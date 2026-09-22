@@ -9,6 +9,7 @@
     "lint:fix": "oxlint --fix"
   },
   "dependencies": {
+    "@clerk/clerk-js": "^6.32.1",
     "@zcode/client": "workspace:*",
     "@zcode/shared": "workspace:*",
     "@zcode/ui": "workspace:*",

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- HTTP、WebSocket 与静态资源路由集中注册，保持同一鉴权顺序。 */
 import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname, relative, resolve, sep } from "node:path";
 import { hostname } from "node:os";
@@ -38,7 +39,10 @@ import {
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
-import { isCustomForkClerkAuthorized } from "./customForkClerkAuth.js";
+import {
+  authenticateCustomForkClerk,
+  isCustomForkClerkUserAllowed,
+} from "./customForkClerkAuth.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
   const onData = new Emitter<VSBuffer>();
@@ -125,6 +129,21 @@ function setupChannelServer(
 
 /** 存储 web 模式下的远程连接，key 为随机 ID */
 const remoteConnections = new Map<string, RemoteConnection>();
+const customForkTickets = new Map<string, { expiresAt: number; userId: string }>();
+const CUSTOM_FORK_TICKET_TTL_MS = 30_000;
+
+function issueCustomForkTicket(userId: string): string {
+  const ticket = randomUUID();
+  customForkTickets.set(ticket, { userId, expiresAt: Date.now() + CUSTOM_FORK_TICKET_TTL_MS });
+  return ticket;
+}
+
+function consumeCustomForkTicket(ticket: string | undefined): boolean {
+  if (!ticket) return false;
+  const record = customForkTickets.get(ticket);
+  customForkTickets.delete(ticket);
+  return Boolean(record && record.expiresAt > Date.now());
+}
 
 function generateId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -318,15 +337,51 @@ export function createHttpServer(
 
   const customForkRoute = resolveCustomForkProductConfig().remoteRoute;
   const requireCustomForkClerk = async (c: Context, next: () => Promise<void>) => {
-    if (!isCustomForkClerkAuthorized(c)) {
+    const pathname = new URL(c.req.url).pathname;
+    if (
+      pathname === customForkRoute ||
+      pathname === `${customForkRoute}/` ||
+      (!pathname.startsWith(`${customForkRoute}/api/`) && pathname !== `${customForkRoute}/ws`)
+    ) {
+      await next();
+      return;
+    }
+    const identity = await authenticateCustomForkClerk(c);
+    if (!identity) {
       return c.json({ error: "Clerk authentication required" }, 401);
+    }
+    if (identity.userId !== "local-development" && !isCustomForkClerkUserAllowed(identity.userId)) {
+      return c.json({ error: "Clerk user is not authorized for this fork" }, 403);
     }
     await next();
   };
-  app.use(customForkRoute, requireCustomForkClerk);
-  app.use(`${customForkRoute}/*`, requireCustomForkClerk);
+  app.use(`${customForkRoute}/api/*`, requireCustomForkClerk);
 
   app.get(customForkRoute, (c) => c.redirect(`${customForkRoute}/`));
+  app.get(`${customForkRoute}/api/ws-ticket`, async (c) => {
+    const identity = await authenticateCustomForkClerk(c);
+    if (!identity) return c.json({ error: "Clerk authentication required" }, 401);
+    if (identity.userId !== "local-development" && !isCustomForkClerkUserAllowed(identity.userId)) {
+      return c.json({ error: "Clerk user is not authorized for this fork" }, 403);
+    }
+    return c.json({
+      ticket: issueCustomForkTicket(identity.userId),
+      expiresInMs: CUSTOM_FORK_TICKET_TTL_MS,
+    });
+  });
+  app.get(`${customForkRoute}/api/device`, async (c) => {
+    const identity = await authenticateCustomForkClerk(c);
+    if (!identity) return c.json({ error: "Clerk authentication required" }, 401);
+    if (identity.userId !== "local-development" && !isCustomForkClerkUserAllowed(identity.userId)) {
+      return c.json({ error: "Clerk user is not authorized for this fork" }, 403);
+    }
+    const displayName = process.env.ZCODE_FORK_DEVICE_NAME?.trim() || hostname();
+    const deviceId = createHash("sha256")
+      .update(`${displayName}:${process.platform}`)
+      .digest("hex")
+      .slice(0, 16);
+    return c.json({ deviceId, displayName, online: true, lastSeenAt: new Date().toISOString() });
+  });
 
   app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
@@ -344,8 +399,12 @@ export function createHttpServer(
 
   app.get(
     `${resolveCustomForkProductConfig().remoteRoute}/ws`,
-    upgradeWebSocket(() => ({
+    upgradeWebSocket((c) => ({
       onOpen(_event, ws) {
+        if (!consumeCustomForkTicket(new URL(c.req.url).searchParams.get("ticket") ?? undefined)) {
+          ws.close(4001, "Invalid or expired connection ticket");
+          return;
+        }
         setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
       },
     })),

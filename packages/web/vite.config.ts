@@ -65,6 +65,8 @@ export default defineConfig(({ mode }) => {
         },
         // 将 /ws 和 /api 请求代理到 server（默认 3030 端口）
         "/ws": { target: "ws://localhost:3030", ws: true },
+        "/fork/api": { target: "http://localhost:3030" },
+        "/fork/ws": { target: "ws://localhost:3030", ws: true },
         "/api": { target: "http://localhost:3030" },
       },
     },

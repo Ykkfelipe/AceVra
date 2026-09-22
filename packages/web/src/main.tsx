@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Web 入口集中编排启动、路由与 workspace shell wiring，与 Root.tsx 同样先保持入口收口，避免跨层状态拆散。 */
 import { createRoot } from "react-dom/client";
+import { Clerk } from "@clerk/clerk-js";
 import {
   AppErrorBoundary,
   Root,
@@ -86,6 +87,7 @@ interface WebBootstrapResult {
   initialTaskId?: string;
   restoreSession?: boolean;
   allowOpenWorkspace?: boolean;
+  device?: { deviceId: string; displayName: string; online: boolean; lastSeenAt: string };
 }
 
 function isWebOAuthCallback(params: URLSearchParams): boolean {
@@ -367,12 +369,60 @@ async function resolveWebBootstrap(): Promise<WebBootstrapResult> {
   const params = new URLSearchParams(window.location.search);
   const remoteId = params.get("remote");
   const customFork = isCustomForkRoute();
+  let clerkToken: string | undefined;
+  if (customFork && import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) {
+    const clerk = new Clerk(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+    await clerk.load();
+    if (!clerk.user) {
+      root.render(
+        <div className="flex min-h-dvh items-center justify-center bg-background p-4 text-foreground">
+          <div className="w-full max-w-md rounded-xl border border-card-border bg-card p-6">
+            <h1 className="text-lg font-semibold">ZCode Fork Dev</h1>
+            <p className="mt-2 text-sm text-foreground-subtle">Sign in to connect to this Mac.</p>
+            <button
+              type="button"
+              className="mt-5 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
+              onClick={() => void clerk.redirectToSignIn({ redirectUrl: window.location.href })}
+            >
+              Sign in with Clerk
+            </button>
+          </div>
+        </div>,
+      );
+      return { wsUrl: "" };
+    }
+    clerkToken = (await clerk.session?.getToken()) ?? undefined;
+  }
+  const ticketResponse = customFork
+    ? await fetch(
+        `${window.location.origin}${resolveCustomForkProductConfig().remoteRoute}/api/ws-ticket`,
+        {
+          headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : undefined,
+          cache: "no-store",
+        },
+      )
+    : null;
+  const ticket = ticketResponse?.ok
+    ? ((await ticketResponse.json()) as { ticket?: string }).ticket
+    : undefined;
+  const deviceResponse = customFork
+    ? await fetch(
+        `${window.location.origin}${resolveCustomForkProductConfig().remoteRoute}/api/device`,
+        {
+          headers: clerkToken ? { Authorization: `Bearer ${clerkToken}` } : undefined,
+          cache: "no-store",
+        },
+      )
+    : null;
+  const device = deviceResponse?.ok
+    ? ((await deviceResponse.json()) as WebBootstrapResult["device"])
+    : undefined;
   const wsUrl = remoteId
     ? `${resolveDefaultWsOrigin()}/ws/remote/${remoteId}`
-    : `${resolveDefaultWsOrigin()}${customFork ? "/fork/ws" : "/ws"}`;
+    : `${resolveDefaultWsOrigin()}${customFork ? "/fork/ws" : "/ws"}${ticket ? `?ticket=${encodeURIComponent(ticket)}` : ""}`;
 
   if (remoteId) {
-    return { wsUrl };
+    return { wsUrl, device };
   }
 
   try {
@@ -386,13 +436,14 @@ async function resolveWebBootstrap(): Promise<WebBootstrapResult> {
     const workspace = Array.isArray(serverInfo.workspaces) ? serverInfo.workspaces[0] : undefined;
     return {
       wsUrl,
+      device,
       ...(workspace?.path ? { initialWorkspaceAbsPath: workspace.path } : {}),
       ...(workspace?.workspaceIdentity
         ? { initialWorkspaceIdentity: workspace.workspaceIdentity }
         : {}),
     };
   } catch {
-    return { wsUrl };
+    return { wsUrl, device };
   }
 }
 
@@ -450,6 +501,10 @@ async function bootstrapWebApp() {
     return;
   }
 
+  if (!bootstrap.wsUrl) {
+    return;
+  }
+
   try {
     const services = await connectViaWebSocket(bootstrap.wsUrl, {
       onClose: () => {},
@@ -463,6 +518,12 @@ async function bootstrapWebApp() {
           settingService={services.settingService}
           broadcastService={services.broadcastService}
         >
+          {bootstrap.device ? (
+            <div className="border-b border-card-border bg-card px-4 py-2 text-xs text-foreground-subtle">
+              {bootstrap.device.online ? "●" : "○"} {bootstrap.device.displayName} · available on
+              this Mac
+            </div>
+          ) : null}
           <Root
             services={services}
             platform={platform}
