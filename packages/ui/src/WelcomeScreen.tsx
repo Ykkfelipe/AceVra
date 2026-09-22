@@ -33,8 +33,10 @@ interface WelcomeScreenProps {
 export type LoginCompleteReason = "oauth" | "apiKey" | "skip";
 
 export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
+  // 只跟随容器高度（h-full），不再叠加 min-h-dvh：视口单位只属于根节点，
+  // 否则 /fork banner 下内容中心会偏出容器、按钮被裁到可视区外。
   return (
-    <main className="relative flex h-full min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-6 text-foreground sm:px-6">
+    <main className="relative flex h-full items-center justify-center overflow-hidden bg-background px-4 py-6 text-foreground sm:px-6">
       <ThemeHeroVisual className="absolute inset-0" />
       <div className="pointer-events-none absolute left-0 top-0 right-0 z-10 flex h-12 w-full items-center [app-region:drag]" />
       <section className="relative z-10 w-full flex flex-col gap-10 max-w-sm rounded-2xl border border-popover-border bg-background p-8 text-ui-base/relaxed shadow-md sm:p-10">

@@ -265,7 +265,9 @@ export function OccupationOnboarding({
     <main
       aria-label={t("title")}
       data-testid="onboarding-page"
-      className="relative flex h-dvh w-full min-h-0 flex-col overflow-hidden bg-background text-foreground"
+      // 高度跟随 RootShell 容器（h-full），不自声明 h-dvh：/fork banner 下容器小于视口，
+      // 100dvh 会让引导页超出容器、底部按钮被裁切。
+      className="relative flex h-full w-full min-h-0 flex-col overflow-hidden bg-background text-foreground"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-12 [app-region:drag]" />
       {/* 与 Settings 相同，计入 Workspace 的 4px 外层留白、1px 边框和 8px 内边距。 */}

@@ -12,7 +12,9 @@ export function RootStartupLoading({ label, children, busy = true }: RootStartup
     <div
       // Web 端全局 html/body/#root 为 Electron 透明背景让路，React 接管后会替换 HTML 启动壳。
       // 这里必须由阻塞态自身承接主题背景，否则远控链接会在 Root 恢复期间继续露出浏览器白底。
-      className="flex h-full min-h-dvh flex-col items-center justify-center gap-6 bg-background text-foreground"
+      // 高度只跟随容器（h-full）：min-h-dvh 会让元素高于 /fork banner 下的容器，
+      // 视口单位只应由根节点拥有，避免再引入同类裁切缺陷。
+      className="flex h-full flex-col items-center justify-center gap-6 bg-background text-foreground"
       role="status"
       aria-busy={busy}
       aria-label={label}

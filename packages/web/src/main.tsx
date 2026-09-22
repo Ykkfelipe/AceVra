@@ -556,24 +556,31 @@ async function bootstrapWebApp() {
           settingService={services.settingService}
           broadcastService={services.broadcastService}
         >
-          {bootstrap.device ? (
-            <div className="border-b border-card-border bg-card px-4 py-2 text-xs text-foreground-subtle">
-              {bootstrap.device.online ? "●" : "○"} {bootstrap.device.displayName} · available on
-              this Mac
+          {/* 视口高度只由 #root 拥有；device banner 与应用必须在同一个纵向 flex 容器里瓜分剩余空间。
+              之前两者是 #root 下的兄弟节点，RootShell/DesktopWindowFrame 若按 100dvh 计算就会
+              超出 #root，底部（含侧栏 footer）被 overflow:hidden 裁掉。 */}
+          <div className="flex h-full min-h-0 flex-col">
+            {bootstrap.device ? (
+              <div className="shrink-0 border-b border-card-border bg-card px-4 py-2 text-xs text-foreground-subtle">
+                {bootstrap.device.online ? "●" : "○"} {bootstrap.device.displayName} · available on
+                this Mac
+              </div>
+            ) : null}
+            <div className="min-h-0 w-full flex-1">
+              <Root
+                services={services}
+                platform={platform}
+                initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
+                initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
+                initialTaskId={bootstrap.initialTaskId}
+                restoreSession={bootstrap.restoreSession}
+                allowOpenWorkspace={bootstrap.allowOpenWorkspace}
+                preferDirectoryBrowser
+                supportsEmbeddedBrowser={false}
+                allowRemoteWorkspace={false}
+              />
             </div>
-          ) : null}
-          <Root
-            services={services}
-            platform={platform}
-            initialWorkspaceAbsPath={bootstrap.initialWorkspaceAbsPath}
-            initialWorkspaceIdentity={bootstrap.initialWorkspaceIdentity}
-            initialTaskId={bootstrap.initialTaskId}
-            restoreSession={bootstrap.restoreSession}
-            allowOpenWorkspace={bootstrap.allowOpenWorkspace}
-            preferDirectoryBrowser
-            supportsEmbeddedBrowser={false}
-            allowRemoteWorkspace={false}
-          />
+          </div>
         </ZCodeIntlProvider>
       </AppErrorBoundary>,
     );

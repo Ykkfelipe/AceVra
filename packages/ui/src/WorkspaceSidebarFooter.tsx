@@ -214,7 +214,15 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
 
   return (
     // footer 被 Settings 复用，页面专属边距由调用方传入，避免修改共享默认样式。
-    <footer className={cn("flex shrink-0 flex-col gap-2.5 px-4 pt-2 pb-4", className)}>
+    // shrink-0：footer 在滚动容器之外，项目列表再长也不能把它挤出侧栏。
+    // 底边距 1rem + env(safe-area-inset-bottom)：footer 不依赖屏幕最后几个物理像素，
+    // 刘海屏/home 指示条启用安全区时自动垫高（未启用 viewport-fit 时 env() 为 0，视觉不变）。
+    <footer
+      className={cn(
+        "flex shrink-0 flex-col gap-2.5 px-4 pt-2 pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        className,
+      )}
+    >
       <div className="flex min-w-0 gap-2">
         <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
           <DropdownMenuTrigger asChild>

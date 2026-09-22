@@ -30,9 +30,12 @@ export const DesktopWindowFrame = memo(function DesktopWindowFrameComponent({
   return (
     <div
       className={cn(
-        // 手机浏览器的 100vh 会把地址栏区域算进页面高度，
-        // 远控页底部输入框容易被挤到可视区外。动态视口高度能跟随浏览器 chrome 收放，桌面端视觉不变。
-        "flex h-dvh flex-col overflow-hidden border-border text-foreground",
+        // 视口高度只由根节点拥有（#root / .fork-remote-shell 均为 100dvh）。
+        // 这里曾自声明 h-dvh：/fork 连接 banner 占掉一行后，app 容器实际小于视口，
+        // 深层的 DesktopWindowFrame 仍是 100dvh，整棵树超出容器后被 overflow:hidden 裁掉底边，
+        // 表现为侧栏底部账号/Settings footer 被切掉一半。改为 h-full 跟随容器，
+        // 手机地址栏收放仍由根节点的 100dvh 追踪，行为不变。
+        "flex h-full min-h-0 flex-col overflow-hidden border-border text-foreground",
         // Linux BrowserWindow 的不透明底色会把最外层恢复为直角。
         // 外壳 16px 与内层 12px 面板及 4px inset 构成同心圆。Linux 合成器在原生拖拽/缩放时
         // 可能短暂丢失 overflow 圆角，额外使用同半径 clip-path 固定合成裁切；最大化时两者一起归零。
