@@ -34,9 +34,11 @@ import {
   ZCODE_VERSION,
   type ServerRemoteInfo,
   type ServerRemoteWorkspaceInfo,
+  resolveCustomForkProductConfig,
 } from "@zcode/shared";
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
+import { isCustomForkClerkAuthorized } from "./customForkClerkAuth.js";
 
 function wrapWebSocket(ws: WebSocket): ISocket {
   const onData = new Emitter<VSBuffer>();
@@ -314,6 +316,18 @@ export function createHttpServer(
     });
   }
 
+  const customForkRoute = resolveCustomForkProductConfig().remoteRoute;
+  const requireCustomForkClerk = async (c: Context, next: () => Promise<void>) => {
+    if (!isCustomForkClerkAuthorized(c)) {
+      return c.json({ error: "Clerk authentication required" }, 401);
+    }
+    await next();
+  };
+  app.use(customForkRoute, requireCustomForkClerk);
+  app.use(`${customForkRoute}/*`, requireCustomForkClerk);
+
+  app.get(customForkRoute, (c) => c.redirect(`${customForkRoute}/`));
+
   app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
   app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
 
@@ -321,6 +335,15 @@ export function createHttpServer(
   // 都不能再把自己提升为 trusted host。
   app.get(
     "/ws",
+    upgradeWebSocket(() => ({
+      onOpen(_event, ws) {
+        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
+      },
+    })),
+  );
+
+  app.get(
+    `${resolveCustomForkProductConfig().remoteRoute}/ws`,
     upgradeWebSocket(() => ({
       onOpen(_event, ws) {
         setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");

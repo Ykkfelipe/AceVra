@@ -15,6 +15,7 @@ interface ImportMetaEnv {
   readonly VITE_ZCODE_BASE_URL?: string;
   readonly VITE_ZCODE_ENDPOINT_ORIGIN?: string;
   readonly VITE_ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL?: string;
+  readonly VITE_CUSTOM_FORK_REMOTE_ROUTE?: string;
 }
 
 interface ImportMeta {

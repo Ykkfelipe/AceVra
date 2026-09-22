@@ -29,6 +29,7 @@ import {
   resolveConversationShareCodeFromPath,
 } from "./share/conversationShareRoute.js";
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
+import { resolveCustomForkProductConfig } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
 
 function resolveWebThemePreference(defaultTheme: Theme = WEB_DEFAULT_THEME): Theme {
@@ -355,12 +356,20 @@ function resolveDefaultWsOrigin(): string {
   return `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
 }
 
+function isCustomForkRoute(): boolean {
+  const route =
+    import.meta.env.VITE_CUSTOM_FORK_REMOTE_ROUTE?.trim() ||
+    resolveCustomForkProductConfig().remoteRoute;
+  return window.location.pathname === route || window.location.pathname.startsWith(`${route}/`);
+}
+
 async function resolveWebBootstrap(): Promise<WebBootstrapResult> {
   const params = new URLSearchParams(window.location.search);
   const remoteId = params.get("remote");
+  const customFork = isCustomForkRoute();
   const wsUrl = remoteId
     ? `${resolveDefaultWsOrigin()}/ws/remote/${remoteId}`
-    : `${resolveDefaultWsOrigin()}/ws`;
+    : `${resolveDefaultWsOrigin()}${customFork ? "/fork/ws" : "/ws"}`;
 
   if (remoteId) {
     return { wsUrl };
@@ -446,7 +455,7 @@ async function bootstrapWebApp() {
       onClose: () => {},
     });
     const platform = createWebPlatform();
-    document.title = "ZCode - Web + Server";
+    document.title = isCustomForkRoute() ? "ZCode Fork Dev - Remote" : "ZCode - Web + Server";
 
     root.render(
       <AppErrorBoundary>
