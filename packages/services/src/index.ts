@@ -301,6 +301,8 @@ export type {
 export { IClientConfigService } from "./client-config/clientConfig.js";
 export { IAccountsService } from "./accounts/accounts.js";
 export type { CommandCodeStatus } from "./accounts/commandCodeStatusAdapter.js";
+// 注意：这里只导出 codex 执行后端的 descriptor 值与类型面；createCodexExecutionService
+// 工厂留在 ./codex/contract.js 供 host（node.ts）直接 import——它会把实现模块拉进
+// 模块图，而实现模块在顶层创建 serviceLogger（Node 专属），进 Web 包会直接崩。
 export { ICodexExecutionService } from "./codex/app/codexExecutionService.js";
-export { createCodexExecutionService } from "./codex/contract.js";
 export type { CodexAppServerPort, CodexTaskIndexPort } from "./codex/contract.js";

@@ -188,22 +188,29 @@ codexThreadId in meta), sendText → turn/start mapping, stop → interrupt, app
 forwarding, unsupported-command rejection, and generation-bump staleness — all against a
 fake bridge; no real Codex process.
 
-## E2E checklist (blocked on explicit approval — do NOT run without it)
+## Observed App Server shapes (E2E-verified 2026-09-22, codex-cli 0.155.0-alpha.9.2)
 
-One real task requires confirming these App Server calls/events and their exact payload
-shapes (binary strings prove the names; shapes are the unknown):
+Captured against the real ChatGPT Plus login with two live tasks (text-only; file
+create+read). Raw transcripts: `/tmp/codex-e2e/probe1.log`, `probe2.log`.
 
-1. `initialize` (already proven by the account bridge).
-2. `thread/start` — params (cwd/model/approvalPolicy/sandbox shape) and the returned
-   thread id field name; the `thread/started` notification.
-3. `turn/start` — input items shape; `turn/started`, `item/started`, `item/completed`,
-   `item/agentMessage/delta`, `item/reasoning/summaryTextDelta`,
-   `item/commandExecution/outputDelta` payloads.
-4. `turn/completed` — status field values and usage shape.
-5. `turn/interrupt` — params and the interrupted turn completion.
-6. Approval server-requests: `item/commandExecution/requestApproval` /
-   `item/fileChange/requestApproval` — param shape, the expected **response** shape and
-   decision enum, and `serverRequest/resolved`.
-7. `thread/resume` + `thread/items/list` — resume-after-restart row rebuild.
-8. `account/read` gate: execution must fail closed with a clear error when no ChatGPT
-   account is signed in.
+| Call / event | Observed shape (abridged) |
+| ------------ | ------------------------- |
+| `initialize` | `{userAgent, codexHome, platformFamily, platformOs}` (unchanged) |
+| `account/read` | `{account:{type:"chatgpt",email,planType}, requiresOpenaiAuth:true, workspaceRouting:{chatgptAccountId,…}}` — **`requiresOpenaiAuth` is true even when signed in**; the sign-in gate must key on `account` presence (as implemented) |
+| `thread/start {cwd}` | `{thread:{id, sessionId, model:"gpt-5.6-terra", approvalPolicy:"never", sandbox:{type:"dangerFullAccess"}, path:<rollout file>, …}, model, modelProvider, approvalPolicy, sandbox, …}` — **thread id is nested at `result.thread.id`**; `extractCodexThreadId` handles it |
+| `thread/started` | `{thread:{id,…}}` — nested, not top-level `threadId` (tolerated) |
+| `turn/start {threadId, input:[{type:"text",text}]}` | **accepted as sent** — live turn ran and replied |
+| `thread/resume {threadId}` | result is **empty `{}`**; caller must keep the original thread id (as implemented). Emits `deprecationNotice`: full-history hydration is deprecated for paginated threads — pass `excludeTurns: true` and page with `thread/turns/list` + `thread/items/list` (follow-up: add `excludeTurns`) |
+| `thread/items/list {threadId}` | `{data:[{turnId, item:{…}}, …], nextCursor, backwardsCursor}` — items under **`data`**, each wrapped in `{turnId, item}`; item types seen: `userMessage {id, content:[{type:"text",text}]}`, `agentMessage {id:"msg_…", text, phase:"final_answer"}`. `normalizeHistoryItem` unwraps `{turnId, item}` (E2E-shaped regression test in `codexExecutionService.test.ts`); `userMessage` history is not replayed as rows — recorded gap (restart-recovery scope) |
+| Live notifications | `item/started`, `item/agentMessage/delta`, `item/completed`, `turn/completed` all parsed by the tolerant parser: E2E 1 rendered `CODEX_E2E_OK` exactly once with 0 `resyncConversationV4` calls |
+| Approval server-requests | **Not emitted** in either run: default thread carries `approvalPolicy:"never"` + `sandbox:{type:"dangerFullAccess"}`. Approval routing stays protocol-tested, not live-E2E-confirmed. Follow-up: set a restrictive `approvalPolicy`/sandbox on `thread/start` when the harness wants approvals enforced |
+
+Post-run task metadata check: `tasks.meta_json` contains `executionBackend:"codex"`,
+`codexThreadId:"<thread uuid>"`, `status:"completed"` for both E2E tasks.
+
+## E2E checklist (superseded by "Observed shapes" above; kept for the remaining drills)
+
+Cancellation, crash/restart recovery (`thread/resume` + items rebuild under a live
+generation bump), `thread/turns/list` pagination, approval request/response round-trip,
+and concurrent Codex tasks remain to be drilled separately after the basic protocol is
+proven (basic protocol proven 2026-09-22; pre-E2E checkpoint `fork-codex-exec-v1`).
