@@ -116,6 +116,8 @@ type CodexServerRequest =
       readonly type: "approval";
       readonly rawId: number;
       readonly info: CodexExecutionApprovalRequestInfo;
+      /** item/permissions/requestApproval 请求的权限 profile（仅宿主内存，不下发通道）。 */
+      readonly requestedPermissions?: unknown;
     }
   | { readonly type: "unhandled"; readonly rawId: number; readonly method: string };
 
@@ -300,6 +302,10 @@ export function parseCodexServerRequest(
   return {
     type: "approval",
     rawId,
+    // 权限请求的 profile 原样留存供批准时回传；其余请求不携带该字段。
+    ...(matched.kind === "permissions" && typeof record.permissions === "object" && record.permissions !== null
+      ? { requestedPermissions: record.permissions }
+      : {}),
     info: {
       interactionId: "",
       kind: matched.kind,

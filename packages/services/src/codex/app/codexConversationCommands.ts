@@ -77,8 +77,23 @@ export async function handleConversationCommand(
       });
     }
     case "stop": {
+      // schema（0.155.0-alpha.9.2）要求 turn/interrupt 同时携带 threadId 与 turnId；
+      // turn id 未知（turn/started 未到达且响应缺 turn 字段）时宁肯失败 ACK，
+      // 也不发送缺字段的 payload 让 Codex 侧报 invalid params。
+      if (!runtime.codexTurnId) {
+        return ackOf({
+          commandId: envelope.commandId,
+          status: "failed",
+          revisionAtDecision: revision(),
+          reasonCode: "codex_interrupt_no_active_turn",
+          message: "no active Codex turn id yet; retry once the turn has started",
+        });
+      }
       try {
-        await context.bridge.call(CODEX_METHODS.turnInterrupt, { threadId: runtime.codexThreadId });
+        await context.bridge.call(CODEX_METHODS.turnInterrupt, {
+          threadId: runtime.codexThreadId,
+          turnId: runtime.codexTurnId,
+        });
       } catch (error) {
         return ackOf({
           commandId: envelope.commandId,

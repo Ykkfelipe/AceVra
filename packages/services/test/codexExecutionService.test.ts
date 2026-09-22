@@ -17,6 +17,11 @@ import type { ZCodeTaskMeta } from "@zcode/shared";
 import type { ConversationTopicFrame } from "@zcode/shared/zcode-protocol-v4";
 import type { CodexAppServerPort, CodexTaskIndexPort } from "../src/codex/app/codexPorts.js";
 import { createCodexExecutionService } from "../src/codex/app/codexExecutionServiceImpl.js";
+import {
+  CODEX_EXECUTION_POLICY_PRESETS,
+  DEFAULT_CODEX_EXECUTION_POLICY,
+  resolveCodexExecutionPolicy,
+} from "../src/codex/domain/codexPolicy.js";
 
 interface FakeBridgeState {
   installed: boolean;
@@ -26,6 +31,8 @@ interface FakeBridgeState {
   /** method → result（或 error）。未配置的方法返回 {id: "<method>"}。 */
   results: Map<string, unknown>;
   errors: Map<string, string>;
+  /** 可选的动态应答器：返回非 undefined 时优先于 results/errors（用于翻页等有状态形状）。 */
+  callOverride?: (method: string, params: unknown) => unknown | undefined;
   notifications: Array<(method: string, params: unknown, rawRequest?: { method: string; params: unknown; rawId: number }) => void>;
 }
 
@@ -38,7 +45,12 @@ function makeBridge(overrides: Partial<FakeBridgeState> = {}): {
     generation: 1,
     calls: [],
     responses: [],
-    results: new Map([["account/read", { account: { type: "chatgpt", email: "u@example.com", planType: "plus" } }]]),
+    results: new Map<string, unknown>([
+      ["account/read", { account: { type: "chatgpt", email: "u@example.com", planType: "plus" } }],
+      // E2E 观察：thread id 嵌套在 result.thread.id；turn id 在 result.turn.id（schema）。
+      ["thread/start", { thread: { id: "id-thread-start" } }],
+      ["turn/start", { turn: { id: "id-turn-start" } }],
+    ]),
     errors: new Map(),
     notifications: [],
     ...overrides,
@@ -52,6 +64,8 @@ function makeBridge(overrides: Partial<FakeBridgeState> = {}): {
     },
     async call<T>(method: string, params: unknown = {}): Promise<T> {
       state.calls.push({ method, params });
+      const overridden = state.callOverride?.(method, params);
+      if (overridden !== undefined) return overridden as T;
       const error = state.errors.get(method);
       if (error) throw new Error(error);
       const configured = state.results.get(method);
@@ -97,10 +111,15 @@ function makeTaskIndex() : { port: CodexTaskIndexPort; rows: Map<string, ZCodeTa
   };
 }
 
-function makeService(bridge = makeBridge(), taskIndex = makeTaskIndex()) {
+function makeService(
+  bridge = makeBridge(),
+  taskIndex = makeTaskIndex(),
+  policy = DEFAULT_CODEX_EXECUTION_POLICY,
+) {
   const created = createCodexExecutionService({
     bridge: bridge.port,
     taskIndex: taskIndex.port,
+    policy,
   });
   return { ...created, bridge, taskIndex };
 }
@@ -128,7 +147,14 @@ test("createTask persists the harness task ↔ codex thread binding and starts t
   assert.equal(meta?.executionBackend, "codex");
   assert.equal(meta?.codexThreadId, "id-thread-start");
   assert.equal(meta?.title, "fix the bug");
-  assert.ok(service.bridge.state.calls.some((call) => call.method === "thread/start"));
+  // 宿主执行策略必须显式下发（安全默认：审批开启 + 只读沙箱），不允许静默走 Codex 默认。
+  const threadStart = service.bridge.state.calls.find((call) => call.method === "thread/start");
+  assert.ok(threadStart);
+  assert.deepEqual(threadStart.params, {
+    cwd: "/tmp/ws",
+    approvalPolicy: "on-request",
+    sandbox: "read-only",
+  });
   assert.ok(
     service.bridge.state.calls.some(
       (call) => call.method === "turn/start" && JSON.stringify(call.params).includes("fix the bug"),
@@ -192,15 +218,34 @@ test("sendText over the v4 envelope maps to turn/start and is acknowledged", asy
   dispose.dispose();
 });
 
-test("stop maps to turn/interrupt; unsupported commands are rejected", async () => {
+test("stop maps to turn/interrupt {threadId, turnId}; unsupported commands are rejected", async () => {
   const service = makeService();
   const created = await service.service.createTask({ workspacePath: "/tmp/ws" });
   const taskId = created.task.taskId;
+  // turn id 未知（turn/start 响应缺 turn 字段且无 turn/started 通知）→ 宁可失败也不发缺字段 payload。
+  const earlyStop = await service.service.sendConversationCommandV4({
+    envelope: { commandId: "c-stop-early", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+  });
+  assert.equal(earlyStop.status, "failed");
+  assert.equal(earlyStop.reasonCode, "codex_interrupt_no_active_turn");
+  // 正常路径：sendText 后 codexTurnId 取自 turn/start 响应 {turn:{id}}。
+  await service.service.sendConversationCommandV4({
+    envelope: {
+      commandId: "c-1b",
+      clientId: "client-1",
+      sessionId: taskId,
+      type: "sendText",
+      payload: { text: "long turn" },
+      issuedAt: 0,
+    },
+  });
   const stopAck = await service.service.sendConversationCommandV4({
     envelope: { commandId: "c-2", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
   });
   assert.equal(stopAck.status, "accepted");
-  assert.ok(service.bridge.state.calls.some((call) => call.method === "turn/interrupt"));
+  const interrupt = service.bridge.state.calls.find((call) => call.method === "turn/interrupt");
+  assert.ok(interrupt, "turn/interrupt must be issued");
+  assert.deepEqual(interrupt.params, { threadId: "id-thread-start", turnId: "id-turn-start" });
   const forkAck = await service.service.sendConversationCommandV4({
     envelope: {
       commandId: "c-3",
@@ -213,6 +258,41 @@ test("stop maps to turn/interrupt; unsupported commands are rejected", async () 
   });
   assert.equal(forkAck.status, "rejected");
   assert.equal(forkAck.reasonCode, "fault.command.unsupportedBackend");
+});
+
+test("turn/started notification backfills the interrupt turn id and turn/completed clears it", async () => {
+  const service = makeService();
+  const created = await service.service.createTask({ workspacePath: "/tmp/ws" });
+  const taskId = created.task.taskId;
+  // 响应缺 turn 字段的形状：turnId 只能来自 turn/started 通知。
+  service.bridge.state.results.set("turn/start", {});
+  await service.service.sendConversationCommandV4({
+    envelope: {
+      commandId: "c-1c",
+      clientId: "client-1",
+      sessionId: taskId,
+      type: "sendText",
+      payload: { text: "streaming" },
+      issuedAt: 0,
+    },
+  });
+  for (const handler of service.bridge.state.notifications) {
+    handler("turn/started", { threadId: "id-thread-start", turnId: "codex-live-turn" }, undefined);
+  }
+  const stopAck = await service.service.sendConversationCommandV4({
+    envelope: { commandId: "c-2b", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+  });
+  assert.equal(stopAck.status, "accepted");
+  const interrupt = service.bridge.state.calls.find((call) => call.method === "turn/interrupt");
+  assert.deepEqual(interrupt?.params, { threadId: "id-thread-start", turnId: "codex-live-turn" });
+  for (const handler of service.bridge.state.notifications) {
+    handler("turn/completed", { threadId: "id-thread-start", turnId: "codex-live-turn", status: "ok" }, undefined);
+  }
+  const lateStop = await service.service.sendConversationCommandV4({
+    envelope: { commandId: "c-2c", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+  });
+  assert.equal(lateStop.status, "failed");
+  assert.equal(lateStop.reasonCode, "codex_interrupt_no_active_turn");
 });
 
 test("approval server requests reach the harness and decisions answer the raw request id", async () => {
@@ -269,7 +349,8 @@ test("approval server requests reach the harness and decisions answer the raw re
     },
   });
   assert.equal(ack.status, "accepted");
-  assert.deepEqual(service.bridge.state.responses, [{ rawId: 77, result: { decision: "approved" } }]);
+  // schema 真形：CommandExecutionApprovalDecision 用 accept/decline，不是 approved/denied。
+  assert.deepEqual(service.bridge.state.responses, [{ rawId: 77, result: { decision: "accept" } }]);
   // 决议后 pendingInteractions 清空；未知 interactionId 拒绝。
   const replay = await service.service.sendConversationCommandV4({
     envelope: {
@@ -283,6 +364,38 @@ test("approval server requests reach the harness and decisions answer the raw re
   });
   assert.equal(replay.status, "rejected");
   assert.equal(replay.reasonCode, "codex_approval_unknown_interaction");
+});
+
+test("unroutable approval requests fail closed with schema-true denial bodies", async () => {
+  const service = makeService();
+  const created = await service.service.createTask({ workspacePath: "/tmp/other-ws" });
+  // 该任务绑定 id-thread-start；用未知 threadId 制造 unroutable 审批。
+  await service.service.sendConversationCommandV4({
+    envelope: {
+      commandId: "c-r-0",
+      clientId: "client-1",
+      sessionId: created.task.taskId,
+      type: "sendText",
+      payload: { text: "trigger" },
+      issuedAt: 0,
+    },
+  });
+  for (const handler of service.bridge.state.notifications) {
+    handler(
+      "item/commandExecution/requestApproval",
+      { threadId: "unknown-thread", command: "rm -rf /" },
+      { method: "item/commandExecution/requestApproval", params: { threadId: "unknown-thread" }, rawId: 900 },
+    );
+    handler(
+      "item/permissions/requestApproval",
+      { threadId: "unknown-thread", permissions: { fileSystem: { read: ["/etc"] } } },
+      { method: "item/permissions/requestApproval", params: { threadId: "unknown-thread" }, rawId: 901 },
+    );
+  }
+  assert.deepEqual(service.bridge.state.responses, [
+    { rawId: 900, result: { decision: "decline" } },
+    { rawId: 901, result: { permissions: {}, scope: "turn" } },
+  ]);
 });
 
 test("unsupported commands without a session are rejected; renameSession updates the title", async () => {
@@ -313,9 +426,29 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
   const frames: ConversationTopicFrame[] = [];
   const dispose = service.service.onDynamicConversationFrame()((frame) => frames.push(frame));
   // 桥换代：进程重启。resume 返回 {}（E2E 观察形状）；items/list 返回 E2E 观察的
-  // {data:[{turnId, item:{…}}]} 包装形状。
+  // {data:[{turnId, item:{…}}]} 包装形状，并带 nextCursor 验证重建翻页跟随。
   service.bridge.state.generation = 2;
   service.bridge.state.results.set("thread/resume", {});
+  let itemsPage = 0;
+  service.bridge.state.callOverride = (method, params) => {
+    if (method !== "thread/items/list") return undefined;
+    const cursor = (params as { cursor?: string }).cursor;
+    if (itemsPage === 0 && !cursor) {
+      itemsPage = 1;
+      return {
+        data: [{ turnId: "turn-hist", item: { type: "agentMessage", id: "hist-1", text: "history answer" } }],
+        nextCursor: "cursor-2",
+        backwardsCursor: null,
+      };
+    }
+    assert.equal(cursor, "cursor-2", "second history page must follow nextCursor");
+    itemsPage = 2;
+    return {
+      data: [{ turnId: "turn-hist", item: { type: "agentMessage", id: "hist-2", text: "page two" } }],
+      nextCursor: null,
+      backwardsCursor: null,
+    };
+  };
   service.bridge.state.results.set("thread/items/list", {
     data: [
       {
@@ -341,10 +474,31 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
     service.bridge.state.calls.some((call) => call.method === "thread/resume"),
     "thread/resume must be issued after a generation bump",
   );
-  // 恢复的历史行可经 rowsRange 读取（E2E 观察的 {turnId, item} 包装必须被解包）。
+  // resume 必须 excludeTurns:true（schema 推荐，全量 hydration 已废弃）并重申宿主策略。
+  const resume = service.bridge.state.calls.find((call) => call.method === "thread/resume");
+  assert.deepEqual(resume?.params, {
+    threadId: "id-thread-start",
+    approvalPolicy: "on-request",
+    sandbox: "read-only",
+    excludeTurns: true,
+  });
+  // 恢复的历史行可经 rowsRange 读取（E2E 观察的 {turnId, item} 包装必须被解包 + 翻页齐全）。
   const rows = await service.service.conversationRowsRangeV4({ sessionId: taskId, limit: 10 });
-  const historyRow = rows.rows.find((row) => row.kind === "assistantText");
-  assert.ok(historyRow, "wrapped history item must be replayed as an assistantText row");
-  assert.equal(historyRow.text, "history answer");
+  const historyTexts = rows.rows.filter((row) => row.kind === "assistantText").map((row) => row.text);
+  assert.deepEqual(historyTexts.sort(), ["history answer", "page two"]);
   dispose.dispose();
+});
+
+test("execution policy resolves by preset name and fails closed on unknown names", () => {
+  assert.deepEqual(resolveCodexExecutionPolicy(null).policy, CODEX_EXECUTION_POLICY_PRESETS.safeInteractive);
+  assert.deepEqual(resolveCodexExecutionPolicy(undefined).adoptedDefault, false);
+  assert.deepEqual(resolveCodexExecutionPolicy("workspaceWrite").policy, {
+    approvalPolicy: "on-request",
+    sandbox: "workspace-write",
+  });
+  // 显式指名才可达 unrestricted；未知名称回落默认并标记 adoptedDefault。
+  assert.deepEqual(resolveCodexExecutionPolicy("unrestricted").policy, CODEX_EXECUTION_POLICY_PRESETS.unrestricted);
+  const unknown = resolveCodexExecutionPolicy("yolo");
+  assert.deepEqual(unknown.policy, DEFAULT_CODEX_EXECUTION_POLICY);
+  assert.equal(unknown.adoptedDefault, true);
 });

@@ -5,6 +5,7 @@
 import type { ConversationTopicFrame } from "@zcode/shared/zcode-protocol-v4";
 import { CodexThreadProjection } from "#src/codex/domain/codexProjection.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
+import type { CodexExecutionPolicy } from "#src/codex/domain/codexPolicy.js";
 import {
   CODEX_METHODS,
   parseCodexNotification,
@@ -29,6 +30,12 @@ export class CodexTaskRuntime {
   /** 创建/重建时的 bridge generation；与 bridge.generation 不等即 stale。 */
   bridgeGeneration: number;
   projection: CodexThreadProjection;
+  /**
+   * Codex 侧活动 turn id（thread/start 不分配 turn；来自 turn/start 响应的
+   * {turn:{id}} 或 turn/started 通知）。turn/interrupt 的 schema 要求 threadId+turnId
+   * 双字段，未知时必须拒绝 stop 而不是发送缺字段的 payload。turn/completed 后清空。
+   */
+  codexTurnId: string | null = null;
   /** 服务器请求 id → interactionId 的反查表（仅活订阅期）。 */
   turnCounter = 0;
 
@@ -87,10 +94,21 @@ function extractCodexThreadId(result: unknown): string | null {
   return null;
 }
 
+/** 从 turn/start 响应中容错提取 Codex turn id（schema：{turn:{id,...}}）。 */
+export function extractCodexTurnId(result: unknown): string | null {
+  if (typeof result !== "object" || result === null) return null;
+  const record = result as Record<string, unknown>;
+  const direct = record.turnId ?? record.turn_id;
+  if (typeof direct === "string" && direct.trim()) return direct;
+  const turn = typeof record.turn === "object" && record.turn !== null ? (record.turn as Record<string, unknown>) : null;
+  if (turn && typeof turn.id === "string" && turn.id.trim()) return turn.id;
+  return null;
+}
+
 /** 启动一个新的 Codex thread（thread/start）；账号门禁在这里 fail closed。 */
 export async function startCodexThread(
   bridge: CodexAppServerPort,
-  params: { workspacePath: string },
+  params: { workspacePath: string; policy: CodexExecutionPolicy },
 ): Promise<string> {
   const account = (await bridge.call("account/read", {})) as {
     account?: unknown;
@@ -99,8 +117,13 @@ export async function startCodexThread(
   if (!account?.account) {
     throw new Error("codex_not_signed_in");
   }
-  // thread/start 的参数面在 E2E 前无法完全确认；最小面 + cwd，模型走 Codex 自身默认。
-  const result = await bridge.call(CODEX_METHODS.threadStart, { cwd: params.workspacePath });
+  // 宿主执行策略显式下发（approvalPolicy + sandbox），不再依赖 Codex 自身默认
+  // （E2E 观察到的默认是 approvalPolicy:"never" + dangerFullAccess，不可接受）。
+  const result = await bridge.call(CODEX_METHODS.threadStart, {
+    cwd: params.workspacePath,
+    approvalPolicy: params.policy.approvalPolicy,
+    sandbox: params.policy.sandbox,
+  });
   const threadId = extractCodexThreadId(result);
   if (!threadId) throw new Error("codex_thread_start_missing_id");
   return threadId;
@@ -110,9 +133,17 @@ export async function startCodexThread(
 export async function resumeCodexThread(
   bridge: CodexAppServerPort,
   threadId: string,
+  policy: CodexExecutionPolicy,
 ): Promise<string> {
-  const result = await bridge.call(CODEX_METHODS.threadResume, { threadId });
-  // resume 返回可能只是请求回显；只在明确的 thread 字段出现时才采纳新 id。
+  // excludeTurns:true 是 schema 文本明确推荐的用法（全量历史 hydration 已废弃，
+  // 分页走 thread/items/list）；同时重申宿主策略，防止旧线程带着宽松策略复活。
+  const result = await bridge.call(CODEX_METHODS.threadResume, {
+    threadId,
+    approvalPolicy: policy.approvalPolicy,
+    sandbox: policy.sandbox,
+    excludeTurns: true,
+  });
+  // resume 返回可能只是请求回显（E2E 观察 {}）；只在明确的 thread 字段出现时才采纳新 id。
   if (typeof result === "object" && result !== null) {
     const record = result as Record<string, unknown>;
     const thread = typeof record.thread === "object" && record.thread !== null ? (record.thread as Record<string, unknown>) : null;
@@ -123,9 +154,12 @@ export async function resumeCodexThread(
   return threadId;
 }
 
+/** 冷恢复分页上限：防病态 cursor 循环；正常线程远小于此。 */
+const MAX_HISTORY_PAGES = 50;
+
 /**
  * 从 Codex 分页 items 重建投影（重启后 subscribe 的恢复路径）。
- * 形状未在 E2E 前确认：接受数组 / {items} / {data}，逐条落终态行。
+ * 按 nextCursor 翻页直到耗尽；接受数组 / {items} / {data} 形状，逐条落终态行。
  * 恢复失败不阻塞订阅：投影保持已恢复部分，turn 事件照常走。
  */
 export async function rebuildProjectionFromCodex(
@@ -133,25 +167,34 @@ export async function rebuildProjectionFromCodex(
   threadId: string,
   projection: CodexThreadProjection,
 ): Promise<void> {
-  let result: unknown;
-  try {
-    result = await bridge.call(CODEX_METHODS.threadItemsList, { threadId });
-  } catch {
-    return;
-  }
-  const record = typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
-  const items: unknown[] = Array.isArray(result)
-    ? result
-    : Array.isArray(record?.items)
-      ? (record?.items as unknown[])
-      : Array.isArray(record?.data)
-        ? (record?.data as unknown[])
-        : [];
-  for (const entry of items) {
-    const item = normalizeHistoryItem(entry);
-    if (!item) continue;
-    // 冷恢复直接落终态行：不要求先出现过 itemStarted。
-    projection.replayCompletedItem(item);
+  let cursor: string | null = null;
+  for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
+    let result: unknown;
+    try {
+      result = await bridge.call(
+        CODEX_METHODS.threadItemsList,
+        cursor ? { threadId, cursor } : { threadId },
+      );
+    } catch {
+      return;
+    }
+    const record = typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
+    const items: unknown[] = Array.isArray(result)
+      ? result
+      : Array.isArray(record?.items)
+        ? (record?.items as unknown[])
+        : Array.isArray(record?.data)
+          ? (record?.data as unknown[])
+          : [];
+    for (const entry of items) {
+      const item = normalizeHistoryItem(entry);
+      if (!item) continue;
+      // 冷恢复直接落终态行：不要求先出现过 itemStarted。
+      projection.replayCompletedItem(item);
+    }
+    const next = record?.nextCursor;
+    cursor = typeof next === "string" && next.trim() ? next : null;
+    if (!cursor) return;
   }
 }
 
@@ -178,6 +221,7 @@ export function routeCodexNotification(
       const { commit, record } = runtime.projection.registerApproval(
         { kind: info.kind, toolName: info.toolName, summary: info.summary },
         request.rawId,
+        request.requestedPermissions,
       );
       return { commit, approval: { rawId: request.rawId, interactionId: record.interactionId } };
     }
@@ -188,6 +232,14 @@ export function routeCodexNotification(
     // thread/start 的返回缺 id 时，以通知兜底。
     runtime.codexThreadId = notification.threadId;
     return null;
+  }
+  if (notification.type === "turnStarted") {
+    // turn/interrupt 需要 Codex 侧 turnId；响应缺失时以通知兜底。
+    if (notification.turnId) runtime.codexTurnId = notification.turnId;
+    return null;
+  }
+  if (notification.type === "turnCompleted") {
+    runtime.codexTurnId = null;
   }
   const commit = runtime.projection.applyNotification(notification);
   return commit ? { commit, approval: null } : null;

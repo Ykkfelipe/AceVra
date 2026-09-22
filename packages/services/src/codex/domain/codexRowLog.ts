@@ -24,6 +24,11 @@ export function codexToolInputText(item: Extract<CodexServerNotification, { type
   }
 }
 
+/** 会不会渲染成 toolCall 行（审批锚点 / 冷恢复的落行判定都用它）。 */
+export function isToolItemKind(kind: Extract<CodexServerNotification, { type: "itemStarted" }>["item"]["kind"]): boolean {
+  return kind === "commandExecution" || kind === "fileChange" || kind === "mcpToolCall" || kind === "webSearch";
+}
+
 export class CodexRowLog {
   readonly #rows: ConversationRow[] = [];
   readonly #rowIdByEntity = new Map<string, number>();

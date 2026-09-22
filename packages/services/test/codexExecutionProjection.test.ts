@@ -162,8 +162,45 @@ test("approval request surfaces as pendingInteraction and resolves via the table
 
   const resolution = projection.resolveApproval(record.interactionId, "approved");
   assert.ok(resolution);
-  assert.deepEqual(resolution.codexResponse, { decision: "approved" });
+  // schema 真形：CommandExecutionApprovalDecision 是 accept/decline 词表，不是 approved/denied。
+  assert.deepEqual(resolution.codexResponse, { decision: "accept" });
   assert.equal(projection.buildSnapshot("task-1").pendingInteractions.length, 0);
+
+  // 权限类审批：拒绝 = 空 profile（不授予任何额外权限）；批准 = 回传请求的 profile。
+  const permRequest = parseCodexServerRequest(
+    "item/permissions/requestApproval",
+    { threadId: "t1", turnId: "turn-1", itemId: "itm-9", permissions: { fileSystem: { read: ["/tmp/x"] } } },
+    43,
+  );
+  assert.equal(permRequest.type, "approval");
+  assert.ok(permRequest.type === "approval");
+  const perm = projection.registerApproval(
+    { kind: permRequest.info.kind, toolName: permRequest.info.toolName, summary: permRequest.info.summary },
+    permRequest.rawId,
+    permRequest.requestedPermissions,
+  );
+  const permDenial = projection.resolveApproval(perm.record.interactionId, "denied");
+  assert.ok(permDenial);
+  assert.deepEqual(permDenial.codexResponse, { permissions: {}, scope: "turn" });
+  const permApprove = projection.resolveApproval("codex-approval-999", "approved");
+  assert.equal(permApprove, null);
+  const second = parseCodexServerRequest(
+    "item/permissions/requestApproval",
+    { threadId: "t1", turnId: "turn-1", itemId: "itm-9", permissions: { fileSystem: { read: ["/tmp/x"] } } },
+    44,
+  );
+  assert.ok(second.type === "approval");
+  const perm2 = projection.registerApproval(
+    { kind: second.info.kind, toolName: second.info.toolName, summary: second.info.summary },
+    second.rawId,
+    second.requestedPermissions,
+  );
+  const permGrant = projection.resolveApproval(perm2.record.interactionId, "approved");
+  assert.ok(permGrant);
+  assert.deepEqual(permGrant.codexResponse, {
+    permissions: { fileSystem: { read: ["/tmp/x"] } },
+    scope: "turn",
+  });
 });
 
 test("turn completion drives turnHeader state and control phase", () => {
