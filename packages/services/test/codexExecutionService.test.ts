@@ -312,10 +312,19 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
   const taskId = created.task.taskId;
   const frames: ConversationTopicFrame[] = [];
   const dispose = service.service.onDynamicConversationFrame()((frame) => frames.push(frame));
-  // 桥换代：进程重启。resume 配置返回同 id；items/list 返回历史条目。
+  // 桥换代：进程重启。resume 返回 {}（E2E 观察形状）；items/list 返回 E2E 观察的
+  // {data:[{turnId, item:{…}}]} 包装形状。
   service.bridge.state.generation = 2;
+  service.bridge.state.results.set("thread/resume", {});
   service.bridge.state.results.set("thread/items/list", {
-    items: [{ type: "agentMessage", id: "hist-1", text: "history answer" }],
+    data: [
+      {
+        turnId: "turn-hist",
+        item: { type: "agentMessage", id: "hist-1", text: "history answer" },
+      },
+    ],
+    nextCursor: null,
+    backwardsCursor: null,
   });
   const subscribeAck = await service.service.subscribeConversationV4({ topic: `conversation/${taskId}` });
   assert.equal(subscribeAck.ack.mode, "snapshot");
@@ -332,8 +341,10 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
     service.bridge.state.calls.some((call) => call.method === "thread/resume"),
     "thread/resume must be issued after a generation bump",
   );
-  // 恢复的历史行可经 rowsRange 读取。
+  // 恢复的历史行可经 rowsRange 读取（E2E 观察的 {turnId, item} 包装必须被解包）。
   const rows = await service.service.conversationRowsRangeV4({ sessionId: taskId, limit: 10 });
-  assert.ok(rows.rows.some((row) => row.kind === "assistantText"));
+  const historyRow = rows.rows.find((row) => row.kind === "assistantText");
+  assert.ok(historyRow, "wrapped history item must be replayed as an assistantText row");
+  assert.equal(historyRow.text, "history answer");
   dispose.dispose();
 });

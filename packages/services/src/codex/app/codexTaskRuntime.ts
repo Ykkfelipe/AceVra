@@ -156,8 +156,10 @@ export async function rebuildProjectionFromCodex(
 }
 
 function normalizeHistoryItem(entry: unknown): CodexItem | null {
-  // 复用通知解析的 item 面：把历史条目包成 item/completed 通知再解析。
-  const parsed = parseCodexNotification("item/completed", { item: entry });
+  // E2E 观察：thread/items/list 的条目是 {turnId, item:{type,…}} 包装；容错回退裸 item。
+  const record = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : null;
+  const unwrapped = record?.item ?? entry;
+  const parsed = parseCodexNotification("item/completed", { item: unwrapped });
   if (parsed.type !== "itemCompleted") return null;
   return parsed.item;
 }

@@ -491,6 +491,14 @@ Codex does NOT go through the ZCode model adapter or the zcode-cli runtime.
 - Independent review pass done (review-agent): all 11 findings fixed, including the P0
   frame-sequence contract, atomic runtime rebuild after bridge restart, failed-ack for
   rejected turn/start, approval deny-on-unroutable, and the respond() generation fence.
+- E2E validated 2026-09-22 (text-only + file create/read) with the real ChatGPT Plus
+  login. Protocol shapes are now OBSERVED, not assumed — see "Observed App Server
+  shapes" in the spec. Gotchas proven live: `requiresOpenaiAuth:true` is returned even
+  when signed in (gate on `account` presence); thread id is nested at
+  `thread/start → result.thread.id`; `thread/resume` returns `{}`; items live under
+  `thread/items/list → data[].item`; default threads run `approvalPolicy:"never"` +
+  full-access sandbox so no approval requests fire (approval round-trip still needs a
+  drill with a restrictive policy). Pre-E2E checkpoint: `fork-codex-exec-v1`.
 
 ## Environment note
 

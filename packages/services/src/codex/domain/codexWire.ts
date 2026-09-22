@@ -210,7 +210,12 @@ export function parseCodexNotification(method: string, params: unknown): CodexSe
   const turnId = asOptionalString(record.turnId) ?? asOptionalString(record.turn_id);
   switch (method) {
     case "thread/started": {
-      const id = asOptionalString(record.threadId) ?? asOptionalString(record.thread_id);
+      // E2E 观察：id 嵌套在 params.thread.id，而非顶层 threadId。
+      const thread = typeof record.thread === "object" && record.thread !== null ? (record.thread as Record<string, unknown>) : null;
+      const id =
+        asOptionalString(record.threadId) ??
+        asOptionalString(record.thread_id) ??
+        asOptionalString(thread?.id);
       return id ? { type: "threadStarted", threadId: id } : { type: "unknown", method };
     }
     case "turn/started":
