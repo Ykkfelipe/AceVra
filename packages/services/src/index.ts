@@ -299,3 +299,5 @@ export type {
   FeedbackTicketType,
 } from "@zcode/shared";
 export { IClientConfigService } from "./client-config/clientConfig.js";
+export { IAccountsService } from "./accounts/accounts.js";
+export type { CommandCodeStatus } from "./accounts/commandCodeStatusAdapter.js";

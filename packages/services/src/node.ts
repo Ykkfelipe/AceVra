@@ -10,6 +10,8 @@ import {
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
 import { getAppConfigDir as resolveAppConfigDir } from "./paths.js";
+import { IAccountsService } from "./accounts/accounts.js";
+import { createAccountsService } from "./accounts/accountsServiceImpl.js";
 import {
   buildLocalMediaPreviewUrl,
   isProviderProvisioningAccountCredentialKey,
@@ -2429,6 +2431,19 @@ export function createLocalServices(options: {
     .register(ISettingService, settingService)
     .register(IOnboardingRecordService, onboardingRecordService)
     .register(ICredentialService, credentialService)
+    .register(
+      IAccountsService,
+      createAccountsService({
+        // Host-side only: the Codex OAuth callback targets localhost on this machine, so
+        // the URL must be opened here and never forwarded to a remote browser.
+        openExternalUrl: async (url: string) => {
+          const { execFile } = await import("node:child_process");
+          await new Promise<void>((resolve, reject) => {
+            execFile("open", [url], (error) => (error ? reject(error) : resolve()));
+          });
+        },
+      }),
+    )
     .register(IBroadcastService, broadcastService)
     .register(IZCodeTaskService, zcodeTaskService)
     .register(IZCodeAgentService, zcodeAgentService)

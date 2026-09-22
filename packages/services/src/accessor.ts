@@ -6,6 +6,7 @@ import type { IGitCheckpointService } from "./git/gitCheckpoint.js";
 import type { ISystemService } from "./system/system.js";
 import type { ITerminalService } from "./terminal/terminal.js";
 import type { ISettingService } from "./setting/setting.js";
+import type { IAccountsService } from "./accounts/accounts.js";
 import type { ICredentialService } from "./credential/credential.js";
 import type { IBroadcastService } from "./broadcast/broadcast.js";
 import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
@@ -51,6 +52,8 @@ export interface IServiceAccessor {
   /** Onboarding 完成记录（本地持久化）；旧测试 double / 不支持的 host 可不提供。 */
   readonly onboardingRecordService?: IOnboardingRecordService;
   readonly credentialService: ICredentialService;
+  /** Accounts & Imports：脱敏账号状态与历史导入；旧 host / 测试 double 可不提供。 */
+  readonly accountsService: IAccountsService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
   /** 窗口 Host 聚合面；旧 server wire 或测试 double 可暂不提供。 */
