@@ -7,6 +7,7 @@ import type { ISystemService } from "./system/system.js";
 import type { ITerminalService } from "./terminal/terminal.js";
 import type { ISettingService } from "./setting/setting.js";
 import type { IAccountsService } from "./accounts/accounts.js";
+import type { ICodexExecutionService } from "./codex/app/codexExecutionService.js";
 import type { ICredentialService } from "./credential/credential.js";
 import type { IBroadcastService } from "./broadcast/broadcast.js";
 import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
@@ -54,6 +55,11 @@ export interface IServiceAccessor {
   readonly credentialService: ICredentialService;
   /** Accounts & Imports：脱敏账号状态与历史导入；旧 host / 测试 double 可不提供。 */
   readonly accountsService: IAccountsService;
+  /**
+   * Codex 执行后端（phase 10）；旧 host / 测试 double 可不提供。
+   * UI 在缺省时禁用 Codex 后端入口，而不是报错。
+   */
+  readonly codexExecutionService?: ICodexExecutionService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
   /** 窗口 Host 聚合面；旧 server wire 或测试 double 可暂不提供。 */

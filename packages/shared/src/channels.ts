@@ -148,6 +148,11 @@ export const ServiceChannels = {
   OnboardingRecord: "onboarding-record",
   /** Accounts & Imports：外部 coding agent 的账号桥接与历史导入（仅传输脱敏状态） */
   Accounts: "accounts",
+  /**
+   * Codex 执行后端（phase 10）：Codex App Server thread 的任务绑定、v4 会话投影与审批。
+   * 仅传输 v4 投影与脱敏任务元信息；凭证/OAuth 材料不经过本通道。
+   */
+  CodexExecution: "codex-execution",
 } as const;
 
 export type ServiceChannelName = (typeof ServiceChannels)[keyof typeof ServiceChannels];

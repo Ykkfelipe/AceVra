@@ -6,8 +6,11 @@
 // - 30s keep-warm：refCount 归零不立即 dispose（防 pane 关/开、布局调整抖动）；
 // - agentService 换代：远程条目保持 layer/transport 身份并单向切换最新 proxy；
 //   本地 __base__ 用新 service 重建条目。
+import type { ICodexExecutionService } from "@zcode/services";
 import type { IZCodeAgentService } from "@zcode/services";
 import { createAgentConversationTransport } from "@/v4/agentConversationTransport.js";
+import { createCodexConversationTransport } from "@/v4/codexConversationTransport.js";
+import { createBackendRoutingConversationTransport } from "@/v4/backendRoutingConversationTransport.js";
 import { remoteAgentServiceGeneration } from "@/lib/remoteAgentServiceGeneration.js";
 import { ReplaceableConversationTransport } from "@/v4/replaceableConversationTransport.js";
 import { SessionDataLayer } from "@/v4/sessionDataLayer.js";
@@ -71,6 +74,8 @@ interface RegistryEntry {
   key: string;
   agentService: WorkspaceConnectionAgentService;
   agentServiceGeneration: number;
+  /** 条目创建时的 codex 服务；proxy 换代 replace 时沿用（codex 侧错误由 store retry 兜住）。 */
+  codexService?: ICodexExecutionService;
   transport: ConversationTransport;
   replaceableTransport: ReplaceableConversationTransport | null;
   layer: SessionDataLayer;
@@ -150,6 +155,50 @@ function releaseEntry(entry: RegistryEntry): void {
   });
 }
 
+/** registry 内按连接缓存的 Codex 归属判定（taskId → 是否 codex，RPC + 永久缓存）。 */
+const codexTaskBindingCaches = new WeakMap<ICodexExecutionService, (taskId: string) => Promise<boolean>>();
+
+function resolveCodexTaskPredicate(
+  codexService: ICodexExecutionService,
+): (taskId: string) => Promise<boolean> {
+  const existing = codexTaskBindingCaches.get(codexService);
+  if (existing) return existing;
+  const cache = new Map<string, boolean>();
+  const predicate = async (taskId: string): Promise<boolean> => {
+    const cached = cache.get(taskId);
+    if (cached !== undefined) return cached;
+    // 只缓存成功判定；瞬态 RPC 失败不缓存，避免把 Codex 任务永久钉在 agent 传输上。
+    const result = await codexService.isCodexTask(taskId).catch(() => undefined);
+    if (result === undefined) return false;
+    cache.set(taskId, result);
+    return result;
+  };
+  codexTaskBindingCaches.set(codexService, predicate);
+  return predicate;
+}
+
+/** 组合 agent + codex 两条传输；codexService 缺省时行为与纯 agent 传输一致。 */
+function createWorkspaceConversationTransport(params: {
+  agentService: WorkspaceConnectionAgentService;
+  workspacePath: string;
+  workspaceIdentity?: string;
+  createLocalMediaPreviewUrl?: (path: string) => string;
+  codexService?: ICodexExecutionService;
+}): ConversationTransport {
+  const agentTransport = createAgentConversationTransport(params.agentService, {
+    workspacePath: params.workspacePath,
+    ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+    ...(params.createLocalMediaPreviewUrl ? { createLocalMediaPreviewUrl: params.createLocalMediaPreviewUrl } : {}),
+  });
+  if (!params.codexService) return agentTransport;
+  const codexTransport = createCodexConversationTransport(params.codexService);
+  return createBackendRoutingConversationTransport({
+    agent: agentTransport,
+    codex: codexTransport,
+    isCodexTask: resolveCodexTaskPredicate(params.codexService),
+  });
+}
+
 /**
  * 取/建某 endpoint+workspace 的共享 conversation 连接，refCount++。
  * agentService 由调用方（V4PaneConversationProvider 经 useWorkspaceServicesResolution）解析；
@@ -160,6 +209,7 @@ export function acquireWorkspaceConnection(
   scope: WorkspaceConnectionScope,
   agentService: WorkspaceConnectionAgentService,
   createLocalMediaPreviewUrl?: (path: string) => string,
+  codexService?: ICodexExecutionService,
 ): WorkspaceConnectionLease {
   const key = buildWorkspaceConnectionKey(scope);
   const existing = registry.get(key);
@@ -194,10 +244,12 @@ export function acquireWorkspaceConnection(
         disposeEntry(existing);
       }
     }
-    const initialTransport = createAgentConversationTransport(agentService, {
+    const initialTransport = createWorkspaceConversationTransport({
+      agentService,
       workspacePath: scope.workspacePath,
       ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
       ...(createLocalMediaPreviewUrl ? { createLocalMediaPreviewUrl } : {}),
+      ...(codexService ? { codexService } : {}),
     });
     const replaceableTransport = isRemote
       ? new ReplaceableConversationTransport(initialTransport)
@@ -207,6 +259,7 @@ export function acquireWorkspaceConnection(
       key,
       agentService,
       agentServiceGeneration: incomingServiceGeneration,
+      ...(codexService ? { codexService } : {}),
       transport,
       replaceableTransport,
       layer: new SessionDataLayer({ transport }),
@@ -249,9 +302,11 @@ export function acquireWorkspaceConnection(
       entry.agentService = agentService;
       entry.agentServiceGeneration = incomingServiceGeneration;
       entry.replaceableTransport.replace(
-        createAgentConversationTransport(agentService, {
+        createWorkspaceConversationTransport({
+          agentService,
           workspacePath: scope.workspacePath,
           ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
+          ...(entry.codexService ? { codexService: entry.codexService } : {}),
         }),
       );
     },

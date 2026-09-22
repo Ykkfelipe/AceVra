@@ -1166,6 +1166,10 @@ export const zcodeTaskMetaSchema = z.object({
   provider: zcodeAgentProviderSchema.optional(),
   migrationSource: zcodeTaskMigrationSourceSchema.optional(),
   forkedFromTaskId: nonEmptyStringSchema.optional(),
+  // 执行后端标记（phase 10）：缺省 "zcode"；"codex" 任务由 Codex App Server thread 驱动。
+  executionBackend: z.enum(["zcode", "codex"]).optional(),
+  // Codex thread 绑定：meta_json 单一来源，与 executionBackend 成对出现。
+  codexThreadId: nonEmptyStringSchema.optional(),
   // cron automation 身份：随 meta_json 一起持久化（单一来源），同时在写入时投影到 tasks 表
   // cron_automation_id 索引列，供按 automation 反查 session。runId 属于 automation_runs /
   // 投递 metadata，不属于 task 表。

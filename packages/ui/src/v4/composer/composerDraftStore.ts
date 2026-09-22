@@ -9,7 +9,12 @@
 // 附件不入草稿（objectUrl/File 不可序列化，localPath 附件重启后归属难校验——
 // 与「v4 composer 不做附件草稿持久化」的裁决一致）。
 import { logger } from "@/logger.js";
-import { modelSelectionSchema, type ModelSelection } from "@zcode/shared";
+import {
+  isZCodeExecutionBackend,
+  modelSelectionSchema,
+  type ModelSelection,
+  type ZCodeExecutionBackend,
+} from "@zcode/shared";
 import { submissionModeSchema, type SubmissionMode } from "@zcode/shared/zcode-protocol-v4";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
 
@@ -20,6 +25,11 @@ export interface V4ComposerDraft {
   /** 有合法 mode 表示已经初始化；没有模型仍是明确空态，不能按旧文本草稿补默认。 */
   mode?: SubmissionMode;
   planEnabled?: boolean;
+  /**
+   * 新任务的执行后端（phase 10）：缺省 "zcode"。只作用于 draft 首发；
+   * 既定任务的后端由任务 meta 决定，切换会话后本字段不再消费。
+   */
+  executionBackend?: ZCodeExecutionBackend;
   /** 已处理的工具变更，防止重连快照再次覆盖用户选择。 */
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
@@ -133,6 +143,9 @@ function readDraft(value: unknown): V4ComposerDraft | null {
       ? { lastPlanTransitionId: value.lastPlanTransitionId }
       : {}),
     ...(modelSelection ? { modelSelection } : {}),
+    ...(isZCodeExecutionBackend(value.executionBackend)
+      ? { executionBackend: value.executionBackend }
+      : {}),
     ...(value.initializeFromNewTask === true && !mode.success
       ? { initializeFromNewTask: true as const }
       : {}),

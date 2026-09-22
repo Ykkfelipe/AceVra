@@ -6,7 +6,11 @@ import { applyComposerPermissionGrant } from "@/v4/composer/composerPermissionGr
 // Workspace presentation 水合只提供 mode 与 slash commands；模型候选、能力和首选值
 // 统一来自目标 Host ModelSelectionView。
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ZCODE_AGENT_PROVIDER, resolveExecutionState } from "@zcode/shared";
+import {
+  ZCODE_AGENT_PROVIDER,
+  resolveExecutionState,
+  type ZCodeExecutionBackend,
+} from "@zcode/shared";
 import { applyComposerPlanTransition } from "@/v4/composer/composerPlanTransition.js";
 import type {
   ZCodeConfigOption,
@@ -97,6 +101,8 @@ interface DraftConfigControl {
   handleDraftSelectModel: (modelProvider: string, model: string) => void;
   handleDraftSelectThought: (thought: string) => void;
   handleDraftSwitchMode: (mode: string) => void;
+  /** draft 态执行后端选择（ZCode | Codex）；只写草稿意图，不触达 runtime。 */
+  handleDraftSwitchBackend: (backend: ZCodeExecutionBackend) => void;
 }
 
 export function useDraftConfigControl(params: {
@@ -480,6 +486,14 @@ export function useDraftConfigControl(params: {
     [updateComposerDraft],
   );
 
+  // 执行后端选择只影响 draft 首发路径；既定任务的后端由任务 meta 决定。
+  const handleDraftSwitchBackend = useCallback(
+    (backend: ZCodeExecutionBackend) => {
+      updateComposerDraft((current) => ({ ...current, executionBackend: backend }));
+    },
+    [updateComposerDraft],
+  );
+
   return {
     modelSelectionRead,
     draftConfig,
@@ -493,6 +507,7 @@ export function useDraftConfigControl(params: {
     handleDraftSelectModel,
     handleDraftSelectThought,
     handleDraftSwitchMode,
+    handleDraftSwitchBackend,
   };
 }
 

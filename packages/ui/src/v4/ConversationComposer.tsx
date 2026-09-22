@@ -42,6 +42,7 @@ import {
   TID_V4_STOP,
   testId,
   type PlanIdentitySnapshot,
+  type ZCodeExecutionBackend,
   type ZCodeProvider,
 } from "@zcode/shared";
 import type {
@@ -157,6 +158,7 @@ import {
   V4ComposerModelControls,
   type ModelSelectionSource,
 } from "@/v4/composer/V4ComposerToolbar.js";
+import { V4ComposerBackendSwitch } from "@/v4/composer/V4ComposerBackendControls.js";
 import {
   resolveV4ComposerConfigPickerState,
   type V4ComposerConfigPicker,
@@ -429,6 +431,11 @@ interface ConversationComposerProps {
   /** 选中思考深度；同时带上用户操作时看到的模型，避免异步回流后把 thought 归到另一模型。 */
   onSelectThought: (thought: string, modelContext: { provider: string; model: string }) => void;
   onSwitchMode: (mode: string) => void;
+  /** 新任务的执行后端选择（draft 态渲染）；缺省隐藏选择器。 */
+  draftBackend?: ZCodeExecutionBackend;
+  onSwitchBackend?: (backend: ZCodeExecutionBackend) => void;
+  /** host 未注册 codex-execution 服务时 false，Codex 菜单项禁用。 */
+  codexBackendAvailable?: boolean;
   /** 打开当前 session 的 Status panel，并直达 Running 明细。 */
   onOpenRunningBackgroundWorks?: () => void;
   /**
@@ -518,6 +525,9 @@ function ConversationComposerImpl({
   onSelectModel,
   onSelectThought,
   onSwitchMode,
+  draftBackend,
+  onSwitchBackend,
+  codexBackendAvailable = false,
   onOpenRunningBackgroundWorks,
   backgroundWorkOpenTarget = "panel",
   runningSubagentCount = 0,
@@ -1176,7 +1186,10 @@ function ConversationComposerImpl({
           !submittedShareContext) ||
         pendingRef.current ||
         !submissionReady ||
-        (createSubmissionFromComposer !== undefined && submission === null) ||
+        // Codex 后端首发不经 zcode submission（模型选择缺省也放行）；stub 不被 Codex 分支消费。
+        (createSubmissionFromComposer !== undefined &&
+          submission === null &&
+          draftBackend !== "codex") ||
         attachmentsApi.hasUnreadyAttachments
       ) {
         return;
@@ -1441,6 +1454,7 @@ function ConversationComposerImpl({
       attachmentsApi,
       conversationSelectionReferences,
       conversationTelemetry,
+      draftBackend,
       draftConfig,
       createSubmissionFromComposer,
       submissionReady,
@@ -2039,6 +2053,16 @@ function ConversationComposerImpl({
     () => (
       <div className="flex min-w-0 items-center gap-1">
         <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden empty:hidden">
+          {draftMode && onSwitchBackend ? (
+            <V4ComposerBackendSwitch
+              backend={draftBackend ?? "zcode"}
+              codexAvailable={codexBackendAvailable}
+              disabled={disabled}
+              activeConfigPicker={activeConfigPicker}
+              onConfigPickerOpenChange={handleConfigPickerOpenChange}
+              onSwitchBackend={onSwitchBackend}
+            />
+          ) : null}
           <V4ComposerModelControls
             workspacePath={workspacePath}
             workspaceIdentity={workspaceIdentity}
@@ -2103,8 +2127,10 @@ function ConversationComposerImpl({
       activeConfigPicker,
       composerPhase,
       composerUsage,
+      codexBackendAvailable,
       disabled,
       draftConfig,
+      draftBackend,
       draftMode,
       handleStopClick,
       handleSendButtonClick,
@@ -2117,6 +2143,7 @@ function ConversationComposerImpl({
       onSelectThought,
       onRecoverCustomModelSelection,
       onSendCompressionCommand,
+      onSwitchBackend,
       onSwitchMode,
       pending,
       provider,

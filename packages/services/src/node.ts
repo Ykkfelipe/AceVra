@@ -12,6 +12,11 @@ import {
 import { getAppConfigDir as resolveAppConfigDir } from "./paths.js";
 import { IAccountsService } from "./accounts/accounts.js";
 import { createAccountsService } from "./accounts/accountsServiceImpl.js";
+import { CodexAppServerBridge } from "./accounts/codexAppServerBridge.js";
+import {
+  createCodexExecutionService,
+  ICodexExecutionService,
+} from "./codex/contract.js";
 import {
   buildLocalMediaPreviewUrl,
   isProviderProvisioningAccountCredentialKey,
@@ -650,6 +655,12 @@ const providerProvisioningTriggerDisposers = new WeakMap<
 // 与其它侧表一样按 ServiceCollection 登记并在 dispose 时统一 close。
 const sharedSqliteRepos = new WeakMap<ServiceCollection, ReadonlyArray<{ close(): void }>>();
 const accountRequestAuthServices = new WeakMap<ServiceCollection, IAccountRequestAuthService>();
+// Codex 执行后端与共享 codex app-server bridge：随 host 关停统一回收
+// （bridge 只有 accounts/execution 两个消费者时由 node.ts 持有所有权并在此 dispose）。
+const codexExecutionDisposables = new WeakMap<
+  ServiceCollection,
+  ReadonlyArray<{ dispose(): void }>
+>();
 export type OffPeakRequestAuthBuilder = (
   ticketId: string,
 ) => Promise<{ apiKey: string; headers: Record<string, string> }>;
@@ -2330,6 +2341,13 @@ export function createLocalServices(options: {
     settingService,
     cuaProductMcpServerResolver,
   });
+  // Codex 执行后端：一个 host 进程只允许一个 `codex app-server` 子进程，
+  // 账号桥与执行后端共享同一 bridge 实例（generation fencing / restart 预算保持 bridge 权威）。
+  const codexAppServerBridge = new CodexAppServerBridge();
+  const codexExecution = createCodexExecutionService({
+    bridge: codexAppServerBridge,
+    taskIndex: taskIndexRepo,
+  });
   const oauthService = createOAuthService(credentialService, {
     apiClient,
     onProviderLogout: handleOAuthProviderLogout,
@@ -2436,6 +2454,7 @@ export function createLocalServices(options: {
       createAccountsService({
         // Host-side only: the Codex OAuth callback targets localhost on this machine, so
         // the URL must be opened here and never forwarded to a remote browser.
+        codexBridge: codexAppServerBridge,
         openExternalUrl: async (url: string) => {
           const { execFile } = await import("node:child_process");
           await new Promise<void>((resolve, reject) => {
@@ -2446,6 +2465,7 @@ export function createLocalServices(options: {
     )
     .register(IBroadcastService, broadcastService)
     .register(IZCodeTaskService, zcodeTaskService)
+    .register(ICodexExecutionService, codexExecution.service)
     .register(IZCodeAgentService, zcodeAgentService)
     .register(IZCodeSessionService, zcodeSessionService)
     .register(ICuaPermissionService, cuaPermissionService)
@@ -2642,6 +2662,10 @@ export function createLocalServices(options: {
   // 见 sharedSqliteRepos 声明处注释：登记全部 tasks-index sqlite 句柄，dispose 链统一关闭
   sqliteReposToClose.push(taskIndexRepo);
   sharedSqliteRepos.set(services, sqliteReposToClose);
+  codexExecutionDisposables.set(services, [
+    { dispose: () => codexExecution.dispose() },
+    { dispose: () => codexAppServerBridge.dispose() },
+  ]);
   return services;
 }
 
@@ -2755,6 +2779,9 @@ export function disposeServiceResources(services: ServiceCollection): void {
   providerProvisioningTriggerDisposers.delete(services);
   providerProvisioningSources.delete(services);
   managedHostApiNetworkTransports.get(services)?.dispose();
+  // Codex：先停服务（释放帧 emitter / 通知订阅），再终停共享 app-server bridge（terminal）。
+  for (const disposable of codexExecutionDisposables.get(services) ?? []) disposable.dispose();
+  codexExecutionDisposables.delete(services);
 }
 
 export async function disposeServiceResourcesAndWait(services: ServiceCollection): Promise<void> {
@@ -2776,6 +2803,10 @@ export async function disposeServiceResourcesAndWait(services: ServiceCollection
       service.disposeAll();
     }
   }
+
+  // Codex：先停服务再终停共享 app-server bridge（与同步路径同序；这里是真实关停路径）。
+  for (const disposable of codexExecutionDisposables.get(services) ?? []) disposable.dispose();
+  codexExecutionDisposables.delete(services);
 
   // 等待托管的 Computer Use Helper 终止（best-effort）：Helper 是长生命周期高权限进程，服务释放语义必须显式
   // 收口它，不能只靠 launcher-pid watchdog / 进程退出兜底。

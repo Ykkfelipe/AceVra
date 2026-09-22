@@ -10,6 +10,7 @@ import {
   IOnboardingRecordService,
   ICredentialService,
   IAccountsService,
+  ICodexExecutionService,
   IBroadcastService,
   IZCodeTaskService,
   IZCodeAgentService,
@@ -59,6 +60,8 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly onboardingRecordService: IOnboardingRecordService;
   readonly credentialService: ICredentialService;
   readonly accountsService: IAccountsService;
+  // Codex 执行后端（phase 10）；旧 host 未注册时 accessor 上为可选。
+  readonly codexExecutionService?: ICodexExecutionService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
   readonly windowControllerService?: IWindowControllerService;
@@ -125,6 +128,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
     );
     this.accountsService = ProxyChannel.toService<IAccountsService>(
       channelClient.getChannel(IAccountsService.channelName),
+    );
+    this.codexExecutionService = ProxyChannel.toService<ICodexExecutionService>(
+      channelClient.getChannel(ICodexExecutionService.channelName),
     );
     this.credentialService = ProxyChannel.toService<ICredentialService>(
       channelClient.getChannel(ICredentialService.channelName),
