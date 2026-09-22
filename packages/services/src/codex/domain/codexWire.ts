@@ -290,7 +290,9 @@ export function parseCodexServerRequest(
       ? "codex.commandExecution"
       : matched.kind === "fileChange"
         ? "codex.fileChange"
-        : `codex.${asOptionalString(record.server) ?? "mcpToolCall"}`;
+        : matched.kind === "permissions"
+          ? "codex.permissions"
+          : `codex.${asOptionalString(record.server) ?? "mcpToolCall"}`;
   const summary =
     command ??
     (item?.kind === "fileChange"
