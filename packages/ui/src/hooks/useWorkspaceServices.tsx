@@ -227,3 +227,27 @@ export function useWorkspaceServices(
     remoteTarget,
   ).services;
 }
+
+/**
+ * 按 workspace 身份解析 service accessor，hook 数稳定。
+ *
+ * 旧的调用点写成 `workspacePath ? useWorkspaceServices(...) : useServices()`，两条分支的 hook
+ * 数不同；Web 启动时 workspacePath 先从 undefined 变成已解析路径，分支一切换 hook 序列错位，
+ * 直接抛出 "Cannot read properties of undefined (reading 'length')"。
+ * 这里固定走同一条 resolution 链；workspacePath 为空时显式回落到当前 context，
+ * 保留旧 useServices() 分支的取值语义（resolution 在空 path 下会优先 baseServices，语义不同）。
+ */
+export function useResolvedServiceAccessor(
+  workspacePath: string | null | undefined,
+  preferredRemoteSessionId?: string | null,
+  workspaceIdentity?: string | null,
+): IServiceAccessor {
+  const contextServices = useServices();
+  const resolution = useWorkspaceServicesResolution(
+    workspacePath,
+    preferredRemoteSessionId,
+    workspaceIdentity,
+  );
+  return workspacePath?.trim() ? resolution.services : contextServices;
+}
+

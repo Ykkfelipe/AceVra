@@ -1,5 +1,4 @@
-import { useServices } from "@/hooks/useServices.js";
-import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useResolvedServiceAccessor } from "@/hooks/useWorkspaceServices.js";
 import type { IZCodeTaskService } from "@zcode/services";
 import type { ZCodeTaskSnapshot } from "@zcode/shared";
 import { uiMemoryDiagnosticsRegistry } from "@/lib/memoryDiagnostics.js";
@@ -294,9 +293,12 @@ export function useZCodeTaskService(
   workspaceIdentity?: string | null,
 ): IZCodeTaskService {
   // ZCode task 服务按 workspace 身份解析，保证所有 task RPC 都落到对应的 host。
-  const services = workspacePath
-    ? useWorkspaceServices(workspacePath, preferredRemoteSessionId, workspaceIdentity)
-    : useServices();
+  // 统一走稳定的 resolution，避免按 workspacePath 二选一调用不同 hook 导致序列错位崩溃。
+  const services = useResolvedServiceAccessor(
+    workspacePath,
+    preferredRemoteSessionId,
+    workspaceIdentity,
+  );
   const rawService = services.zcodeTaskService;
   if (!rawService || typeof rawService !== "object") {
     return rawService;
