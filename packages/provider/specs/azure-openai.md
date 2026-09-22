@@ -201,3 +201,42 @@ second target.
 Permission interception behaved **identically** for both models: the same prompt, the same
 four options, the same one-time grant semantics, and Deny correctly aborted the write while
 still returning the Read result to the model.
+
+
+### gpt-5.4-nano retry in a clean workspace — PASSED
+
+The first nano attempt ran in a workspace that already held `azure-tool-test.txt` from the
+gpt-5-mini run, and nano wrote to that filename instead of the requested one. The retry
+used a fresh, empty workspace with a neutral name (`scratch-b`, so the directory name could
+not prime the model) and a collision-proof filename. **Nothing else changed**: same provider
+config, same runtime, same tool implementations, `reasoning_effort` still omitted.
+
+Result: **task completed correctly.**
+
+- Filename: `nano-agent-proof-9271.txt` — exact.
+- Content: `b'NANO_TOOL_OK'`, 12 bytes, **no trailing newline** — exact. Verified in the tool
+  call before approval and again on disk by hexdump.
+- Tool calls: **sequential**, not parallel. Call 0 emitted `Write` alone; call 1 emitted
+  `Read` only after the Write had executed, against the *same* path; call 2 was the final
+  answer. No path outside the target file was touched, and no other file was created.
+- Write result was incorporated before Read — the ordering proves it, unlike the first
+  attempt where both calls were emitted in the same turn before any result existed.
+
+| | agent loop | ancillary (title) |
+| --- | --- | --- |
+| calls | 3 | 1 |
+| latency | 8687 ms (4169 / 2935 / 1583) | 1597 ms |
+| input tokens | 96015 | 263 |
+| output tokens | 222 | 14 |
+| reasoning tokens | 0 | 0 |
+| tool calls | 2 (`Write`, `Read`) | 0 |
+| streaming | true on all 3 | non-streaming |
+
+`reasoning_effort` was absent from every request and `max_tokens` never appeared, confirming
+the empty reasoning map and the GPT-5 output-parameter rewrite held.
+
+**Interpretation.** The parallel `Write`+`Read` emission seen in the first attempt was not a
+fixed trait of the model — in a clean workspace nano sequenced the calls correctly. The
+original failure is better explained as context contamination: a pre-existing file in the
+workspace pulled the model's filename choice toward it. The harness was never modified for
+either attempt, and no compatibility defect was found in nano.
