@@ -374,6 +374,58 @@ Azure rotation lesson: propagation is **not instant**. After
 `az cognitiveservices account keys regenerate --key-name key1` the old key still returned 200
 for roughly 20 seconds before 401. Confirm a rotation by polling, not one check.
 
+## Provider-managed effort (2026-09-22)
+
+A user reported seeing "Low" on a model whose ladder is a single `"default"`. Fix shipped in
+the working tree (not committed): the thought-level control is now **hidden** for models
+whose declared ladder is exactly `["default"]`, i.e. provider-managed effort, and `"default"`
+got a localized word ("Default" / "默认") for the two text surfaces that still print a raw
+level (subagent labels, `list_models` rows).
+
+What changed:
+
+- `packages/ui/src/lib/modelThoughtOption.ts` — new exported predicate
+  `isProviderManagedThoughtOption` (exactly one option, value exactly `"default"`). The
+  resolver is untouched.
+- Hide sites, all reading that one predicate: `V4ComposerToolbar.tsx` (composer chip),
+  `OffPeakEditView.tsx`, `AutomationEditView.tsx`, `WorkflowRunSettingsPopover.tsx` (nulls the
+  option it passes to the fields component) and `SubagentReasoningField.tsx` (renders `null`
+  while keeping state kind `"supported"`).
+- `chat-input-toolbar/thoughtLevelOptions.ts` + both locales — the `default` label.
+- New tests: `packages/ui/test/providerManagedThoughtOption.test.ts`,
+  `packages/model-option-map/test/optionMaps.test.ts`,
+  `packages/provider/test/providerManagedReasoningLevel.test.ts`. The ui test registers
+  `packages/ui/test/uiAssetStubLoader.mjs` because the label table imports `display.tsx`,
+  which reaches real `.svg` files that plain `node --import tsx` cannot load.
+
+**The two regression traps — do not "simplify" this by returning `null` from the resolver.**
+Both were verified before choosing the presentation-layer fix:
+
+1. `OffPeakEditView.tsx` derives `effectiveThoughtLevel` from `thoughtLevelOption?.currentValue`
+   and `canSubmit` requires it. A `null` option permanently disables create/save for
+   single-`"default"` models — today it works because the option resolves with
+   `currentValue: "default"`.
+2. `SubagentsSection.tsx`: a persisted subagent override with
+   `options.reasoningLevel === "default"` becomes state kind `"unsupported"` once the option is
+   `null`; `isSubagentThoughtLevelAvailable()` returns false for `"unsupported"`, so
+   `thoughtLevelInvalid` blocks `canSave` and shows a spurious "select a supported reasoning
+   level" error.
+
+Config was **not** touched: `config/provider/zcode-builtin.json` and the personal
+`~/.zcode/v2/provider_config.json` are unchanged (mtime still `Sep 22 03:50`, 76957 bytes).
+A throwaway read-only audit resolved every personal rule through the real resolver and
+compiled every declared value: **183/183 assertions passed, 0 violations** — 61
+`providerModelRules`, 0 `manualProviderModelRules`, 60 `["default"]` entries each emitting
+zero reasoning paths with their max-output map intact; `gpt-5-mini` still emits
+`reasoning_effort: low` plus the `max_completion_tokens`/`max_tokens` rewrite; the builtin
+GLM-5.3/5.3-Flash ladder still emits `output_config.effort`.
+
+Unverified: the original "Low" sighting itself. The composer cannot paint "Low" for a model
+whose projected ladder is `["default"]` — the label comes from the option entries, and a
+one-entry `"default"` list renders "default"/placeholder. Strongest supported explanation:
+either the model was `gpt-5-mini` (genuinely `["low"]`, legitimately a fixed "Low" chip), or
+the painter saw a stale ladder. A reproduction was not obtained.
+
 ## Testing
 
 ```bash
@@ -385,7 +437,12 @@ mise exec -- node --import tsx --test \
 # these two need the ui tsconfig because the shortcut kernel imports through the @/ alias
 TSX_TSCONFIG_PATH=packages/ui/tsconfig.json mise exec -- node --import tsx --test \
   packages/ui/test/onboardingHookOrderRegression.test.ts \
-  packages/ui/test/composerEnterSubmitSemantics.test.ts
+  packages/ui/test/composerEnterSubmitSemantics.test.ts \
+  packages/ui/test/providerManagedThoughtOption.test.ts
+
+mise exec -- node --import tsx --test \
+  packages/model-option-map/test/optionMaps.test.ts \
+  packages/provider/test/providerManagedReasoningLevel.test.ts
 ```
 
 Full gate before committing: `pnpm run typecheck`, `pnpm run lint` (**baseline is 70

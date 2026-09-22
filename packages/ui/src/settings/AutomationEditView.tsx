@@ -128,7 +128,10 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
 import { useAutomationProjectOptions } from "@/hooks/useAutomationProjectOptions.js";
 import { useModelSelectionView } from "@/hooks/useModelSelectionView.js";
-import { resolveModelThoughtOption } from "@/lib/modelThoughtOption.js";
+import {
+  isProviderManagedThoughtOption,
+  resolveModelThoughtOption,
+} from "@/lib/modelThoughtOption.js";
 import { decodeCustomModelValue, encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import { parseModelPickerValue } from "@/lib/zcodeSessionProjection.js";
 import { startUserAction } from "@/lib/userActionTelemetry.js";
@@ -2700,7 +2703,9 @@ export function AutomationEditView({
                         {intl.formatMessage({ id: "common.retry" })}
                       </Button>
                     ) : null}
-                    {thoughtLevelOption ? (
+                    {/* provider 托管 effort 的单 "default" 档没有可选阶梯，隐藏控件；
+                        effectiveReasoningLevel 仍取自 effectiveSelection，提交语义不变。 */}
+                    {thoughtLevelOption && !isProviderManagedThoughtOption(thoughtLevelOption) ? (
                       <ThoughtLevelCycleControl
                         intl={intl}
                         option={thoughtLevelOption}

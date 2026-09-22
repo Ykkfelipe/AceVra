@@ -147,6 +147,28 @@ Genuine risks, all metadata rather than architecture:
 None of this requires touching MCP, plugins, subagents or the agent runtime.
 
 
+## Single-value `"default"` means provider-managed effort
+
+`gpt-5.4-nano` (and every Command Code model) declares `reasoningLevel: { values:
+["default"], map: "{}" }`: exactly one nominal value and an empty merge patch. That
+combination is read as **provider-managed effort** — the deployment decides, ZCode sends no
+reasoning parameter at all. Concretely:
+
+- The composer and the settings surfaces hide the thought-level control for these models
+  (`isProviderManagedThoughtOption`, `packages/ui/src/lib/modelThoughtOption.ts`). Hiding
+  happens at the render sites only; `resolveModelThoughtOption` keeps returning an option.
+- The internal selection still carries `reasoningLevel: "default"`, so
+  `validateModelSelectionOptions` and every submission path keep working unchanged.
+- The empty map writes nothing: no `reasoning_effort`, no `thinking`, no `output_config`.
+  Verified per-entry against the live personal config — 183/183 assertions, 60
+  `["default"]` entries emitting zero reasoning paths.
+- `gpt-5-mini` is *not* one of these: its ladder is a genuinely single `"low"`, so it keeps a
+  fixed "Low" chip. Do not collapse the two cases into one.
+
+Because the value is now shown outside the composer too (subagent labels, `list_models`
+rows), `"default"` has a localized word ("Default" / "默认") in
+`chat.toolbar.thoughtLevel.value.default`.
+
 ## gpt-5.4-nano comparison (2026-09-22)
 
 `gpt-5-nano` is **not deployed** on this resource. The deployments are `gpt-5-mini`,

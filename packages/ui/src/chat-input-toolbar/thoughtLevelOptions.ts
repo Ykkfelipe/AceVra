@@ -16,6 +16,8 @@ const NO_THOUGHT_LEVEL_VALUES = new Set([
 ]);
 
 const THOUGHT_LEVEL_LABEL_IDS: Record<string, string> = {
+  // provider 托管 effort 的单一名义档：控件被隐藏，但子代理标签与 list_models 仍会显示这个值。
+  default: "chat.toolbar.thoughtLevel.value.default",
   disabled: "chat.toolbar.thoughtLevel.value.off",
   false: "chat.toolbar.thoughtLevel.value.off",
   no: "chat.toolbar.thoughtLevel.value.off",

@@ -4252,6 +4252,7 @@ const zhCN: Record<string, string> = {
   "chat.toolbar.thoughtLevel.placeholder": "选择思考档位",
   "chat.toolbar.thoughtLevel.description":
     "调整回答前的思考深度。通常越高越稳，但响应也会更慢一些。",
+  "chat.toolbar.thoughtLevel.value.default": "默认",
   "chat.toolbar.thoughtLevel.value.off": "关闭",
   "chat.toolbar.thoughtLevel.value.on": "开启",
   "chat.toolbar.thoughtLevel.value.minimal": "极低",

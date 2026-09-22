@@ -19,7 +19,10 @@ import { Spinner } from "@/components/ui/spinner.js";
 import { useModelSelectionView } from "@/hooks/useModelSelectionView.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { buildRegistryModelSelectGroups } from "@/lib/modelSelectionGroups.js";
-import { resolveModelThoughtOption } from "@/lib/modelThoughtOption.js";
+import {
+  isProviderManagedThoughtOption,
+  resolveModelThoughtOption,
+} from "@/lib/modelThoughtOption.js";
 import { encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import { parseModelPickerValue } from "@/lib/zcodeSessionProjection.js";
 import { logger } from "@/logger.js";
@@ -219,7 +222,9 @@ function WorkflowRunSettingsForm({
           formatMessage: intl.formatMessage.bind(intl),
           providerName,
         }).name;
-  const thoughtOption =
+  // provider 托管 effort 的单 "default" 档没有可切换状态：字段不画档位控件，
+  // 但 draft.level 仍按该模型的 Option 取默认值，Apply 语义不变。
+  const resolvedThoughtOption =
     draftModel.kind === "model" && view !== null && !unavailable
       ? resolveModelThoughtOption({
           modelSelectionView: view,
@@ -227,6 +232,10 @@ function WorkflowRunSettingsForm({
           modelId: draftModel.modelId,
           ...(draftModel.level === undefined ? {} : { currentValue: draftModel.level }),
         })
+      : null;
+  const thoughtOption =
+    resolvedThoughtOption && !isProviderManagedThoughtOption(resolvedThoughtOption)
+      ? resolvedThoughtOption
       : null;
 
   const handleModelChange = (value: string) => {
