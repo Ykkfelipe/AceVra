@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { register } from "node:module";
 import type { ModelSelectionView } from "@zcode/services";
-import { validateModelSelectionOptions } from "@zcode/provider";
+import { commandCodeReasoningCapability, validateModelSelectionOptions } from "@zcode/provider";
 import {
   isProviderManagedThoughtOption,
   resolveModelThoughtOption,
@@ -78,6 +78,18 @@ test("a real ladder still resolves its full option list", () => {
     ["low", "high", "max"],
   );
   assert.equal(option.currentValue, "high");
+  assert.equal(isProviderManagedThoughtOption(option), false);
+});
+
+test("a manifest-backed Command Code ladder automatically remains selector-visible", () => {
+  const capability = commandCodeReasoningCapability("z-ai/glm-5.3-flash");
+  assert.ok(capability);
+  const option = resolve(capability.reasoningLevels, "high");
+  assert.ok(option);
+  assert.deepEqual(
+    option.options?.map((entry) => entry.value),
+    ["low", "high", "max"],
+  );
   assert.equal(isProviderManagedThoughtOption(option), false);
 });
 

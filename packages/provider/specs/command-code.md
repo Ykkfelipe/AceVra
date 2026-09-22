@@ -1,7 +1,8 @@
 # Command Code as a fork provider (Phase 8)
 
-Status: **implemented and verified 2026-09-22 — configuration only, no adapter, no runtime
-change.**
+Status: **implemented and verified 2026-09-22 — configuration only, no adapter or runtime
+change.** See [verified reasoning capabilities](./command-code-reasoning-capabilities.md) for
+the reviewed GOAT effort manifest and its synchronizer.
 
 ## What "GOAT" is
 
@@ -15,12 +16,12 @@ Max, Team, and Provider". The GOAT plan therefore qualifies.
 
 From https://commandcode.ai/docs/provider:
 
-| Endpoint | Format |
-| --- | --- |
+| Endpoint                                                       | Format                  |
+| -------------------------------------------------------------- | ----------------------- |
 | `POST https://api.commandcode.ai/provider/v1/chat/completions` | OpenAI Chat Completions |
-| `POST .../provider/v1/responses` | OpenAI Responses |
-| `POST .../provider/v1/messages` | Anthropic Messages |
-| `GET  .../provider/v1/models` | model list |
+| `POST .../provider/v1/responses`                               | OpenAI Responses        |
+| `POST .../provider/v1/messages`                                | Anthropic Messages      |
+| `GET  .../provider/v1/models`                                  | model list              |
 
 Auth is `Authorization: Bearer <CMD_API_KEY>`, and the docs state "The same key
 authenticates the CLI and the API" — so the key already present in
@@ -60,9 +61,10 @@ More on the reasoning line above: a single-value `"default"` ladder plus `map: "
 **provider-managed effort**. The composer and settings controls are hidden for those models
 (they would otherwise show a meaningless one-item "default" selector), the internal selection
 still carries `reasoningLevel: "default"`, and the empty patch sends nothing — no
-`reasoning_effort`, no `thinking`, no `output_config`. All 60 `["default"]` entries in the
-personal config were audited for this (183/183 assertions). Models with a real ladder keep
-their control, and a genuinely single-`"low"` model (Azure `gpt-5-mini`) keeps its fixed
+`reasoning_effort`, no `thinking`, no `output_config`. The approved 29-model manifest is the
+only exception: it supplies each model's verified multi-level ladder and maps it to
+`{ "reasoning_effort": reasoningLevel }`. Models outside that allow-list remain
+provider-managed; a genuinely single-`"low"` model (Azure `gpt-5-mini`) keeps its fixed
 "Low" chip.
 
 ## Credential handling
