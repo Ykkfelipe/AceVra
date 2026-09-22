@@ -86,8 +86,35 @@ Azure's own response headers confirm streaming:
 
 The 33 tools sent include `Bash`, `Read`, `Edit`, `Write`, `WebFetch`, `Skill` and `Agent`
 — i.e. the harness offered Azure the same tool surface it offers GLM, through the same
-runtime. Tool calling is therefore *wired*, though the validation prompt deliberately
-required no tool call, so an actual Azure tool invocation is still unexercised.
+runtime.
+
+### Tool-call round trip (verified 2026-09-22)
+
+A second validation exercised an actual tool call end to end, with no code change:
+
+| Turn | finishReason | Azure emitted | Result |
+| --- | --- | --- | --- |
+| 0 | `tool-calls` | `Write{file_path: …/ws/azure-tool-test.txt, content: "AZURE_TOOL_OK"}` | intercepted by ZCode's permission prompt, approved once, executed |
+| 1 | `tool-calls` | `Read{file_path: …/ws/azure-tool-test.txt}` | executed; proves the Write result was returned to the model |
+| 2 | `stop` | — | model reported the contents back |
+
+The file on disk is 13 bytes, `AZURE_TOOL_OK`, no trailing newline. Only `Write` and
+`Read` were used, matching the prompt's constraint. All three turns ran with
+`stream=true`, 33 tools offered, `providerId=azure-openai`, `reasoning_effort=low`
+(64 reasoning tokens on turn 0). A fourth, separate call is the auto-title generation:
+non-streaming, zero tools.
+
+This confirms the loop Azure -> ZCode runtime -> tool execution -> result back to Azure
+runs on the existing permission and tool machinery, unmodified.
+
+### Credential rotation
+
+The key was rotated on 2026-09-22 after it was exposed by a harness file diff. The exposed
+value was `key1` on the `obsy-resource` account (matched by hash, never printed);
+`az cognitiveservices account keys regenerate --key-name key1` replaced it, and both
+`.env.azure.local` and `provider_config.json` were rewritten in place at mode 0600.
+Propagation is not instant: the old key still authenticated for roughly 20 seconds before
+returning 401. Verify a rotation by polling rather than checking once.
 
 ## Which harness capabilities should follow automatically
 
