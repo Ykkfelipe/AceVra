@@ -171,6 +171,8 @@ approvals. The old implicit default (no policy fields sent → Codex default
   `createLocalServices`, so it crosses the relay exactly like every other service, already
   carrying sanitized frames only. Approvals are ordinary v4 pendingInteractions, so the
   existing `PermissionDialog` + `resolveInteraction` envelope resolve them remotely.
+- Host-side only: `ZCODE_CODEX_EXECUTABLE` overrides the codex binary path for protocol
+  recording/test tees (composition-root wiring in `node.ts`; absent by default).
 - Errors are scrubbed before acknowledgement (`codexErrorToCode`): message text is capped
   and stripped of absolute paths.
 
@@ -257,6 +259,44 @@ create+read). Raw transcripts: `/tmp/codex-e2e/probe1.log`, `probe2.log`.
 
 Post-run task metadata check: `tasks.meta_json` contains `executionBackend:"codex"`,
 `codexThreadId:"<thread uuid>"`, `status:"completed"` for both E2E tasks.
+
+## Observed approval round-trip (v1.1 drill, 2026-09-22, restrictive default policy)
+
+Live one-turn drill through `/fork` (isolated relay + remote browser, unauthenticated local
+mode), default `safeInteractive` policy (`on-request` + `read-only`), scratch workspace,
+instruction: create `codex-approval-proof.txt` with exactly `APPROVAL_OK` (no trailing
+newline) and read it back. Wire recorded via a pass-through tee in front of the real
+app-server (`ZCODE_CODEX_EXECUTABLE`). Observed:
+
+| Step | Observed shape |
+| ---- | -------------- |
+| `thread/start` | `{cwd, approvalPolicy:"on-request", sandbox:"read-only"}` accepted; thread id at `result.thread.id` |
+| `turn/start` response | `{turn:{id:"01a…", items:[], status:"inProgress", …}}` — Codex turn id captured for `turn/interrupt` |
+| approval gate | notification `thread/status/changed {status:{type:"active",activeFlags:["waitingOnApproval"]}}` precedes the request |
+| server-request | `item/commandExecution/requestApproval` with **id `0`**; params `{kind:"command", threadId, turnId, itemId:"exec-…", startedAtMs, environmentId:"local", reason, command:"/bin/zsh -lc '…'"}` |
+| harness response | `{jsonrpc:"2.0", id:0, result:{decision:"accept"}}` — schema-true accept mapping proven live |
+| resolution notice | notification `serverRequest/resolved {threadId, requestId:0}` after the response (no answer required) |
+| continuation | same turn continues (no second turn): command executed → `item/completed` → final `agentMessage` deltas `APPROVAL_OK` → `turn/completed` |
+| file bytes | `codex-approval-proof.txt` = exactly `APPROVAL_OK` (11 bytes, no newline) |
+| remote UX | approval surfaced as ordinary v4 pendingInteraction → `PermissionDialog` in `/fork` → remote Allow/Confirm → `resolveInteraction` envelope |
+
+Noise observed on live threads (all parsed as `unhandled`/unknown and dropped, never
+answered): `mcpServer/startupStatus/updated` server-notifications, `thread/tokenUsage/updated`,
+`account/rateLimits/updated`, `thread/status/changed`, `warning`. Server-request rawIds on a
+fresh bridge are small integers starting at 0.
+
+Restart/resume (host restart and bridge-only SIGKILL of the `codex app-server` child, both
+drilled): bridge auto-restarts within the restart budget; fresh attachment →
+`thread/resume {threadId, approvalPolicy, sandbox, excludeTurns:true}` →
+`thread/items/list` returns all 4 wrapped entries (`{turnId,item}`, `nextCursor:null`) →
+projection rebuilds commentary/toolCall/final rows (`userMessage` history still not
+replayed — known gap, does not lose assistant content) → task rows intact and
+non-duplicated across reconnects.
+
+Live cancellation drill: **pending** — `turn/interrupt {threadId, turnId}` is
+schema-validated and covered by unit tests (turn id captured from `turn/start` response and
+`turn/started`, cleared on `turn/completed`, `codex_interrupt_no_active_turn` when unknown);
+no live inference was spent on it per the phase instruction.
 
 ## E2E checklist (superseded by "Observed shapes" above; kept for the remaining drills)
 

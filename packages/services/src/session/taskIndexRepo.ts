@@ -48,7 +48,10 @@ function appendZCodeAgentIndexedProviderFilter(
   provider: ZCodeProvider,
 ): void {
   // 列表按当前 runtime provider 过滤；历史导入来源不改变此边界。
-  where.push("provider = ?");
+  // Codex 执行后端的任务是同一工作区任务面的一等成员：provider 列不承载它的模型
+  // provider 语义，唯一标记是 meta_json.executionBackend（见 codex-execution spec），
+  // 因此在这里显式纳入，否则宿主重启后 Codex 任务会从任务列表消失、无法重新打开。
+  where.push(`(provider = ? OR json_extract(meta_json, '$.executionBackend') = 'codex')`);
   args.push(provider);
 }
 type DatabaseSyncInstance = InstanceType<typeof DatabaseSync>;
@@ -1711,7 +1714,10 @@ export class TaskIndexRepo {
         WHERE (@workspace_key IS NULL OR workspace_key = @workspace_key)
           AND (@include_deleted = 1 OR deleted = 0)
           -- 按请求指定的 runtime provider 过滤；迁移来源另存于 migration_source。
-          AND (@provider IS NULL OR provider = @provider)
+          -- Codex 执行后端任务（meta_json.executionBackend='codex'）纳入同一列表，
+          -- 否则宿主重启后 Codex 任务从列表消失（见 codexTaskListVisibility.test.ts）。
+          AND (@provider IS NULL OR provider = @provider
+               OR json_extract(meta_json, '$.executionBackend') = 'codex')
           AND (@pinned IS NULL OR pinned = @pinned)
           AND (@archived IS NULL OR archived = @archived)
         ORDER BY updated_at DESC, created_at DESC, task_id DESC`,
@@ -2553,12 +2559,56 @@ export class TaskIndexRepo {
   }
 
   async getTaskMeta(params: {
-    workspacePath: string;
+    workspacePath?: string;
     workspaceIdentity?: string;
     taskId: string;
   }): Promise<ZCodeTaskMeta | null> {
     await this.ensureReady();
-    const row = this.getTaskRow(params);
+    if (!params.workspacePath?.trim() && !params.workspaceIdentity?.trim()) {
+      // taskId-only 读取（Codex 执行后端的路由探询/冷恢复）：宿主重启后内存 runtime
+      // 为空，调用方只有 taskId。task_id 是全局 UUID，按其定位并返回该任务自身的
+      // meta；远端仍只能经 codex-execution 通道拿到脱敏绑定，不扩大任何泄露面。
+      const row = this.getDatabase()
+        .prepare(
+          `SELECT
+            workspace_key,
+            workspace_path,
+            workspace_identity,
+            task_id,
+            title,
+            task_status,
+            provider,
+            mode,
+            model,
+            migration_source,
+            forked_from_task_id,
+            cron_automation_id,
+            off_peak_task_id,
+            created_at,
+            updated_at,
+            unread_at,
+            last_unread_at,
+            pinned,
+            archived,
+            deleted,
+            title_overridden,
+            searchable_text,
+            meta_json
+          FROM tasks
+          WHERE task_id = ?
+          LIMIT 1`,
+        )
+        .get(params.taskId) as TaskIndexRow | undefined;
+      if (!row || row.deleted === 1) {
+        return null;
+      }
+      return rowToMeta(row);
+    }
+    const row = this.getTaskRow({
+      workspacePath: params.workspacePath ?? "",
+      workspaceIdentity: params.workspaceIdentity,
+      taskId: params.taskId,
+    });
     if (!row || row.deleted === 1) {
       return null;
     }
