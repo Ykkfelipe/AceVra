@@ -20,6 +20,8 @@ interface WebSocketConnectionOptions {
   onOpenSocket?: (socket: WebSocket) => void;
   /** Development-only lifecycle tracing supplied by the embedding application. */
   debug?: (event: "socket_open" | "first_outbound_frame" | "first_inbound_frame") => void;
+  /** Capabilities intentionally absent from a Web replayable attachment. */
+  webReplayableCapabilities?: { windowController?: boolean };
 }
 
 function wrapBrowserWebSocket(ws: WebSocket, debug?: WebSocketConnectionOptions["debug"]): ISocket {
@@ -107,12 +109,17 @@ export function connectViaWebSocket(
       options?.onOpenSocket?.(ws);
       options?.debug?.("socket_open");
       const socket = wrapBrowserWebSocket(ws, options?.debug);
-      resolve(connectViaProtocol(new SocketProtocol(socket)));
+      resolve(
+        connectViaProtocol(new SocketProtocol(socket), options?.webReplayableCapabilities),
+      );
     });
   });
 }
 
-export function connectViaProtocol(protocol: IMessagePassingProtocol): IServiceAccessor {
+export function connectViaProtocol(
+  protocol: IMessagePassingProtocol,
+  capabilities?: { windowController?: boolean },
+): IServiceAccessor {
   const client = new ChannelClient(protocol);
-  return new RemoteServiceAccess(client);
+  return new RemoteServiceAccess(client, capabilities);
 }

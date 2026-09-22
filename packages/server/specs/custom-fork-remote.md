@@ -78,3 +78,58 @@ concurrent browsers.
   is unavailable or the device is offline.
 
 Official routes, providers, relay behavior, and agent behavior are unchanged.
+
+## Phase 6 Web stabilization contract
+
+The `/fork` browser shell owns only connection lifecycle and presentation state. It does not own
+workspace, task, session, or conversation state. Those remain projections of the Mac attachment's
+existing services. The shell state is one of:
+
+- `authentication-required`: Clerk is configured and there is no current session/token.
+- `relay-unavailable`: the fork API cannot be reached or rejects bootstrap for a reason other than
+  authentication.
+- `offline`: the API is reachable but the registered Mac is offline.
+- `connecting`: the Mac is online and a fresh single-use relay ticket is being exchanged.
+- `online`: the replayable RPC socket is initialized and the shared application shell is mounted.
+- `reconnecting`: a previously-online socket closed and automatic recovery is in progress.
+- `restored`: the first successful connection after `reconnecting`; it is announced briefly before
+  returning to `online`.
+
+Mutable connection state has one owner: the `/fork` Web connection controller. Presence polling and
+socket close events send transitions to that owner; React UI reads the resulting state. A reconnect
+never reuses a relay ticket or RPC accessor.
+
+```text
+socket close / presence poll
+          -> Web connection controller
+          -> fetch authenticated device presence
+          -> issue fresh relay ticket when online
+          -> open fresh browser attachment
+          -> receive ChannelServer Initialize
+          -> mount one fresh service accessor generation
+```
+
+Reconnect attempts are single-flight and use bounded exponential backoff. A stale attempt may only
+commit if its generation is still current. Unmount/page teardown invalidates the generation and
+closes the active socket. Relay unavailability and device offline are visible recoverable states;
+neither clears browser-side navigation/cache state. The direct `/fork/ws` route remains the
+capability-safe fallback for a reachable fork server when no relay ticket can be issued.
+
+`window-controller` is a Desktop Local Host aggregation channel and is not part of the
+`web-remote-replayable` attachment contract. The Web client must therefore mark that capability as
+absent and let UI consumers use their existing sessions-index/task-service paths. It must not create
+a proxy that sends calls to an unknown channel, and absence must settle loading state immediately.
+
+Onboarding hooks must be unconditional across the transition from an unresolved workspace to the
+resolved relay workspace. The dialog may remain closed on Web when the first-run record is already
+handled, but connection initialization must never leave a stale loading/onboarding overlay.
+
+At widths below 768 px the `/fork` shell is a mobile workspace, not a scaled desktop: the connection
+banner wraps without clipping, respects safe-area insets, and does not steal height from the app;
+navigation/project/task surfaces can occupy the viewport, composer controls remain reachable, and
+dialogs/popovers are bounded by the visual viewport. Desktop geometry remains unchanged above that
+breakpoint.
+
+Acceptance requires desktop and iPhone-sized coverage for project/task navigation, task creation,
+composer send/response, model and usage controls, dialogs, and all seven connection states. Restarting
+the Mac-side relay/worker must recover without a browser reload and leave the selected task usable.

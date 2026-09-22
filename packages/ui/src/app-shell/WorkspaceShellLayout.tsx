@@ -822,6 +822,16 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const primaryNavigationBack =
     workspaceMainView === "plugin-store" ? handleManageInstalledPlugins : handleTaskNavBack;
   const canPrimaryNavigationBack = workspaceMainView === "plugin-store" || canTaskNavBack;
+  const closeMobileWebSidebar = useCallback(() => {
+    if (
+      !isDesktop &&
+      isSidebarVisible &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 767px)").matches
+    ) {
+      handleToggleSidebar();
+    }
+  }, [handleToggleSidebar, isDesktop, isSidebarVisible]);
   const handleCreateTaskInChat = useCallback(
     (request?: Parameters<typeof onCreateTask>[0]) => {
       // workspaceReadOnlyReason 判定的是活动 workspace；当 request 显式带 targetWorkspace 时
@@ -834,8 +844,9 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       }
       showChatMainView();
       onCreateTask(request);
+      closeMobileWebSidebar();
     },
-    [onCreateTask, showChatMainView, workspaceReadOnlyReason],
+    [closeMobileWebSidebar, onCreateTask, showChatMainView, workspaceReadOnlyReason],
   );
   const shellWorkbenchBinding = useMemo<WorkbenchSessionBinding | null>(
     () =>
@@ -921,8 +932,17 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       } else {
         handleSelectTask(targetWorkspacePath, taskId, targetWorkspaceIdentity);
       }
+      closeMobileWebSidebar();
     },
-    [handleSelectTask, intl, shellWorkbenchBinding, showChatMainView, tabStoreApi, workspaceTabs],
+    [
+      closeMobileWebSidebar,
+      handleSelectTask,
+      intl,
+      shellWorkbenchBinding,
+      showChatMainView,
+      tabStoreApi,
+      workspaceTabs,
+    ],
   );
   // 中枢直接启动 accepted 后切到新会话（run 卡已在顶部）：复用运行历史那条导航，
   // target 恒带工作流所属项目坐标（不变式 7），remoteSessionId 决定连接 endpoint。
@@ -1102,9 +1122,11 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     [handleStartDraftInWorkspace, showChatMainView],
   );
   const handleCreateProjectDraft = useCallback(
-    (path: string, identity?: string) =>
-      handleStartDraftInWorkspaceInChat(path, identity, undefined, "project"),
-    [handleStartDraftInWorkspaceInChat],
+    (path: string, identity?: string) => {
+      handleStartDraftInWorkspaceInChat(path, identity, undefined, "project");
+      closeMobileWebSidebar();
+    },
+    [closeMobileWebSidebar, handleStartDraftInWorkspaceInChat],
   );
   const activeWorkspacePurpose =
     workspaceTabs.find(

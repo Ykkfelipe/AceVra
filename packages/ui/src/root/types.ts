@@ -36,6 +36,8 @@ export interface RootProps {
   allowRemoteWorkspace?: boolean;
   /** 非桌面入口初始 workspace 注入前继续展示的 loading，桌面端不使用 */
   initialWorkspaceLoadingFallback?: ReactNode;
+  /** Web remote 在引导记录 RPC 判定期间保持已初始化 workspace 可见。 */
+  showWorkspaceWhileOnboardingLoading?: boolean;
   /** Assistant code-comment 卡片灰度；默认关闭，关闭时保留原始 directive。 */
   assistantCodeCommentCardsEnabled?: boolean;
 }

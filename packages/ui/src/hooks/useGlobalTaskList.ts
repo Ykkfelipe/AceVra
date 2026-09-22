@@ -141,8 +141,8 @@ export function useGlobalTaskList(params: {
         return;
       }
       if (!controllerRegistry) {
-        // 原子切换后 base attachment 必须提供 Controller；缺失代表 Host/Renderer 版本不一致。
-        logger.error("[useGlobalTaskList] window Host Controller channel unavailable");
+        // web-remote-replayable 明确不提供 Desktop window controller。此时 sessions-index
+        // 与 workspace task service 仍是数据权威；这里立即结束 hydration，不发送未知频道 RPC。
         setLoading(false);
         return;
       }

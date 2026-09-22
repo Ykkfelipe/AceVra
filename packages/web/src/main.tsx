@@ -11,6 +11,7 @@ import {
   type Theme,
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
+import "./customForkRemote.css";
 import { connectViaWebSocket } from "@zcode/client";
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
@@ -32,6 +33,7 @@ import {
 import type { IPlatformService, RemoteTarget, ServerRemoteInfo } from "@zcode/shared";
 import { resolveCustomForkProductConfig } from "@zcode/shared";
 import { WEB_DEFAULT_THEME, resolveWebInitialTheme } from "./webThemeSeed.js";
+import { CustomForkRemoteApp } from "./customForkRemoteApp.js";
 
 function resolveWebThemePreference(defaultTheme: Theme = WEB_DEFAULT_THEME): Theme {
   const saved = localStorage.getItem("zcode-theme");
@@ -517,6 +519,12 @@ async function bootstrapWebApp() {
 
   if (isConversationSharePath(window.location.pathname)) {
     await renderConversationSharePage();
+    return;
+  }
+
+  if (isCustomForkRoute()) {
+    document.title = "ZCode Fork Dev - Remote";
+    root.render(<CustomForkRemoteApp platform={createWebPlatform()} />);
     return;
   }
 

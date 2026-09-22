@@ -158,6 +158,7 @@ function RootInner({
   supportsEmbeddedBrowser: explicitSupportsEmbeddedBrowser,
   allowRemoteWorkspace = true,
   initialWorkspaceLoadingFallback,
+  showWorkspaceWhileOnboardingLoading = false,
 }: RootProps) {
   useEffect(() => {
     setMcpStorePlatform(platform);
@@ -993,7 +994,9 @@ function RootInner({
       {directoryBrowserDialog}
       <OccupationOnboarding
         showWindowControls={Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop))}
-        showChildrenWhileLoading={!workspaceShellPath && isSettingsTabActive}
+        showChildrenWhileLoading={
+          showWorkspaceWhileOnboardingLoading || (!workspaceShellPath && isSettingsTabActive)
+        }
         isMacDesktop={isMacDesktop}
         isWindowsDesktop={isWindowsDesktop}
       >
