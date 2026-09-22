@@ -40,6 +40,9 @@ const HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionId>([
   "automations",
   // 旧插件市场已迁出设置页；保留 id 只用于迁移历史偏好和旧调用。
   "plugins",
+  // 旧顶层「账号与导入」分区已并入模型设置 split panel（account 导航项）；
+  // resolveSettingsSection 会把该 id 迁到 modelProvider，这里兜底防再入选项列表。
+  "accounts",
   // 工作区搜索（.zcodeignore）设置入口先隐藏：规则文件仍生效并可手动编辑，
   // 编辑页代码保留，放开时从这里移除即可。
   "workspaceFileSearch",
@@ -92,6 +95,9 @@ export function resolveSettingsSection(
   fallbackSection: SettingsSectionId = "general",
 ): SettingsSectionId {
   if (section === "plugins") return "plugin";
+  // 偏好/意图迁移：账号与导入已并入模型设置 split panel 的 account 导航项，
+  // 旧 "accounts" 顶层分区 id 统一落到 modelProvider（plugins→plugin 同款处理）。
+  if (section === "accounts") return "modelProvider";
   return isSettingsSectionEnabled(section) ? section : fallbackSection;
 }
 

@@ -218,9 +218,19 @@ export type ModelProviderNavItem =
       label: string;
       provider: ProviderSettingsFormProvider;
       statusActive: boolean;
+    }
+  /**
+   * Accounts & Imports 入口（Codex / Claude Code / Command Code 的账号桥接与历史导入）。
+   * 不携带 provider/statusActive：它不是模型供应商，导航不显示供应商状态灯，
+   * 也不参与供应商拖拽排序。
+   */
+  | {
+      key: string;
+      type: "account";
+      label: string;
     };
 
-export type ModelProviderNavGroupId = "preset" | "custom";
+export type ModelProviderNavGroupId = "preset" | "custom" | "account";
 
 export interface ModelProviderNavGroup {
   id: ModelProviderNavGroupId;

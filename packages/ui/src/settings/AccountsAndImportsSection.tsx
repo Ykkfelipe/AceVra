@@ -29,7 +29,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1">
       <span className="text-ui-xs text-foreground-subtle">{label}</span>
-      <span className="text-ui-xs font-medium tabular-nums">{value}</span>
+      {/* 窄屏（iPhone 宽度）下长 email/型号名必须截断，不能把卡片撑出横向滚动。 */}
+      <span className="min-w-0 truncate text-ui-xs font-medium tabular-nums">{value}</span>
     </div>
   );
 }

@@ -68,6 +68,10 @@ function shouldShowModelProviderGroupLoadingIndicator(params: {
   if (params.groupId === "preset") {
     return params.presetLoading;
   }
+  if (params.groupId === "account") {
+    // 账号组没有供应商列表的加载态（账号状态在右侧详情里按需拉取）。
+    return false;
+  }
   return params.customLoading;
 }
 
@@ -401,7 +405,9 @@ export function ModelProviderSectionNavigation({
                 ) : null}
               </div>
 
-              {group.id === "preset" ? (
+              {group.id === "preset" || group.id === "account" ? (
+                // account 组与 preset 同为静态列表：非拖拽渲染，
+                // getSortableProviderId 对无 provider 的节点返回 null，进 DnD 上下文只会白包一层。
                 <PresetProviderCardNavigation
                   group={group}
                   selectedNodeKey={selectedNodeKey}

@@ -8,7 +8,6 @@ import {
   Palette,
   Sun,
   BarChart3,
-  UserCog,
   Terminal,
   AlarmClock,
   Anchor,
@@ -155,14 +154,6 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "usage",
     icon: BarChart3,
     titleId: "settings.usageTitle",
-    groupId: "dataAndStats",
-  },
-  // Accounts & Imports：外部 coding agent 的账号桥接与历史导入。
-  // 放在数据与统计分组，紧邻 usage：两者都是账号/用量视角的只读面板。
-  {
-    id: "accounts",
-    icon: UserCog,
-    titleId: "settings.accounts.title",
     groupId: "dataAndStats",
   },
 ];

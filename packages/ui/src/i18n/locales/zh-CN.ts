@@ -1859,6 +1859,7 @@ const zhCN: Record<string, string> = {
   "settings.migration.title": "迁移",
   "settings.accounts.title": "账号与导入",
   "settings.accounts.description": "连接外部 coding agent 并导入历史会话",
+  "settings.accounts.navGroup": "账号",
   "settings.migration.sectionTitle": "Claude 历史迁移",
   "settings.migration.sectionDescription":
     "扫描本机 Claude Code 原生历史，可按 workspace 和时间范围筛选，再把选中的会话导入到对应的 ZCode 任务列表。",

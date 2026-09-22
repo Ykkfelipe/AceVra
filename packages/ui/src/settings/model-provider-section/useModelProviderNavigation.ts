@@ -41,6 +41,9 @@ interface PresetProviderWithConfig extends PresetProviderSpec {
   provider: ProviderSettingsFormProvider | null;
 }
 
+/** Accounts & Imports 导航节点 key（左栏 account 组内唯一一项）。 */
+export const ACCOUNT_NAV_NODE_KEY = "account:imports";
+
 interface UseModelProviderNavigationOptions {
   presetProviders: PresetProviderWithConfig[];
   modelProviders: ProviderSettingsFormProvider[];
@@ -220,6 +223,19 @@ export function useModelProviderNavigation({
           provider,
           statusActive: provider.executable === true,
         })),
+      },
+      // Accounts & Imports：外部 coding agent 的账号桥接与历史导入。
+      // 单独成组挂在模型供应商之后；不参与供应商拖拽排序，默认选中也永远不会落在这里。
+      {
+        id: "account",
+        title: intl.formatMessage({ id: "settings.accounts.navGroup" }),
+        items: [
+          {
+            key: ACCOUNT_NAV_NODE_KEY,
+            type: "account" as const,
+            label: intl.formatMessage({ id: "settings.accounts.title" }),
+          },
+        ],
       },
     ];
 
@@ -524,7 +540,8 @@ export function connectionSelectionMatchesNavigationItem(
   selection: ProviderFamilyConnectionSelection,
   item: Exclude<ModelProviderNavGroup["items"][number], { type: "codingPlanLoading" }>,
 ): boolean {
-  if (item.type === "custom") return false;
+  // account 节点不对应任何供应商连接方式（也无 presetId），与 custom 一样直接排除。
+  if (item.type === "custom" || item.type === "account") return false;
   const familySpec = resolveModelProviderFamilySpecByProviderId(item.presetId ?? "");
   if (familySpec?.id !== family) return false;
   if (selection.kind === "start-plan") {

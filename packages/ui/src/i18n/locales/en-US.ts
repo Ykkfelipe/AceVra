@@ -1970,6 +1970,7 @@ const enUS: Record<string, string> = {
   "settings.migration.title": "Migration",
   "settings.accounts.title": "Accounts & Imports",
   "settings.accounts.description": "Connect external coding agents and import their history",
+  "settings.accounts.navGroup": "Accounts",
   "settings.migration.sectionTitle": "Claude History Migration",
   "settings.migration.sectionDescription":
     "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching ZCode task lists.",

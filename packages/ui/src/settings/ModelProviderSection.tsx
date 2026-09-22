@@ -228,8 +228,10 @@ function resolveModelProviderSideSelectionKey(
 }
 
 /**
- * 模型 Provider 设置只由 SettingsPage 注入 Local Host；这里不接收 workspaceIdentity，
- * 防止远程 workspace 误将 Provider Settings 的读写路由到远端 Environment。
+ * 模型 Provider 设置只由 SettingsPage 注入 Local Host；这里不接收 workspaceIdentity
+ * 参与供应商读写，防止远程 workspace 误将 Provider Settings 的读写路由到远端 Environment。
+ * accounts* 三个 prop 是例外通道：只透传给右侧 Accounts & Imports 详情
+ * （历史导入的 workspace 绑定），绝不进入模型供应商的读写路径。
  */
 export function ModelProviderSection({
   workspacePath = "",
@@ -237,12 +239,18 @@ export function ModelProviderSection({
   connectivityWorkspaceRequired = false,
   pendingModelProviderTarget,
   onConsumePendingModelProviderTarget,
+  accountsWorkspacePath,
+  accountsWorkspaceIdentity,
+  accountsIsDesktop,
 }: {
   workspacePath?: string;
   connectivityWorkspacePath?: string;
   connectivityWorkspaceRequired?: boolean;
   pendingModelProviderTarget?: SettingsModelProviderTarget;
   onConsumePendingModelProviderTarget?: () => void;
+  accountsWorkspacePath?: string | null;
+  accountsWorkspaceIdentity?: string;
+  accountsIsDesktop?: boolean;
 } = {}) {
   const { intl, locale } = useZCodeIntl();
   const confirmDialog = useConfirmDialog();
@@ -1101,6 +1109,9 @@ export function ModelProviderSection({
           providerSettingsView={providerSettingsView}
           selectedNavItem={selectedNavItem}
           navigationItems={navigationItems}
+          accountsWorkspacePath={accountsWorkspacePath}
+          accountsWorkspaceIdentity={accountsWorkspaceIdentity}
+          accountsIsDesktop={accountsIsDesktop}
           connectionSettingsFailed={familyConnectionSettingsFailed}
           startPlanSubscriptionCount={(() => {
             const providerId =

@@ -1,6 +1,12 @@
 # Accounts & Imports (Phase 9)
 
-Status: **investigation complete for both sources. Nothing implemented yet.**
+Status: **implemented (phase 9, see HANDOFF.md).** Codex/Claude account bridges,
+sanitized status, and Claude/Codex history discovery are live. Settings placement:
+the `account` variant of `ModelProviderNavItem`
+(`packages/ui/src/settings/model-provider-section/constants.ts`) renders
+`AccountsAndImportsSection` in the Model settings split-panel detail pane
+(`model-provider-section/Detail.tsx`); the standalone top-level "accounts"
+Settings section was removed and its old id migrates to `modelProvider`.
 
 Two *distinct* features, deliberately not conflated:
 
@@ -118,10 +124,11 @@ Settings open, and after an explicit connect/disconnect) rather than by subscrip
 Claude (already built): `importClaudeNativeSessions`
 (`packages/services/src/session/claude-native/claudeNativeSessionImportService.ts`) copies
 Claude's `.jsonl` transcripts into the workspace as ZCode tasks. It is already shared by
-onboarding (`OnboardingDialog.tsx:61`) and Settings (`MigrationSection.tsx:61`, wired at
-`SettingsPage.tsx:1880`) through the `useClaudeSessionMigration` hook, so it is already
-re-runnable after onboarding. Per "do not duplicate it", this stays as is; only its
-presentation moves under the new section.
+onboarding (`OnboardingDialog.tsx:61`) and Settings (`MigrationSection.tsx:61`, embedded by
+`AccountsAndImportsSection`, which is rendered from the Model settings split-panel
+`account` variant in `model-provider-section/Detail.tsx`) through the
+`useClaudeSessionMigration` hook, so it is already re-runnable after onboarding. Per
+"do not duplicate it", this stays as is; only its presentation moved with the section.
 
 Codex (to build): the equivalent local store is `~/.codex/sessions/{year}/…` plus
 `~/.codex/thread_history_1.sqlite` (~134 MB; tables `thread_items`, `thread_turns`). This is

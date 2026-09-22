@@ -117,6 +117,13 @@ undefined (reading 'length')` inside zustand `useStore` → `useCallback`, caugh
    position 8 (`useRef` → `useContext`). Skipping the wizard still reaches the shell.
 2. ~~`window-controller` channel is absent on `web-remote-replayable`~~ — Phase 6 makes
    the absence an explicit capability instead of a failed RPC probe.
+3. ~~Sidebar footer clipped on `/fork`~~ — fixed in `a8a4584`. Shell components below
+   `#root` re-declared viewport height (`h-dvh`/`h-screen`), so under the connection banner
+   the app row was shorter than its children and `overflow:hidden` sliced off the bottom
+   strip containing the sidebar footer. Now only `#root`/`.fork-remote-shell` own `100dvh`;
+   everything below fills its container (`h-full min-h-0`), and the footer keeps `shrink-0`
+   with `pb-[calc(1rem+env(safe-area-inset-bottom))]`. Pinned by
+   `packages/ui/test/shellViewportHeightContract.test.ts`.
 
 ## Phase 6 (reconnect + web stabilization)
 
@@ -389,12 +396,19 @@ Tests that need the local Codex/Claude clients skip cleanly when absent.
 
 ## Immediate next steps
 
-1. **Relocate the Accounts UI into the Model settings split panel.** The user asked for this
-   explicitly and did not like the current standalone section of plain cards. The blocker is
-   that `ModelProviderNavItem` (`packages/ui/src/settings/model-provider-section/constants.ts`)
-   is a discriminated union of `preset | codingPlan | teamPlan | custom`; an `account` variant
-   must be added and handled in `Navigation.tsx` and `Detail.tsx`. Once done, drop the
-   separate `"accounts"` nav entry from `settingsPageConfig.ts`. **Do this first.**
+1. ~~**Relocate the Accounts UI into the Model settings split panel.**~~ **Done.** The user
+   disliked the standalone section of plain cards, so Accounts & Imports now lives in the
+   Model settings split panel: `ModelProviderNavItem`
+   (`packages/ui/src/settings/model-provider-section/constants.ts`) gained an `account`
+   variant, rendered by the static (non-sortable) list in `Navigation.tsx` and dispatched in
+   `Detail.tsx` to the existing `AccountsAndImportsSection` (Codex card + scan, Claude Code
+   card, Command Code card, Claude history migration — no second accounts UI was built).
+   `connectionSelectionMatchesNavigationItem` excludes the account node and default selection
+   never lands on it. The standalone `"accounts"` entry is gone from
+   `settingsPageConfig.ts` / `SettingsPage.tsx`; legacy `accounts` ids migrate to
+   `modelProvider` in `lib/settingsNavigation.ts` (plugins precedent). i18n key:
+   `settings.accounts.navGroup`. Spec refreshed in
+   `packages/services/specs/accounts-and-imports.md`.
 2. **Make Codex history actually importable.** `scanCodexImportableSessions` only discovers
    candidates; nothing writes them into tasks yet. Mirror
    `importClaudeNativeSessions`, reusing `ZCodeImportSessionsResult` with `provider: "codex"`

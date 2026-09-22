@@ -64,6 +64,7 @@ import type { ProviderSettingsView } from "@zcode/services";
 import type { SavePersonalModelDraftInput } from "@zcode/provider";
 import { resolveAccountProviderInspectionAccess } from "@/lib/accountProviderAccess.js";
 import { projectProviderSettingsViewToFormProviders } from "@/lib/providerSettingsFormProjection.js";
+import { AccountsAndImportsSection } from "@/settings/AccountsAndImportsSection.js";
 
 const START_PLAN_ENTRY_BANNER_CLASS =
   "min-h-20 w-full overflow-hidden rounded-xl border border-border bg-[radial-gradient(circle_at_14%_12%,color-mix(in_srgb,var(--color-success)_24%,var(--color-background)_76%)_0%,color-mix(in_srgb,var(--color-success)_10%,var(--color-surface)_90%)_64%,var(--color-surface)_300%)] p-4 text-left transition-colors hover:border-border-hover";
@@ -252,6 +253,9 @@ export function ModelProviderSectionDetail({
   onCodingPlanPurchaseComplete,
   onSelectNavItem,
   providerSettingsView: providerSettingsViewOverride,
+  accountsWorkspacePath,
+  accountsWorkspaceIdentity,
+  accountsIsDesktop,
 }: {
   selectedNavItem: ModelProviderNavItem | null;
   navigationItems?: ModelProviderNavItem[];
@@ -301,6 +305,10 @@ export function ModelProviderSectionDetail({
   onCodingPlanPurchaseComplete: () => void | Promise<void>;
   onSelectNavItem?: (item: ModelProviderNavItem) => void;
   providerSettingsView?: ProviderSettingsView | null;
+  /** Accounts & Imports 详情的工作区上下文：只喂给历史导入绑定，不参与模型供应商路由。 */
+  accountsWorkspacePath?: string | null;
+  accountsWorkspaceIdentity?: string;
+  accountsIsDesktop?: boolean;
 }) {
   const { intl } = useZCodeIntl();
   const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
@@ -392,6 +400,19 @@ export function ModelProviderSectionDetail({
 
   if (!selectedNavItem) {
     return <ModelProviderLoadingCard loadingLabel={loadingLabel} />;
+  }
+
+  if (selectedNavItem.type === "account") {
+    // Accounts & Imports：Codex / Claude Code / Command Code 账号状态与历史导入。
+    // 完整复用已建成的 AccountsAndImportsSection（含 Codex 扫描与 Claude MigrationSection），
+    // 不在这里重建第二套账号 UI。所有 hook 已在上方无条件执行，此分支可安全早退。
+    return (
+      <AccountsAndImportsSection
+        workspacePath={accountsWorkspacePath ?? null}
+        {...(accountsWorkspaceIdentity ? { workspaceIdentity: accountsWorkspaceIdentity } : {})}
+        {...(accountsIsDesktop === undefined ? {} : { isDesktop: accountsIsDesktop })}
+      />
+    );
   }
 
   if (selectedNavItem.type === "preset") {
