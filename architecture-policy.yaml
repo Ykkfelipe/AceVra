@@ -31,6 +31,14 @@ modules:
     layers: { domain: domain, app: app, adapters: adapters }
     layerOrder: [domain, app, adapters]
     owner: desktop-settings
+  - id: codex
+    roots: [packages/services/src/codex]
+    managed: true
+    requires: [shared, services]
+    publicEntrypoints: [packages/services/src/codex/contract.ts]
+    layers: { domain: domain, app: app }
+    layerOrder: [domain, app]
+    owner: codex-execution
   - id: client
     roots: [packages/client/src]
     managed: false

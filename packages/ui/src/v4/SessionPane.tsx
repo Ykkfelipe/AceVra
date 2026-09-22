@@ -23,7 +23,9 @@ import {
   TID_V4_SESSION_PANE,
   testId,
   ZCODE_AGENT_PROVIDER,
+  type ZCodeExecutionBackend,
 } from "@zcode/shared";
+import { useCodexExecutionService } from "@/hooks/useCodexExecutionService.js";
 import type {
   ConversationShareAccessMode,
   GitChangeSourceId,
@@ -1245,6 +1247,7 @@ export function SessionPane({
     handleDraftSelectModel,
     handleDraftSelectThought,
     handleDraftSwitchMode,
+    handleDraftSwitchBackend,
     promoteComposerDraft,
     captureAcceptedModelSelection,
     replaceComposerDraft,
@@ -1258,6 +1261,14 @@ export function SessionPane({
     agentStartupAllowed: draftAgentStartupAllowed,
     modelSelectionService,
   });
+  // 执行后端（phase 10）：draft 首发时 ZCode | Codex。回调与首发路径经 ref 读取，
+  // 避免逐键重建 dispatchSendTextAfterConfig。
+  const draftBackend = composerDraft.executionBackend ?? "zcode";
+  const draftBackendRef = useRef<ZCodeExecutionBackend>(draftBackend);
+  draftBackendRef.current = draftBackend;
+  const codexExecutionService = useCodexExecutionService();
+  const codexExecutionServiceRef = useRef(codexExecutionService);
+  codexExecutionServiceRef.current = codexExecutionService;
   const modelSelectionView =
     modelSelectionRead.state.status === "ready" ? modelSelectionRead.state.view : null;
   const draftModelSelectionRevisionRef = useRef<number | null>(null);
@@ -1288,9 +1299,13 @@ export function SessionPane({
     () => createComposerSubmissionConfig(draftConfigRef.current, modelSelectionView),
     [draftConfigRef, modelSelectionView],
   );
+  // Codex 后端首发不需要 zcode 模型选择；就绪态与 submission 构造都放行。
+  // 生成的 stub submission 只被 zcode 命令路径消费，Codex 分支不会读取。
   const composerSubmissionReady = useMemo(
-    () => createComposerSubmissionConfig(draftConfig, modelSelectionView) !== null,
-    [draftConfig, modelSelectionView],
+    () =>
+      draftBackend === "codex" ||
+      createComposerSubmissionConfig(draftConfig, modelSelectionView) !== null,
+    [draftBackend, draftConfig, modelSelectionView],
   );
   const codingPlanUpgradeDialog = useOptionalCodingPlanUpgradeDialog();
   const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
@@ -2279,7 +2294,8 @@ export function SessionPane({
   // pane 未绑定会话时后台建 phase=draft 会话作预热载体：配置写 CAS 直达、首发复用。
   // 对外绑定语义不变（shell activeTaskId 仍 null），预热会话只是 pane 内部 effective 订阅目标。
   const { binding: prewarmBinding } = useDraftSessionPrewarm({
-    enabled: sessionId === null && draftAgentStartupAllowed,
+    // Codex 后端草稿不预热 zcode session（无 CLI runtime）；首发走 createTask。
+    enabled: sessionId === null && draftAgentStartupAllowed && draftBackend === "zcode",
     workspaceKey,
     paneId,
     invalidationVersion: draftRuntimeInvalidationVersion,
@@ -2556,10 +2572,6 @@ export function SessionPane({
         if (!slashCommand.task) return "sent" as const;
       }
 
-      if (!(await ensureDraftModelReadyForSend())) {
-        return "blocked" as const;
-      }
-
       let effectiveText = text;
       if (slashCommand?.kind === "planShortcut") {
         // 命令显式指定本次 Submission 的模式，不能靠另一条 CAS 的先后顺序保证。
@@ -2574,6 +2586,36 @@ export function SessionPane({
           ? useZCodeSessionStore.getState().getWorkspaceState(workspacePath, workspaceIdentity)
               .groupedDraftTask
           : null;
+      // Codex 后端首发（phase 10）：不创建 zcode-cli session，直接 createTask + 首个
+      // turn，并复用 handleDraftSessionCreated 的 promote/导航路径切到新任务。不经过
+      // zcode 模型就绪门禁（Codex 用自己的模型）。slash 命令、附件与共享上下文在 Codex
+      // 后端尚不支持——必须显式 blocked，绝不能静默回落 ZCode 后端执行用户消息。
+      if (sessionId === null && draftBackendRef.current === "codex") {
+        if (
+          slashCommand !== null ||
+          readyAttachments.length > 0 ||
+          sharedContextRefs?.length
+        ) {
+          toast(intl.formatMessage({ id: "chat.toolbar.backend.codex.unsupportedInput" }));
+          return "blocked" as const;
+        }
+        const codexService = codexExecutionServiceRef.current;
+        if (!codexService) {
+          toast(intl.formatMessage({ id: "chat.toolbar.backend.codex.unavailable" }));
+          return "blocked" as const;
+        }
+        // createTask 失败时任务不存在；异常交给 composer 保留草稿并展示发送错误。
+        const created = await codexService.createTask({
+          workspacePath,
+          ...(workspaceIdentity ? { workspaceIdentity } : {}),
+          firstInput: effectiveText,
+        });
+        handleDraftSessionCreated(created.task.taskId, groupedDraftTaskAtSend, createSourceAtSend);
+        return "sent" as const;
+      }
+      if (!(await ensureDraftModelReadyForSend())) {
+        return "blocked" as const;
+      }
       const selectionSideSlashCommand =
         sessionId && (appSlashCommands?.length ?? 0) > 0
           ? parseSelectionSideSlashCommand(text, readyAttachments, {
@@ -4414,6 +4456,9 @@ export function SessionPane({
       onSelectModel={handleSelectModel}
       onSelectThought={handleSelectThought}
       onSwitchMode={handleSwitchMode}
+      draftBackend={draftBackend}
+      onSwitchBackend={isDraft ? handleDraftSwitchBackend : undefined}
+      codexBackendAvailable={codexExecutionService != null}
       onOpenRunningBackgroundWorks={
         sessionId && runningBackgroundWorkCount > 0 ? handleOpenRunningBackgroundWorks : undefined
       }

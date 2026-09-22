@@ -313,3 +313,20 @@ export type {
   AccountBridgeStatus,
   AccountBridgeConnectResult,
 } from "./accountBridge.js";
+export {
+  ZCODE_EXECUTION_BACKENDS,
+  isZCodeExecutionBackend,
+} from "./codex-execution.js";
+export type {
+  ZCodeExecutionBackend,
+  CodexTaskBinding,
+  CodexExecutionCreateTaskParams,
+  CodexExecutionCreateTaskResult,
+  CodexExecutionSendTurnParams,
+  CodexExecutionApprovalDecision,
+  CodexExecutionApprovalRequestInfo,
+  CodexTaskThreadInfo,
+  CodexExecutionReadTaskParams,
+  CodexExecutionListTasksParams,
+  CodexExecutionListTasksResult,
+} from "./codex-execution.js";

@@ -325,6 +325,17 @@ export interface ZCodeTaskMeta {
   offPeakTaskId?: string;
   /** fork 产物保留来源 taskId，供 UI 做本地化标题兜底和后续追溯。 */
   forkedFromTaskId?: string;
+  /**
+   * 执行后端标记：缺省视为 "zcode"（旧数据兼容）。"codex" 表示该 task 由
+   * Codex App Server 的 thread 驱动，不持有 zcode-cli session；绑定关系见 codexThreadId。
+   */
+  executionBackend?: import("./codex-execution.js").ZCodeExecutionBackend;
+  /**
+   * Codex thread id（executionBackend="codex" 时存在）。
+   * 这是 harness task 与 Codex thread/session 之间唯一的持久化关联；
+   * 它不是 zcode sessionId，恢复/重订阅一律经 codex-execution 通道按 taskId 反查。
+   */
+  codexThreadId?: string;
   /** 未读任务记录最近一次标记/产生未读的时间，用于跨重启保留蓝点状态。 */
   unreadAt?: number;
   /** 持久化的任务状态，记录最后一次 prompt 的结果 */

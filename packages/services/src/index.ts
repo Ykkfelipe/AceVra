@@ -301,3 +301,6 @@ export type {
 export { IClientConfigService } from "./client-config/clientConfig.js";
 export { IAccountsService } from "./accounts/accounts.js";
 export type { CommandCodeStatus } from "./accounts/commandCodeStatusAdapter.js";
+export { ICodexExecutionService } from "./codex/app/codexExecutionService.js";
+export { createCodexExecutionService } from "./codex/contract.js";
+export type { CodexAppServerPort, CodexTaskIndexPort } from "./codex/contract.js";

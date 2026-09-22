@@ -4508,6 +4508,14 @@ const enUS: Record<string, string> = {
   "chat.modelSwitch.contextWindowGuard.stillTooLarge":
     "After compression, the context used by this conversation is still larger than the target model's available context after reserving maximum output. Model switching was canceled.",
   "chat.toolbar.mode.label": "Switch mode",
+  "chat.toolbar.backend.label": "Agent backend",
+  "chat.toolbar.backend.zcode.label": "ZCode",
+  "chat.toolbar.backend.zcode.description": "Run tasks with the built-in ZCode agent",
+  "chat.toolbar.backend.codex.label": "Codex",
+  "chat.toolbar.backend.codex.description": "Run tasks with the local Codex app agent",
+  "chat.toolbar.backend.codex.unavailable": "unavailable",
+  "chat.toolbar.backend.codex.unsupportedInput":
+    "Slash commands, attachments and shared context are not supported for Codex tasks yet",
   // CUA composer entry button
   "chat.toolbar.computerUse.label": "Computer Use",
   "chat.toolbar.computerUse.tooltip.idle":

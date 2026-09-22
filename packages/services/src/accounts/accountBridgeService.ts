@@ -62,13 +62,20 @@ export interface AccountBridgeServiceDeps {
   readonly codexExecutablePath?: string;
   readonly claudeExecutablePath?: string;
   readonly clientVersion?: string;
+  /**
+   * 宿主进程共享的 CodexAppServerBridge 实例（一个 host 只允许一个 `codex app-server`
+   * 子进程）。缺省时由本服务自建，供旧调用方/测试兼容。
+   */
+  readonly codexBridge?: CodexAppServerBridge;
 }
 
 export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
-  const codex = new CodexAppServerBridge({
-    ...(deps.codexExecutablePath ? { executablePath: deps.codexExecutablePath } : {}),
-    ...(deps.clientVersion ? { clientVersion: deps.clientVersion } : {}),
-  });
+  const codex =
+    deps.codexBridge ??
+    new CodexAppServerBridge({
+      ...(deps.codexExecutablePath ? { executablePath: deps.codexExecutablePath } : {}),
+      ...(deps.clientVersion ? { clientVersion: deps.clientVersion } : {}),
+    });
   const claudeBin = deps.claudeExecutablePath ?? "claude";
 
   const links: Record<AccountBridgeSource, HarnessLinkState> = {
@@ -349,7 +356,8 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       return source === "codex" ? readCodexStatus() : readClaudeStatus();
     },
     dispose(): void {
-      codex.dispose();
+      // 共享 bridge 的所有权在 node.ts（host 关停统一回收）；这里只回收自建实例。
+      if (!deps.codexBridge) codex.dispose();
     },
   };
 }

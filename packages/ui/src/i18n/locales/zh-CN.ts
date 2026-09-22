@@ -4236,6 +4236,13 @@ const zhCN: Record<string, string> = {
   "chat.modelSwitch.contextWindowGuard.stillTooLarge":
     "压缩完成后，当前会话已使用的上下文仍大于目标模型预留最大输出后的可用上下文，模型切换已取消。",
   "chat.toolbar.mode.label": "切换模式",
+  "chat.toolbar.backend.label": "Agent 后端",
+  "chat.toolbar.backend.zcode.label": "ZCode",
+  "chat.toolbar.backend.zcode.description": "使用内置 ZCode agent 执行任务",
+  "chat.toolbar.backend.codex.label": "Codex",
+  "chat.toolbar.backend.codex.description": "使用本机 Codex 应用 agent 执行任务",
+  "chat.toolbar.backend.codex.unavailable": "不可用",
+  "chat.toolbar.backend.codex.unsupportedInput": "Codex 任务暂不支持斜杠命令、附件与共享上下文",
   // CUA 输入框常驻入口按钮
   "chat.toolbar.computerUse.label": "电脑操作",
   "chat.toolbar.computerUse.tooltip.idle": "电脑操作空闲——首次使用时自动启动",

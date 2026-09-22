@@ -51,7 +51,21 @@ interface PendingRequest {
   readonly timer: ReturnType<typeof setTimeout>;
 }
 
-export type CodexNotificationHandler = (method: string, params: unknown) => void;
+/**
+ * Codex 服务器 → 客户端请求（审批等）的原生消息。rawId 是 JSON-RPC request id，
+ * 必须原样回传 `{jsonrpc:"2.0", id, result}`；params 内不含任何凭证材料。
+ */
+export interface CodexServerRequestMessage {
+  readonly method: string;
+  readonly params: unknown;
+  readonly rawId: number;
+}
+
+export type CodexNotificationHandler = (
+  method: string,
+  params: unknown,
+  rawRequest?: CodexServerRequestMessage,
+) => void;
 
 export function resolveCodexExecutable(override?: string): string | undefined {
   if (override?.trim()) return existsSync(override.trim()) ? override.trim() : undefined;
@@ -71,6 +85,8 @@ export class CodexAppServerBridge {
   #nextRequestId = 1;
   /** Incremented on every (re)start; fences stale responses from a dead process. */
   #generation = 0;
+  /** 服务器请求 rawId → 派发时的 generation；respond 时校验，防止跨代误答。 */
+  readonly #pendingServerRequests = new Map<number, number>();
   #starting: Promise<void> | null = null;
   #initializeResult: Record<string, unknown> | null = null;
   #restartTimestamps: number[] = [];
@@ -194,9 +210,21 @@ export class CodexAppServerBridge {
       return;
     }
     if (typeof message.method === "string") {
+      // 服务器请求（审批）带请求 id；登记派发代数供 respond 校验，原样交给 handler。
+      const rawId = typeof id === "number" ? id : null;
+      if (rawId !== null) {
+        // 有界：溢出丢最旧的登记（该请求将无法应答，Codex 侧按超时处理）。
+        if (this.#pendingServerRequests.size >= 64) {
+          const oldest = this.#pendingServerRequests.keys().next().value;
+          if (oldest !== undefined) this.#pendingServerRequests.delete(oldest);
+        }
+        this.#pendingServerRequests.set(rawId, generation);
+      }
+      const rawRequest =
+        rawId !== null ? { method: message.method, params: message.params, rawId } : undefined;
       for (const handler of this.#notificationHandlers) {
         try {
-          handler(message.method, message.params);
+          handler(message.method, message.params, rawRequest);
         } catch (error) {
           logger.warn(undefined, `codex notification handler threw: ${String(error)}`);
         }
@@ -266,6 +294,20 @@ export class CodexAppServerBridge {
     return (await this.#request(method, params, this.#generation, timeoutMs)) as T;
   }
 
+  /**
+   * 应答一条服务器 → 客户端请求（如审批）。generation fence：只应答在本代进程内派发、
+   * 且当前仍在live 进程上的请求；登记缺失或代数不符时静默丢弃，绝不写入新进程的 stdin。
+   */
+  respond(rawId: number, result: unknown): void {
+    const dispatchedGeneration = this.#pendingServerRequests.get(rawId);
+    if (dispatchedGeneration === undefined) return;
+    this.#pendingServerRequests.delete(rawId);
+    if (dispatchedGeneration !== this.#generation) return;
+    const child = this.#child;
+    if (!child) return;
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: rawId, result })}\n`);
+  }
+
   get initializeInfo(): Record<string, unknown> | null {
     return this.#initializeResult;
   }
@@ -276,6 +318,7 @@ export class CodexAppServerBridge {
    */
   stop(): void {
     this.#failGeneration(this.#generation, new Error("codex_bridge_stopped"));
+    this.#pendingServerRequests.clear();
     this.#generation += 1; // fence any late output from the process we are killing
     this.#child?.kill();
     this.#child = null;

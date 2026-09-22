@@ -7,6 +7,7 @@ machine. Read this file first, then the specs it points at:
 - `packages/provider/specs/azure-openai.md` — Azure provider, GPT-5 quirks, capability rules
 - `packages/provider/specs/command-code.md` — Command Code Provider API
 - `packages/services/specs/accounts-and-imports.md` — account bridges and history import
+- `packages/services/specs/codex-execution.md` — Codex execution backend (phase 10)
 
 **START HERE for the next task:** see "Immediate next steps" at the end of this file. The
 top item is UI, not plumbing: the user explicitly disliked the current Accounts placement.
@@ -480,6 +481,30 @@ Tests that need the local Codex/Claude clients skip cleanly when absent.
    merged in. Do not invent percentages.
 5. **Agent execution has not been started** for Codex or Claude, by instruction. Phase 9 was
    account/auth/status/history/usage only.
+
+## Codex execution backend (phase 10, 2026-09-22)
+
+Spec: `packages/services/specs/codex-execution.md`. Vertical slice implemented: harness
+task → Codex thread (`thread/start`) → streamed Codex notifications projected into the v4
+conversation contract → shared task UI, with approvals surfaced as pendingInteractions.
+Codex does NOT go through the ZCode model adapter or the zcode-cli runtime.
+
+- Code map: `packages/services/src/codex/` (contract/domain/app), channel
+  `codex-execution`, shared types `packages/shared/src/codex-execution.ts`, renderer
+  routing transport `packages/ui/src/v4/codexConversationTransport.ts` +
+  `backendRoutingConversationTransport.ts`, composer backend selector in
+  `ConversationComposer`/`V4ComposerBackendControls`.
+- The protocol shapes are typed from binary strings of the installed Codex; payloads are
+  **not yet E2E-verified**. The first real inference run is blocked on explicit approval —
+  the E2E checklist in the spec lists every method/event to confirm.
+- Regression trap: snapshot sections the slice does not model must stay empty/null; the
+  first frame after subscribe must carry deliveryKind "initial" or the projection store
+  treats it as a gap and enters recovery; deltas frames must carry
+  `(fromSeq, toSeq] = (prevSeq, commitSeq]` or streaming degrades into a resync storm
+  (the store only applies deltas when `frame.fromSeq === current.seq`).
+- Independent review pass done (review-agent): all 11 findings fixed, including the P0
+  frame-sequence contract, atomic runtime rebuild after bridge restart, failed-ack for
+  rejected turn/start, approval deny-on-unroutable, and the respond() generation fence.
 
 ## Environment note
 
