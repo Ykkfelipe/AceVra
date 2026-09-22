@@ -500,6 +500,42 @@ Codex does NOT go through the ZCode model adapter or the zcode-cli runtime.
   full-access sandbox so no approval requests fire (approval round-trip still needs a
   drill with a restrictive policy). Pre-E2E checkpoint: `fork-codex-exec-v1`.
 
+## Codex Execution v1.1 — remote approvals & resilience (2026-09-22)
+
+Commits `20edc6c` (schema-true approvals + safe execution policy) and `6316628` (restart
+re-openability). Spec: `packages/services/specs/codex-execution.md` — "Harness execution
+policy" + "Observed approval round-trip" sections carry the full protocol record.
+
+- **Field names/enum values come from the installed binary's own schema**
+  (`codex app-server generate-json-schema`, v2 bundle) — never guess them. Key facts:
+  thread/start `approvalPolicy` = `untrusted|on-request|never`, `sandbox` =
+  `read-only|workspace-write|danger-full-access` (kebab-case strings); approval RESPONSES
+  are `{decision:"accept"|"decline"|…}` (NOT approved/denied — the pre-v1.1 code sent
+  invalid bodies that only worked because nothing had ever answered one);
+  `item/permissions/requestApproval` responds `{permissions, scope}` with no decision
+  field; `turn/interrupt` requires threadId **and** turnId (get it from the turn/start
+  response `{turn:{id}}`); `thread/resume` takes `excludeTurns:true` + policy overrides.
+- **Execution policy** (`codexPolicy.ts`): default `safeInteractive` = on-request +
+  read-only. `ZCODE_CODEX_EXECUTION_POLICY=workspaceWrite|unrestricted` is the only way to
+  change it; unknown names fail closed. No client/relay surface can widen it.
+- **Live drill proven**: one real Codex turn through /fork under the restrictive default —
+  approval server-request → remote Allow in PermissionDialog → `{decision:"accept"}` → same
+  turn continued → exact 11-byte file. Wire recorded with a pass-through tee via
+  `ZCODE_CODEX_EXECUTABLE` (host env, also used to point the bridge at a wrapper for tests).
+- **Restart/resume**: host restart AND bridge-only SIGKILL both drilled — auto-restart,
+  `thread/resume` on the persisted thread id, history rebuild, rows intact/non-duplicated.
+  Live cancellation: pending (schema + unit tests only, by instruction).
+- **Two E2E bugs fixed in `6316628`**: Codex tasks were invisible in the workspace task
+  list (provider='glm' filter) and `getTaskMeta` threw on taskId-only lookups after the
+  runtime cache emptied — together they made a Codex task unrecoverable after restart.
+- **Per-attachment services**: `createLocalServices` runs per browser attachment, so the
+  codex projection/row log rebuilds on every fresh attach (each gets `thread/resume` +
+  `thread/items/list`). Cheap, and snapshots carry fresh logEpochs — but don't assume the
+  projection survives across attachments.
+- Gotcha: the sidebar conversation is virtualized and collapses finished work under a
+  "Worked" expander — row-counting E2Es must expand it and scroll, or they only see the
+  final answer row.
+
 ## Environment note
 
 The dev stack is started from the two commands in "Running the dev loop". When those are
