@@ -1,6 +1,6 @@
 # Fork handoff (custom ZCode fork)
 
-Continuation guide for the next agent. Phase 5 (relay development transport) is
+Continuation guide for the next agent. Phase 6 (web stabilization + reconnect) is
 implemented and validated on this machine; read `packages/server/specs/custom-fork-remote.md`
 first, then this file for the working loop, evidence and remaining work.
 
@@ -11,6 +11,7 @@ first, then this file for the working loop, evidence and remaining work.
 | 2     | `921842e`            | fork identity isolation                                                                        |
 | 3/4   | `7a80c2a`, `ca3b55b` | fork remote foundation + Clerk-authenticated access                                            |
 | 5     | `0af265d`            | `/fork/relay/*` attachment transport: browser gets a working workspace/task UI through a relay |
+| 6     | `4652e03`, `ca6154e` | hook-order fix, web reconnect controller, capability-safe accessor, `/fork` mobile shell        |
 
 Phase 5 verified on this machine (macOS, `mise` pinned Node 24, local relay in the
 same server process):
@@ -94,12 +95,94 @@ Diagnostics contract: `ZCODE_FORK_RELAY_DEBUG=1` enables `[fork-relay]` server l
 
 ## Known pre-existing defects (not caused by the fork, reproduce on `/ws` too)
 
-1. `OnboardingDialog` hook-order violation → `TypeError: Cannot read properties of
+1. ~~`OnboardingDialog` hook-order violation~~ — fixed in `4652e03`; pinned by
+   `packages/ui/test/onboardingHookOrderRegression.test.ts`. Original symptom:
+   hook-order violation → `TypeError: Cannot read properties of
 undefined (reading 'length')` inside zustand `useStore` → `useCallback`, caught by
    `ScopedErrorBoundary:onboarding-dialog`. Hook diff shows the sequence drifting at
    position 8 (`useRef` → `useContext`). Skipping the wizard still reaches the shell.
-2. `window-controller` channel is absent on `web-remote-replayable`, so
-   `useGlobalTaskList` logs `Unknown channel … timed out after 1000ms`.
+2. ~~`window-controller` channel is absent on `web-remote-replayable`~~ — Phase 6 makes
+   the absence an explicit capability instead of a failed RPC probe.
+
+## Phase 6 (reconnect + web stabilization)
+
+`packages/web/src/customForkRemoteApp.tsx` now owns the whole `/fork` connection
+lifecycle; `main.tsx` just delegates the route to it. States:
+`authentication-required` / `relay-unavailable` / `offline` / `connecting` / `online` /
+`reconnecting` / `restored`.
+
+Invariants, which the drills below check directly:
+
+- Every attempt mints a **fresh single-use relay ticket** and opens a **fresh browser
+  attachment**. No ticket and no service accessor is ever reused. This is forced by the
+  Phase 5 root cause: one `ChannelServer` (and therefore one `Initialize`) per attachment.
+- A monotonic `generationRef` fences stale attempts, so a socket that closes after its
+  generation was superseded cannot schedule a retry or overwrite newer state.
+- Retries use bounded backoff `500ms -> 1s -> 2s -> 4s -> 8s -> 15s` (capped), reset to 0
+  on a successful connect. `/fork/ws` remains the per-attempt fallback when the relay
+  ticket is unavailable.
+- 401 from `/fork/api/ws-ticket` or `/fork/api/device` goes to `authentication-required`
+  and **stops** retrying; it never spins against a dead Clerk session.
+- The `windowController` capability is now explicit. `RemoteServiceAccess` takes a
+  capability set, so a web replayable attachment no longer builds a proxy for a channel
+  the host deliberately does not expose. This closes pre-existing defect 2 below:
+  `useGlobalTaskList` ends hydration instead of logging an unknown-channel timeout.
+
+### Validating reconnect without disturbing a running dev server
+
+Do **not** test reconnect against the dev server on `:3030` — killing it to simulate a Mac
+restart kills the loop you are working in. Run a second, fully isolated instance instead.
+The relay keeps attachment/presence state in in-process maps, so a second process on
+another port is a genuinely independent relay:
+
+```bash
+cd /Users/felipemore/Projects/ZCode-Fork/packages/server
+PORT=3031 \
+ZCODE_FORK_RELAY_URL=ws://localhost:3031 \
+ZCODE_FORK_RELAY_DEVICE_TOKEN=isolated-relay-validation-token \
+ZCODE_FORK_ALLOWED_CLERK_USER_IDS=local-development \
+ZCODE_FORK_ALLOW_UNAUTHENTICATED=1 \
+ZCODE_FORK_RELAY_DEBUG=1 \
+ZCODE_FORK_DEVICE_NAME=isolated-test-mac \
+ZCODE_SERVER_WORKSPACE=/tmp/iso-ws \
+mise exec -- node dist/entry-http.js
+```
+
+It must run from `packages/server` — the bundle resolves its externals through the repo's
+`node_modules`, so a copy outside the tree dies on `ERR_MODULE_NOT_FOUND: yaml`. Node 24
+has a global `WebSocket`, so a drill script needs no `ws` dependency. Both drills below
+passed on this machine against that instance (`2026-09-22`):
+
+Transport contract, 8/8:
+
+- fresh ticket opens an attachment and receives the 19-byte `Initialize`
+- a replayed ticket is refused with 4001 without pairing
+- a reconnect mints a distinct ticket and gets a fresh `Initialize`
+- a concurrent second browser gets its own attachment, and the first stays open
+- `relay-ticket` for an unknown device is 404
+
+Mac-restart recovery, 6/6:
+
+- `SIGKILL` on the Mac closes the live browser socket with **1006 in 9ms**
+- presence and ticket mint both fail closed with `ECONNREFUSED` — they never hang
+- after restart, the first backoff tick reconnects and receives a fresh `Initialize`
+- the device id is stable across the restart, so the UI does not see a new Mac
+
+### Not yet re-verified
+
+The browser-level end-to-end pass (send a task, receive a response, plus the mobile
+viewport screenshots at iPhone width) has not been re-run since the work was recovered.
+Everything below transport is verified: 3/3 tests, typecheck, oxlint 0 errors with the
+warning count unchanged at 70, architecture check 0 violations, web production build.
+
+### Recovery note
+
+The Phase 6 slice was written, then lost before it was committed when the working tree was
+reset to `main`. It was recovered verbatim from the Codex thread history
+(`~/.codex/thread_history_1.sqlite`, table `thread_items`, `item_type = 'fileChange'`;
+each row's `changes[].diff` is a unified hunk, and for `kind = 'add'` the field holds the
+whole file). Replaying them in `rollout_ordinal` order reproduced the reported
+12 files / +583 / -16 exactly. **Commit each slice before switching branches.**
 
 ## Remaining work for the public relay milestone
 
@@ -108,5 +191,4 @@ undefined (reading 'length')` inside zustand `useStore` → `useCallback`, caugh
   state instead of in-process maps.
 - QR/pairing UX: `POST /fork/api/pairing-token` + `consumePairingToken` exist but no
   client uses them yet.
-- Reconnect UX: the web fork path has no reconnection (`onClose: () => {}`), so a Mac or
-  relay restart needs a page reload; tickets live 30s and attachments are single-use.
+- ~~Reconnect UX~~ — done in Phase 6; see above.
