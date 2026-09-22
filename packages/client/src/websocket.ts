@@ -18,15 +18,23 @@ export interface WebSocketConnectionCloseEvent {
 interface WebSocketConnectionOptions {
   onClose?: (event: WebSocketConnectionCloseEvent) => void;
   onOpenSocket?: (socket: WebSocket) => void;
+  /** Development-only lifecycle tracing supplied by the embedding application. */
+  debug?: (event: "socket_open" | "first_outbound_frame" | "first_inbound_frame") => void;
 }
 
-function wrapBrowserWebSocket(ws: WebSocket): ISocket {
+function wrapBrowserWebSocket(ws: WebSocket, debug?: WebSocketConnectionOptions["debug"]): ISocket {
   const onData = new Emitter<VSBuffer>();
   const onClose = new Emitter<void>();
   const onEnd = new Emitter<void>();
+  let receivedFirstFrame = false;
+  let sentFirstFrame = false;
 
   ws.binaryType = "arraybuffer";
   ws.addEventListener("message", (e) => {
+    if (!receivedFirstFrame) {
+      receivedFirstFrame = true;
+      debug?.("first_inbound_frame");
+    }
     onData.fire(VSBuffer.wrap(new Uint8Array(e.data as ArrayBuffer)));
   });
   ws.addEventListener("close", () => {
@@ -44,6 +52,10 @@ function wrapBrowserWebSocket(ws: WebSocket): ISocket {
     onEnd: onEnd.event,
     write(buffer: VSBuffer) {
       if (ws.readyState === WebSocket.OPEN) {
+        if (!sentFirstFrame) {
+          sentFirstFrame = true;
+          debug?.("first_outbound_frame");
+        }
         ws.send(buffer.buffer as Uint8Array<ArrayBuffer>);
       }
     },
@@ -93,7 +105,8 @@ export function connectViaWebSocket(
     ws.addEventListener("open", () => {
       settled = true;
       options?.onOpenSocket?.(ws);
-      const socket = wrapBrowserWebSocket(ws);
+      options?.debug?.("socket_open");
+      const socket = wrapBrowserWebSocket(ws, options?.debug);
       resolve(connectViaProtocol(new SocketProtocol(socket)));
     });
   });

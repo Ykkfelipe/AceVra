@@ -74,6 +74,14 @@ async function resolveFeedbackUrl(): Promise<string | undefined> {
 
 const root = createRoot(document.getElementById("root")!);
 const webAuthService = createWebAuthService();
+const relayDebugEnabled = import.meta.env.VITE_ZCODE_FORK_RELAY_DEBUG === "1";
+
+function relayDebug(event: string): void {
+  if (relayDebugEnabled) {
+    // Deliberately omit URLs, payloads, credentials, and tickets.
+    console.info("[fork-relay-web]", event);
+  }
+}
 
 // 初始化 Web 端流式 clientId，确保所有 hook 在首次渲染前就使用稳定 ID
 {
@@ -87,7 +95,7 @@ interface WebBootstrapResult {
   initialTaskId?: string;
   restoreSession?: boolean;
   allowOpenWorkspace?: boolean;
-  device?: { deviceId: string; displayName: string; online: boolean; lastSeenAt: string };
+  device?: { deviceId: string; displayName: string; online: boolean; lastSeenAt?: string };
 }
 
 function isWebOAuthCallback(params: URLSearchParams): boolean {
@@ -417,9 +425,28 @@ async function resolveWebBootstrap(): Promise<WebBootstrapResult> {
   const device = deviceResponse?.ok
     ? ((await deviceResponse.json()) as WebBootstrapResult["device"])
     : undefined;
+  const relayTicketResponse =
+    customFork && device
+      ? await fetch(
+          `${window.location.origin}${resolveCustomForkProductConfig().remoteRoute}/api/relay-ticket`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(clerkToken ? { Authorization: `Bearer ${clerkToken}` } : {}),
+            },
+            body: JSON.stringify({ deviceId: device.deviceId }),
+            cache: "no-store",
+          },
+        )
+      : null;
+  const relayTicket = relayTicketResponse?.ok
+    ? ((await relayTicketResponse.json()) as { ticket?: string }).ticket
+    : undefined;
+  const relayDeviceId = device?.deviceId;
   const wsUrl = remoteId
     ? `${resolveDefaultWsOrigin()}/ws/remote/${remoteId}`
-    : `${resolveDefaultWsOrigin()}${customFork ? "/fork/ws" : "/ws"}${ticket ? `?ticket=${encodeURIComponent(ticket)}` : ""}`;
+    : `${resolveDefaultWsOrigin()}${customFork && relayTicket ? "/fork/relay/ws" : customFork ? "/fork/ws" : "/ws"}${relayTicket && relayDeviceId ? `?deviceId=${encodeURIComponent(relayDeviceId)}&ticket=${encodeURIComponent(relayTicket)}` : ticket ? `?ticket=${encodeURIComponent(ticket)}` : ""}`;
 
   if (remoteId) {
     return { wsUrl, device };
@@ -506,9 +533,12 @@ async function bootstrapWebApp() {
   }
 
   try {
+    relayDebug("replayable_client_creating");
     const services = await connectViaWebSocket(bootstrap.wsUrl, {
       onClose: () => {},
+      debug: (event) => relayDebug(event),
     });
+    relayDebug("replayable_client_ready");
     const platform = createWebPlatform();
     document.title = isCustomForkRoute() ? "ZCode Fork Dev - Remote" : "ZCode - Web + Server";
 
@@ -539,6 +569,7 @@ async function bootstrapWebApp() {
         </ZCodeIntlProvider>
       </AppErrorBoundary>,
     );
+    relayDebug("root_rendered");
   } catch (error) {
     renderWebBootstrapError(error);
   }

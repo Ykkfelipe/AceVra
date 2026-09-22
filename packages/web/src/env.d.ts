@@ -17,6 +17,8 @@ interface ImportMetaEnv {
   readonly VITE_ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL?: string;
   readonly VITE_CUSTOM_FORK_REMOTE_ROUTE?: string;
   readonly VITE_CLERK_PUBLISHABLE_KEY?: string;
+  // 本地 relay 调试开关：由 vite define 注入，非 "1" 时所有 relay 诊断日志保持关闭。
+  readonly VITE_ZCODE_FORK_RELAY_DEBUG?: string;
 }
 
 interface ImportMeta {

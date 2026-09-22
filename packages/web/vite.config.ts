@@ -66,6 +66,7 @@ export default defineConfig(({ mode }) => {
         // 将 /ws 和 /api 请求代理到 server（默认 3030 端口）
         "/ws": { target: "ws://localhost:3030", ws: true },
         "/fork/api": { target: "http://localhost:3030" },
+        "/fork/relay": { target: "ws://localhost:3030", ws: true },
         "/fork/ws": { target: "ws://localhost:3030", ws: true },
         "/api": { target: "http://localhost:3030" },
       },
@@ -94,6 +95,10 @@ export default defineConfig(({ mode }) => {
       // 明确注入 OAuth 公开配置，避免 Web 端在不同 mode 下隐式依赖源码 fallback。
       "import.meta.env.VITE_ZAI_OAUTH_CLIENT_ID": JSON.stringify(zaiOAuthClientId),
       "import.meta.env.VITE_ZAI_OAUTH_ORIGIN": JSON.stringify(zaiOAuthOrigin),
+      // Local relay tracing stays opt-in and is never enabled by a production build by default.
+      "import.meta.env.VITE_ZCODE_FORK_RELAY_DEBUG": JSON.stringify(
+        env.ZCODE_FORK_RELAY_DEBUG === "1" ? "1" : "",
+      ),
     },
     build: {
       // 生产不在浏览器产物暴露 sourceMappingURL，避免客户端侧还原业务源码。

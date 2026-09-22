@@ -40,6 +40,18 @@ import {
 import { connectRemote, createRemoteBackend, type RemoteConnection } from "./remote/index.js";
 import { createHostCapabilityStore } from "./hostCapability.js";
 import {
+  attachRelayDeviceSocket,
+  consumeRelayConnectionTicketForDevice,
+  createRelayAttachment,
+  getRelayDevice,
+  issuePairingToken,
+  issueRelayConnectionTicket,
+  listRelayDevices,
+  registerRelayDevice,
+  relayDebug,
+  shortId,
+} from "./customForkRelay.js";
+import {
   authenticateCustomForkClerk,
   isCustomForkClerkUserAllowed,
 } from "./customForkClerkAuth.js";
@@ -86,7 +98,7 @@ function wrapWebSocket(ws: WebSocket): ISocket {
 const log = (...args: unknown[]) =>
   console.log(formatLogPrefix("zcode-server:http", process.pid), ...args);
 
-function setupChannelServer(
+export function setupChannelServer(
   ws: WebSocket,
   services: ServiceCollection,
   clientMode: "desktop-continuous" | "web-remote-replayable",
@@ -380,7 +392,60 @@ export function createHttpServer(
       .update(`${displayName}:${process.platform}`)
       .digest("hex")
       .slice(0, 16);
-    return c.json({ deviceId, displayName, online: true, lastSeenAt: new Date().toISOString() });
+    // 在线状态只能来自 relay 注册：relay 已配置但本进程尚无注册记录（刚启动或已断开）时
+    // 必须报离线，否则前端显示 ● 却在 /fork/api/relay-ticket 收到 404。
+    // 未配置 relay 时这个 server 进程本身就是设备，直接视为在线（直连 /fork/ws 路径）。
+    const registration = getRelayDevice(identity.userId, deviceId)?.device;
+    const relayConfigured = Boolean(process.env.ZCODE_FORK_RELAY_URL?.trim());
+    if (registration) {
+      return c.json({
+        deviceId,
+        displayName,
+        online: registration.online,
+        lastSeenAt: registration.lastSeenAt,
+      });
+    }
+    // 已配置 relay 但没有注册记录时不编造 lastSeenAt：本进程确实没见过这台设备。
+    return relayConfigured
+      ? c.json({ deviceId, displayName, online: false })
+      : c.json({ deviceId, displayName, online: true, lastSeenAt: new Date().toISOString() });
+  });
+  app.get(`${customForkRoute}/api/devices`, async (c) => {
+    const identity = await authenticateCustomForkClerk(c);
+    if (!identity) return c.json({ error: "Clerk authentication required" }, 401);
+    if (identity.userId !== "local-development" && !isCustomForkClerkUserAllowed(identity.userId)) {
+      return c.json({ error: "Clerk user is not authorized for this fork" }, 403);
+    }
+    const devices = listRelayDevices(identity.userId);
+    relayDebug("devices_listed", { ownerUserId: shortId(identity.userId), count: devices.length });
+    return c.json({ devices });
+  });
+  app.post(`${customForkRoute}/api/pairing-token`, async (c) => {
+    const identity = await authenticateCustomForkClerk(c);
+    if (!identity) return c.json({ error: "Clerk authentication required" }, 401);
+    if (identity.userId !== "local-development" && !isCustomForkClerkUserAllowed(identity.userId)) {
+      return c.json({ error: "Clerk user is not authorized for this fork" }, 403);
+    }
+    return c.json({ token: issuePairingToken(identity.userId), expiresInMs: 60_000 });
+  });
+  app.post(`${customForkRoute}/api/relay-ticket`, async (c) => {
+    const identity = await authenticateCustomForkClerk(c);
+    if (!identity) return c.json({ error: "Clerk authentication required" }, 401);
+    if (identity.userId !== "local-development" && !isCustomForkClerkUserAllowed(identity.userId)) {
+      return c.json({ error: "Clerk user is not authorized for this fork" }, 403);
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { deviceId?: string };
+    if (!body.deviceId || !getRelayDevice(identity.userId, body.deviceId)?.device.online) {
+      relayDebug("relay_ticket_rejected", {
+        ownerUserId: shortId(identity.userId),
+        reason: "device_offline",
+      });
+      return c.json({ error: "Device offline" }, 404);
+    }
+    return c.json({
+      ticket: issueRelayConnectionTicket(identity.userId, body.deviceId),
+      expiresInMs: 30_000,
+    });
   });
 
   app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
@@ -406,6 +471,76 @@ export function createHttpServer(
           return;
         }
         setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
+      },
+    })),
+  );
+
+  app.get(
+    `${customForkRoute}/relay/device`,
+    upgradeWebSocket((c) => ({
+      onOpen(_event, ws) {
+        const token = c.req.header("x-zcode-device-token");
+        if (!token || token !== process.env.ZCODE_FORK_RELAY_DEVICE_TOKEN?.trim()) {
+          relayDebug("device_registration_rejected", { reason: "invalid_device_token" });
+          ws.close(4003, "Invalid relay device token");
+          return;
+        }
+        const deviceId = c.req.query("deviceId");
+        const ownerUserId = c.req.query("ownerUserId");
+        const displayName = c.req.query("displayName");
+        if (!deviceId || !ownerUserId || !displayName) {
+          relayDebug("device_registration_rejected", { reason: "missing_identity" });
+          ws.close(4000, "Missing device identity");
+          return;
+        }
+        // attachment socket：只承载某个已调度 attachment 的 RPC 字节，不参与设备心跳，
+        // 也不能覆盖 presence 注册（否则会挤掉在线状态与 attach 控制通道）。
+        const attachmentId = c.req.query("attachmentId")?.trim();
+        if (attachmentId) {
+          attachRelayDeviceSocket(attachmentId, deviceId, ws.raw as WebSocket);
+          return;
+        }
+        registerRelayDevice({ deviceId, ownerUserId, displayName }, ws.raw as WebSocket);
+      },
+    })),
+  );
+
+  app.get(
+    `${customForkRoute}/relay/ws`,
+    upgradeWebSocket((c) => ({
+      onOpen(_event, ws) {
+        const deviceId = c.req.query("deviceId");
+        const relayTicket = c.req.query("ticket");
+        const ownerUserId =
+          relayTicket && deviceId
+            ? consumeRelayConnectionTicketForDevice(relayTicket, deviceId)
+            : undefined;
+        if (!ownerUserId || !deviceId) {
+          ws.close(4001, "Invalid or expired relay ticket");
+          return;
+        }
+        const connection = getRelayDevice(ownerUserId, deviceId);
+        if (!connection || !connection.device.online) {
+          relayDebug("browser_upgrade_rejected", {
+            deviceId: shortId(deviceId),
+            reason: "device_offline",
+          });
+          ws.close(4004, "Device offline");
+          return;
+        }
+        const browser = ws.raw as WebSocket;
+        // 每个浏览器独占一次 attachment：Mac 会为该 attachment 新建 channel server，
+        // 这样 Initialize 一定发给已连接的浏览器（见 specs/custom-fork-remote.md）。
+        const attachmentId = createRelayAttachment({ deviceId, ownerUserId, browser });
+        if (!attachmentId) {
+          ws.close(4005, "Mac is not accepting relay attachments");
+          return;
+        }
+        relayDebug("browser_bound", {
+          deviceId: shortId(deviceId),
+          ownerUserId: shortId(ownerUserId),
+          attachmentId: shortId(attachmentId),
+        });
       },
     })),
   );

@@ -26,7 +26,7 @@ run = "mise exec -- node scripts/mise-run.mjs pnpm dev:desktop:prod"
 
 [tasks.dev-web]
 description = "Start the server and web client dev servers."
-env = { ZCODE_FORK_ALLOWED_CLERK_USER_IDS = "user_3Jf3aAXOGiPHUSjYDqLcGTmmYRe", ZCODE_FORK_CLERK_AUTHORIZED_PARTIES = "http://localhost:5173" }
+env = { ZCODE_FORK_ALLOWED_CLERK_USER_IDS = "user_3Jf3aAXOGiPHUSjYDqLcGTmmYRe", ZCODE_FORK_CLERK_AUTHORIZED_PARTIES = "http://localhost:5173", ZCODE_FORK_RELAY_URL = "ws://localhost:3030", ZCODE_FORK_RELAY_DEVICE_TOKEN = "local-relay-development-token" }
 run = "mise exec -- node scripts/mise-run.mjs pnpm dev:web"
 
 [tasks.typecheck]
