@@ -39,6 +39,14 @@ modules:
     layers: { domain: domain, app: app }
     layerOrder: [domain, app]
     owner: codex-execution
+  - id: task-artifacts
+    roots: [packages/services/src/task-artifacts]
+    managed: true
+    requires: [shared, services]
+    publicEntrypoints: [packages/services/src/task-artifacts/contract.ts]
+    layers: { app: app }
+    layerOrder: [app]
+    owner: task-artifacts
   - id: client
     roots: [packages/client/src]
     managed: false

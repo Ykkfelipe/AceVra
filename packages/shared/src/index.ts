@@ -330,3 +330,29 @@ export type {
   CodexExecutionListTasksParams,
   CodexExecutionListTasksResult,
 } from "./codex-execution.js";
+
+export type {
+  TaskArtifactDescriptor,
+  TaskArtifactListParams,
+  TaskArtifactListResult,
+  TaskArtifactReadParams,
+  TaskArtifactReadResult,
+  TaskArtifactRegistration,
+  TaskArtifactRegistrationResult,
+  TaskArtifactRegistrationFailure,
+  TaskArtifactOrigin,
+  TaskArtifactScope,
+} from "./task-artifacts.js";
+export {
+  TASK_ARTIFACT_ORIGINS,
+  INLINE_PREVIEW_MIME_TYPES,
+  TASK_ARTIFACT_MIME_ALLOWLIST,
+  TASK_ARTIFACT_MAX_BYTES,
+  TASK_ARTIFACT_FAULT_CODES,
+  isInlinePreviewMimeType,
+  isAllowedTaskArtifactMimeType,
+  taskArtifactDescriptorSchema,
+  taskArtifactReadParamsSchema,
+  taskArtifactMimeForFileName,
+  taskArtifactRowType,
+} from "./task-artifacts.js";

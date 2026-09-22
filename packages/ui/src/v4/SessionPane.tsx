@@ -134,6 +134,7 @@ import { WorkspaceHookPendingBanner } from "@/v4/WorkspaceHookPendingBanner.js";
 import { ConversationStatusPanel } from "@/v4/ConversationStatusPanel.js";
 import { SessionSubscriptionErrorPanel } from "@/v4/SessionSubscriptionErrorPanel.js";
 import { ConversationTimeline } from "@/v4/ConversationTimeline.js";
+import { SessionTaskArtifactSection } from "@/v4/TaskArtifactCard.js";
 import { ConversationShareImportNotice } from "@/v4/ConversationShareImportNotice.js";
 import { ConversationShareConfirmationDock } from "@/v4/ConversationShareConfirmationDock.js";
 import { ConversationShareSuccessDock } from "@/v4/ConversationShareSuccessDock.js";
@@ -3742,6 +3743,17 @@ export function SessionPane({
     !isDraft && (lease === null || sessionLeaseReady) && snapshot?.sessionId === sessionId
       ? snapshot
       : null;
+
+  // 已作为真实 artifact 行内联渲染的 artifact id；尾部 artifact 区据此去重。
+  const presentArtifactIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of timelineSnapshot?.rows.window ?? []) {
+      if (row.kind !== "artifact") continue;
+      const match = /^zcode-artifact:\/\/task\/[^/]+\/([^/]+)$/u.exec(row.ref);
+      if (match?.[1]) ids.add(match[1]);
+    }
+    return ids;
+  }, [timelineSnapshot]);
   const shareHandoverContext =
     snapshot?.sharedContextImport && "contextId" in snapshot.sharedContextImport
       ? snapshot.sharedContextImport
@@ -4800,6 +4812,15 @@ export function SessionPane({
               onLoadAllOlder={handleLoadAllOlder}
               turnNavigatorDirectoryRevision={state.turnNavigatorDirectoryRevision}
               bottomDock={conversationBottomDock}
+              artifactSection={
+                <SessionTaskArtifactSection
+                  sessionId={sessionId}
+                  workspacePath={workspacePath}
+                  {...(workspaceIdentity ? { workspaceIdentity } : {})}
+                  enabled={!shareActive && !importedShare}
+                  presentArtifactIds={presentArtifactIds}
+                />
+              }
               hideTurnNavigator={shareActive && shareInSelectionStage}
               backgroundScrollLocked={resolveConversationShareBackgroundScrollLocked({
                 partialShareActive: shareActive,

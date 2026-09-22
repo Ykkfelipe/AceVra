@@ -8,6 +8,7 @@ import type { ITerminalService } from "./terminal/terminal.js";
 import type { ISettingService } from "./setting/setting.js";
 import type { IAccountsService } from "./accounts/accounts.js";
 import type { ICodexExecutionService } from "./codex/app/codexExecutionService.js";
+import type { ITaskArtifactDeliveryService } from "./task-artifacts/app/taskArtifactService.js";
 import type { ICredentialService } from "./credential/credential.js";
 import type { IBroadcastService } from "./broadcast/broadcast.js";
 import type { IZCodeTaskService } from "./session/zcodeTaskService.js";
@@ -60,6 +61,11 @@ export interface IServiceAccessor {
    * UI 在缺省时禁用 Codex 后端入口，而不是报错。
    */
   readonly codexExecutionService?: ICodexExecutionService;
+  /**
+   * Task artifacts（phase 11）：清单 + 分块读取；旧 host / 测试 double 可不提供。
+   * 注册是宿主内部能力，不在该服务面上。
+   */
+  readonly taskArtifactService?: ITaskArtifactDeliveryService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
   /** 窗口 Host 聚合面；旧 server wire 或测试 double 可暂不提供。 */

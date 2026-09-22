@@ -153,6 +153,11 @@ export const ServiceChannels = {
    * 仅传输 v4 投影与脱敏任务元信息；凭证/OAuth 材料不经过本通道。
    */
   CodexExecution: "codex-execution",
+  /**
+   * Task artifacts（phase 11）：工具/agent 结构化输出的注册与远程投递。
+   * 通道只暴露清单与分块读取；注册是宿主内部能力。描述符不含宿主路径。
+   */
+  TaskArtifacts: "task-artifacts",
 } as const;
 
 export type ServiceChannelName = (typeof ServiceChannels)[keyof typeof ServiceChannels];

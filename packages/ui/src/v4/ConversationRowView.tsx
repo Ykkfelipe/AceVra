@@ -16,6 +16,7 @@ import {
   TrendingUpDownIcon,
   XIcon,
 } from "lucide-react";
+import type { TaskArtifactDescriptor } from "@zcode/shared";
 import {
   TID_V4_EDIT,
   TID_V4_EDIT_ATTACHMENT_REMOVE,
@@ -124,6 +125,7 @@ import { ConversationHookDetailsAction } from "@/v4/ConversationHookDetailsActio
 import { formatModelChangeLabel } from "@/v4/composer/modelTriggerDisplay.js";
 import { formatMessageTimeLabel } from "@/v4/messageTimeLabel.js";
 import { parseConversationShareContext } from "@/lib/conversationShareContext.js";
+import { TaskArtifactCard } from "@/v4/TaskArtifactCard.js";
 
 function RowShell({
   rowId,
@@ -145,7 +147,47 @@ function RowShell({
   );
 }
 
-const ArtifactRowView = memo(function ArtifactRowView({ row }: { row: ArtifactRow }) {
+const ArtifactRowView = memo(function ArtifactRowView({
+  row,
+  context,
+}: {
+  row: ArtifactRow;
+  context: ConversationRowRenderContext;
+}) {
+  // phase 11：task-artifacts 注册的行（ref = zcode-artifact://task/<taskId>/<artifactId>）
+  // 走授权读取：图片内联预览 + 下载；分享投影等其他 ref 形状保持静态卡片。
+  const taskRef = /^zcode-artifact:\/\/task\/([^/]+)\/([^/]+)$/u.exec(row.ref);
+  const sessionTaskId = context.sessionId ?? null;
+  const taskRefTaskId = taskRef?.[1];
+  const taskRefArtifactId = taskRef?.[2];
+  if (
+    sessionTaskId &&
+    taskRefTaskId &&
+    taskRefArtifactId &&
+    taskRefTaskId === sessionTaskId &&
+    (row.artifactType === "image" || row.artifactType === "file")
+  ) {
+    const descriptor: TaskArtifactDescriptor = {
+      artifactId: taskRefArtifactId,
+      taskId: taskRefTaskId,
+      fileName: row.displayName,
+      mimeType: row.mimeType,
+      byteSize: row.sizeBytes,
+      sha256: row.sha256,
+      origin: "tool",
+      createdAt: row.createdAt,
+      state: "available",
+    };
+    return (
+      <div className="px-4 py-1">
+        <TaskArtifactCard
+          artifact={descriptor}
+          workspacePath={context.workspacePath}
+          layout="row"
+        />
+      </div>
+    );
+  }
   return (
     <RowShell rowId={row.rowId} className="px-4 py-1">
       <div className="flex items-center gap-2 rounded-lg border border-card-border bg-card px-3 py-2">
@@ -2116,7 +2158,7 @@ function ConversationRowViewImpl({
     case "subagent":
       return <SubagentRowView row={row} />;
     case "artifact":
-      return <ArtifactRowView row={row} />;
+      return <ArtifactRowView row={row} context={context} />;
     default:
       return null;
   }

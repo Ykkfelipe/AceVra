@@ -11,6 +11,7 @@ import {
   ICredentialService,
   IAccountsService,
   ICodexExecutionService,
+  ITaskArtifactDeliveryService,
   IBroadcastService,
   IZCodeTaskService,
   IZCodeAgentService,
@@ -62,6 +63,8 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly accountsService: IAccountsService;
   // Codex 执行后端（phase 10）；旧 host 未注册时 accessor 上为可选。
   readonly codexExecutionService?: ICodexExecutionService;
+  // Task artifacts（phase 11）；旧 host 未注册时 accessor 上为可选。
+  readonly taskArtifactService?: ITaskArtifactDeliveryService;
   readonly broadcastService: IBroadcastService;
   readonly zcodeTaskService: IZCodeTaskService;
   readonly windowControllerService?: IWindowControllerService;
@@ -131,6 +134,11 @@ export class RemoteServiceAccess implements IServiceAccessor {
     );
     this.codexExecutionService = ProxyChannel.toService<ICodexExecutionService>(
       channelClient.getChannel(ICodexExecutionService.channelName),
+    );
+    // 旧 host 未注册 task-artifacts 时 getChannel 会抛错吗？不会：toService 延迟解析，
+    // 调用才需要 channel 存在；这里与 codex 同款可选语义。
+    this.taskArtifactService = ProxyChannel.toService<ITaskArtifactDeliveryService>(
+      channelClient.getChannel(ITaskArtifactDeliveryService.channelName),
     );
     this.credentialService = ProxyChannel.toService<ICredentialService>(
       channelClient.getChannel(ICredentialService.channelName),
