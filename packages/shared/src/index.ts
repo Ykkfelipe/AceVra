@@ -305,3 +305,11 @@ export * from "./customForkProduct.js";
 export * from "./pluginStoreOrdering.js";
 export * from "./session-debug.js";
 export { redactFeedbackText } from "./feedbackPrivacy.js";
+export type {
+  AccountBridgeSource,
+  AccountBridgeConnectionState,
+  AccountBridgeIdentity,
+  AccountBridgeUsage,
+  AccountBridgeStatus,
+  AccountBridgeConnectResult,
+} from "./accountBridge.js";
