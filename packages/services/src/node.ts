@@ -2353,7 +2353,10 @@ export function createLocalServices(options: {
       `unknown ZCODE_CODEX_EXECUTION_POLICY preset; falling back to the safe default`,
     );
   }
-  const codexAppServerBridge = new CodexAppServerBridge();
+  const codexAppServerBridge = new CodexAppServerBridge({
+    // 可选宿主覆盖（协议录制/测试 tee 用）：缺省仍走 ChatGPT.app 内置路径或 PATH。
+    executablePath: process.env.ZCODE_CODEX_EXECUTABLE || undefined,
+  });
   const codexExecution = createCodexExecutionService({
     bridge: codexAppServerBridge,
     taskIndex: taskIndexRepo,
