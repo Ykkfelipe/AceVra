@@ -45,6 +45,7 @@ import {
 } from "electron";
 import type { UtilityProcess as ElectronUtilityProcess } from "electron";
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir, hostname } from "node:os";
 import {
@@ -157,6 +158,7 @@ import {
   desktopRuntimeEnv,
   runtimeApplicationName,
   runtimeHomePath,
+  runtimeProtocolScheme,
   runtimeSessionDataPath,
   runtimeUserDataPath,
   shouldUseElectronDefaultUserDataPath,
@@ -268,6 +270,7 @@ if (!shouldUseElectronDefaultUserDataPath) {
       "Desktop runtime data paths are required when Electron default userData is disabled",
     );
   }
+  mkdirSync(runtimeSessionDataPath, { recursive: true });
   app.setPath("userData", runtimeUserDataPath);
   app.setPath("sessionData", runtimeSessionDataPath);
 }
@@ -529,7 +532,7 @@ async function runBrowserCommandOnView(params: {
 let currentDesktopZoomLevel = 0;
 let currentDesktopWindowSize: DesktopWindowSize | undefined;
 const preloadPath = join(import.meta.dirname, "../preload/index.cjs");
-const settingsFile = join(homedir(), ".zcode", "v2", "setting.json");
+const settingsFile = join(app.getPath("home"), ".zcode", "v2", "setting.json");
 let activeAppShutdownPolicy = resolveAppShutdownPolicy("normal", process.platform);
 let activeAppShutdownKind: AppShutdownKind | null = null;
 const WINDOWS_AGENT_FORCE_KILL_TIMEOUT_MS = 2_000;
@@ -1790,7 +1793,10 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
   return win;
 }
 
-registerDeepLinkProtocol(logger, { iconPath: linuxDesktopIntegrationIconPath });
+registerDeepLinkProtocol(logger, {
+  iconPath: linuxDesktopIntegrationIconPath,
+  scheme: runtimeProtocolScheme,
+});
 app.on("open-url", (event, url) => {
   event.preventDefault();
   const workspacePath = extractOpenWorkspacePathFromDeepLinkUrl(url);

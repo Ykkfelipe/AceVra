@@ -7,7 +7,8 @@ interface ChromiumHardwareAccelerationApp {
 }
 
 function resolveChromiumHardwareAccelerationSettingsFile(homePath: string = homedir()): string {
-  return join(homePath, ".zcode", "v2", "setting.json");
+  const configuredHome = process.env.ZCODE_DESKTOP_HOME_DIR?.trim() || homePath;
+  return join(configuredHome, ".zcode", "v2", "setting.json");
 }
 
 function extractBootstrapChromiumHardwareAccelerationEnabled(rawValue: unknown): boolean {

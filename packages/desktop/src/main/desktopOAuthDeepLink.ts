@@ -400,9 +400,9 @@ export function registerDeepLinkProtocol(
     info: (...args: unknown[]) => void;
     warn: (...args: unknown[]) => void;
   },
-  options: { iconPath?: string } = {},
+  options: { iconPath?: string; scheme?: string } = {},
 ) {
-  const scheme = "zcode";
+  const scheme = options.scheme?.trim() || "zcode";
 
   if (process.defaultApp && process.argv.length >= 2) {
     const entry = resolve(process.argv[1]!);

@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { setDataBaseDir } from "@zcode/services/node";
 
 function resolveBootstrapSettingsFile(homePath: string = homedir()): string {
-  return join(homePath, ".zcode", "v2", "setting.json");
+  const configuredHome = process.env.ZCODE_DESKTOP_HOME_DIR?.trim() || homePath;
+  return join(configuredHome, ".zcode", "v2", "setting.json");
 }
 
 function extractBootstrapDataBaseDir(rawValue: unknown): string | null {

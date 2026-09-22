@@ -33,7 +33,8 @@ function getZCodeDataDir() {
 }
 
 function getZCodeCliDir() {
-  return join(homedir(), ".zcode", "cli");
+  const home = process.env.ZCODE_DESKTOP_HOME_DIR?.trim() || homedir();
+  return join(home, ".zcode", "cli");
 }
 
 function getZCodeCliLogDir() {
@@ -46,7 +47,8 @@ function getZCodeCliLogDir() {
  * helperExitLogPathFor）。同目录下还有 `.tokens` broker 凭据，收集时必须按文件名白名单。
  */
 function getCuaHelperRunDir() {
-  return join(homedir(), ".zcode", "computer-use", "run");
+  const home = process.env.ZCODE_DESKTOP_HOME_DIR?.trim() || homedir();
+  return join(home, ".zcode", "computer-use", "run");
 }
 
 function isCuaHelperDiagnosticFileName(fileName: string): boolean {

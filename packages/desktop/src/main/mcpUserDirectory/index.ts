@@ -60,7 +60,10 @@ const AGENTS_MCP_DESCRIPTOR: DirectoryMcpDescriptor = {
 };
 
 function resolveUserHomeDir(): string {
-  const envHome = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
+  const envHome =
+    process.env.ZCODE_DESKTOP_HOME_DIR?.trim() ||
+    process.env.HOME?.trim() ||
+    process.env.USERPROFILE?.trim();
   return envHome && envHome.length > 0 ? envHome : homedir();
 }
 

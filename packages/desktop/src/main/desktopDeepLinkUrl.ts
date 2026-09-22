@@ -1,5 +1,8 @@
-const DEEP_LINK_SCHEME = "zcode";
-const DEEP_LINK_RE = /\bzcode:(?:\/\/|\/)?[^\s"'<>]+/i;
+const DEEP_LINK_SCHEME = process.env.ZCODE_DESKTOP_PROTOCOL_SCHEME?.trim().toLowerCase() || "zcode";
+const DEEP_LINK_RE = new RegExp(
+  `\\b${DEEP_LINK_SCHEME.replace(/[^a-z0-9_-]/g, "\\\\$&")}:(?:\\/\\/|\\/)?[^\\s"'<>]+`,
+  "i",
+);
 const OAUTH_CALLBACK_HOSTS = new Set(["oauth"]);
 const PAYMENT_CALLBACK_HOST = "payment";
 const WORKSPACE_OPEN_HOST = "workspace";

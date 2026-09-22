@@ -115,6 +115,10 @@ const isLocalDevelopmentRuntime =
   (globalThis as typeof globalThis & { __ZCODE_LOCAL_DEVELOPMENT_RUNTIME__?: boolean })
     .__ZCODE_LOCAL_DEVELOPMENT_RUNTIME__ === true;
 
+if (isLocalDevelopmentRuntime) {
+  document.title = "Custom Fork Dev";
+}
+
 function readBooleanFlag(name: string, defaultValue: boolean): boolean {
   const value = new URLSearchParams(window.location.search).get(name);
   if (value == null) return defaultValue;
