@@ -1,7 +1,8 @@
 # Azure OpenAI in the custom fork (Phase 7)
 
 Findings from inspecting the provider architecture, before any code was written.
-Status: **investigation complete, implementation blocked on credentials.**
+Status: **implemented and verified on 2026-09-22 — configuration only, no adapter, no
+runtime change.**
 
 ## Does the existing OpenAI-compatible provider suffice?
 
@@ -47,6 +48,46 @@ Personal providers persist to `~/.zcode/v2/provider_config.json`, outside the re
 via `atomicWritePrivateTextFile`. Keys therefore cannot reach git. The fork reads endpoint,
 key and deployment from `.env.azure.local`, already covered by `.gitignore`'s `.env.*.local`
 rule. No key is ever committed, logged or printed.
+
+## Verified result
+
+Probe (no inference): `GET {resource}/openai/v1/models` returns **200** with both
+`api-key` and `Authorization: Bearer`, so the v1 surface exists and no custom header is
+needed. The legacy `/openai/deployments?api-version=` surface also answers 200 and lists
+the `gpt-5-mini` deployment, but v1 is what is used. The Foundry `/models` inference
+surface returns 404 and is not used. Note the configured endpoint was an AI Foundry
+*project* URL (`…/api/projects/<project>`); the OpenAI-compatible surface lives on the
+**resource root**, so the base URL is derived by stripping the project path.
+
+Provider written to `~/.zcode/v2/provider_config.json` (mode 0600, outside the repo):
+
+- `providerId: azure-openai`, group `standard-personal`, `api.type: openai-chat-completions`
+- `baseUrl: https://<resource>.services.ai.azure.com/openai/v1`
+- `personalModelIds: ["gpt-5-mini"]` — the deployment name is the model id
+- properties: `contextWindow 272000`, `supportsToolCall true`, `supportsJsonSchemaOutput
+  true`, `supportsImage false` (Azure publishes no vision flag, so it is not claimed)
+- `reasoningLevel: { values: ["low"] }` — one level only; no GLM-style ladder invented,
+  because Azure's metadata publishes no reasoning ladder. The UI consequently renders a
+  fixed "Low" chip instead of a selector.
+- `maxOutputTokens.map` emits `max_completion_tokens` **and deletes `max_tokens`**, since
+  GPT-5 rejects the latter. Option maps are restricted-CEL JSON merge patches, so this
+  parameter difference is solved in configuration rather than in an adapter.
+
+The recorded request (`~/.zcode/cli/rollout/model-io-*.jsonl`) confirms the shape:
+
+```
+model=gpt-5-mini  stream=true  reasoning_effort=low
+max_completion_tokens=128000   max_tokens ABSENT   tools=33  tool_choice set
+providerId=azure-openai        durationMs=3483     querySource=main_turn
+```
+
+Azure's own response headers confirm streaming:
+`content-type: text/event-stream`, `azureai-fe-is-streaming: True`.
+
+The 33 tools sent include `Bash`, `Read`, `Edit`, `Write`, `WebFetch`, `Skill` and `Agent`
+— i.e. the harness offered Azure the same tool surface it offers GLM, through the same
+runtime. Tool calling is therefore *wired*, though the validation prompt deliberately
+required no tool call, so an actual Azure tool invocation is still unexercised.
 
 ## Which harness capabilities should follow automatically
 
