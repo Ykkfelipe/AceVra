@@ -145,3 +145,59 @@ Genuine risks, all metadata rather than architecture:
 - Declaring a capability the deployment lacks fails at request time, not at config time.
 
 None of this requires touching MCP, plugins, subagents or the agent runtime.
+
+
+## gpt-5.4-nano comparison (2026-09-22)
+
+`gpt-5-nano` is **not deployed** on this resource. The deployments are `gpt-5-mini`,
+`Phi-4-mini-instruct` and `gpt-5.4-nano`. Nothing was deployed; `gpt-5.4-nano` was added to
+the **existing** `azure-openai` provider — no new provider, no adapter.
+
+Config differences from gpt-5-mini, all conservative:
+
+- `reasoningLevel: { values: ["default"], map: "{}" }` — the patch is empty, so
+  `reasoning_effort` is **never sent**. Azure publishes no reasoning metadata for this
+  deployment, so none is invented. Confirmed absent from both agent-loop requests.
+- `contextWindow: 128000`, `maxOutputTokens.max: 16384` — deliberately under-declared,
+  since Azure publishes no limits for this deployment.
+- `supportsImage: false` — no vision flag published.
+
+### Result: task FAILED, on model behaviour, not harness compatibility
+
+The single standardized run asked for `nano-tool-test.txt` containing exactly
+`NANO_TOOL_OK`. gpt-5.4-nano instead emitted:
+
+```
+Write{file_path: .../ws/azure-tool-test.txt, content: "NANO_TOOL_OK\n"}
+Read {file_path: .../ws/azure-tool-test.txt}
+```
+
+Two errors: the wrong filename — it targeted the pre-existing `azure-tool-test.txt` left by
+the gpt-5-mini run — and a trailing newline the prompt excluded. The write was **denied**,
+because it was not the required Write and approving it would have destroyed the gpt-5-mini
+evidence. `azure-tool-test.txt` is unchanged at 13 bytes, and `nano-tool-test.txt` was never
+created.
+
+This is a capability difference, not a compatibility defect, so **the agent runtime was not
+modified**. Provider, transport, streaming, tool-call encoding and permission interception
+all behaved correctly.
+
+### Behavioural differences worth noting
+
+| | gpt-5-mini | gpt-5.4-nano |
+| --- | --- | --- |
+| tool-call shape | one call per turn, sequential | `Write` + `Read` emitted together in one turn |
+| filename accuracy | correct | wrong — reused a file already in context |
+| content accuracy | exact, no trailing newline | added a trailing newline |
+| agent-loop calls | 3 | 2 (then denied) |
+| agent-loop latency | 7569 ms | 6250 ms |
+| reasoning tokens | 64 | 0 (no `reasoning_effort` sent) |
+| prompt-cache reads | 30080 on turn 1 | 0 on turn 0, 31872 on turn 1 |
+
+Emitting both tool calls in a single turn is legal parallel tool calling and the runtime
+handled it; it simply gives the model no chance to see the first result before choosing the
+second target.
+
+Permission interception behaved **identically** for both models: the same prompt, the same
+four options, the same one-time grant semantics, and Deny correctly aborted the write while
+still returning the Read result to the model.
