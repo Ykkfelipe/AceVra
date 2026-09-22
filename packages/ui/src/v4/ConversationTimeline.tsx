@@ -288,6 +288,8 @@ interface ConversationTimelineProps {
   turnNavigatorDirectoryRevision?: number;
   /** 与旧 ChatView 对齐：composer dock 属于同一个滚动视口，sticky 到滚动容器底部。 */
   bottomDock?: ReactNode;
+  /** phase 11：任务级 artifact 区（已注册工具/agent 产出物），渲染在全部 turn 之后。 */
+  artifactSection?: ReactNode;
   /** 分享选择面板所在的共享父容器；用于把 dock 的真实位置写入同一坐标系。 */
   selectionPanelLayoutContainerRef?: { current: HTMLElement | null };
   /**
@@ -367,6 +369,7 @@ function ConversationTimelineImpl({
   onLoadAllOlder,
   turnNavigatorDirectoryRevision = 0,
   bottomDock,
+  artifactSection,
   selectionPanelLayoutContainerRef,
   backgroundScrollLocked = false,
   emptyState,
@@ -1880,6 +1883,7 @@ function ConversationTimelineImpl({
                   />
                 </div>
               ) : null}
+              {artifactSection}
               {pendingGuides.length > 0 ? (
                 <div
                   data-v4-timeline-content-column="true"

@@ -12,7 +12,10 @@ import {
   parseCodexServerRequest,
   type CodexItem,
 } from "#src/codex/domain/codexWire.js";
-import type { CodexAppServerPort } from "./codexPorts.js";
+import type { CodexAppServerPort, CodexTaskIndexPort } from "./codexPorts.js";
+import type { ITaskArtifactRegistry } from "#src/task-artifacts/contract.js";
+import { scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
+import { reanchorRegisteredArtifactsAfterRebuild } from "./codexDeliveryIntegration.js";
 
 interface CodexTaskRuntimeParams {
   readonly taskId: string;
@@ -254,4 +257,59 @@ export function selectRuntimeForNotification(
     return candidates.find((candidate) => candidate.codexThreadId === threadId) ?? null;
   }
   return candidates.length === 1 ? (candidates[0] ?? null) : null;
+}
+
+/** ensureRuntime 的可注入实现（宿主重启/换代后的冷恢复路径）。 */
+export async function ensureRuntimeForTask(options: {
+  bridge: CodexAppServerPort;
+  taskIndex: CodexTaskIndexPort;
+  policy: CodexExecutionPolicy;
+  taskArtifacts?: ITaskArtifactRegistry;
+  runtimes: Map<string, CodexTaskRuntime>;
+  taskId: string;
+  now: () => number;
+}): Promise<CodexTaskRuntime> {
+  const { bridge, taskIndex, policy, taskArtifacts, runtimes, taskId, now } = options;
+  const existing = runtimes.get(taskId);
+  if (existing && !existing.isStale(bridge)) return existing;
+  try {
+    const meta = await taskIndex.getTaskMeta({ taskId });
+    if (!meta || meta.executionBackend !== "codex" || !meta.codexThreadId) {
+      throw new Error("codex_task_not_found");
+    }
+    if (!bridge.installed) throw new Error("codex_not_installed");
+    const generation = bridge.generation;
+    const projection = new CodexThreadProjection(`codex-${generation}`, now);
+    // resume / 重建先行，成功后才换入 runtime：中途失败不能把空投影永久写进缓存。
+    const resumedThreadId = await resumeCodexThread(bridge, meta.codexThreadId, policy);
+    await rebuildProjectionFromCodex(bridge, resumedThreadId, projection);
+    await reanchorRegisteredArtifactsAfterRebuild({
+      registry: taskArtifacts,
+      taskId,
+      projection,
+    });
+    const runtime =
+      existing ??
+      new CodexTaskRuntime(
+        {
+          taskId,
+          workspacePath: meta.workspacePath,
+          ...(meta.workspaceIdentity ? { workspaceIdentity: meta.workspaceIdentity } : {}),
+          codexThreadId: resumedThreadId,
+          bridgeGeneration: generation,
+        },
+        now,
+      );
+    runtime.bridgeGeneration = generation;
+    runtime.projection = projection;
+    runtime.codexThreadId = resumedThreadId;
+    // 旧代进程的 turn 已随进程消失：换代重建后不允许拿旧 turnId 去打断新进程。
+    runtime.codexTurnId = null;
+    runtimes.set(taskId, runtime);
+    return runtime;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === "codex_task_not_found" || message === "codex_not_installed") throw error;
+    throw new Error(scrubCodexErrorDetail(`codex_thread_resume_failed: ${message}`));
+  }
 }

@@ -86,3 +86,116 @@ export class CodexRowLog {
     return source.slice(-limit);
   }
 }
+
+/** 工具行构造（itemId 缺失时用本地行号兜底 id）；冷恢复与实时投影共用。 */
+export function buildCodexToolCallRow(options: {
+  item: Extract<CodexServerNotification, { type: "itemStarted" }>["item"];
+  turnId: string;
+  status: "running" | "success" | "error";
+  allocateRowId: () => number;
+  now: () => number;
+}): ConversationRow {
+  const { item, turnId, status, allocateRowId, now } = options;
+  const createdAt = now();
+  const entityId = item.itemId ? `codex-item-${item.itemId}` : `codex-row-${allocateRowId()}`;
+  return {
+    ...rowBase(allocateRowId(), turnId, entityId, createdAt),
+    kind: "toolCall",
+    toolCallId: item.itemId ?? `codex-tool-${allocateRowId()}`,
+    toolName: `codex.${item.kind}`,
+    status,
+    inputText: codexToolInputText(item),
+    startedAt: createdAt,
+    ...(status === "running" ? {} : { endedAt: createdAt }),
+  };
+}
+
+/** 流式文本行（assistantText/reasoning）构造；entityId 稳定自 itemId。 */
+export function buildStreamingTextRow(options: {
+  item: { itemId: string | null; text: string };
+  kind: "assistantText" | "reasoning";
+  turnId: string;
+  allocateRowId: () => number;
+  now: () => number;
+}): { row: ConversationRow } {
+  const { item, kind, turnId, allocateRowId, now } = options;
+  const entityId = item.itemId ? `codex-item-${item.itemId}` : `codex-row-${allocateRowId()}`;
+  const row: ConversationRow = {
+    ...rowBase(allocateRowId(), turnId, entityId, now()),
+    kind,
+    text: item.text,
+    state: "streaming",
+  };
+  return { row };
+}
+
+/** 宿主发起用户轮的 turnHeader 行构造。 */
+export function buildTurnHeaderRow(options: {
+  turnId: string;
+  commandId: string;
+  rowId: number;
+  createdAt: number;
+}): ConversationRow {
+  const { turnId, commandId, rowId, createdAt } = options;
+  return {
+    ...rowBase(rowId, turnId, `codex-turn-${turnId}`, createdAt),
+    kind: "turnHeader",
+    origin: "userInput",
+    executionKind: "agent",
+    sourceCommandId: commandId,
+    state: "running",
+    startedAt: createdAt,
+  };
+}
+
+/** 宿主发起用户轮的 userInput 行构造。 */
+export function buildUserInputRow(options: {
+  turnId: string;
+  text: string;
+  commandId: string;
+  rowId: number;
+  createdAt: number;
+}): ConversationRow {
+  const { turnId, text, commandId, rowId, createdAt } = options;
+  return {
+    ...rowBase(rowId, turnId, `codex-input-${turnId}`, createdAt),
+    kind: "userInput",
+    text,
+    origin: "realUser",
+    sourceCommandId: commandId,
+  };
+}
+
+/** 冷恢复：历史条目 → 终态行（文本类直接落行；工具类按 status 判定成败）。 */
+export function buildReplayedHistoryRow(options: {
+  item: Extract<CodexServerNotification, { type: "itemStarted" }>["item"];
+  existing: ConversationRow | undefined;
+  turnId: string;
+  allocateRowId: () => number;
+  now: () => number;
+}): ConversationRow | null {
+  const { item, existing, turnId, allocateRowId, now } = options;
+  const failed = item.status != null && /fail|error/i.test(item.status);
+  if (item.kind === "agentMessage" || item.kind === "reasoning") {
+    const kind = item.kind === "agentMessage" ? ("assistantText" as const) : ("reasoning" as const);
+    if (existing?.kind === kind) return { ...existing, text: item.text, state: "complete" };
+    const entityId = item.itemId ? `codex-item-${item.itemId}` : `codex-row-${allocateRowId()}`;
+    return {
+      ...rowBase(allocateRowId(), turnId, entityId, now()),
+      kind,
+      text: item.text,
+      state: "complete",
+    };
+  }
+  if (!isToolItemKind(item.kind)) return null;
+  if (existing?.kind === "toolCall") {
+    return { ...existing, status: failed ? ("error" as const) : ("success" as const), endedAt: now() };
+  }
+  return buildCodexToolCallRow({
+    item,
+    turnId,
+    status: failed ? "error" : "success",
+    allocateRowId,
+    now,
+  });
+}

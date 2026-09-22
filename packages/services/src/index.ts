@@ -306,3 +306,6 @@ export type { CommandCodeStatus } from "./accounts/commandCodeStatusAdapter.js";
 // 模块图，而实现模块在顶层创建 serviceLogger（Node 专属），进 Web 包会直接崩。
 export { ICodexExecutionService } from "./codex/app/codexExecutionService.js";
 export type { CodexAppServerPort, CodexTaskIndexPort } from "./codex/contract.js";
+// task-artifacts 同款纪律：只导出通道 descriptor（browser-safe：仅 zod + descriptors）。
+// TaskArtifactRegistry（node:fs）留在 ./task-artifacts/contract.js 供 host 内部 import。
+export { ITaskArtifactDeliveryService } from "./task-artifacts/app/taskArtifactService.js";

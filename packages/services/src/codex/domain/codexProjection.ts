@@ -1,7 +1,10 @@
 // Codex thread → v4 conversation 投影（domain，纯函数类，无 IO / 无时钟）。
-// Codex 通知与宿主侧 turn 边界归约成 v4 rows/deltas；行存储见 codexRowLog.ts，
-// 快照形状由 codexSnapshot.ts 构造，审批登记/解析委托 codexApprovals.ts。
-import type { CodexExecutionApprovalDecision, CodexExecutionApprovalRequestInfo } from "@zcode/shared";
+// 行存储/行构造见 codexRowLog.ts，快照见 codexSnapshot.ts，交付追踪见 codexDelivery.ts。
+import type {
+  CodexExecutionApprovalDecision,
+  CodexExecutionApprovalRequestInfo,
+  TaskArtifactDescriptor,
+} from "@zcode/shared";
 import type {
   ConversationDelta,
   ConversationRow,
@@ -15,12 +18,18 @@ import {
   type CodexPhase,
   type CodexProjectionState,
 } from "./codexSnapshot.js";
-import { CodexRowLog, codexToolInputText, isToolItemKind, rowBase } from "./codexRowLog.js";
 import {
-  CodexApprovalTable,
-  type CodexApprovalRecord,
-  type CodexApprovalResolution,
-} from "./codexApprovals.js";
+  buildTurnHeaderRow,
+  buildUserInputRow,
+  buildCodexToolCallRow,
+  buildStreamingTextRow,
+  CodexRowLog,
+  isToolItemKind,
+  rowBase,
+} from "./codexRowLog.js";
+import { buildCodexArtifactRow, CodexTurnDeliveryTracker } from "./codexDelivery.js";
+import { buildReplayedHistoryRow } from "./codexRowLog.js";
+import { CodexApprovalTable, type CodexApprovalRecord, type CodexApprovalResolution } from "./codexApprovals.js";
 
 export interface CodexProjectionCommit {
   readonly seq: number;
@@ -46,6 +55,7 @@ export class CodexThreadProjection {
   #phase: CodexPhase = "completedSuccess";
   #lastError: CodexProjectionState["lastError"] = null;
   #title = "";
+  readonly #deliveryTracker = new CodexTurnDeliveryTracker();
 
   constructor(
     /** 渲染端 logEpoch；与桥代数绑定（codex-<generation>）。 */
@@ -108,22 +118,20 @@ export class CodexThreadProjection {
     const createdAt = this.now();
     const turnId = params.turnId;
     this.#currentTurnId = turnId;
-    const turnHeader: TurnHeaderRow = {
-      ...rowBase(this.#log.allocateRowId(), turnId, `codex-turn-${turnId}`, createdAt),
-      kind: "turnHeader",
-      origin: "userInput",
-      executionKind: "agent",
-      sourceCommandId: params.commandId,
-      state: "running",
-      startedAt: createdAt,
-    };
-    const userInput: ConversationRow = {
-      ...rowBase(this.#log.allocateRowId(), turnId, `codex-input-${turnId}`, createdAt),
-      kind: "userInput",
+    this.#deliveryTracker.beginTurn(turnId, params.text);
+    const turnHeader = buildTurnHeaderRow({
+      turnId,
+      commandId: params.commandId,
+      rowId: this.#log.allocateRowId(),
+      createdAt,
+    }) as TurnHeaderRow;
+    const userInput = buildUserInputRow({
+      turnId,
       text: params.text,
-      origin: "realUser",
-      sourceCommandId: params.commandId,
-    };
+      commandId: params.commandId,
+      rowId: this.#log.allocateRowId(),
+      createdAt,
+    });
     this.#currentTurnRowId = turnHeader.rowId;
     this.#phase = "running";
     this.#lastError = null;
@@ -135,16 +143,12 @@ export class CodexThreadProjection {
   }
 
   #appendStreamingRow(item: { itemId: string | null; text: string }, kind: "assistantText" | "reasoning"): CodexProjectionCommit {
-    const turnId = this.#currentTurnId ?? "codex-turn-unknown";
-    const entityId = item.itemId ? `codex-item-${item.itemId}` : `codex-row-${this.#log.allocateRowId()}`;
-    const row: ConversationRow = {
-      ...rowBase(this.#log.allocateRowId(), turnId, entityId, this.now()),
-      kind,
-      text: item.text,
-      state: "streaming",
-    };
-    if (item.itemId) this.#streamingRowByItemId.set(item.itemId, row.rowId);
-    return this.#commit([this.#log.append(row)]);
+    const built = buildStreamingTextRow({
+      item, kind, turnId: this.#currentTurnId ?? "codex-turn-unknown",
+      allocateRowId: () => this.#log.allocateRowId(), now: this.now,
+    });
+    if (item.itemId) this.#streamingRowByItemId.set(item.itemId, built.row.rowId);
+    return this.#commit([this.#log.append(built.row)]);
   }
 
   /** 应用一条 Codex 通知；不适用返回 null（调用方丢弃，不产生空帧）。 */
@@ -155,6 +159,11 @@ export class CodexThreadProjection {
       case "itemDelta":
         return this.#itemDelta(notification);
       case "itemCompleted":
+        if (notification.item.kind === "fileChange") {
+          this.#deliveryTracker.recordFileChangePaths(
+            notification.item.changes.map((change) => change.path),
+          );
+        }
         return this.#itemCompleted(notification.item);
       case "turnCompleted":
         return this.#turnCompleted(notification);
@@ -184,24 +193,12 @@ export class CodexThreadProjection {
     }
     if (!isToolItemKind(item.kind)) return null;
     const turnId = this.#currentTurnId ?? "codex-turn-unknown";
-    const row = this.#toolCallRow(item, turnId, "running");
+    const row = buildCodexToolCallRow({
+      item, turnId, status: "running",
+      allocateRowId: () => this.#log.allocateRowId(), now: this.now,
+    });
     if (item.itemId) this.#streamingRowByItemId.set(item.itemId, row.rowId);
     return this.#commit([this.#log.append(row)]);
-  }
-
-  #toolCallRow(item: CodexItem, turnId: string, status: "running" | "success" | "error"): ConversationRow {
-    const createdAt = this.now();
-    const entityId = item.itemId ? `codex-item-${item.itemId}` : `codex-row-${this.#log.allocateRowId()}`;
-    return {
-      ...rowBase(this.#log.allocateRowId(), turnId, entityId, createdAt),
-      kind: "toolCall",
-      toolCallId: item.itemId ?? `codex-tool-${this.#log.allocateRowId()}`,
-      toolName: `codex.${item.kind}`,
-      status,
-      inputText: codexToolInputText(item),
-      startedAt: createdAt,
-      ...(status === "running" ? {} : { endedAt: createdAt }),
-    };
   }
 
   #itemDelta(notification: Extract<CodexServerNotification, { type: "itemDelta" }>): CodexProjectionCommit | null {
@@ -305,15 +302,12 @@ export class CodexThreadProjection {
     return this.#commit(deltas);
   }
 
-  /**
-   * turn/start 失败的本地收口：Codex 不会为这次 turn 发 turn/completed，
-   * 投影必须自己把 turnHeader 置 failed，否则 UI 停在幽灵 running 轮上。
-   */
+  /** turn/start 失败的本地收口：置 turnHeader failed，避免 UI 停在幽灵 running 轮。 */
   failActiveTurn(code: string, message: string): CodexProjectionCommit {
     return this.#closeActiveTurn("failed", { code, message });
   }
 
-  /** 登记审批：生成 interactionId、下发 pendingInteraction，锚点工具行置为 pendingApproval。 */
+  /** 登记审批：pendingInteraction 下发 + 锚点工具行置 pendingApproval。 */
   registerApproval(
     info: Omit<CodexExecutionApprovalRequestInfo, "interactionId">,
     rawId: number,
@@ -365,25 +359,31 @@ export class CodexThreadProjection {
     const turnId = "codex-history";
     const existingRowId = entityId ? this.#log.rowIdOfEntity(entityId) : undefined;
     const existing = existingRowId !== undefined ? this.#log.rowAt(existingRowId) : undefined;
-    if (item.kind === "agentMessage" || item.kind === "reasoning") {
-      const kind = item.kind === "agentMessage" ? "assistantText" : "reasoning";
-      const row: ConversationRow = existing?.kind === kind
-        ? { ...existing, text: item.text, state: "complete" }
-        : {
-            ...rowBase(this.#log.allocateRowId(), turnId, entityId ?? `codex-row-${this.#log.allocateRowId()}`, this.now()),
-            kind,
-            text: item.text,
-            state: "complete",
-          };
-      return this.#commit([existing ? this.#log.upsert(row) : this.#log.append(row)]);
-    }
-    if (!isToolItemKind(item.kind)) return null;
     const failed = item.status != null && /fail|error/i.test(item.status);
-    const row =
-      existing?.kind === "toolCall"
-        ? { ...existing, status: failed ? ("error" as const) : ("success" as const), endedAt: this.now() }
-        : this.#toolCallRow(item, turnId, failed ? "error" : "success");
+    const row = buildReplayedHistoryRow({
+      item,
+      existing,
+      turnId,
+      allocateRowId: () => this.#log.allocateRowId(),
+      now: this.now,
+    });
+    if (!row) return null;
     return this.#commit([existing ? this.#log.upsert(row) : this.#log.append(row)]);
+  }
+
+  /** turn 完成后取走交付候选（输入文本 + fileChange 路径）；每轮一次性。 */
+  takeCompletedTurnDelivery(): { turnId: string; userInputText: string; filePaths: string[] } | null {
+    return this.#deliveryTracker.takeCompleted(); }
+
+  /** 已注册 artifact → 标准 artifact 行（turnId 未知时用冷恢复组）。 */
+  appendArtifactRow(descriptor: TaskArtifactDescriptor, turnId: string | null): CodexProjectionCommit {
+    const row = buildCodexArtifactRow({
+      descriptor,
+      turnId: turnId || "codex-history",
+      rowId: this.#log.allocateRowId(),
+      createdAt: this.now(),
+    });
+    return this.#commit([this.#log.append(row)]);
   }
 
   buildSnapshot(sessionId: string): ReturnType<typeof buildCodexSnapshot> {

@@ -33,12 +33,18 @@ import { parseConversationTopic } from "@zcode/shared/zcode-protocol-v4";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { CODEX_METHODS, scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
 import { codexUnroutableApprovalResponse } from "#src/codex/domain/codexApprovals.js";
+import type { ITaskArtifactRegistry } from "#src/task-artifacts/contract.js";
+import {
+  deliverUserNamedCodexArtifacts,
+  reanchorRegisteredArtifactsAfterRebuild,
+} from "./codexDeliveryIntegration.js";
 import { toCodexTaskBinding } from "#src/codex/domain/codexBinding.js";
 import type { CodexExecutionPolicy } from "#src/codex/domain/codexPolicy.js";
 import { CodexThreadProjection } from "#src/codex/domain/codexProjection.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
 import {
   CodexTaskRuntime,
+  ensureRuntimeForTask,
   extractCodexTurnId,
   rebuildProjectionFromCodex,
   resumeCodexThread,
@@ -62,6 +68,8 @@ interface CodexExecutionServiceDeps {
   readonly taskIndex: CodexTaskIndexPort;
   /** 宿主执行策略（approvalPolicy + sandbox），由 node.ts 按 env 解析，默认 safeInteractive。 */
   readonly policy: CodexExecutionPolicy;
+  /** Task artifacts 注册面（宿主内部）；缺省时用户点名交付不生效（不报错）。 */
+  readonly taskArtifacts?: ITaskArtifactRegistry;
   readonly now?: () => number;
 }
 
@@ -118,6 +126,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       .catch((error) => logger.warn(undefined, `codex task status write failed: ${String(error)}`));
   }
 
+
   // ── bridge 通知扇入：按 threadId 路由到 runtime 并归约成帧 ──
   const offNotification = deps.bridge.onNotification((method, params, rawRequest) => {
     try {
@@ -146,6 +155,23 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       emitCommit(runtime!.taskId, routed.commit);
       if (method === "turn/completed") {
         persistStatus(runtime!.taskId, runtime!.projection.phase === "error" ? "error" : "completed");
+        // 用户点名交付：turn 完成后旁路注册（不改 turn 语义，不阻塞通知扇入）。
+        const delivery = runtime!.projection.takeCompletedTurnDelivery();
+        if (delivery && deps.taskArtifacts) {
+          void deliverUserNamedCodexArtifacts({
+            registry: deps.taskArtifacts,
+            taskId: runtime!.taskId,
+            workspacePath: runtime!.workspacePath,
+            ...(runtime!.workspaceIdentity
+              ? { workspaceIdentity: runtime!.workspaceIdentity }
+              : {}),
+            projection: runtime!.projection,
+            delivery,
+            emitCommit,
+          }).catch((error) => {
+            logger.warn(undefined, `codex artifact delivery failed: ${String(error)}`);
+          });
+        }
       }
     } catch (error) {
       logger.warn(undefined, `codex notification routing failed: ${String(error)}`);
@@ -153,45 +179,16 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   });
 
   /** 确保 runtime 可用；失败路径绝不污染缓存，错误一律脱敏后再出通道。 */
-  async function ensureRuntime(taskId: string): Promise<CodexTaskRuntime> {
-    const existing = runtimes.get(taskId);
-    if (existing && !existing.isStale(deps.bridge)) return existing;
-    try {
-      const meta = await deps.taskIndex.getTaskMeta({ taskId });
-      if (!meta || meta.executionBackend !== "codex" || !meta.codexThreadId) {
-        throw new Error("codex_task_not_found");
-      }
-      if (!deps.bridge.installed) throw new Error("codex_not_installed");
-      const generation = deps.bridge.generation;
-      const projection = new CodexThreadProjection(`codex-${generation}`, now);
-      // resume / 重建先行，成功后才换入 runtime：中途失败不能把空投影永久写进缓存。
-      const resumedThreadId = await resumeCodexThread(deps.bridge, meta.codexThreadId, deps.policy);
-      await rebuildProjectionFromCodex(deps.bridge, resumedThreadId, projection);
-      const runtime =
-        existing ??
-        new CodexTaskRuntime(
-          {
-            taskId,
-            workspacePath: meta.workspacePath,
-            ...(meta.workspaceIdentity ? { workspaceIdentity: meta.workspaceIdentity } : {}),
-            codexThreadId: resumedThreadId,
-            bridgeGeneration: generation,
-          },
-          now,
-        );
-      runtime.bridgeGeneration = generation;
-      runtime.projection = projection;
-      runtime.codexThreadId = resumedThreadId;
-      // 旧代进程的 turn 已随进程消失：换代重建后不允许拿旧 turnId 去打断新进程。
-      runtime.codexTurnId = null;
-      runtimes.set(taskId, runtime);
-      return runtime;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message === "codex_task_not_found" || message === "codex_not_installed") throw error;
-      throw new Error(scrubCodexErrorDetail(`codex_thread_resume_failed: ${message}`));
-    }
-  }
+  const ensureRuntime = (taskId: string): Promise<CodexTaskRuntime> =>
+    ensureRuntimeForTask({
+      bridge: deps.bridge,
+      taskIndex: deps.taskIndex,
+      policy: deps.policy,
+      taskArtifacts: deps.taskArtifacts,
+      runtimes,
+      taskId,
+      now,
+    });
 
   const service: ICodexExecutionService = {
     async createTask(params: CodexExecutionCreateTaskParams): Promise<CodexExecutionCreateTaskResult> {

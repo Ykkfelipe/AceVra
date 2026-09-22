@@ -227,6 +227,8 @@ export const conversationArtifactTypeSchema = z.enum([
   "html",
   "md",
   "text",
+  // phase 11：task-artifacts 注册的任意二进制（zip 等）落通用文件卡片。
+  "file",
 ]);
 export type ConversationArtifactType = z.infer<typeof conversationArtifactTypeSchema>;
 

@@ -19,6 +19,11 @@ import {
   resolveCodexExecutionPolicy,
 } from "./codex/contract.js";
 import {
+  ITaskArtifactDeliveryService,
+  TaskArtifactRegistry,
+  instrumentBrowserExecutorForArtifacts,
+} from "./task-artifacts/contract.js";
+import {
   buildLocalMediaPreviewUrl,
   isProviderProvisioningAccountCredentialKey,
   type ProviderProvisioningTrigger,
@@ -2080,6 +2085,9 @@ export function createLocalServices(options: {
   // OffPeakTaskService 单例在下方 DI register IIFE 中创建（晚于 agent service）；
   // 用前向引用 holder 惰性绑定——offPeak/create 协议请求只会发生在服务集合装配完成后。
   let offPeakTaskServiceForAgent: OffPeakTaskService | undefined;
+  // Task artifacts（phase 11）：宿主内部注册表。通道只暴露 delivery facade（list/read）；
+  // 注册面仅注入给 browser-use 桥插桩与 Codex 投影等宿主内部集成。
+  const taskArtifactRegistry = new TaskArtifactRegistry();
   // desktop-attached-remote 装配不暴露 Off-Peak 工具面（远程不在支持范围）。
   const offPeakToolWiring =
     options?.serviceAuthorityMode === "desktop-attached-remote"
@@ -2114,7 +2122,13 @@ export function createLocalServices(options: {
     processLifecycleReporter: options?.processLifecycleReporter,
     spawnFallbackCwd: options?.zcodeAgentSpawnFallbackCwd,
     // browser-use：host→main 执行桥透传给 agent service 的 onRequest browserExecute 路由。
-    browserControlExecutor: options?.browserControlExecutor,
+    // 插桩层把成功的截图结果旁路注册成任务 artifact（工具结果本身不变）。
+    browserControlExecutor: options?.browserControlExecutor
+      ? instrumentBrowserExecutorForArtifacts({
+          executor: options.browserControlExecutor,
+          registry: taskArtifactRegistry,
+        })
+      : undefined,
     // 官方 Server MCP 身份头：host 是唯一身份权威，Agent 经反向请求索取。
     // Provider 存在性读取正式 Model Selection View；不恢复旧 Provider Snapshot。
     officialMcpAuthHeadersResolver: createOfficialMcpAuthHeadersResolver({
@@ -2361,6 +2375,7 @@ export function createLocalServices(options: {
     bridge: codexAppServerBridge,
     taskIndex: taskIndexRepo,
     policy: codexPolicyResolution.policy,
+    taskArtifacts: taskArtifactRegistry,
   });
   const oauthService = createOAuthService(credentialService, {
     apiClient,
@@ -2480,6 +2495,11 @@ export function createLocalServices(options: {
     .register(IBroadcastService, broadcastService)
     .register(IZCodeTaskService, zcodeTaskService)
     .register(ICodexExecutionService, codexExecution.service)
+    .register(ITaskArtifactDeliveryService, {
+      // 通道只暴露 delivery facade：远端可列/可读已注册 artifact，但不能注册。
+      listTaskArtifacts: (params) => taskArtifactRegistry.listTaskArtifacts(params),
+      readTaskArtifact: (params) => taskArtifactRegistry.readTaskArtifact(params),
+    })
     .register(IZCodeAgentService, zcodeAgentService)
     .register(IZCodeSessionService, zcodeSessionService)
     .register(ICuaPermissionService, cuaPermissionService)
@@ -2679,6 +2699,7 @@ export function createLocalServices(options: {
   codexExecutionDisposables.set(services, [
     { dispose: () => codexExecution.dispose() },
     { dispose: () => codexAppServerBridge.dispose() },
+    { dispose: () => taskArtifactRegistry.dispose() },
   ]);
   return services;
 }
