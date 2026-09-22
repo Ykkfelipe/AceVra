@@ -15,7 +15,6 @@ import type {
   CodexExecutionListTasksResult,
   CodexExecutionReadTaskParams,
   CodexExecutionSendTurnParams,
-  CodexTaskBinding,
   CodexTaskThreadInfo,
   ZCodeTaskMeta,
 } from "@zcode/shared";
@@ -33,10 +32,14 @@ import type {
 import { parseConversationTopic } from "@zcode/shared/zcode-protocol-v4";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { CODEX_METHODS, scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
+import { codexUnroutableApprovalResponse } from "#src/codex/domain/codexApprovals.js";
+import { toCodexTaskBinding } from "#src/codex/domain/codexBinding.js";
+import type { CodexExecutionPolicy } from "#src/codex/domain/codexPolicy.js";
 import { CodexThreadProjection } from "#src/codex/domain/codexProjection.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
 import {
   CodexTaskRuntime,
+  extractCodexTurnId,
   rebuildProjectionFromCodex,
   resumeCodexThread,
   routeCodexNotification,
@@ -57,19 +60,9 @@ interface SubscriptionEntry {
 interface CodexExecutionServiceDeps {
   readonly bridge: CodexAppServerPort;
   readonly taskIndex: CodexTaskIndexPort;
+  /** 宿主执行策略（approvalPolicy + sandbox），由 node.ts 按 env 解析，默认 safeInteractive。 */
+  readonly policy: CodexExecutionPolicy;
   readonly now?: () => number;
-}
-
-function toBinding(meta: ZCodeTaskMeta): CodexTaskBinding {
-  return {
-    taskId: meta.taskId,
-    workspacePath: meta.workspacePath,
-    ...(meta.workspaceIdentity ? { workspaceIdentity: meta.workspaceIdentity } : {}),
-    executionBackend: "codex",
-    codexThreadId: meta.codexThreadId ?? "",
-    title: meta.title,
-    createdAt: meta.createdAt,
-  };
 }
 
 export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
@@ -144,7 +137,8 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
         // 审批类服务器请求必须可路由：无法定位 thread 的审批回 denied 并告警，
         // 绝不静默丢弃（那会让 turn 无 UI 可审批地挂死）。
         if (rawRequest && rawRequest.method.includes("requestApproval")) {
-          deps.bridge.respond(rawRequest.rawId, { decision: "denied" });
+          // fail closed：无法定位 thread 的审批按 schema 真形回拒（权限类回空授权）。
+          deps.bridge.respond(rawRequest.rawId, codexUnroutableApprovalResponse(rawRequest.method));
           logger.warn(undefined, `codex approval routed to no runtime; denied rawId=${rawRequest.rawId}`);
         }
         return;
@@ -171,7 +165,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       const generation = deps.bridge.generation;
       const projection = new CodexThreadProjection(`codex-${generation}`, now);
       // resume / 重建先行，成功后才换入 runtime：中途失败不能把空投影永久写进缓存。
-      const resumedThreadId = await resumeCodexThread(deps.bridge, meta.codexThreadId);
+      const resumedThreadId = await resumeCodexThread(deps.bridge, meta.codexThreadId, deps.policy);
       await rebuildProjectionFromCodex(deps.bridge, resumedThreadId, projection);
       const runtime =
         existing ??
@@ -188,6 +182,8 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       runtime.bridgeGeneration = generation;
       runtime.projection = projection;
       runtime.codexThreadId = resumedThreadId;
+      // 旧代进程的 turn 已随进程消失：换代重建后不允许拿旧 turnId 去打断新进程。
+      runtime.codexTurnId = null;
       runtimes.set(taskId, runtime);
       return runtime;
     } catch (error) {
@@ -202,6 +198,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       if (!deps.bridge.installed) throw new Error("codex_not_installed");
       const codexThreadId = await startCodexThread(deps.bridge, {
         workspacePath: params.workspacePath,
+        policy: deps.policy,
       });
       const taskId = createUuid();
       const createdAt = now();
@@ -236,7 +233,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       if (params.firstInput?.trim()) {
         await service.sendTurn({ taskId, content: params.firstInput });
       }
-      return { task: toBinding(meta) };
+      return { task: toCodexTaskBinding(meta) };
     },
 
     async sendTurn(params: CodexExecutionSendTurnParams): Promise<{ accepted: boolean; commandId: string }> {
@@ -247,10 +244,12 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       emitCommit(params.taskId, commit);
       try {
         // turn/start 的 input 形状以 spec 的 E2E checklist 为准；文本项 {type:"text", text}。
-        await deps.bridge.call(CODEX_METHODS.turnStart, {
+        // 响应携带 {turn:{id}}（schema）：记下 Codex 侧 turn id 供 turn/interrupt 使用。
+        const result = await deps.bridge.call(CODEX_METHODS.turnStart, {
           threadId: runtime.codexThreadId,
           input: [{ type: "text", text: params.content }],
         });
+        runtime.codexTurnId = extractCodexTurnId(result);
       } catch (error) {
         // Codex 不会为这次 turn 发 turn/completed；投影必须本地收口成 failed，
         // 否则 UI 停在幽灵 running 轮上（canStop 永真）。
@@ -295,7 +294,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
           ? { workspaceIdentity: params.workspaceIdentity }
           : {}),
       });
-      return { tasks: metas.filter((meta) => meta.executionBackend === "codex").map(toBinding) };
+      return { tasks: metas.filter((meta) => meta.executionBackend === "codex").map(toCodexTaskBinding) };
     },
 
     async isCodexTask(taskId: string): Promise<boolean> {

@@ -15,7 +15,7 @@ import {
   type CodexPhase,
   type CodexProjectionState,
 } from "./codexSnapshot.js";
-import { CodexRowLog, codexToolInputText, rowBase } from "./codexRowLog.js";
+import { CodexRowLog, codexToolInputText, isToolItemKind, rowBase } from "./codexRowLog.js";
 import {
   CodexApprovalTable,
   type CodexApprovalRecord,
@@ -34,10 +34,6 @@ export interface CodexApprovalResolutionWithCommit extends CodexApprovalResoluti
 }
 
 type CodexItem = Extract<CodexServerNotification, { type: "itemStarted" }>["item"];
-
-function isToolItemKind(kind: CodexItem["kind"]): boolean {
-  return kind === "commandExecution" || kind === "fileChange" || kind === "mcpToolCall" || kind === "webSearch";
-}
 
 export class CodexThreadProjection {
   readonly #log = new CodexRowLog();
@@ -321,10 +317,11 @@ export class CodexThreadProjection {
   registerApproval(
     info: Omit<CodexExecutionApprovalRequestInfo, "interactionId">,
     rawId: number,
+    requestedPermissions?: unknown,
   ): { commit: CodexProjectionCommit; record: CodexApprovalRecord } {
     const anchorRowId =
       info.kind === "commandExecution" || info.kind === "fileChange" ? this.#log.lastToolRowId() : null;
-    const record = this.#approvals.register({ info, rawId, anchorRowId, createdAt: this.now() });
+    const record = this.#approvals.register({ info, rawId, anchorRowId, createdAt: this.now(), requestedPermissions });
     const deltas: ConversationDelta[] = [
       { op: "state.updated", patch: { pendingInteractions: this.#approvals.toPendingInteractions(this.now()) } },
     ];

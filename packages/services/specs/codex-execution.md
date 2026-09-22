@@ -102,13 +102,63 @@ Row identity: `rowId` = monotonic per task (projection-local counter); `entityId
 | Envelope type | Codex action |
 | ------------- | ------------ |
 | `sendText` | `turn/start` (or queued: create+`turn/start` when `firstInput` on createTask) |
-| `stop` | `turn/interrupt` |
-| `resolveInteraction` | respond to the matching Codex approval server-request (`decision` approved/denied) |
+| `stop` | `turn/interrupt` **{threadId, turnId}** — both required by schema; the Codex turn id is captured from the `turn/start` response (`{turn:{id}}`) and from `turn/started` notifications, cleared on `turn/completed`; when unknown the stop is failed with `codex_interrupt_no_active_turn` rather than sent incomplete |
+| `resolveInteraction` | respond to the matching Codex approval server-request with the schema-true body (see approvals below) |
 | `renameSession` | task index title update only (Codex `thread/name/set` deferred) |
 | anything else | ack `rejected`, reason `fault.command.unsupportedBackend` |
 
 `createSession` / `createSelectionSideSession` / fork / editUserQuery / rewind / workflow
 commands are rejected for Codex tasks in this slice.
+
+## Harness execution policy (schema-derived, 2026-09-22)
+
+Field names and enum values below are copied from the installed binary's own protocol
+schema (`codex app-server generate-json-schema`, codex-cli 0.155.0-alpha.9.2, v2 bundle) —
+not guessed. The harness never invents values outside these enums.
+
+- `thread/start` accepts `approvalPolicy` (`AskForApproval` string variants:
+  `"untrusted" | "on-request" | "never"`, plus a granular object variant this backend does
+  not use) and `sandbox` (`SandboxMode`: `"read-only" | "workspace-write" |
+  "danger-full-access"`).
+- `thread/resume` accepts the same two fields plus `excludeTurns: boolean`; its schema text
+  explicitly recommends `excludeTurns: true` + pagination via `thread/turns/list` /
+  `thread/items/list` because full-history hydration is deprecated. The harness resumes
+  with `excludeTurns: true` and **re-asserts the policy** so an old thread cannot come back
+  with a looser policy than the host currently runs.
+- `turn/start` takes per-turn overrides (`approvalPolicy`, `sandboxPolicy` — the latter is a
+  different object shape, `SandboxPolicy` with camelCase `type`); the harness deliberately
+  does not duplicate the policy per turn — the thread-level policy persists.
+- `turn/interrupt` requires both `threadId` and `turnId`; response `{}`.
+- Approval server-request **responses** are not approved/denied:
+  - `item/commandExecution/requestApproval` and `item/fileChange/requestApproval` respond
+    `{decision}` with `"accept" | "acceptForSession" | "decline" | "cancel"` (plus amendment
+    variants the harness never sends). Harness mapping: approved → `"accept"`, denied →
+    `"decline"`. `acceptForSession` (silent re-approval) and `cancel` (kills the turn) are
+    deliberately never emitted — both weaken the fail-closed posture.
+  - `item/permissions/requestApproval` responds `{permissions: GrantedPermissionProfile,
+    scope?: "turn"|"session"}` — there is no decision field. Harness mapping: denied →
+    `{permissions:{}, scope:"turn"}` (empty grant = nothing additional authorized);
+    approved → the request's own `permissions` profile echoed back with `scope:"turn"`.
+    The requested profile lives only in the host-side approval record; it never crosses
+    the channel.
+  - Approvals that cannot be routed to a runtime are answered by the same schema-true
+    denial (decline / empty permissions grant) — never dropped, never auto-approved.
+- `thread/items/list` pages with `cursor`/`limit` and returns `nextCursor`; history rebuild
+  follows `nextCursor` until exhausted (bounded at 50 pages).
+
+The policy itself is a host-side constant domain (`codexPolicy.ts`):
+
+| Preset | approvalPolicy | sandbox | Selected by |
+| ------ | -------------- | ------- | ----------- |
+| `safeInteractive` (**default**) | `on-request` | `read-only` | everything unless overridden |
+| `workspaceWrite` | `on-request` | `workspace-write` | explicit env preset |
+| `unrestricted` | `never` | `danger-full-access` | explicit env preset only |
+
+Selection: `ZCODE_CODEX_EXECUTION_POLICY=<preset-name>` on the host process. Unknown or
+blank names fail closed to `safeInteractive` with a warning. There is no per-task or
+per-client policy surface: a remote client can never widen the sandbox or disable
+approvals. The old implicit default (no policy fields sent → Codex default
+`approvalPolicy:"never"` + `dangerFullAccess`) is retired.
 
 ## Security boundary (do not weaken)
 
@@ -203,7 +253,7 @@ create+read). Raw transcripts: `/tmp/codex-e2e/probe1.log`, `probe2.log`.
 | `thread/resume {threadId}` | result is **empty `{}`**; caller must keep the original thread id (as implemented). Emits `deprecationNotice`: full-history hydration is deprecated for paginated threads — pass `excludeTurns: true` and page with `thread/turns/list` + `thread/items/list` (follow-up: add `excludeTurns`) |
 | `thread/items/list {threadId}` | `{data:[{turnId, item:{…}}, …], nextCursor, backwardsCursor}` — items under **`data`**, each wrapped in `{turnId, item}`; item types seen: `userMessage {id, content:[{type:"text",text}]}`, `agentMessage {id:"msg_…", text, phase:"final_answer"}`. `normalizeHistoryItem` unwraps `{turnId, item}` (E2E-shaped regression test in `codexExecutionService.test.ts`); `userMessage` history is not replayed as rows — recorded gap (restart-recovery scope) |
 | Live notifications | `item/started`, `item/agentMessage/delta`, `item/completed`, `turn/completed` all parsed by the tolerant parser: E2E 1 rendered `CODEX_E2E_OK` exactly once with 0 `resyncConversationV4` calls |
-| Approval server-requests | **Not emitted** in either run: default thread carries `approvalPolicy:"never"` + `sandbox:{type:"dangerFullAccess"}`. Approval routing stays protocol-tested, not live-E2E-confirmed. Follow-up: set a restrictive `approvalPolicy`/sandbox on `thread/start` when the harness wants approvals enforced |
+| Approval server-requests | **Not emitted** in either run: the pre-v1.1 threads carried Codex's own default `approvalPolicy:"never"` + `sandbox:{type:"dangerFullAccess"}`. v1.1 retires that default — the harness now sends `approvalPolicy:"on-request"` + `sandbox:"read-only"` explicitly (see "Harness execution policy"); the live approval round-trip drill is part of this phase |
 
 Post-run task metadata check: `tasks.meta_json` contains `executionBackend:"codex"`,
 `codexThreadId:"<thread uuid>"`, `status:"completed"` for both E2E tasks.

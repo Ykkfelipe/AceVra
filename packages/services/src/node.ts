@@ -16,6 +16,7 @@ import { CodexAppServerBridge } from "./accounts/codexAppServerBridge.js";
 import {
   createCodexExecutionService,
   ICodexExecutionService,
+  resolveCodexExecutionPolicy,
 } from "./codex/contract.js";
 import {
   buildLocalMediaPreviewUrl,
@@ -2343,10 +2344,20 @@ export function createLocalServices(options: {
   });
   // Codex 执行后端：一个 host 进程只允许一个 `codex app-server` 子进程，
   // 账号桥与执行后端共享同一 bridge 实例（generation fencing / restart 预算保持 bridge 权威）。
+  // 执行策略默认 safeInteractive（审批开启 + 只读沙箱）；只有 ZCODE_CODEX_EXECUTION_POLICY
+  // 显式指名预设才会改变，未知名称 fail closed 回落默认并告警。
+  const codexPolicyResolution = resolveCodexExecutionPolicy(process.env.ZCODE_CODEX_EXECUTION_POLICY);
+  if (codexPolicyResolution.adoptedDefault) {
+    createServiceLogger("codex-execution").warn(
+      undefined,
+      `unknown ZCODE_CODEX_EXECUTION_POLICY preset; falling back to the safe default`,
+    );
+  }
   const codexAppServerBridge = new CodexAppServerBridge();
   const codexExecution = createCodexExecutionService({
     bridge: codexAppServerBridge,
     taskIndex: taskIndexRepo,
+    policy: codexPolicyResolution.policy,
   });
   const oauthService = createOAuthService(credentialService, {
     apiClient,
