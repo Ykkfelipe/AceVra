@@ -56,6 +56,15 @@ Conservative metadata, consistent with the Azure work:
 - `maxOutputTokens.map` emits plain `max_tokens`; these two models are not GPT-5 family and
   do not need the `max_completion_tokens` rewrite Azure required.
 
+More on the reasoning line above: a single-value `"default"` ladder plus `map: "{}"` means
+**provider-managed effort**. The composer and settings controls are hidden for those models
+(they would otherwise show a meaningless one-item "default" selector), the internal selection
+still carries `reasoningLevel: "default"`, and the empty patch sends nothing — no
+`reasoning_effort`, no `thinking`, no `output_config`. All 60 `["default"]` entries in the
+personal config were audited for this (183/183 assertions). Models with a real ladder keep
+their control, and a genuinely single-`"low"` model (Azure `gpt-5-mini`) keeps its fixed
+"Low" chip.
+
 ## Credential handling
 
 The key is read **read-only** from `~/.commandcode/auth.json` and copied into

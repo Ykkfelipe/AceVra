@@ -50,6 +50,7 @@ import {
 } from "@/chat-input-toolbar/StartPlanContextBalance.js";
 import { ThoughtLevelCycleControl } from "@/chat-input-toolbar/ThoughtLevelCycleControl.js";
 import { getNextThoughtLevelValue } from "@/chat-input-toolbar/thoughtLevelOptions.js";
+import { isProviderManagedThoughtOption } from "@/lib/modelThoughtOption.js";
 import type { V4ComposerConfigPicker } from "@/v4/composer/configPickerState.js";
 import { useToolbarShortcutBindings } from "@/v4/composer/toolbarShortcuts.js";
 import {
@@ -1071,7 +1072,9 @@ function V4ComposerModelControlsImpl({
           providerSubmenuClassName={providerSubmenuClassName}
         />
       ) : null}
-      {thoughtOption ? (
+      {/* provider 托管 effort 的单 "default" 档没有可切换状态，隐藏控件；
+          提交仍按 currentValue "default" 写入 reasoningLevel，data-* 锚点语义不变。 */}
+      {thoughtOption && !isProviderManagedThoughtOption(thoughtOption) ? (
         <ThoughtLevelCycleControl
           indicatorClassName="hidden @xl/composer:block"
           triggerClassName="@max-sm/composer:size-7 @max-sm/composer:justify-center @max-sm/composer:p-0"

@@ -3,6 +3,7 @@ import { CircleHelp, Loader2 } from "lucide-react";
 import { ZCODE_AGENT_PROVIDER, type ZCodeConfigOption } from "@zcode/shared";
 import { ThoughtLevelCycleControl } from "@/chat-input-toolbar/ThoughtLevelCycleControl.js";
 import type { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { isProviderManagedThoughtOption } from "@/lib/modelThoughtOption.js";
 
 export type SubagentReasoningFieldState =
   | { kind: "not-applicable" }
@@ -36,6 +37,13 @@ export function SubagentReasoningField({
   }, [interactive]);
 
   if (state.kind === "not-applicable" || state.kind === "unsupported") {
+    return null;
+  }
+
+  // provider 托管 effort 的单 "default" 档没有可选阶梯：不画控件。
+  // 状态仍保持 supported —— 置成 unsupported 会让 isSubagentThoughtLevelAvailable 误判
+  // 已持久化的 "default" 档失效，连带禁用保存并弹出“请选择受支持的推理档位”。
+  if (state.kind === "supported" && isProviderManagedThoughtOption(state.option)) {
     return null;
   }
 

@@ -4527,6 +4527,7 @@ const enUS: Record<string, string> = {
   "chat.toolbar.thoughtLevel.placeholder": "Select reasoning level",
   "chat.toolbar.thoughtLevel.description":
     "Adjust how much the agent thinks before answering. Higher effort is usually steadier but slower.",
+  "chat.toolbar.thoughtLevel.value.default": "Default",
   "chat.toolbar.thoughtLevel.value.off": "Off",
   "chat.toolbar.thoughtLevel.value.on": "On",
   "chat.toolbar.thoughtLevel.value.minimal": "Minimal",

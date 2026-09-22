@@ -57,7 +57,10 @@ import {
 } from "@/settings/offPeakUiPresentation.js";
 import { ModelConfigSelect, type ModelSelectGroup } from "@/ModelConfigSelect.js";
 import { ThoughtLevelCycleControl } from "@/chat-input-toolbar/ThoughtLevelCycleControl.js";
-import { resolveModelThoughtOption } from "@/lib/modelThoughtOption.js";
+import {
+  isProviderManagedThoughtOption,
+  resolveModelThoughtOption,
+} from "@/lib/modelThoughtOption.js";
 
 const MODEL_ITEM_NEVER_LOCKED = () => false;
 
@@ -661,8 +664,10 @@ export function OffPeakEditView({
                     )}
                     triggerLabelClassName="inline-flex min-w-0 truncate text-left"
                   />
-                  {/* 推理档位：仅推理模型显示；缺省=workspace 默认 */}
-                  {thoughtLevelOption ? (
+                  {/* 推理档位：仅推理模型显示；缺省=workspace 默认。
+                      provider 托管 effort 的单 "default" 档没有可选阶梯，隐藏控件；
+                      effectiveThoughtLevel/canSubmit 继续读该 Option 的 currentValue。 */}
+                  {thoughtLevelOption && !isProviderManagedThoughtOption(thoughtLevelOption) ? (
                     <ThoughtLevelCycleControl
                       intl={intl}
                       option={thoughtLevelOption}
