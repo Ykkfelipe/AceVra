@@ -168,12 +168,44 @@ Mac-restart recovery, 6/6:
 - after restart, the first backoff tick reconnects and receives a fresh `Initialize`
 - the device id is stable across the restart, so the UI does not see a new Mac
 
-### Not yet re-verified
+### Browser-level end-to-end (verified)
 
-The browser-level end-to-end pass (send a task, receive a response, plus the mobile
-viewport screenshots at iPhone width) has not been re-run since the work was recovered.
-Everything below transport is verified: 3/3 tests, typecheck, oxlint 0 errors with the
-warning count unchanged at 70, architecture check 0 violations, web production build.
+Run against an isolated stack so the dev server on `:3030` is never involved: the isolated
+relay on `:3031` plus a static host that serves `packages/web/dist` and proxies only
+`/api`, `/fork/api`, `/fork/ws` and `/fork/relay` upstream. `/fork/` itself must fall back
+to `index.html` — proxying the whole `/fork` prefix returns 404, because the server only
+owns the API and socket routes under it. This avoids touching `vite.config.ts`, whose
+proxy targets are hardcoded to `:3030`.
+
+One minimal request (`Reply exactly with: RELAY_E2E_OK`, GLM-5.3, effort Low, scratch
+workspace) returned `RELAY_E2E_OK` in 4s. Chain confirmed: browser composer -> relay ->
+Mac agent -> model request -> streamed response -> browser UI. Cost: 1% of the 5-hour
+window; weekly and MCP meters unchanged.
+
+Responsive pass at 375x812, measured through `getBoundingClientRect` rather than
+screenshots: navigation fills the viewport (375), selecting a task gives a full-width
+conversation with navigation unmounted, the composer computes to exactly 16px (iOS
+input-safe, no zoom-on-focus), and the model, effort and usage popovers all sit inside the
+viewport (174-367, 174-302, 28-348) with `scrollWidth === innerWidth` throughout.
+
+### Pitfall: the browser drill's Enter key
+
+A drill appeared to show Enter-to-send broken in the `/fork` composer. It was **not** a
+product bug. The automation sent the key name `"Return"`, which produces no keydown in the
+page at all — a window-capture probe recorded zero events for `"Return"` and trusted
+`key: "Enter"` events for `"Enter"` and `"shift+Enter"`. Use `"Enter"`.
+
+Enter semantics are correct and now pinned by
+`packages/ui/test/composerEnterSubmitSemantics.test.ts`: `composerSend` defaults to
+`["Enter"]`, an absent or `{}` override resolves to defaults, and only a deliberate rebind
+(explicit `[]`, or `["Ctrl+Enter"]`) releases bare Enter to newline. That file needs
+`TSX_TSCONFIG_PATH=packages/ui/tsconfig.json` because the shortcut kernel imports through
+the `@/` Vite alias.
+
+To probe Enter without spending model quota, register a window-capture `keydown` listener
+that calls `preventDefault()` and `stopImmediatePropagation()` for `Enter`. Capture at
+window runs before the event can reach Lexical's editor listener, so the keystroke is
+observable but can never submit.
 
 ### Recovery note
 
