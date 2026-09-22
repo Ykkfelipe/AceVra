@@ -1,8 +1,15 @@
 # Fork handoff (custom ZCode fork)
 
-Continuation guide for the next agent. Phase 6 (web stabilization + reconnect) is
-implemented and validated on this machine; read `packages/server/specs/custom-fork-remote.md`
-first, then this file for the working loop, evidence and remaining work.
+Continuation guide for the next agent. Phases 2-9 are implemented and validated on this
+machine. Read this file first, then the specs it points at:
+
+- `packages/server/specs/custom-fork-remote.md` — relay transport and Phase 6 contract
+- `packages/provider/specs/azure-openai.md` — Azure provider, GPT-5 quirks, capability rules
+- `packages/provider/specs/command-code.md` — Command Code Provider API
+- `packages/services/specs/accounts-and-imports.md` — account bridges and history import
+
+**START HERE for the next task:** see "Immediate next steps" at the end of this file. The
+top item is UI, not plumbing: the user explicitly disliked the current Accounts placement.
 
 ## State
 
@@ -12,6 +19,13 @@ first, then this file for the working loop, evidence and remaining work.
 | 3/4   | `7a80c2a`, `ca3b55b` | fork remote foundation + Clerk-authenticated access                                            |
 | 5     | `0af265d`            | `/fork/relay/*` attachment transport: browser gets a working workspace/task UI through a relay |
 | 6     | `4652e03`, `ca6154e` | hook-order fix, web reconnect controller, capability-safe accessor, `/fork` mobile shell        |
+| 7     | `edd57c9`, `dfcf0e1` | Azure OpenAI provider (config only), gpt-5-mini + gpt-5.4-nano                                  |
+| 8     | `5d085c7`            | Command Code provider via its documented Provider API                                          |
+| 9     | `86f120a`, `5392bcc` | Accounts & Imports: Codex/Claude account bridges, Settings section, Codex history discovery    |
+
+Tags: `fork-relay-v1`, `fork-azure-agent-v1`, `fork-azure-nano-v1`, `fork-commandcode-v1`,
+`fork-accounts-v1`. Each tag's annotation is a full phase report — `git tag -n99 <tag>`.
+Branch: `custom-fork/phase-1`. `main` is the untouched upstream snapshot.
 
 Phase 5 verified on this machine (macOS, `mise` pinned Node 24, local relay in the
 same server process):
@@ -224,3 +238,180 @@ whole file). Replaying them in `rollout_ordinal` order reproduced the reported
 - QR/pairing UX: `POST /fork/api/pairing-token` + `consumePairingToken` exist but no
   client uses them yet.
 - ~~Reconnect UX~~ — done in Phase 6; see above.
+
+## Providers (phases 7-8)
+
+All three are **configuration only**. No adapter was written and no runtime code was changed
+to support any of them, which is the point the phases were proving.
+
+| Provider id | API type | Base URL | Models |
+| --- | --- | --- | --- |
+| Z.ai (builtin) | — | — | GLM-5.3, GLM-5.3-Flash |
+| `azure-openai` | `openai-chat-completions` | `https://<resource>.services.ai.azure.com/openai/v1` | gpt-5-mini, gpt-5.4-nano |
+| `command-code` | `openai-chat-completions` | `https://api.commandcode.ai/provider/v1` | 59 (GOAT plan) |
+
+Config lives in `~/.zcode/v2/provider_config.json`, mode 0600, **outside the repo**. The
+server does not hot-reload it: restart after editing.
+
+### Things that will bite you
+
+- **Azure endpoint shape.** The user's endpoint is an AI Foundry *project* URL
+  (`.../api/projects/<name>`). The OpenAI-compatible surface lives on the **resource root**,
+  so strip the project path. The legacy `/openai/deployments/{d}/...?api-version=` shape
+  would need a real adapter; the v1 surface does not.
+- **GPT-5 parameter names.** GPT-5 models reject `max_tokens` and require
+  `max_completion_tokens`. Option maps are restricted-CEL JSON **merge patches**, so this is
+  fixed in config: `{"max_completion_tokens": maxOutputTokens, "max_tokens": null}` — the
+  null deletes the offending key. Non-GPT-5 models use plain `max_tokens`.
+- **`reasoningLevel` cannot be empty.** The schema requires at least one value. When a
+  provider publishes no reasoning ladder, declare one nominal value with map `"{}"` so the
+  patch is empty and `reasoning_effort` is never sent. Do not invent a ladder.
+- **Command Code plan gating.** GOAT does not include every catalogue model. 9 of the 68
+  chat-completions models need Pro/Provider, and **all 8 Claude models are Pro/Provider**, so
+  the `anthropic-messages` provider entry was removed. `supported_endpoints` in
+  `GET /provider/v1/models` tells you which models can use which api type.
+- **"GOAT" is a plan, not a model.** No model by that name exists.
+
+## Accounts & Imports (phase 9)
+
+Two deliberately separate concerns: **account connection** and **history import**. History
+import works whether or not the account bridge is connected, and there is a test asserting it.
+
+### Code map
+
+| File | Role |
+| --- | --- |
+| `packages/shared/src/accountBridge.ts` | the sanitized wire contract — the security boundary |
+| `packages/services/src/accounts/codexAppServerBridge.ts` | `codex app-server` stdio JSON-RPC process manager |
+| `packages/services/src/accounts/accountBridgeService.ts` | Codex + Claude adapters |
+| `packages/services/src/accounts/commandCodeStatusAdapter.ts` | Command Code `status --json` parsing |
+| `packages/services/src/accounts/codexHistoryImportRepo.ts` | Codex rollout discovery |
+| `packages/services/src/accounts/accountsServiceImpl.ts` | `IAccountsService` host implementation |
+| `packages/ui/src/settings/AccountsAndImportsSection.tsx` | Settings UI (placement is provisional) |
+
+Registered in `createLocalServices` (`packages/services/src/node.ts`) and exposed on the
+client accessor (`packages/client/src/remoteServiceAccess.ts`), channel `"accounts"`.
+
+### Codex
+
+The bundled CLI is at `/Applications/ChatGPT.app/Contents/Resources/codex` and is **not on
+PATH**. Version 0.155.0-alpha.9.2.
+
+The protocol is self-describing — never guess it:
+
+```bash
+/Applications/ChatGPT.app/Contents/Resources/codex app-server generate-json-schema --out <dir>
+/Applications/ChatGPT.app/Contents/Resources/codex app-server generate-ts --out <dir>
+```
+
+Transport is **newline-delimited JSON-RPC over stdio** (not LSP Content-Length framing).
+`initialize` returns `{userAgent, codexHome, platformFamily, platformOs}`.
+
+Methods used: `account/read`, `account/login/start`, `account/login/cancel`, `account/logout`
+(never called), `account/rateLimits/read`, `account/usage/read`. The completion notification
+is **`account/login/completed`** — an earlier guess of `account/loginCompleted` was wrong and
+silently never fired, so take names from `ServerNotification.json`.
+
+`account/read` returns `{type:"chatgpt", email, planType}`. **No token field exists**, which
+is what makes the boundary structural rather than a matter of discipline.
+
+`account/login/start {type:"chatgpt"}` returns `{authUrl, loginId}` **even when already
+signed in**, so the signed-in path exercises the full OAuth round trip and you do not need to
+sign the user out to test it. `account/login/cancel` cleanly aborts and leaves the account
+signed in.
+
+### Claude Code
+
+Version 2.1.202 at `~/.local/bin/claude`. Use only `claude auth status --json`,
+`claude auth login --claudeai`, and `claude auth logout` (not used). **Do not use
+`setup-token`** — it mints a long-lived credential ZCode would then hold.
+
+`auth status --json` **exits non-zero while signed out but still prints valid JSON**, so a
+non-zero exit must not be treated as failure when stdout parses. `auth login` works
+headlessly: it opens a browser and prints a fallback URL.
+
+### Command Code
+
+`commandcode status --json` is the documented automation surface and returns
+`{authenticated, version, user, model, context_window}`. `whoami` ignores `--json`. The
+`/usage` slash command holds plan/credits/usage but **refuses to run headlessly** and points
+at a web view, so plan and quota are reported UNAVAILABLE rather than inferred. Parsing is
+isolated in a tested adapter so CLI drift fails loudly.
+
+### Security boundary — do not weaken this
+
+- Only `AccountBridge*` shapes cross the relay. `AccountBridgeConnectResult` has **no
+  `authUrl` field** by design: Codex's OAuth callback targets localhost on the Mac, so the
+  host opens the URL and it never reaches a remote browser. Do not add a QR code for it.
+- **"Disconnect from harness" must never log the source app out.** It calls neither
+  `account/logout` nor `claude auth logout`. A test asserts the source login survives a
+  disconnect/reconnect cycle. This is why the bridge has a non-terminal `stop()` separate
+  from the terminal `dispose()` — an early version used `dispose()` and made the bridge
+  unrestartable.
+- Error strings are scrubbed of URLs, paths and long opaque blobs before they can reach a
+  client.
+- How the boundary was actually verified: secret fingerprints computed host-side, then 380
+  secret-shaped DOM strings hashed **in the page** and compared, so no secret value entered
+  the browser. Repeat that technique rather than eyeballing.
+
+### Credentials
+
+| Secret | Location |
+| --- | --- |
+| Azure key | `.env.azure.local` (gitignored) + `provider_config.json` |
+| Command Code key | `provider_config.json` (user replaced the CLI-issued one with their own) |
+| Codex OAuth tokens | `~/.codex/auth.json` — **owned and refreshed by Codex, never read** |
+| Claude credentials | Claude's own store — never read |
+
+Azure rotation lesson: propagation is **not instant**. After
+`az cognitiveservices account keys regenerate --key-name key1` the old key still returned 200
+for roughly 20 seconds before 401. Confirm a rotation by polling, not one check.
+
+## Testing
+
+```bash
+mise exec -- node --import tsx --test \
+  packages/services/test/accountBridgeSecurityBoundary.test.ts \
+  packages/services/test/commandCodeStatusAdapter.test.ts \
+  packages/client/test/webReplayableCapabilities.test.ts
+
+# these two need the ui tsconfig because the shortcut kernel imports through the @/ alias
+TSX_TSCONFIG_PATH=packages/ui/tsconfig.json mise exec -- node --import tsx --test \
+  packages/ui/test/onboardingHookOrderRegression.test.ts \
+  packages/ui/test/composerEnterSubmitSemantics.test.ts
+```
+
+Full gate before committing: `pnpm run typecheck`, `pnpm run lint` (**baseline is 70
+warnings, 0 errors — do not regress it**), `pnpm run architecture:check -- --changed`,
+`pnpm --filter @zcode/web build`, `git diff --check`.
+
+Tests that need the local Codex/Claude clients skip cleanly when absent.
+
+## Immediate next steps
+
+1. **Relocate the Accounts UI into the Model settings split panel.** The user asked for this
+   explicitly and did not like the current standalone section of plain cards. The blocker is
+   that `ModelProviderNavItem` (`packages/ui/src/settings/model-provider-section/constants.ts`)
+   is a discriminated union of `preset | codingPlan | teamPlan | custom`; an `account` variant
+   must be added and handled in `Navigation.tsx` and `Detail.tsx`. Once done, drop the
+   separate `"accounts"` nav entry from `settingsPageConfig.ts`. **Do this first.**
+2. **Make Codex history actually importable.** `scanCodexImportableSessions` only discovers
+   candidates; nothing writes them into tasks yet. Mirror
+   `importClaudeNativeSessions`, reusing `ZCodeImportSessionsResult` with `provider: "codex"`
+   (the union already accepts it). Keep it independent of the account bridge, and keep
+   selection explicit — do not bulk-import all rollouts.
+3. **Claude migration reports "desktop only" over the relay.** The existing
+   `MigrationSection` gates itself to desktop, so Claude history import is not usable from
+   `/fork`. Decide whether to lift that gate for the relay path.
+4. **Usage dashboard is partial by evidence, not by omission.** Codex supplies
+   `ordinaryUsageAllowed`; Command Code supplies nothing headless; Azure has no trustworthy
+   quota source; Z.ai coding-plan usage already exists in `UsageStatsSection` and was not
+   merged in. Do not invent percentages.
+5. **Agent execution has not been started** for Codex or Claude, by instruction. Phase 9 was
+   account/auth/status/history/usage only.
+
+## Environment note
+
+The dev stack is started from the two commands in "Running the dev loop". When those are
+launched from an agent session they are children of that session and die with it — which has
+already happened once. For a durable setup run them in your own terminals.
