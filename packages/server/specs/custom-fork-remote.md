@@ -5,9 +5,10 @@ web shell and replayable RPC transport. `/fork` serves the same built Web SPA;
 `/fork/ws` exposes the existing `web-remote-replayable` channel server. No new
 provider or agent-runtime path is introduced.
 
-`@zcode/shared` owns the product defaults (`ZCode Fork Dev`, `/fork`, `/fork/ws`,
+`@zcode/shared` owns the product defaults (`AceVra Dev`, `/fork`, `/fork/ws`,
 telemetry disabled). Desktop, server, and Web consume that contract rather than
-duplicating identity strings.
+duplicating identity strings. The `zcode://` OAuth callback remains an intentional
+compatibility identifier and is not renamed with the product label.
 
 ## Clerk boundary
 

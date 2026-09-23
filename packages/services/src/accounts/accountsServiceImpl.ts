@@ -9,7 +9,6 @@ import type {
   AccountBridgeConnectResult,
   AccountBridgeSource,
   AccountBridgeStatus,
-  ZCodeImportableSessionCandidate,
 } from "@zcode/shared";
 import type { IAccountsService } from "#src/accounts/accounts.js";
 import {
@@ -20,7 +19,6 @@ import {
   readCommandCodeStatus,
   type CommandCodeStatus,
 } from "#src/accounts/commandCodeStatusAdapter.js";
-import { scanCodexImportableSessions } from "#src/accounts/codexHistoryImportRepo.js";
 
 export interface AccountsServiceOptions extends AccountBridgeServiceDeps {
   readonly commandCodeExecutable?: string;
@@ -53,18 +51,6 @@ export function createAccountsService(options: AccountsServiceOptions): IAccount
     },
     async readCommandCodeStatus(): Promise<CommandCodeStatus> {
       return readCommandCodeStatus(commandCodeBin);
-    },
-    async scanCodexHistory(opts?: {
-      workspacePath?: string;
-      modifiedSince?: number;
-      limit?: number;
-    }): Promise<readonly ZCodeImportableSessionCandidate[]> {
-      // Independent of account connection by design.
-      return scanCodexImportableSessions({
-        ...(opts?.workspacePath ? { workspacePath: opts.workspacePath } : {}),
-        ...(opts?.modifiedSince !== undefined ? { modifiedSince: opts.modifiedSince } : {}),
-        limit: opts?.limit ?? 25,
-      });
     },
     dispose(): void {
       bridge.dispose();

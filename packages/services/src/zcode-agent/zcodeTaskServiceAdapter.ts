@@ -149,6 +149,11 @@ import {
 import { claudeNativeSessionImportRepo } from "#src/session/claude-native/claudeNativeSessionImportRepo.js";
 import { importClaudeNativeSessions } from "#src/session/claude-native/claudeNativeSessionImportService.js";
 import { buildImportedClaudeTaskId } from "#src/session/claude-native/buildImportedClaudeTaskFile.js";
+import { scanCodexImportableSessions } from "#src/accounts/codexHistoryImportRepo.js";
+import {
+  buildImportedCodexTaskId,
+  importCodexNativeSessions,
+} from "#src/accounts/codexNativeSessionImportService.js";
 import {
   readLegacyImportedClaudeHistory,
   repairImportedClaudeSessionSnapshot,
@@ -182,6 +187,8 @@ interface CreateZCodeTaskServiceAdapterOptions {
   taskIndexSyncer: ZCodeTaskIndexSyncer;
   settingService?: Pick<ISettingService, "get">;
   cuaProductMcpServerResolver?: CuaProductMcpServerResolver;
+  /** App Server 初始化返回的 Codex home；历史扫描不得自行猜测或写回进程环境。 */
+  resolveCodexHome?: () => Promise<string | undefined>;
 }
 
 interface TaskTarget {
@@ -2660,6 +2667,104 @@ export function createZCodeTaskServiceAdapter(
             },
             meta,
             // 导入沿用 task_meta_changed 旧语义。
+            "task_meta_changed",
+          );
+        },
+      });
+    },
+
+    async scanImportableCodexSessions(params: {
+      workspacePath?: string;
+      workspaceIdentity?: string;
+      modifiedSince?: number;
+      limit?: number;
+    }): Promise<ZCodeImportableSessionCandidate[]> {
+      const workspaceKey = params.workspaceIdentity?.trim() || params.workspacePath;
+      const candidates = await scanCodexImportableSessions({
+        ...params,
+        codexHome: await options.resolveCodexHome?.(),
+      });
+      return Promise.all(
+        candidates.map(async (candidate) => {
+          const identityTask = await taskIndexRepo.getTaskMeta({
+            taskId: buildImportedCodexTaskId(
+              workspaceKey ?? candidate.workspacePath,
+              candidate.sessionId,
+            ),
+          });
+          if (identityTask) return { ...candidate, alreadyImported: true };
+          if (!workspaceKey || workspaceKey === candidate.workspacePath) {
+            return { ...candidate, alreadyImported: false };
+          }
+          const legacyTask = await taskIndexRepo.getTaskMeta({
+            taskId: buildImportedCodexTaskId(candidate.workspacePath, candidate.sessionId),
+          });
+          return {
+            ...candidate,
+            alreadyImported: Boolean(
+              legacyTask &&
+              !legacyTask.workspaceIdentity &&
+              legacyTask.migrationSource === "codex" &&
+              (!legacyTask.migrationSourceSessionId ||
+                legacyTask.migrationSourceSessionId === candidate.sessionId),
+            ),
+          };
+        }),
+      );
+    },
+
+    async importCodexSessions(params: {
+      workspacePath?: string;
+      workspaceIdentity?: string;
+      sessionIds: string[];
+    }): Promise<ZCodeImportSessionsResult> {
+      const workspaceKey = params.workspaceIdentity?.trim() || params.workspacePath;
+      return importCodexNativeSessions({
+        taskIndexRepo,
+        workspacePath: params.workspacePath,
+        workspaceIdentity: params.workspaceIdentity,
+        codexHome: await options.resolveCodexHome?.(),
+        sessionIds: params.sessionIds,
+        createImportedSession: async (source) => {
+          const targetWorkspaceIdentity = params.workspacePath
+            ? params.workspaceIdentity
+            : undefined;
+          const taskId = buildImportedCodexTaskId(
+            workspaceKey ?? source.workspacePath,
+            source.sessionId,
+          );
+          const snapshot = await options.zcodeAgentService.createSession({
+            workspacePath: source.workspacePath,
+            workspaceIdentity: targetWorkspaceIdentity,
+            sessionId: taskId,
+            sessionTraceId: createSessionTraceId(),
+            persistence: "immediate",
+            importedHistory: {
+              source: "codex",
+              sourceSessionId: source.sessionId,
+              title: source.title,
+              model: source.model,
+              createdAt: source.createdAt,
+              updatedAt: source.updatedAt,
+              messages: source.messages,
+            },
+          });
+          const meta = await syncTaskIndexSnapshot(snapshot);
+          return syncTaskIndexMeta({
+            ...meta,
+            migrationSource: "codex",
+            migrationSourceSessionId: source.sessionId,
+          });
+        },
+        onTaskImported: (meta) => {
+          rememberIndexedTaskMeta(meta);
+          emitWorkspaceTaskListChanged(
+            {
+              workspacePath: meta.workspacePath,
+              workspaceIdentity: meta.workspaceIdentity,
+              taskId: meta.taskId,
+            },
+            meta,
             "task_meta_changed",
           );
         },

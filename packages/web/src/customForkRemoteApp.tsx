@@ -189,12 +189,14 @@ export function CustomForkRemoteApp({ platform }: { platform: IPlatformService }
     return (
       <main className="fork-auth-shell">
         <section className="fork-auth-card">
-          <h1 className="text-ui-lg font-semibold">ZCode Fork Dev</h1>
+          <h1 className="text-ui-lg font-semibold">AceVra Dev</h1>
           <p className="text-ui-base text-foreground-subtle">Sign in to connect to this Mac.</p>
           <button
             type="button"
             className="rounded-lg bg-primary px-4 py-2 text-ui-base text-primary-foreground"
-            onClick={() => void clerkRef.current?.redirectToSignIn({ redirectUrl: window.location.href })}
+            onClick={() =>
+              void clerkRef.current?.redirectToSignIn({ redirectUrl: window.location.href })
+            }
           >
             Sign in with Clerk
           </button>

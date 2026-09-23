@@ -104,12 +104,29 @@ export interface CuaHelperTransportHandle {
 }
 
 export interface CuaPermissionStatusQueryReport {
+  /** Verified signing identifier of the Helper (from its code signature), or null. */
   grant_owner: string | null;
   owner?: { display_name?: string | null } | null;
   accessibility: "granted" | "stale" | "denied" | "unknown";
   accessibility_probe?: { ok: boolean; classification?: string };
   screen_recording: "granted" | "denied" | "unknown";
   screen_capture_probe?: { ok: boolean; classification?: string };
+  /**
+   * `CGPreflightScreenCaptureAccess` is process-cached, so this readout can stay `false` for a
+   * process that asked before the grant while a real capture already works. It is named as a
+   * readout for that reason; the functional truth is a capture.
+   */
+  screen_recording_readout?: {
+    preflight: boolean | null;
+    source: string;
+    cached?: boolean;
+    note?: string;
+  } | null;
+  /** Functional probe result. `null` means the probe was not run in that process. */
+  screen_capture_probe_ok?: boolean | null;
+  screen_capture_probe_state?: "ok" | "failed" | "not_run";
+  identity?: import("./broker.d.ts").HelperIdentityReport;
+  identity_verified?: boolean;
   [key: string]: unknown;
 }
 

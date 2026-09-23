@@ -522,7 +522,7 @@ export const hostLogResponseSchema = z.object({
 
 export { zcodeProviderSchema };
 
-export const zcodeTaskMigrationSourceSchema = z.enum(["claudeCode"]);
+export const zcodeTaskMigrationSourceSchema = z.enum(["claudeCode", "codex"]);
 
 export const hostAgentProcessSpawnedResponseSchema = z.object({
   type: z.literal("agent-process-spawned"),
@@ -1165,6 +1165,7 @@ export const zcodeTaskMetaSchema = z.object({
   runtimeEpoch: z.number().int().nonnegative().optional(),
   provider: zcodeAgentProviderSchema.optional(),
   migrationSource: zcodeTaskMigrationSourceSchema.optional(),
+  migrationSourceSessionId: nonEmptyStringSchema.optional(),
   forkedFromTaskId: nonEmptyStringSchema.optional(),
   // 执行后端标记（phase 10）：缺省 "zcode"；"codex" 任务由 Codex App Server thread 驱动。
   executionBackend: z.enum(["zcode", "codex"]).optional(),

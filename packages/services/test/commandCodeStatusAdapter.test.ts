@@ -14,7 +14,10 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseCommandCodeStatusJson } from "../src/accounts/commandCodeStatusAdapter.js";
+import {
+  isCommandCodeMissingExecutableError,
+  parseCommandCodeStatusJson,
+} from "../src/accounts/commandCodeStatusAdapter.js";
 
 test("parses the documented status --json payload", () => {
   const parsed = parseCommandCodeStatusJson(
@@ -51,4 +54,11 @@ test("never surfaces an apiKey even if the CLI were to emit one", () => {
   assert.equal(Object.hasOwn(parsed, "apiKey"), false);
   assert.equal(Object.hasOwn(parsed, "token"), false);
   assert.doesNotMatch(JSON.stringify(parsed), /secret/);
+});
+
+test("only ENOENT means the Command Code executable is not installed", () => {
+  assert.equal(isCommandCodeMissingExecutableError({ code: "ENOENT" }), true);
+  assert.equal(isCommandCodeMissingExecutableError({ code: "ETIMEDOUT" }), false);
+  assert.equal(isCommandCodeMissingExecutableError({ code: "EACCES" }), false);
+  assert.equal(isCommandCodeMissingExecutableError(new Error("crashed")), false);
 });

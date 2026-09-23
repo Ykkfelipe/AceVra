@@ -10,6 +10,7 @@ export function CodingPlanStatusMeta({
   extraAction,
   statusLabel,
   manageLabel,
+  manageDisabled,
   unlinkLabel,
   unlinkLoading,
   onManage,
@@ -20,6 +21,7 @@ export function CodingPlanStatusMeta({
   renewTime?: string | null;
   expireTime?: string | null;
   manageLabel?: string | null;
+  manageDisabled?: boolean;
   unlinkLabel?: string | null;
   unlinkLoading?: boolean;
   onManage?: () => void;
@@ -68,7 +70,7 @@ export function CodingPlanStatusMeta({
         visible={Boolean((subscriptionTimeLabel || extraAction) && manageLabel)}
       />
       {manageLabel && onManage ? (
-        <CodingPlanMetaAction label={manageLabel} onClick={onManage} />
+        <CodingPlanMetaAction label={manageLabel} disabled={manageDisabled} onClick={onManage} />
       ) : null}
       <CodingPlanMetaSeparator
         visible={Boolean(
@@ -89,12 +91,14 @@ export function StartPlanStatusMeta({
   hasQuota = false,
   refreshing = false,
   onRefresh,
+  extraAction,
 }: {
   expireTime?: string | null;
   entitlements?: UsageEntitlementSubscriptionDetail["entitlements"];
   hasQuota?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
+  extraAction?: ReactNode;
 }) {
   const { intl, locale } = useZCodeIntl();
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -176,6 +180,8 @@ export function StartPlanStatusMeta({
           <span className="whitespace-nowrap">{expireTimeLabel}</span>
         </>
       ) : null}
+      <CodingPlanMetaSeparator visible={Boolean(expireTimeLabel && extraAction)} />
+      {extraAction}
     </span>
   );
 }
@@ -265,17 +271,19 @@ function CodingPlanMetaSeparator({ visible }: { visible: boolean }) {
 function CodingPlanMetaAction({
   label,
   loading,
+  disabled,
   onClick,
 }: {
   label: string;
   loading?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       className="text-ui-base font-medium text-brand underline-offset-2 hover:text-brand/80 hover:underline disabled:pointer-events-none disabled:opacity-50"
-      disabled={loading}
+      disabled={loading || disabled}
       onClick={onClick}
     >
       {label}

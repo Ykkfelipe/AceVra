@@ -167,3 +167,18 @@ export function formatQuotaResetTime(params: {
     hourCycle: "h23",
   }).format(resetAt);
 }
+
+/**
+ * Format a remaining-quota percentage for the quota cards.
+ *
+ * Shared by the Coding Plan card and the Codex included-usage windows so both surfaces round
+ * and localize identically. A missing value renders as an explicit placeholder rather than 0%.
+ */
+export function formatRemainingPercentage(locale: string, value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "--";
+  }
+  return `${new Intl.NumberFormat(locale, {
+    maximumFractionDigits: value >= 10 ? 0 : 1,
+  }).format(Math.max(0, Math.min(100, value)))}%`;
+}

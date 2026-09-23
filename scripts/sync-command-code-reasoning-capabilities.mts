@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { getAppConfigDir } from "../packages/services/src/paths.ts";
 import { join } from "node:path";
 import { applyCommandCodeReasoningCapabilitiesToPersonalConfig } from "../packages/provider/src/command-code-reasoning-capabilities.ts";
 import { decodeProviderConfigFile } from "../packages/provider-node/src/provider-config-file-codec.ts";
 import { atomicWritePrivateTextFile } from "../packages/shared/src/node/privateFilePersistence.ts";
 
-const configPath = join(homedir(), ".zcode", "v2", "provider_config.json");
+const configPath = join(getAppConfigDir(), "provider_config.json");
 const source = await readFile(configPath, "utf8");
 const next = applyCommandCodeReasoningCapabilitiesToPersonalConfig(JSON.parse(source));
 

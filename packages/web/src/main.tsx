@@ -387,7 +387,7 @@ async function resolveWebBootstrap(): Promise<WebBootstrapResult> {
       root.render(
         <div className="flex min-h-dvh items-center justify-center bg-background p-4 text-foreground">
           <div className="w-full max-w-md rounded-xl border border-card-border bg-card p-6">
-            <h1 className="text-lg font-semibold">ZCode Fork Dev</h1>
+            <h1 className="text-lg font-semibold">AceVra Dev</h1>
             <p className="mt-2 text-sm text-foreground-subtle">Sign in to connect to this Mac.</p>
             <button
               type="button"
@@ -511,6 +511,18 @@ function renderWebBootstrapError(error: unknown): void {
 }
 
 async function bootstrapWebApp() {
+  if (import.meta.env.DEV && window.location.pathname === "/__dev/model-settings-fixtures") {
+    const { ModelSettingsFixtureHarness } =
+      await import("../../ui/src/settings/model-provider-section/ModelSettingsFixtureHarness.js");
+    document.title = "AceVra Dev · Model Settings fixtures";
+    root.render(
+      <ZCodeIntlProvider initialLocale="en-US">
+        <ModelSettingsFixtureHarness />
+      </ZCodeIntlProvider>,
+    );
+    return;
+  }
+
   const params = new URLSearchParams(window.location.search);
   if (isWebOAuthCallback(params)) {
     renderWebAuthCallbackPage();
@@ -523,7 +535,7 @@ async function bootstrapWebApp() {
   }
 
   if (isCustomForkRoute()) {
-    document.title = "ZCode Fork Dev - Remote";
+    document.title = "AceVra Dev - Remote";
     root.render(<CustomForkRemoteApp platform={createWebPlatform()} />);
     return;
   }
@@ -548,7 +560,7 @@ async function bootstrapWebApp() {
     });
     relayDebug("replayable_client_ready");
     const platform = createWebPlatform();
-    document.title = isCustomForkRoute() ? "ZCode Fork Dev - Remote" : "ZCode - Web + Server";
+    document.title = isCustomForkRoute() ? "AceVra Dev - Remote" : "AceVra - Web + Server";
 
     root.render(
       <AppErrorBoundary>

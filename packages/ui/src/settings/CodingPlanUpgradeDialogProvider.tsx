@@ -19,6 +19,7 @@ import {
 } from "@/hooks/useCodingPlanEntryPlanList.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
 import { reportCodingPlanUpgradeClick } from "@/lib/codingPlanFunnelTelemetry.js";
+import { SHOW_PROVIDER_PLAN_PURCHASES } from "@/lib/forkProductPolicy.js";
 
 interface CodingPlanUpgradeDialogContextValue {
   inventory: CodingPlanEntryInventory;
@@ -49,6 +50,7 @@ export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactN
     ) => {
       // 所有入口统一守卫；查询完成后不自动重放之前被拦截的点击。
       const { status, entryPlanList } = inventoryRef.current;
+      if (!SHOW_PROVIDER_PLAN_PURCHASES) return false;
       if (observation?.signal.aborted) return false;
       if (status !== "ready") {
         if (observation && status === "error") inventoryRef.current.retry();

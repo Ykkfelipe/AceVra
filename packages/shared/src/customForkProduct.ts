@@ -6,7 +6,7 @@ export interface CustomForkProductConfig {
 }
 
 export const CUSTOM_FORK_PRODUCT_DEFAULTS: CustomForkProductConfig = {
-  applicationName: "ZCode Fork Dev",
+  applicationName: "AceVra Dev",
   remoteRoute: "/fork",
   telemetryEnabled: false,
   remoteWebSocketPath: "/ws",

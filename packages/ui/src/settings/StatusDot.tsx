@@ -15,7 +15,7 @@ const TONE_CLASS: Record<StatusDotTone, string> = {
 export function StatusDot({ tone, spinning }: { tone: StatusDotTone; spinning?: boolean }) {
   const color = TONE_CLASS[tone];
   if (spinning) {
-    return <Loader2Icon className={`size-3 animate-spin ${color}`} />;
+    return <Loader2Icon className={`size-3 animate-spin ${color}`} aria-hidden="true" />;
   }
-  return <CircleIcon className={`size-2 fill-current ${color}`} />;
+  return <CircleIcon className={`size-2 fill-current ${color}`} aria-hidden="true" />;
 }

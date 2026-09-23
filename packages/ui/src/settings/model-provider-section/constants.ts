@@ -4,6 +4,7 @@ import {
   buildBigModelCodingPlanPersonalManageUrl,
   BUILTIN_MODEL_PROVIDER_IDS,
   createUuid,
+  type AccountBridgeSource,
   type OAuthProviderId,
   ZCODE_ENV,
   ZAI_PROVIDER_ID,
@@ -220,14 +221,17 @@ export type ModelProviderNavItem =
       statusActive: boolean;
     }
   /**
-   * Accounts & Imports 入口（Codex / Claude Code / Command Code 的账号桥接与历史导入）。
-   * 不携带 provider/statusActive：它不是模型供应商，导航不显示供应商状态灯，
-   * 也不参与供应商拖拽排序。
+   * 外部执行账号（Codex / Claude Code）。
+   *
+   * 这里刻意与供应商区分：Provider 配置的是模型 API / 套餐，账号是已完成认证的外部
+   * 执行身份。节点不携带 provider/statusActive，导航不显示供应商状态灯，也不参与拖拽排序。
    */
   | {
       key: string;
       type: "account";
       label: string;
+      /** 该节点代表的外部账号来源。 */
+      source: AccountBridgeSource;
     };
 
 export type ModelProviderNavGroupId = "preset" | "custom" | "account";

@@ -550,6 +550,21 @@ export interface IZCodeTaskService {
     sessionIds: string[];
   }): Promise<ZCodeImportSessionsResult>;
 
+  /** Scan Codex rollout history with the same filters and result contract as Claude migration. */
+  scanImportableCodexSessions(params: {
+    workspacePath?: string;
+    workspaceIdentity?: string;
+    modifiedSince?: number;
+    limit?: number;
+  }): Promise<ZCodeImportableSessionCandidate[]>;
+
+  /** Import selected Codex local sessions as normal tasks. */
+  importCodexSessions(params: {
+    workspacePath?: string;
+    workspaceIdentity?: string;
+    sessionIds: string[];
+  }): Promise<ZCodeImportSessionsResult>;
+
   /** 切换 task 模式 */
   setMode(params: { taskId: string; mode: ZCodeTaskMode }): Promise<void>;
 

@@ -295,7 +295,9 @@ import works whether or not the account bridge is connected, and there is a test
 | `packages/services/src/accounts/commandCodeStatusAdapter.ts` | Command Code `status --json` parsing |
 | `packages/services/src/accounts/codexHistoryImportRepo.ts` | Codex rollout discovery |
 | `packages/services/src/accounts/accountsServiceImpl.ts` | `IAccountsService` host implementation |
-| `packages/ui/src/settings/AccountsAndImportsSection.tsx` | Settings UI (placement is provisional) |
+| `packages/services/src/accounts/accountBridgeMapping.ts` | Wire→contract mapping for account/usage (pure) |
+| `packages/ui/src/settings/account-bridge/AccountBridgeDetail.tsx` | Settings UI, one screen per connected account |
+| `packages/ui/src/settings/account-bridge/accountBridgePresentation.ts` | Status/usage presentation rules (pure) |
 
 Registered in `createLocalServices` (`packages/services/src/node.ts`) and exposed on the
 client accessor (`packages/client/src/remoteServiceAccess.ts`), channel `"accounts"`.
@@ -454,15 +456,18 @@ Tests that need the local Codex/Claude clients skip cleanly when absent.
 
 ## Immediate next steps
 
-1. ~~**Relocate the Accounts UI into the Model settings split panel.**~~ **Done.** The user
-   disliked the standalone section of plain cards, so Accounts & Imports now lives in the
-   Model settings split panel: `ModelProviderNavItem`
-   (`packages/ui/src/settings/model-provider-section/constants.ts`) gained an `account`
-   variant, rendered by the static (non-sortable) list in `Navigation.tsx` and dispatched in
-   `Detail.tsx` to the existing `AccountsAndImportsSection` (Codex card + scan, Claude Code
-   card, Command Code card, Claude history migration — no second accounts UI was built).
-   `connectionSelectionMatchesNavigationItem` excludes the account node and default selection
-   never lands on it. The standalone `"accounts"` entry is gone from
+1. ~~**Relocate the Accounts UI into the Model settings split panel.**~~ **Superseded.** The
+   Model settings split panel is still the home for these accounts, but the interim structure
+   (one `account` node rendering an `AccountsAndImportsSection` with a card per source plus a
+   Command Code card) has been replaced. `ModelProviderNavItem`'s `account` variant now carries
+   a `source` (`packages/ui/src/settings/model-provider-section/constants.ts`), the nav renders
+   one node per account under a "Connected accounts" group, and `Detail.tsx` dispatches to
+   `AccountBridgeDetail` (`packages/ui/src/settings/account-bridge/`) — one screen per account,
+   with that account's history import on the same screen. Codex included-usage windows are now
+   surfaced from `account/rateLimits/read`. Command Code's CLI status moved into its own
+   provider detail (`CommandCodeCliStatus`) so it no longer looks like a second Command Code.
+   `connectionSelectionMatchesNavigationItem` still excludes account nodes, so provider-family
+   connection resolution never selects one. The standalone `"accounts"` entry is gone from
    `settingsPageConfig.ts` / `SettingsPage.tsx`; legacy `accounts` ids migrate to
    `modelProvider` in `lib/settingsNavigation.ts` (plugins precedent). i18n key:
    `settings.accounts.navGroup`. Spec refreshed in
