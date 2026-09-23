@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template for the CUA development helper bundle. build-dev-helper.mjs substitutes
+  __VERSION__ / __BUILD__ / __BUNDLE_ID__ / __EXECUTABLE__ / __DISPLAY_NAME__.
+
+  LSMinimumSystemVersion tracks the product floor declared by the desktop package
+  (packages/desktop/src/main/cuaOsSupport.ts, CUA_MINIMUM_MACOS_VERSION = 12.0). The
+  binary must be compiled with a matching explicit -target: swiftc's default target on
+  this SDK is macosx28.0, which LaunchServices refuses with kLSIncompatibleSystemVersionErr
+  (-10825), so the bundle would not open at all.
+
+  LSUIElement keeps the helper out of the Dock and out of the app switcher — it is an
+  accessory process that must never steal the user's foreground.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>__EXECUTABLE__</string>
+	<key>CFBundleIdentifier</key>
+	<string>__BUNDLE_ID__</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>__DISPLAY_NAME__</string>
+	<key>CFBundleDisplayName</key>
+	<string>__DISPLAY_NAME__</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>
