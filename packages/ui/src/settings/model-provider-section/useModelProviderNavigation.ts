@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 import type { ProviderSettingsFormProvider } from "@/lib/providerSettingsFormTypes.js";
 import { getProviderFormLabel } from "@/lib/providerSettingsFormTypes.js";
 import type {
+  AccountBridgeSource,
   ProviderFamilyConnectionSelection,
   ProviderFamilyConnectionSelectionSettings,
   ProviderFamilyDomain,
@@ -41,8 +42,22 @@ interface PresetProviderWithConfig extends PresetProviderSpec {
   provider: ProviderSettingsFormProvider | null;
 }
 
-/** Accounts & Imports 导航节点 key（左栏 account 组内唯一一项）。 */
-export const ACCOUNT_NAV_NODE_KEY = "account:imports";
+/**
+ * 已连接账号的固定顺序与文案 key。
+ * 顺序稳定，新增来源时在此登记；账号节点不参与供应商拖拽排序。
+ */
+const ACCOUNT_BRIDGE_NAV_LABEL_IDS: readonly {
+  source: AccountBridgeSource;
+  labelId: string;
+}[] = [
+  { source: "codex", labelId: "settings.accounts.source.codex" },
+  { source: "claude-code", labelId: "settings.accounts.source.claudeCode" },
+];
+
+/** 外部执行账号导航节点 key。每个来源一个节点，与供应商节点同构。 */
+function createAccountBridgeNodeKey(source: AccountBridgeSource): string {
+  return `account:${source}`;
+}
 
 interface UseModelProviderNavigationOptions {
   presetProviders: PresetProviderWithConfig[];
@@ -224,18 +239,18 @@ export function useModelProviderNavigation({
           statusActive: provider.executable === true,
         })),
       },
-      // Accounts & Imports：外部 coding agent 的账号桥接与历史导入。
-      // 单独成组挂在模型供应商之后；不参与供应商拖拽排序，默认选中也永远不会落在这里。
+      // 已连接账号：Codex / Claude Code 等已完成认证的外部执行身份。
+      // 与供应商分组并列但语义不同——供应商配置模型 API / 套餐，账号是执行身份。
+      // 账号节点不参与供应商拖拽排序，默认选中也永远不会落在这里。
       {
         id: "account",
         title: intl.formatMessage({ id: "settings.accounts.navGroup" }),
-        items: [
-          {
-            key: ACCOUNT_NAV_NODE_KEY,
-            type: "account" as const,
-            label: intl.formatMessage({ id: "settings.accounts.title" }),
-          },
-        ],
+        items: ACCOUNT_BRIDGE_NAV_LABEL_IDS.map(({ source, labelId }) => ({
+          key: createAccountBridgeNodeKey(source),
+          type: "account" as const,
+          label: intl.formatMessage({ id: labelId }),
+          source,
+        })),
       },
     ];
 

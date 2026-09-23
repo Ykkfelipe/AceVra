@@ -1968,9 +1968,51 @@ const enUS: Record<string, string> = {
   "sidebar.settings.theme.zai-dark": "Dark theme",
   "sidebar.settings.theme.dark": "Dark theme",
   "settings.migration.title": "Migration",
-  "settings.accounts.title": "Accounts & Imports",
-  "settings.accounts.description": "Connect external coding agents and import their history",
-  "settings.accounts.navGroup": "Accounts",
+  "settings.accounts.navGroup": "Connected accounts",
+  "settings.accounts.source.codex": "Codex",
+  "settings.accounts.source.claudeCode": "Claude Code",
+  "settings.accounts.description.codex":
+    "Codex is an authenticated external execution account, not a model provider. Sign in through the Codex App Server and import its local transcripts; credentials stay with Codex.",
+  "settings.accounts.description.claudeCode":
+    "Claude Code is an authenticated external execution account, not a model provider. Sign in through the Claude Code CLI and import its local transcripts; credentials stay with Claude.",
+  "settings.accounts.bridge.connected": "Connected",
+  "settings.accounts.bridge.connecting": "Connecting…",
+  "settings.accounts.bridge.disconnected": "Not connected",
+  "settings.accounts.bridge.notInstalled": "Not installed",
+  "settings.accounts.bridge.error": "Connection error",
+  "settings.accounts.auth.signedIn": "Signed in",
+  "settings.accounts.auth.signedOut": "Signed out",
+  "settings.accounts.action.connect": "Connect",
+  "settings.accounts.action.reconnect": "Reconnect",
+  "settings.accounts.action.restartBridge": "Restart bridge",
+  "settings.accounts.action.disconnect": "Disconnect from harness",
+  "settings.accounts.action.scan": "Scan",
+  "settings.accounts.action.refresh": "Refresh",
+  "settings.accounts.disconnectHint":
+    "Disconnecting stops the harness bridge only. Your {source} sign-in is left untouched.",
+  "settings.accounts.installHint.codex":
+    "The bundled Codex client was not found on this Mac. Install the ChatGPT desktop app to connect Codex.",
+  "settings.accounts.installHint.claudeCode":
+    "The Claude Code CLI was not found on PATH. Install Claude Code to connect this account.",
+  "settings.accounts.error.status_refresh_failed":
+    "Could not read account status from the local client.",
+  "settings.accounts.error.connect_failed": "Connecting failed.",
+  "settings.accounts.error.codex_history_scan_failed": "Could not read Codex's local transcripts.",
+  "settings.accounts.import.codexTitle": "Import Codex history",
+  "settings.accounts.import.codexDescription":
+    "Reads Codex's local transcripts. Works whether or not the account is connected.",
+  "settings.accounts.usage.unavailable": "No included-usage window is available.",
+  "settings.accounts.usage.managedByClaude":
+    "Usage limits are managed by Claude. Claude Code exposes no local rate-limit data, so no figures are shown here.",
+  "settings.accounts.usage.windowDuration": "Usage window ({minutes} min)",
+  "settings.accounts.usage.windowUnspecified": "Usage window",
+  "settings.accounts.usage.blocked.rateLimitReached":
+    "Included usage is used up. It resumes when the window resets.",
+  "settings.accounts.usage.blocked.workspaceCreditsDepleted":
+    "Workspace credits for included usage are depleted.",
+  "settings.accounts.usage.blocked.workspaceUsageLimitReached":
+    "The workspace usage limit for included usage is reached.",
+  "settings.accounts.usage.blocked.generic": "Included usage is currently unavailable.",
   "settings.migration.sectionTitle": "Claude History Migration",
   "settings.migration.sectionDescription":
     "Scan native Claude Code history on this machine, optionally filter by workspace and activity window, then import the selected sessions into their matching ZCode task lists.",
@@ -2692,6 +2734,7 @@ const enUS: Record<string, string> = {
     "Failed to read your sign-in status. Please retry.",
   "settings.modelProvider.codingPlan.purchase.authStateRetry": "Retry sign-in status",
   "settings.modelProvider.codingPlan.productsError": "Could not load plans",
+  "settings.modelProvider.codingPlan.planDetailsUnavailable": "Plan details unavailable",
   "settings.modelProvider.codingPlan.productsReconnectTitle": "Connect to view plans",
   "settings.modelProvider.codingPlan.reconnectToViewPlans": "Reconnect",
   "settings.modelProvider.codingPlan.productsLoginRequired":
@@ -3099,6 +3142,15 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.modelsPlaceholder": "One model name per line",
   "settings.modelProvider.modelsCount": "{count} models",
   "settings.modelProvider.presetTitle": "Providers",
+  "settings.modelProvider.commandCodeCli.title": "Command Code CLI account",
+  "settings.modelProvider.commandCodeCli.authenticated": "Authenticated",
+  "settings.modelProvider.commandCodeCli.notInstalled": "Not installed",
+  "settings.modelProvider.commandCodeCli.statusUnavailable":
+    "Command Code CLI status is unavailable.",
+  "settings.modelProvider.commandCodeCli.signedOut": "Signed out",
+  "settings.modelProvider.commandCodeCli.refresh": "Refresh Command Code CLI status",
+  "settings.modelProvider.commandCodeCli.usageUnavailable":
+    "Plan and usage metrics are not shown: the CLI exposes them only through its interactive /usage overlay, so no figures are inferred.",
   "settings.usage.sectionTitle": "Usage stats",
   "settings.usage.sectionDescription": "Built from local app session history.",
   "settings.usage.tab.appUsage": "App usage",

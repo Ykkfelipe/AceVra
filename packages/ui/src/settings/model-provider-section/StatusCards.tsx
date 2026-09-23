@@ -1,4 +1,4 @@
-import { CodingPlanEntryButton } from "@/settings/CodingPlanEntryButton.js";
+import { CodingPlanEntryButton, useCodingPlanEntryGate } from "@/settings/CodingPlanEntryButton.js";
 /* eslint-disable max-lines -- Coding Plan/Start Plan 状态卡集中编排状态、动作和套餐区块，当前先保持同一文件避免拆散状态语义。 */
 import {
   BIGMODEL_PROVIDER_ID,
@@ -21,6 +21,7 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useCodingPlanQuotaResetUi } from "@/hooks/useCodingPlanQuotaResetUi.js";
 import {
   formatQuotaResetTime,
+  formatRemainingPercentage,
   isCodingPlanQuotaLimitFull,
   isSameLimitCategory,
 } from "@/lib/codingPlanQuotaPresentation.js";
@@ -52,6 +53,7 @@ import {
   isBigModelUnregisteredAuthError,
 } from "./BigModelRegistrationHint.js";
 import { formatQuotaModelDisplayName } from "./quotaModelDisplayName.js";
+import { StatusCardSurface } from "@/settings/StatusCardSurface.js";
 
 const CODING_PLAN_USAGE_SUMMARY_COLORS = [
   "var(--color-usage-chart-1)",
@@ -59,49 +61,6 @@ const CODING_PLAN_USAGE_SUMMARY_COLORS = [
   "var(--color-usage-chart-3)",
   "var(--color-usage-chart-4)",
 ] as const;
-
-function PlanStatusCardSurface({
-  planTitle,
-  titleAccessory,
-  statusMeta,
-  trailingAction,
-  usageContent,
-}: {
-  planTitle: string;
-  titleAccessory?: ReactNode;
-  statusMeta: ReactNode;
-  trailingAction?: ReactNode;
-  usageContent?: ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="flex min-w-0 items-center justify-between gap-3 max-sm:flex-col max-sm:items-stretch">
-        <div className="min-w-0 space-y-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <h3 className="min-w-0 truncate text-ui-lg font-semibold leading-5 text-foreground">
-              {planTitle}
-            </h3>
-            {titleAccessory}
-          </div>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            {statusMeta}
-          </div>
-        </div>
-        {trailingAction ? (
-          <div className="shrink-0 max-sm:flex max-sm:w-full max-sm:[&>button]:w-full">
-            {trailingAction}
-          </div>
-        ) : null}
-      </div>
-      {usageContent ? (
-        <>
-          <div className="my-4 border-t border-border" />
-          {usageContent}
-        </>
-      ) : null}
-    </div>
-  );
-}
 
 export function ModelProviderLoadingCard({ loadingLabel }: { loadingLabel: string }) {
   return (
@@ -317,6 +276,11 @@ export function CodingPlanStatusPanel({
   const canUpgrade =
     // Max 已是最高档但仍需要续期入口，不能因为不可升级就隐藏按钮。
     upgradeActionVisible && isPurchased && !isChecking && !isUnsupported;
+  // 升级入口依赖全局套餐目录（inventory）。目录请求失败只说明升级/续期暂时不可用，
+  // 不代表当前账号的套餐身份或额度有问题——账号身份与额度来自另一条权益链路。
+  // 因此这里把目录失败降级成状态行内的一句提示，而不是把卡片主操作换成大号错误按钮。
+  const entryGate = useCodingPlanEntryGate();
+  const upgradeCatalogUnavailable = canUpgrade && entryGate.status === "error";
   const canManageCodingPlan =
     !isDisconnected &&
     !isChecking &&
@@ -442,6 +406,9 @@ export function CodingPlanStatusPanel({
     plans: subscriptionDetails ?? [],
     limits: quotaLimits,
   });
+  const upgradeCatalogNotice = upgradeCatalogUnavailable ? (
+    <CodingPlanEntryGateNotice onRetry={entryGate.retry} />
+  ) : undefined;
   const statusMeta =
     isPurchased && isStartPlanProvider ? (
       // 产品语义:体验套餐用量卡片不展示「管理」「解绑」操作(免费套餐无管理页,
@@ -455,11 +422,13 @@ export function CodingPlanStatusPanel({
         )}
         refreshing={startPlanEntitlementRefreshing}
         onRefresh={refreshStartPlanEntitlement}
+        extraAction={upgradeCatalogNotice}
       />
     ) : isPurchased ? (
       <CodingPlanStatusMeta
         renewTime={subscriptionRenewTime}
         expireTime={subscriptionExpireTime}
+        extraAction={upgradeCatalogNotice}
         manageLabel={
           canManageCodingPlan
             ? intl.formatMessage({
@@ -571,9 +540,9 @@ export function CodingPlanStatusPanel({
   const planCards =
     isStartPlanProvider && isPurchased && startPlanEntries.length > 0
       ? startPlanEntries.map(({ plan, limits: planLimits }, index) => (
-          <PlanStatusCardSurface
+          <StatusCardSurface
             key={`${plan.productId}:${index}`}
-            planTitle={plan.productName.trim() || planTitle}
+            title={plan.productName.trim() || planTitle}
             statusMeta={
               index === 0 ? (
                 statusContent
@@ -588,52 +557,50 @@ export function CodingPlanStatusPanel({
               )
             }
             trailingAction={index === 0 ? trailingAction : undefined}
-            usageContent={
-              usageDetailsVisible &&
-              (effectiveViewState.balanceStatus === "checking" || planLimits.length > 0) ? (
-                <StartPlanQuotaStatusCard
-                  isChecking={effectiveViewState.balanceStatus === "checking"}
-                  limits={planLimits}
-                  embedded
-                />
-              ) : undefined
-            }
-          />
+          >
+            {usageDetailsVisible &&
+            (effectiveViewState.balanceStatus === "checking" || planLimits.length > 0) ? (
+              <StartPlanQuotaStatusCard
+                isChecking={effectiveViewState.balanceStatus === "checking"}
+                limits={planLimits}
+                embedded
+              />
+            ) : null}
+          </StatusCardSurface>
         ))
       : [
-          <PlanStatusCardSurface
+          <StatusCardSurface
             key="current-plan"
-            planTitle={planTitle}
+            title={planTitle}
             statusMeta={statusContent}
             trailingAction={trailingAction}
-            usageContent={
-              usageCardsVisible ? (
-                isStartPlanProvider ? (
-                  // 服务端契约保证 balances 只属于 active plans：purchased 快照必带套餐详情，
-                  // 多卡路径必然可用。兜底分支（nav item 无套餐详情）不得把全量 quotaLimits
-                  // 塞进单卡，否则无归属桶违背「无匹配 plan_id 的桶不得附着到任何卡片」的约定；
-                  // 余额未落定时只保留查询占位。
-                  effectiveViewState.balanceStatus === "checking" ? (
-                    <StartPlanQuotaStatusCard
-                      isChecking
-                      limits={[]}
-                      expireTime={subscriptionExpireTime}
-                      embedded
-                    />
-                  ) : undefined
-                ) : (
-                  <CodingPlanUsageSummaryCards
-                    limits={quotaLimits}
-                    mcpQuotaLimit={mcpQuotaLimit}
-                    sourceKey={quotaResetSourceKey ?? providerId}
-                    preferredProviderId={providerId}
-                    accountAccess={quotaResetAccountAccess}
-                    onEntitlementRefresh={onQuotaResetEntitlementRefresh}
+          >
+            {usageCardsVisible ? (
+              isStartPlanProvider ? (
+                // 服务端契约保证 balances 只属于 active plans：purchased 快照必带套餐详情，
+                // 多卡路径必然可用。兜底分支（nav item 无套餐详情）不得把全量 quotaLimits
+                // 塞进单卡，否则无归属桶违背「无匹配 plan_id 的桶不得附着到任何卡片」的约定；
+                // 余额未落定时只保留查询占位。
+                effectiveViewState.balanceStatus === "checking" ? (
+                  <StartPlanQuotaStatusCard
+                    isChecking
+                    limits={[]}
+                    expireTime={subscriptionExpireTime}
+                    embedded
                   />
-                )
-              ) : undefined
-            }
-          />,
+                ) : null
+              ) : (
+                <CodingPlanUsageSummaryCards
+                  limits={quotaLimits}
+                  mcpQuotaLimit={mcpQuotaLimit}
+                  sourceKey={quotaResetSourceKey ?? providerId}
+                  preferredProviderId={providerId}
+                  accountAccess={quotaResetAccountAccess}
+                  onEntitlementRefresh={onQuotaResetEntitlementRefresh}
+                />
+              )
+            ) : null}
+          </StatusCardSurface>,
         ];
 
   return (
@@ -644,6 +611,28 @@ export function CodingPlanStatusPanel({
         <StartPlanCard preview={startPlanPreview.preview} />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * 升级目录暂不可用时的行内提示。
+ *
+ * 目录查询失败只影响升级/续期这一个动作，所以提示放在状态行内保持低噪，并且必须保留重试入口；
+ * 卡片主操作同时被禁用（见 CodingPlanUpgradeAction），用户不会点到一个无效的购买入口。
+ */
+function CodingPlanEntryGateNotice({ onRetry }: { onRetry?: () => void }) {
+  const { intl } = useZCodeIntl();
+  return (
+    <button
+      type="button"
+      onClick={onRetry}
+      className="text-ui-base font-medium text-warning underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50"
+      disabled={!onRetry}
+    >
+      {intl.formatMessage({ id: "settings.modelProvider.codingPlan.planDetailsUnavailable" })}
+      {" · "}
+      {intl.formatMessage({ id: "common.retry" })}
+    </button>
   );
 }
 
@@ -1080,15 +1069,6 @@ function normalizeUsagePercentage(value: number | undefined): number | null {
     return null;
   }
   return Math.max(0, Math.min(100, value));
-}
-
-function formatRemainingPercentage(locale: string, value: number | null): string {
-  if (value == null || !Number.isFinite(value)) {
-    return "--";
-  }
-  return `${new Intl.NumberFormat(locale, {
-    maximumFractionDigits: value >= 10 ? 0 : 1,
-  }).format(Math.max(0, Math.min(100, value)))}%`;
 }
 
 function formatLimitModels(limit: UsageQuotaLimit): string {

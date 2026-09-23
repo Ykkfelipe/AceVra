@@ -64,7 +64,8 @@ import type { ProviderSettingsView } from "@zcode/services";
 import type { SavePersonalModelDraftInput } from "@zcode/provider";
 import { resolveAccountProviderInspectionAccess } from "@/lib/accountProviderAccess.js";
 import { projectProviderSettingsViewToFormProviders } from "@/lib/providerSettingsFormProjection.js";
-import { AccountsAndImportsSection } from "@/settings/AccountsAndImportsSection.js";
+import { AccountBridgeDetail } from "@/settings/account-bridge/AccountBridgeDetail.js";
+import { CommandCodeCliStatus, COMMAND_CODE_PROVIDER_ID } from "./CommandCodeCliStatus.js";
 
 const START_PLAN_ENTRY_BANNER_CLASS =
   "min-h-20 w-full overflow-hidden rounded-xl border border-border bg-[radial-gradient(circle_at_14%_12%,color-mix(in_srgb,var(--color-success)_24%,var(--color-background)_76%)_0%,color-mix(in_srgb,var(--color-success)_10%,var(--color-surface)_90%)_64%,var(--color-surface)_300%)] p-4 text-left transition-colors hover:border-border-hover";
@@ -405,11 +406,12 @@ export function ModelProviderSectionDetail({
   }
 
   if (selectedNavItem.type === "account") {
-    // Accounts & Imports：Codex / Claude Code / Command Code 账号状态与历史导入。
-    // 完整复用已建成的 AccountsAndImportsSection（含 Codex 扫描与 Claude MigrationSection），
-    // 不在这里重建第二套账号 UI。所有 hook 已在上方无条件执行，此分支可安全早退。
+    // 已连接账号：每个执行账号（Codex / Claude Code）一个独立详情，
+    // 账号状态与其历史导入同页，不再把所有账号塞进一张大卡片列表。
+    // 所有 hook 已在上方无条件执行，此分支可安全早退。
     return (
-      <AccountsAndImportsSection
+      <AccountBridgeDetail
+        source={selectedNavItem.source}
         workspacePath={accountsWorkspacePath ?? null}
         {...(accountsWorkspaceIdentity ? { workspaceIdentity: accountsWorkspaceIdentity } : {})}
         {...(accountsIsDesktop === undefined ? {} : { isDesktop: accountsIsDesktop })}
@@ -865,6 +867,38 @@ export function ModelProviderSectionDetail({
   const customApiKeyUrl = customProvider.templateId
     ? getProviderFormApiKeyManagementUrl(customProvider)
     : undefined;
+  // Command Code 只在这里出现一次：Provider 配置 + 其 CLI 账号状态并排，
+  // 不再同时作为一个独立的“账号”卡片出现在账号分组里。
+  if (customProvider.providerId === COMMAND_CODE_PROVIDER_ID) {
+    return (
+      <div className="space-y-3">
+        <CommandCodeCliStatus />
+        <InlineEditableProviderCard
+          provider={customProvider}
+          canConfigureCredentials={canConfigureProviderCredentials}
+          onSave={onSave}
+          {...modelEditingProps}
+          onDelete={() => onDelete(customProvider)}
+          onReorderModelIds={
+            onReorderProviderModels
+              ? (modelIds) => onReorderProviderModels(customProvider.providerId, modelIds)
+              : undefined
+          }
+          onTestModel={onTestModel}
+          presetApiKeyUrl={customApiKeyUrl}
+          readOnlyEndpoints={false}
+          nameEditable
+          onOpenPresetApiKey={
+            customApiKeyUrl
+              ? () => {
+                  onOpenApiKeyUrl(customApiKeyUrl);
+                }
+              : undefined
+          }
+        />
+      </div>
+    );
+  }
   return (
     // 仅展示预设模板声明的入口，不根据地址猜测自定义 Provider 的 Key 控制台。
     <InlineEditableProviderCard

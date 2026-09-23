@@ -34,13 +34,31 @@ export interface AccountBridgeIdentity {
   readonly apiProvider?: string;
 }
 
-/** Usage / rate-limit snapshot, only when the source app's supported API supplies it. */
+/**
+ * Usage / rate-limit snapshot, only when the source app's supported API supplies it.
+ *
+ * Every field is optional and populated strictly from a value the source app returned. A
+ * missing field means "the source app did not report it", never "zero" — the UI must not
+ * fill the gap with an estimate. `windowDurationMins` exists so the UI can name a window
+ * from the reported length instead of assuming which window is the 5-hour one.
+ */
 export interface AccountBridgeUsage {
+  /** Backend permission for ordinary included usage. Absent when the source did not report it. */
   readonly ordinaryUsageAllowed?: boolean;
+  /** Machine reason the source returned for the blocked state, e.g. Codex `rateLimitReachedType`. */
+  readonly blockedReason?: string;
+  /** Percentage of the short window already consumed (0-100), as reported. */
   readonly primaryUsedPercent?: number;
+  /** ISO timestamp when the short window resets, as reported. */
   readonly primaryResetsAt?: string;
+  /** Length of the short window in minutes (e.g. 300 for a 5-hour window), as reported. */
+  readonly primaryWindowDurationMins?: number;
+  /** Percentage of the long window already consumed (0-100), as reported. */
   readonly secondaryUsedPercent?: number;
+  /** ISO timestamp when the long window resets, as reported. */
   readonly secondaryResetsAt?: string;
+  /** Length of the long window in minutes (e.g. 10080 for a weekly window), as reported. */
+  readonly secondaryWindowDurationMins?: number;
 }
 
 /** Everything Settings is allowed to render for one source. */
@@ -55,8 +73,21 @@ export interface AccountBridgeStatus {
   /**
    * Whether the SOURCE application itself reports a signed-in account. Independent of
    * `state`: the user can be signed into Codex while the harness bridge is disconnected.
+   *
+   * Only meaningful when `sourceSignInChecked` is true.
    */
   readonly sourceSignedIn: boolean;
+  /**
+   * Whether this snapshot actually asked the source application for its login state.
+   *
+   * Codex answers `account/read` only while its app-server child process is running, so a
+   * snapshot taken with the harness link disabled has no verified sign-in state and
+   * `sourceSignedIn` is a placeholder. The UI must not present that placeholder as fact.
+   *
+   * Required, not optional: a producer that forgets it would silently suppress the sign-in
+   * state instead of failing to compile.
+   */
+  readonly sourceSignInChecked: boolean;
   readonly identity?: AccountBridgeIdentity;
   readonly usage?: AccountBridgeUsage;
   /** Human-readable failure reason. Must never include command output containing secrets. */

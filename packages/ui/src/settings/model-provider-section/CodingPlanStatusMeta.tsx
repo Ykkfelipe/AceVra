@@ -89,12 +89,14 @@ export function StartPlanStatusMeta({
   hasQuota = false,
   refreshing = false,
   onRefresh,
+  extraAction,
 }: {
   expireTime?: string | null;
   entitlements?: UsageEntitlementSubscriptionDetail["entitlements"];
   hasQuota?: boolean;
   refreshing?: boolean;
   onRefresh?: () => void;
+  extraAction?: ReactNode;
 }) {
   const { intl, locale } = useZCodeIntl();
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -176,6 +178,8 @@ export function StartPlanStatusMeta({
           <span className="whitespace-nowrap">{expireTimeLabel}</span>
         </>
       ) : null}
+      <CodingPlanMetaSeparator visible={Boolean(expireTimeLabel && extraAction)} />
+      {extraAction}
     </span>
   );
 }

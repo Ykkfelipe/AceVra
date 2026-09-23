@@ -1,12 +1,34 @@
 # Accounts & Imports (Phase 9)
 
 Status: **implemented (phase 9, see HANDOFF.md).** Codex/Claude account bridges,
-sanitized status, and Claude/Codex history discovery are live. Settings placement:
-the `account` variant of `ModelProviderNavItem`
-(`packages/ui/src/settings/model-provider-section/constants.ts`) renders
-`AccountsAndImportsSection` in the Model settings split-panel detail pane
-(`model-provider-section/Detail.tsx`); the standalone top-level "accounts"
-Settings section was removed and its old id migrates to `modelProvider`.
+sanitized status, and Claude/Codex history discovery are live.
+
+## Settings placement
+
+Model Settings distinguishes two concepts that used to be conflated:
+
+- **Providers** — model API / plan configuration (`preset` and `custom` navigation groups).
+- **Connected accounts** — authenticated external execution accounts: Codex, Claude Code.
+  The `account` variant of `ModelProviderNavItem`
+  (`packages/ui/src/settings/model-provider-section/constants.ts`) carries a `source`, so each
+  account is its own navigation node rendered by the static (non-sortable) list in
+  `Navigation.tsx` and dispatched in `Detail.tsx` to
+  `packages/ui/src/settings/account-bridge/AccountBridgeDetail.tsx`. The standalone top-level
+  `accounts` Settings section stays removed; its old id migrates to `modelProvider`.
+
+`connectionSelectionMatchesNavigationItem` excludes account nodes, so account nodes never
+participate in provider drag-reorder and provider-family connection resolution never selects
+one. The init/fallback path (`pickInitialConnectionNavigationItem`) only ever returns a
+plan or preset node, so the default selection lands on account nodes only in the degenerate
+case where no provider node exists at all.
+
+**Command Code has exactly one presence.** It is a real personal model provider
+(`command-code`, seeded by `officialProviderMetadataImporter`) *and* a CLI account held
+separately by `~/.commandcode/auth.json`. Previously both were surfaced in Model Settings —
+the provider under `custom` and a look-alike "Command Code" account card — which read as a
+duplicate. The CLI status now renders as a compact strip inside the Command Code provider
+detail (`model-provider-section/CommandCodeCliStatus.tsx`) and is no longer part of the
+accounts screens.
 
 Two *distinct* features, deliberately not conflated:
 
@@ -85,6 +107,34 @@ This satisfies every stated requirement: credentials stay Mac-host-only, nothing
 the relay, nothing is stored in the repo, no token can be logged or rendered, and Codex's own
 login is preserved because ZCode never writes to it.
 
+### Included usage surfaced to the UI
+
+`account/rateLimits/read` is read alongside `account/read` (its failure is not an account
+error — usage is an optional data plane). The response's `rateLimits` snapshot is mapped by
+`packages/services/src/accounts/accountBridgeMapping.ts` into `AccountBridgeUsage`:
+
+| Backend field | Contract field |
+| --- | --- |
+| `ordinaryUsageAllowed` | `ordinaryUsageAllowed` |
+| `rateLimits.primary.usedPercent` / `.resetsAt` (Unix seconds) / `.windowDurationMins` | `primaryUsedPercent` / `primaryResetsAt` (ISO) / `primaryWindowDurationMins` |
+| `rateLimits.secondary.*` | `secondaryUsedPercent` / `secondaryResetsAt` / `secondaryWindowDurationMins` |
+| `rateLimits.rateLimitReachedType` | `blockedReason`, allowlisted to the documented enum values |
+
+Verified against the bundled `codex-cli 0.155.0-alpha.9.2` app-server schema
+(`codex app-server generate-json-schema`) and a live local read: `primary` is
+`windowDurationMins: 300` (5 hours) and `secondary` is `10080` (weekly). The UI names each
+window from the reported length instead of assuming which one is the 5-hour window, and it
+renders a window only when a used percentage was reported, so it never draws an invented bar.
+`account/rateLimits/updated` push notifications are still not consumed; usage is read on
+demand with the rest of the status.
+
+### Sign-in state honesty
+
+Codex answers `account/read` only while its app-server child process is running, and the
+harness link is in-memory. A snapshot taken with the link disabled therefore carries a
+placeholder `sourceSignedIn: false`. `AccountBridgeStatus.sourceSignInChecked` marks whether
+the source was actually asked, and the UI only states "Signed in"/"Signed out" when it was.
+
 ## Claude Code — account connection via the CLI auth surface
 
 Installed: `claude 2.1.202` at `~/.local/bin/claude`. Officially supported commands:
@@ -99,33 +149,46 @@ Installed: `claude 2.1.202` at `~/.local/bin/claude`. Officially supported comma
 `claude auth status --json` on this machine returns:
 
 ```json
-{ "loggedIn": false, "authMethod": "none", "apiProvider": "firstParty" }
+{ "loggedIn": true, "authMethod": "claude.ai", "apiProvider": "firstParty",
+  "email": "…", "orgId": "…", "orgName": "…", "subscriptionType": "pro" }
 ```
 
-Again **no token is exposed** — only `loggedIn`, `authMethod`, `apiProvider`. Claude Code
-owns its credentials (keychain / its own store) and ZCode reads status only.
-
-Note: the CLI is currently signed out here even though the desktop app is in use, so the
-Accounts UI must render a genuine disconnected state rather than assume connection.
+Again **no token is exposed** — the status surface carries login state, auth method, API
+provider, email and subscription tier only. Claude Code owns its credentials (keychain / its
+own store) and ZCode reads status only. `email` and `subscriptionType` are mapped onto the
+shared `AccountBridgeIdentity.email` / `.planType` slots so the Claude account card shows the
+same account tokens as Codex.
 
 `setup-token` is deliberately **not** the recommended path: it mints a long-lived token that
 ZCode would then hold, which is the credential-custody outcome we are avoiding. Prefer
 `auth login` + `auth status`.
 
+### Claude quota: not available, and not invented
+
+Investigated on the installed `claude 2.1.202`: `claude --help` lists no usage, limits, quota,
+cost or stats command, and probing each candidate name with `--json` returns
+`error: unknown option '--json'`. No local cache or state file exposing Claude rate-limit or
+plan-usage data was found either. `claude auth status --json` is the only supported local
+account surface, and it reports plan identity but no usage.
+
+The Claude account screen therefore states that usage limits are managed by Claude and shows
+no 5-hour or weekly figures. Inventing or estimating them is explicitly out of scope.
+
 ### Asymmetry worth designing around
 
 Codex offers a structured JSON-RPC API with push notifications. Claude Code offers CLI
-commands with JSON output and no event stream. The reusable service should therefore define
-one interface and two adapters, with Claude's status obtained by polling on demand (on
-Settings open, and after an explicit connect/disconnect) rather than by subscription.
+commands with JSON output and no event stream. The reusable service therefore defines one
+interface and two adapters, with Claude's status obtained by polling on demand (on Settings
+open, and after an explicit connect/disconnect) rather than by subscription. The asymmetry is
+visible in the UI: Codex can show included-usage windows, Claude cannot.
 
 ## History import — separate feature
 
 Claude (already built): `importClaudeNativeSessions`
 (`packages/services/src/session/claude-native/claudeNativeSessionImportService.ts`) copies
 Claude's `.jsonl` transcripts into the workspace as ZCode tasks. It is already shared by
-onboarding (`OnboardingDialog.tsx:61`) and Settings (`MigrationSection.tsx:61`, embedded by
-`AccountsAndImportsSection`, which is rendered from the Model settings split-panel
+onboarding (`OnboardingDialog.tsx:61`) and Settings (`MigrationSection.tsx:61`, rendered by
+`AccountBridgeDetail` for the Claude account node, which is the Model settings split-panel
 `account` variant in `model-provider-section/Detail.tsx`) through the
 `useClaudeSessionMigration` hook, so it is already re-runnable after onboarding. Per
 "do not duplicate it", this stays as is; only its presentation moved with the section.

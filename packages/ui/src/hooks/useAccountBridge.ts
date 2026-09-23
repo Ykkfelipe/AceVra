@@ -1,12 +1,14 @@
 /**
- * State for the Settings → Accounts & Imports section.
+ * State for the Connected accounts screens (Codex / Claude Code).
  *
  * Keeps two concerns deliberately separate:
  * - account connection (bridge status, connect/reconnect/disconnect)
  * - history import (candidate discovery)
  *
  * Nothing here ever holds credential material; every value originates from a sanitized
- * host response.
+ * host response. Command Code status is NOT part of this hook: it belongs to the Command
+ * Code provider detail, because it is a CLI account reading rather than an execution account
+ * this harness hands work to.
  */
 import { useCallback, useEffect, useState } from "react";
 import type {
@@ -14,44 +16,53 @@ import type {
   AccountBridgeStatus,
   ZCodeImportableSessionCandidate,
 } from "@zcode/shared";
-import type { CommandCodeStatus } from "@zcode/services";
 import { useAccountsService } from "@/hooks/useAccountsService.js";
 import { logger } from "@/logger.js";
 
-export interface AccountsAndImportsState {
-  readonly statuses: readonly AccountBridgeStatus[];
-  readonly commandCode: CommandCodeStatus | null;
-  readonly codexCandidates: readonly ZCodeImportableSessionCandidate[];
-  readonly busy: AccountBridgeSource | "command-code" | "codex-history" | null;
-  readonly loading: boolean;
-  readonly lastError: string | null;
+type AccountBridgeBusy = AccountBridgeSource | "codex-history";
+
+/** Failures the renderer itself observes. Each maps to one localized line. */
+interface AccountBridgeFailure {
+  readonly code: AccountBridgeFailureCode;
+  /**
+   * Sanitized reason reported by the host (`codex_not_installed`, `login_timeout`, …).
+   * The host already strips paths, URLs and opaque blobs, so this is display-safe; it is
+   * kept separate from `code` because it is diagnostic, not a localized message.
+   */
+  readonly reason?: string;
 }
 
-export function useAccountsAndImports() {
+type AccountBridgeFailureCode =
+  | "status_refresh_failed"
+  | "connect_failed"
+  | "codex_history_scan_failed";
+
+export function useAccountBridge() {
   const accountsService = useAccountsService();
   const [statuses, setStatuses] = useState<readonly AccountBridgeStatus[]>([]);
-  const [commandCode, setCommandCode] = useState<CommandCodeStatus | null>(null);
   const [codexCandidates, setCodexCandidates] = useState<
     readonly ZCodeImportableSessionCandidate[]
   >([]);
-  const [busy, setBusy] = useState<AccountsAndImportsState["busy"]>(null);
+  const [busy, setBusy] = useState<AccountBridgeBusy | null>(null);
   const [loading, setLoading] = useState(true);
-  const [lastError, setLastError] = useState<string | null>(null);
+  /**
+   * 状态读取自身的进行中标记。
+   * loading 只覆盖首次水合；手动刷新必须也有独立反馈，否则按钮点了没有任何变化。
+   */
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastError, setLastError] = useState<AccountBridgeFailure | null>(null);
 
   const refreshStatuses = useCallback(async () => {
+    setRefreshing(true);
     try {
       setStatuses(await accountsService.readAllAccountStatuses());
+      // 只清除本次读取失败留下的提示；连接失败等原因不能被随后成功的状态读取掩盖。
+      setLastError((current) => (current?.code === "status_refresh_failed" ? null : current));
     } catch (error) {
       logger.warn("[accounts] status refresh failed", error);
-      setLastError("status_refresh_failed");
-    }
-  }, [accountsService]);
-
-  const refreshCommandCode = useCallback(async () => {
-    try {
-      setCommandCode(await accountsService.readCommandCodeStatus());
-    } catch (error) {
-      logger.warn("[accounts] command code status failed", error);
+      setLastError({ code: "status_refresh_failed" });
+    } finally {
+      setRefreshing(false);
     }
   }, [accountsService]);
 
@@ -59,13 +70,13 @@ export function useAccountsAndImports() {
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      await Promise.all([refreshStatuses(), refreshCommandCode()]);
+      await refreshStatuses();
       if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [refreshStatuses, refreshCommandCode]);
+  }, [refreshStatuses]);
 
   const connect = useCallback(
     async (source: AccountBridgeSource) => {
@@ -74,13 +85,16 @@ export function useAccountsAndImports() {
       try {
         // The host opens any OAuth URL with the Mac's default browser; it is never sent here.
         const result = await accountsService.connectAccount(source);
-        setStatuses((prev) =>
-          prev.map((s) => (s.source === source ? result.status : s)),
-        );
-        if (result.error) setLastError(result.error);
+        setStatuses((prev) => prev.map((s) => (s.source === source ? result.status : s)));
+        if (result.error) {
+          setLastError({
+            code: "connect_failed",
+            reason: result.error,
+          });
+        }
       } catch (error) {
         logger.warn("[accounts] connect failed", error);
-        setLastError("connect_failed");
+        setLastError({ code: "connect_failed" });
       } finally {
         setBusy(null);
         void refreshStatuses();
@@ -121,9 +135,12 @@ export function useAccountsAndImports() {
       setBusy("codex-history");
       try {
         setCodexCandidates(await accountsService.scanCodexHistory({ limit }));
+        setLastError((current) =>
+          current?.code === "codex_history_scan_failed" ? null : current,
+        );
       } catch (error) {
         logger.warn("[accounts] codex history scan failed", error);
-        setLastError("codex_history_scan_failed");
+        setLastError({ code: "codex_history_scan_failed" });
       } finally {
         setBusy(null);
       }
@@ -139,16 +156,15 @@ export function useAccountsAndImports() {
   return {
     statuses,
     statusFor,
-    commandCode,
     codexCandidates,
     busy,
     loading,
+    refreshing,
     lastError,
     connect,
     reconnectBridge,
     disconnect,
     scanCodexHistory,
     refreshStatuses,
-    refreshCommandCode,
   };
 }
