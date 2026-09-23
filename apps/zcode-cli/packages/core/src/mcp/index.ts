@@ -16,6 +16,7 @@ import {
 } from "@zcode/contracts";
 import { ZCODE_CUA_OFFICIAL_MCP_NAMESPACE_NAME as ZCODE_CUA_OFFICIAL_MCP_SERVER_NAME } from "@zcode/shared";
 import { OFFICIAL_CUA_FRAME_MODEL_CONTENT_PROTECTION } from "@zcode/zcode-cua/frame-contract";
+import { canonicalComputerUseMcpName } from "@zcode/zcode-cua/capability-contract";
 import type { ToolRegistry } from "../tool/registry.js";
 import type { ToolEntry } from "../tool/types.js";
 import { createToolRuleNameSet } from "../tool/tool-visibility.js";
@@ -43,7 +44,6 @@ const CUA_USER_TITLE_SCHEMA = {
   description:
     "Required short user-facing title in the user's language that describes why the app interface is being read without implementation terms such as CUA, MCP, or get_app_state",
 } satisfies JsonSchema;
-const ZCODE_CUA_CANONICAL_MODEL_PREFIX = "mcp__computer-use__";
 const ZCODE_CUA_PROVIDER_SPELLING_ALIAS_PREFIX = "mcp__computer_use__";
 
 export interface RegisterMcpToolsOptions {
@@ -94,7 +94,7 @@ function toRegisteredMcpToolName(
     // adapter 会把官方插件 serverName 命名空间化，descriptor.name 因而是
     // mcp__plugin_zcode-cua_computer-use__*；直接沿用它会让 provider 约定的 computer-use
     // 工具永远不存在。可信门成立后仅投影模型可见名称，handler 仍用 descriptor 的原路由。
-    return `${ZCODE_CUA_CANONICAL_MODEL_PREFIX}${toModelVisibleMcpNamePart(descriptor.toolName)}`;
+    return canonicalComputerUseMcpName(toModelVisibleMcpNamePart(descriptor.toolName));
   }
   return toMcpToolName(descriptor);
 }
@@ -265,11 +265,11 @@ function officialCuaProviderSpellingAliases(
   if (
     !officialCuaAuthorityVerified ||
     descriptor.serverName !== ZCODE_CUA_OFFICIAL_MCP_SERVER_NAME ||
-    !name.startsWith(ZCODE_CUA_CANONICAL_MODEL_PREFIX)
+    !name.startsWith("mcp__computer-use__")
   ) {
     return undefined;
   }
-  const toolName = name.slice(ZCODE_CUA_CANONICAL_MODEL_PREFIX.length);
+  const toolName = name.slice("mcp__computer-use__".length);
   return toolName.length > 0
     ? [`${ZCODE_CUA_PROVIDER_SPELLING_ALIAS_PREFIX}${toolName}`]
     : undefined;

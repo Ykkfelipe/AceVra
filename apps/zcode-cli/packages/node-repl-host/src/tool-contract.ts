@@ -1,3 +1,5 @@
+import { COMPUTER_USE_MODEL_GUIDANCE } from "@zcode/zcode-cua/capability-contract";
+
 // 旧默认值与模型常用的 30 秒页面等待相同，发送等副作用成功后会在结果读取前被中止。
 // 执行层和模型可见文案共用该常量，避免真实超时与 tools/list 描述漂移。
 export const NODE_REPL_DEFAULT_TIMEOUT_MS = 60_000;
@@ -25,6 +27,7 @@ export const NODE_REPL_SERVER_INSTRUCTIONS =
   "the corresponding official skill instructs you to control a browser or computer. Do not use this server for unrelated tasks, " +
   "including general-purpose JavaScript, filesystem, shell, package inspection, or data processing. " +
   `Calls default to a ${NODE_REPL_DEFAULT_TIMEOUT_MS} ms timeout. ` +
+  `${COMPUTER_USE_MODEL_GUIDANCE} ` +
   "Always provide `title` as a short user-facing description in the user's language. " +
   "Every `js` call starts fresh; reconstruct browser wrappers and recover persistent tabs from current BrowserControl facts.";
 

@@ -10,6 +10,10 @@
       "types": "./index.d.ts",
       "import": "./index.js"
     },
+    "./capability-contract": {
+      "types": "./capability-contract.d.ts",
+      "import": "./capability-contract.js"
+    },
     "./frame-contract": {
       "types": "./frame-contract.d.ts",
       "import": "./frame-contract.js"

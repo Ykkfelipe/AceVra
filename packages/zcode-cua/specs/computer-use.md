@@ -1,5 +1,76 @@
 # Computer Use permission and identity foundation
 
+## CUA-2.5: normalized Computer Use capability
+
+### Current tool path (inspected before implementation)
+
+- Native observation and mutation are owned by the signed Helper. The `@zcode/zcode-cua`
+  runtime maps its stable public SDK names (`list_apps`, `list_windows`, `get_app_state`,
+  `screenshot`, `request_access`, `computer.press`, `computer.set_value`) to broker methods.
+- The integrated node_repl host carries calls through its session-scoped CUA bridge, the
+  hardened host relay, the peer-bound signed Helper, and the same semantic policy. It does not
+  expose a second actuation route.
+- Provider-driven agents project MCP descriptors through `registerMcpTools`; verified official
+  Computer Use descriptors receive the existing `mcp__computer-use__` model namespace. Provider
+  spelling aliases are one-way names for that same registry entry. Z.ai, Azure OpenAI, and
+  Command Code/OpenAI-compatible requests share the AI SDK model adapter and MCP tool registry.
+- The repository does not contain an arbitrary-AceVra-tool adapter for the Codex execution
+  backend or Claude Code account runtime. Their native CLI tool APIs remain separate. The agent
+  must not advertise direct CUA support there until a real adapter boundary exists.
+- Forked/remote consumers share serialized MCP call arguments and session context. Helper paths,
+  observation frame paths, and opaque observation artifacts remain host-internal; remote/fork
+  does not receive a direct Helper capability.
+
+### Canonical contract and ownership
+
+`capability-contract.js` is the shared vocabulary for method classes, result effects, measured
+action classification, semantic input validation, and model guidance. Public model method names
+and compatibility mappings remain those above. The Helper remains the sole authority for target
+creation, resolution, action, and effect evidence. The host only validates the public argument
+shape and validates the result envelope; it never promotes an effect.
+
+`press` accepts exactly `{ semantic_ref }`; `set_value` accepts exactly
+`{ semantic_ref, value }`. The semantic reference must originate from an observation and resolve
+inside that Helper session. PID, AX path, raw AX pointer, coordinates, window coordinates, and
+element-title searches are not accepted parameters. The broker remains the enforcement boundary.
+
+Action effects are `confirmed`, `partial`, `unknown`, `refused`, or `failed`. The route,
+classification, evidence, and refusal/error code pass through unchanged. Missing or malformed
+effect/route/evidence fails closed as `failed/invalid_result`. `unknown` is not success.
+Measured `press` and `set_value` are both `BEST_EFFORT_BACKGROUND`; the centralized vocabulary
+also reserves `BACKGROUND_SAFE`, `REQUIRES_FOREGROUND`, and `UNSUPPORTED`.
+
+Availability is established by the current Helper and permission status, never inferred from the
+selected provider. Missing Accessibility permission is a typed refusal for mutation; Screen
+Recording is needed only for pixel capture. A missing Helper/verified session, non-macOS build,
+or unavailable native capability fails closed. `request_access` includes a `capabilities` projection
+derived from the verified Helper identity and its Accessibility grant. Screenshot is marked
+`probe_required` because the Helper's cached Screen Recording preflight is not authoritative; an
+`observe` call's actual capture result decides pixel availability. No availability claim enables an
+actuator.
+
+### Execution and verification boundary
+
+```text
+model/provider → existing canonical tool projection → CUA runtime → hardened host relay
+  → valid session capability → signed peer-bound Helper → semantic policy → AX action
+  → post-state verification → normalized result → same provider tool result
+```
+
+The provider runtime can consume canonical AceVra MCP tools through the existing registry. The
+outer node_repl `js` MCP tool remains the advertised entrypoint while the Helper is lazy; the
+runtime cannot remove nested JavaScript methods from that one tool's descriptor at session startup.
+Instead, `request_access` reports the verified runtime capability map and shared guidance directs
+the model to use only methods marked available. Calls still fail closed at the CUA runtime and
+Helper if state changes after that report. Codex and Claude account-backed execution cannot
+currently consume this custom registry; this phase records them as unsupported instead of
+emulating their native tools. Model guidance is shared and instructs observe → semantic action →
+inspect effect → observe again as needed, with no coordinate input.
+
+Deterministic acceptance must stub Helper results and provider projections. It must not issue
+model inference. CUA-2 live signed-Helper acceptance remains the only evidence for native action
+behavior; this phase's live regression is separate from the deterministic projection gate.
+
 ## CUA-2: bounded semantic Accessibility actions
 
 The signed Helper remains the sole owner of observation snapshots, semantic references,

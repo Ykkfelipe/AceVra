@@ -1,3 +1,10 @@
+import {
+  resolveComputerUseMethod,
+  normalizeComputerUseResult,
+  resolveComputerUseCapabilities,
+  validSemanticActionInput,
+} from "./capability-contract.js";
+
 /**
  * Model-facing provider-independent tool name to broker method.
  *
@@ -7,23 +14,17 @@
  * has no crop rung, and answering a crop request with a whole-window capture would silently
  * change what the caller asked for.
  */
-const MODEL_TOOL_METHODS = Object.freeze({
-  list_apps: "list_apps",
-  list_windows: "list_windows",
-  get_app_state: "observe",
-  screenshot: "observe",
-  request_access: "permission_status",
-  "computer.press": "press",
-  "computer.set_value": "set_value",
-});
-
 const MODEL_TOOL_HINT =
   "supported tools: list_apps, list_windows, get_app_state, screenshot, request_access, computer.press, computer.set_value.";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
-function unavailable(text) {
-  return { content: [{ type: "text", text }], isError: true };
+function unavailable(text, code = "unavailable", effect = "refused") {
+  return {
+    content: [{ type: "text", text }],
+    structuredContent: { effect, route: "none", evidence: [], code },
+    isError: true,
+  };
 }
 
 /**
@@ -35,6 +36,7 @@ function unavailable(text) {
  */
 export function createComputerUseRuntime(options = {}) {
   const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
   const explicitSocketPath =
     typeof options.brokerSocketPath === "string" ? options.brokerSocketPath.trim() : "";
 
@@ -47,13 +49,24 @@ export function createComputerUseRuntime(options = {}) {
   return {
     async execute(input) {
       const toolName = typeof input?.toolName === "string" ? input.toolName : "";
-      const method = Object.prototype.hasOwnProperty.call(MODEL_TOOL_METHODS, toolName)
-        ? MODEL_TOOL_METHODS[toolName]
-        : undefined;
+      const method = resolveComputerUseMethod(toolName);
+      if (platform !== "darwin") {
+        return unavailable(
+          "Computer Use native methods are unavailable on this platform",
+          "unsupported_platform",
+        );
+      }
       if (!method) {
         return unavailable(
           `Computer Use tool '${toolName || "(unnamed)"}' is not available: ${MODEL_TOOL_HINT}`,
+          "unsupported",
         );
+      }
+      if (
+        (method === "press" || method === "set_value") &&
+        !validSemanticActionInput(method, input?.arguments)
+      ) {
+        return unavailable(`${method} requires an observation-derived semantic_ref`, "bad_request");
       }
 
       try {
@@ -75,7 +88,29 @@ export function createComputerUseRuntime(options = {}) {
         // that path is a host-internal detail, so it is replaced here by the opaque reference and
         // the whole result is bounded before it is serialized into model context.
         const { result: sanitized } = sanitizeObservationResult(result);
-        return { content: [{ type: "text", text: JSON.stringify(sanitized) }] };
+        if (method === "permission_status") {
+          sanitized.capabilities = resolveComputerUseCapabilities({
+            platform,
+            helperVerified:
+              sanitized.helper_identity?.verified === true || sanitized.identity_verified === true,
+            accessibility: sanitized.accessibility,
+          });
+        }
+        const normalized =
+          method === "press" || method === "set_value"
+            ? normalizeComputerUseResult(sanitized)
+            : sanitized;
+        return {
+          content: [{ type: "text", text: JSON.stringify(normalized) }],
+          ...(method === "press" || method === "set_value"
+            ? {
+                structuredContent: normalized,
+                ...(normalized.effect === "refused" || normalized.effect === "failed"
+                  ? { isError: true }
+                  : {}),
+              }
+            : {}),
+        };
       } catch (error) {
         // A missing grant, a stopped Helper and a refused method are all reported rather than
         // thrown: the caller needs the code in order to decide what to do. The text is redacted
@@ -84,7 +119,11 @@ export function createComputerUseRuntime(options = {}) {
         const code = error && typeof error.code === "string" ? error.code : "unknown";
         const message = error instanceof Error ? error.message : String(error);
         const { redactHostPaths } = await import("./observe-result.js");
-        return unavailable(`Computer Use request failed (${code}): ${redactHostPaths(message)}`);
+        return unavailable(
+          `Computer Use request failed (${code}): ${redactHostPaths(message)}`,
+          code,
+          "failed",
+        );
       }
     },
     async closeSession() {},

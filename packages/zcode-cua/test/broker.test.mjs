@@ -316,6 +316,15 @@ describe("Computer Use runtime", () => {
     dir = mkdtempSync(join(tmpdir(), "cua-runtime-test-"));
     socketPath = join(dir, "helper.sock");
     const backend = {
+      permission_status: async () => ({
+        available: true,
+        platform: "darwin",
+        identity_verified: true,
+        helper_identity: VERIFIED_IDENTITY,
+        accessibility: "granted",
+        screen_recording: "denied",
+        screen_capture_probe_state: "not_run",
+      }),
       list_apps: async () => ({
         count: 1,
         route: "workspace",
@@ -378,6 +387,20 @@ describe("Computer Use runtime", () => {
     assert.equal(parsed.route, "workspace");
   });
 
+  it("returns current verified capability availability without trusting cached capture readout", async () => {
+    const runtime = createComputerUseRuntime({ brokerSocketPath: socketPath });
+    const result = await runtime.execute({
+      toolName: "request_access",
+      arguments: {},
+      context: {},
+    });
+    const parsed = JSON.parse(result.content[0].text);
+    assert.equal(parsed.capabilities.press, true);
+    assert.equal(parsed.capabilities.set_value, true);
+    assert.equal(parsed.capabilities.observe, true);
+    assert.equal(parsed.capabilities.screenshot, "probe_required");
+  });
+
   it("maps get_app_state onto observe and forwards the arguments", async () => {
     const runtime = createComputerUseRuntime({ brokerSocketPath: socketPath });
     const result = await runtime.execute({
@@ -401,7 +424,45 @@ describe("Computer Use runtime", () => {
     assert.equal(parsed.operation, "press");
     assert.equal(parsed.semantic_ref, "opaque-ref");
     assert.equal(parsed.effect, "unknown");
+    assert.equal(result.structuredContent.effect, "unknown");
+    assert.equal(result.structuredContent.classification, "BEST_EFFORT_BACKGROUND");
     assert.equal(parsed.evidence[0].verification, "unproven");
+  });
+
+  it("rejects action arguments that are not exactly semantic references before broker dispatch", async () => {
+    const runtime = createComputerUseRuntime({ brokerSocketPath: socketPath });
+    const before = seen.length;
+    const press = await runtime.execute({
+      toolName: "computer.press",
+      arguments: { pid: 7, path: [0] },
+      context: {},
+    });
+    const setValue = await runtime.execute({
+      toolName: "computer.set_value",
+      arguments: { semantic_ref: "opaque-ref", value: "ok", title: "search" },
+      context: {},
+    });
+    assert.equal(press.structuredContent.code, "bad_request");
+    assert.equal(setValue.structuredContent.code, "bad_request");
+    assert.equal(seen.length, before, "invalid semantic targets must not reach the broker");
+  });
+
+  it("reports native methods unavailable on unsupported platforms", async () => {
+    let ensured = false;
+    const runtime = createComputerUseRuntime({
+      platform: "linux",
+      ensureBrokerAvailable: async () => {
+        ensured = true;
+      },
+    });
+    const result = await runtime.execute({
+      toolName: "computer.press",
+      arguments: { semantic_ref: "opaque-ref" },
+      context: {},
+    });
+    assert.equal(result.structuredContent.code, "unsupported_platform");
+    assert.equal(result.structuredContent.effect, "refused");
+    assert.equal(ensured, false);
   });
 
   it("never hands a host filesystem path to the model", async () => {
