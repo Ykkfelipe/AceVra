@@ -108,7 +108,7 @@ single registration never splits bytes and index across two data roots.
 The store root is resolved on every operation as
 `<getAppConfigDir()>/task-artifacts`. `getAppConfigDir()` follows the process
 data base (`setDataBaseDir` › `ZCODE_DATA_BASE_DIR` › fork/home default), so the
-custom fork dev host (launched with `ZCODE_DATA_BASE_DIR=~/.zcode-fork-dev-home`)
+AceVra dev host (launched with `ZCODE_DATA_BASE_DIR=~/.zcode-fork-dev-home`)
 stores beneath `~/.zcode-fork-dev-home/.zcode/v2/task-artifacts` and never falls
 back to the official `~/.zcode`. Tests inject `rootDir` or a temporary data base.
 

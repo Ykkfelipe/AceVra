@@ -116,7 +116,7 @@ const isLocalDevelopmentRuntime =
     .__ZCODE_LOCAL_DEVELOPMENT_RUNTIME__ === true;
 
 if (isLocalDevelopmentRuntime) {
-  document.title = "Custom Fork Dev";
+  document.title = "AceVra Dev";
 }
 
 function readBooleanFlag(name: string, defaultValue: boolean): boolean {

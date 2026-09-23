@@ -2,14 +2,14 @@
 
 ## Behavior and ownership
 
-For custom-fork development, the Electron utility Host is the sole owner of the
+For AceVra development, the Electron utility Host is the sole owner of the
 local `createLocalServices` graph and therefore of providers, credentials,
 accounts, Codex, tasks, and artifacts. The `/fork` Web application is a remote
 client of the same Host. The HTTP process in `mise run dev-web` serves the SPA
 and brokers authenticated relay attachments only; it must not create a second
 provider/task/account service graph.
 
-The custom-fork default data base is `~/.zcode-fork-dev-home`, with app state at
+The AceVra development compatibility data base is `~/.zcode-fork-dev-home`, with app state at
 `~/.zcode-fork-dev-home/.zcode` and app configuration at
 `~/.zcode-fork-dev-home/.zcode/v2`. Explicit `ZCODE_DATA_BASE_DIR` and
 `ZCODE_HOME` overrides remain supported. Official ZCode continues to use
@@ -29,7 +29,7 @@ mise run dev-web
   -> HTTP/static + Clerk + relay broker (no createLocalServices)
 Electron main
   -> one window-scoped utility Host
-  -> createLocalServices(custom-fork data root)
+  -> createLocalServices(AceVra development data root)
   -> authenticated Host presence socket to relay broker
 /fork
   -> authenticated ticket + replayable browser socket
@@ -46,7 +46,7 @@ stale socket events cannot replace a newer generation. If the Host is offline,
 
 ## Provider metadata migration
 
-On custom-fork Host startup, an idempotent import may copy the Azure OpenAI and
+On AceVra Host startup, an idempotent import may copy the Azure OpenAI and
 Command Code definitions from the official personal-provider file only when the
 fork does not already define the provider. It carries provider/model IDs, API
 type, base URL, and validated model rules/capabilities. `apiKey`, bearer tokens,

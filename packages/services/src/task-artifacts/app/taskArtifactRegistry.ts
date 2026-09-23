@@ -92,7 +92,7 @@ function descriptorOf(meta: StoredArtifactMeta, backingExists: boolean): TaskArt
 export interface TaskArtifactStoreDeps {
   /**
    * store 根目录；缺省每次操作时解析 `<getAppConfigDir()>/task-artifacts`，跟随进程数据根
-   * （custom fork dev host 下即 `~/.zcode-fork-dev-home/.zcode/v2/task-artifacts`）。测试注入临时目录。
+   * （AceVra dev host 下即 `~/.zcode-fork-dev-home/.zcode/v2/task-artifacts`）。测试注入临时目录。
    */
   readonly rootDir?: string;
   readonly now?: () => number;

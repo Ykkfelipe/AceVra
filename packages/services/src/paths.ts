@@ -18,7 +18,7 @@ export interface ResolveDataBaseDirOptions {
 
 /**
  * Resolve one process's data base from explicit overrides and product mode.
- * Custom-fork dev gets an isolated default even when it is launched outside mise;
+ * AceVra development gets an isolated default even when it is launched outside mise;
  * regular ZCode keeps its existing HOME-based default.
  */
 export function resolveDataBaseDir(options: ResolveDataBaseDirOptions = {}): string {

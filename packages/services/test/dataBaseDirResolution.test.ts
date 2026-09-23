@@ -2,10 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveDataBaseDir } from "../src/paths.js";
 
-test("custom fork development resolves to an isolated home when no path is overridden", () => {
+test("AceVra development stays isolated from the official ZCode home", () => {
   assert.equal(
-    resolveDataBaseDir({ env: { ZCODE_FORK_DEV: "1", HOME: "/official-home" }, homeDir: "/os-home" }),
+    resolveDataBaseDir({
+      env: { ZCODE_FORK_DEV: "1", HOME: "/official-home" },
+      homeDir: "/os-home",
+    }),
     "/os-home/.zcode-fork-dev-home",
+  );
+  assert.equal(
+    resolveDataBaseDir({ env: { HOME: "/official-home" }, homeDir: "/os-home" }),
+    "/official-home",
   );
 });
 

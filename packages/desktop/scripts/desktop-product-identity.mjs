@@ -4,19 +4,30 @@
  * 可与原版并排安装的 `AceVra Preview`。
  */
 export const ZCODE_PREVIEW_IDENTITY_ENV = "ZCODE_PREVIEW_IDENTITY";
+export const ACEVRA_PROTOCOL_SCHEME = "acevra";
+export const LEGACY_ZCODE_PROTOCOL_SCHEME = "zcode";
 
 const PRODUCTION_IDENTITY = Object.freeze({
   flavor: "production",
-  appId: "com.acevra.desktop",
+  appId: "dev.acevra.app",
   productName: "AceVra",
   linuxExecutableName: "acevra",
   linuxPackageName: "acevra",
   cuaHelperInstallVariant: null,
 });
 
+const DEVELOPMENT_IDENTITY = Object.freeze({
+  flavor: "development",
+  appId: "dev.acevra.app.development",
+  productName: "AceVra Dev",
+  linuxExecutableName: "acevra-dev",
+  linuxPackageName: "acevra-dev",
+  cuaHelperInstallVariant: "development",
+});
+
 const PREVIEW_IDENTITY = Object.freeze({
   flavor: "preview",
-  appId: "com.acevra.desktop.preview",
+  appId: "dev.acevra.app.preview",
   productName: "AceVra Preview",
   linuxExecutableName: "acevra-preview",
   linuxPackageName: "acevra-preview",
@@ -25,6 +36,7 @@ const PREVIEW_IDENTITY = Object.freeze({
 
 export const desktopProductIdentities = Object.freeze({
   production: PRODUCTION_IDENTITY,
+  development: DEVELOPMENT_IDENTITY,
   preview: PREVIEW_IDENTITY,
 });
 
@@ -84,7 +96,7 @@ export function resolveDesktopArtifactSuffix(env = process.env) {
  */
 export function resolveWindowsAppUserModelIdForFlavor(flavor, runtime = { isPackaged: true }) {
   if (runtime.isPackaged === false) {
-    return "com.acevra.desktop.development";
+    return desktopProductIdentities.development.appId;
   }
   return desktopProductIdentities[flavor === "preview" ? "preview" : "production"].appId;
 }

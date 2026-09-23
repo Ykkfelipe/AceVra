@@ -37,6 +37,7 @@ import {
   type ResolveRemoteCdnOptions,
 } from "./remoteCdn.js";
 import { getElectronAppPath, isElectronAppPackaged } from "./desktopElectronApp.js";
+import { desktopProductIdentities } from "../../scripts/desktop-product-identity.mjs";
 
 const isLocalDevelopmentRuntime = !isElectronAppPackaged();
 export const desktopRuntimeEnv: ZCodeRuntimeEnv = isLocalDevelopmentRuntime
@@ -55,16 +56,16 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
   return value === "1" || value === "true" || value === "yes" || value === "on";
 }
 
-// e2e 运行的是生产构建，默认会和本机正式版 ZCode 共用 app name / userData，
+// e2e 运行的是生产构建，默认会和本机正式版 AceVra 共用 app name / userData，
 // 触发 Electron 单实例锁后只激活已有窗口，Chromedriver 无法接管测试进程。
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
 export const runtimeApplicationName =
   readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
   (isLocalDevelopmentRuntime
-    ? "AceVra Dev"
+    ? desktopProductIdentities.development.productName
     : isPreviewPackagedRuntime
-      ? "AceVra Preview"
-      : "AceVra");
+      ? desktopProductIdentities.preview.productName
+      : desktopProductIdentities.production.productName);
 export const runtimeProtocolScheme =
   readRuntimeEnvOverride("ZCODE_DESKTOP_PROTOCOL_SCHEME") ?? "zcode";
 // Electron 的 app.getPath("home") 不一定跟随测试进程里的 HOME 覆盖。

@@ -26,13 +26,13 @@ export function startCustomForkHostRelay(
   const deviceToken = env.ZCODE_FORK_RELAY_DEVICE_TOKEN?.trim();
   const ownerUserId = env.ZCODE_FORK_ALLOWED_CLERK_USER_IDS?.split(",")[0]?.trim();
   if (!relayBase || !deviceToken || !ownerUserId) {
-    options.onLog?.("custom-fork relay is not configured; local Host remains available");
+    options.onLog?.("AceVra relay is not configured; local Host remains available");
     return null;
   }
 
   const relayUrl = new URL("/fork/relay/device", relayBase);
   if (relayUrl.protocol !== "ws:" && relayUrl.protocol !== "wss:") {
-    options.onLog?.("custom-fork relay URL must use ws or wss");
+    options.onLog?.("AceVra relay URL must use ws or wss");
     return null;
   }
   const displayName = env.ZCODE_FORK_DEVICE_NAME?.trim() || hostname();
@@ -64,12 +64,16 @@ export function startCustomForkHostRelay(
     const socket = new WebSocket(url, { headers: { "x-zcode-device-token": deviceToken } });
     attachments.set(attachmentId, socket);
     socket.once("open", () => {
-      if (disposed || currentGeneration !== generation || attachments.get(attachmentId) !== socket) {
+      if (
+        disposed ||
+        currentGeneration !== generation ||
+        attachments.get(attachmentId) !== socket
+      ) {
         socket.close();
         return;
       }
       setupChannelServer(socket, options.services, "web-remote-replayable");
-      options.onLog?.("custom-fork browser attachment connected", { attachmentId });
+      options.onLog?.("AceVra browser attachment connected", { attachmentId });
     });
     const forget = () => {
       if (attachments.get(attachmentId) === socket) attachments.delete(attachmentId);
@@ -87,7 +91,7 @@ export function startCustomForkHostRelay(
     presence = socket;
     socket.once("open", () => {
       if (presence !== socket || currentGeneration !== generation) return socket.close();
-      options.onLog?.("custom-fork Host connected to relay", { deviceId });
+      options.onLog?.("AceVra Host connected to relay", { deviceId });
     });
     socket.on("message", (raw: Buffer | ArrayBuffer) => {
       if (presence !== socket || currentGeneration !== generation) return;
@@ -106,7 +110,7 @@ export function startCustomForkHostRelay(
       if (presence !== socket || disposed || currentGeneration !== generation) return;
       presence = null;
       clearAttachments();
-      options.onLog?.("custom-fork relay disconnected; retrying");
+      options.onLog?.("AceVra relay disconnected; retrying");
       reconnectTimer = setTimeout(connectPresence, 2_000);
       reconnectTimer.unref?.();
     };
@@ -125,7 +129,7 @@ export function startCustomForkHostRelay(
       clearAttachments();
       presence?.close();
       presence = null;
-      options.onLog?.("custom-fork Host relay disposed");
+      options.onLog?.("AceVra Host relay disposed");
     },
   };
 }

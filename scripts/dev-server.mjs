@@ -9,7 +9,7 @@ const child = spawn(pnpm, ["--filter", "@zcode/server", "dev:watch"], {
 });
 
 child.on("error", (error) => {
-  console.error("[custom-fork-dev-server] failed to start:", error.message);
+  console.error("[acevra-dev-server] failed to start:", error.message);
   process.exitCode = 1;
 });
 for (const signal of ["SIGINT", "SIGTERM"]) {

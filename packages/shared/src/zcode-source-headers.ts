@@ -45,7 +45,7 @@ export function buildZCodeSourceHeadersFromContext(
   return {
     ...ZCODE_SOURCE_HEADERS,
     "HTTP-Referer": endpointOrigin,
-    "User-Agent": `ZCode/${appVersion ?? "unknown"}`,
+    "User-Agent": `AceVra/${appVersion ?? "unknown"}`,
     ...(appVersion ? { "X-ZCode-App-Version": appVersion } : {}),
     "X-Title": `Z Code@${sourceTitle}`,
     ...(platform && arch ? { "X-Platform": `${platform}-${arch}` } : {}),
