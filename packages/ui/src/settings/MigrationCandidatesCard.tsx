@@ -204,17 +204,19 @@ export function MigrationCandidatesCard({
           <div className="space-y-2">
             {candidates.map((candidate) => {
               const isSelected = selectedSessionIds.includes(candidate.sessionId);
+              const alreadyImported = candidate.alreadyImported === true;
 
               return (
                 <button
                   key={candidate.sessionId}
                   type="button"
-                  disabled={isImporting}
+                  disabled={isImporting || alreadyImported}
                   className={cn(
                     "w-full rounded-lg border px-3 py-3 text-left transition-colors",
                     isSelected
                       ? "border-primary bg-accent"
                       : "border-border bg-background hover:bg-surface",
+                    alreadyImported && "cursor-default opacity-70",
                   )}
                   onClick={() => onToggleSelection(candidate.sessionId)}
                 >
@@ -239,6 +241,11 @@ export function MigrationCandidatesCard({
                         <Badge variant="outline" className="font-mono">
                           {candidate.sessionId.slice(0, 8)}
                         </Badge>
+                        {alreadyImported ? (
+                          <Badge variant="secondary">
+                            {intl.formatMessage({ id: "settings.migration.alreadyImported" })}
+                          </Badge>
+                        ) : null}
                       </div>
                       <div className="grid gap-2 text-ui-base text-foreground-subtle grid-cols-[minmax(0,1fr)_auto] items-center">
                         <div className="min-w-0 space-y-1">

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { type BuiltinModelProviderId } from "@zcode/shared";
-import { PackageIcon, UserCog } from "lucide-react";
+import { BotIcon, PackageIcon, TerminalIcon } from "lucide-react";
 import { ProviderLogo } from "./ProviderLogo.js";
 import { type ModelProviderNavItem } from "./constants.js";
 
@@ -24,8 +24,12 @@ export function resolveModelProviderNavLogo(item: ModelProviderNavItem) {
 
 export function renderModelProviderNavIcon(item: ModelProviderNavItem): ReactNode {
   if (item.type === "account") {
-    // 账号组入口沿用 Settings 里 Accounts 的 UserCog 语义，不用供应商占位图标。
-    return <UserCog className="size-4 shrink-0" />;
+    // 账号节点使用执行身份图标，与供应商的品牌 logo / 占位图标明确区分。
+    return item.source === "codex" ? (
+      <BotIcon className="size-4 shrink-0" aria-hidden="true" />
+    ) : (
+      <TerminalIcon className="size-4 shrink-0" aria-hidden="true" />
+    );
   }
   if ("provider" in item && item.provider) {
     return <ProviderLogo logo={resolveModelProviderNavLogo(item)} className="size-4" />;

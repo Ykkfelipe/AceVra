@@ -511,6 +511,18 @@ function renderWebBootstrapError(error: unknown): void {
 }
 
 async function bootstrapWebApp() {
+  if (import.meta.env.DEV && window.location.pathname === "/__dev/model-settings-fixtures") {
+    const { ModelSettingsFixtureHarness } =
+      await import("../../ui/src/settings/model-provider-section/ModelSettingsFixtureHarness.js");
+    document.title = "AceVra Dev · Model Settings fixtures";
+    root.render(
+      <ZCodeIntlProvider initialLocale="en-US">
+        <ModelSettingsFixtureHarness />
+      </ZCodeIntlProvider>,
+    );
+    return;
+  }
+
   const params = new URLSearchParams(window.location.search);
   if (isWebOAuthCallback(params)) {
     renderWebAuthCallbackPage();

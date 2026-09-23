@@ -743,6 +743,17 @@ export const zcodeSessionImportHistorySchema = z.discriminatedUnion("source", [
     .strict(),
   z
     .object({
+      source: z.literal("codex"),
+      sourceSessionId: z.string().trim().min(1),
+      title: z.string().optional(),
+      model: z.string().optional(),
+      createdAt: timestampMsSchema.optional(),
+      updatedAt: timestampMsSchema.optional(),
+      messages: z.array(zcodeSessionImportMessageSchema).min(1),
+    })
+    .strict(),
+  z
+    .object({
       source: z.literal("sharedContext"),
       title: z.string().trim().min(1),
       createdAt: timestampMsSchema.optional(),

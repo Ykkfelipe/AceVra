@@ -24,18 +24,23 @@
  * - does not require ChatGPT.app to be running
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync } from "node:fs";
+import { discoverExecutable } from "#src/accounts/executableDiscovery.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
 const logger = createServiceLogger("codex-bridge");
 
-/** Bundled location on macOS. Codex is not on PATH when installed via ChatGPT.app. */
-const CODEX_BUNDLED_MACOS = "/Applications/ChatGPT.app/Contents/Resources/codex";
+/** Common app-bundle locations; user-specific paths are derived from homedir at runtime. */
+const CODEX_BUNDLED_CANDIDATES = [
+  "/Applications/ChatGPT.app/Contents/Resources/codex",
+  "~/Applications/ChatGPT.app/Contents/Resources/codex",
+  "~/.local/bin/codex",
+  "~/.cargo/bin/codex",
+];
 
 const MAX_RESTARTS = 3;
 const RESTART_WINDOW_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
-const INITIALIZE_TIMEOUT_MS = 20_000;
+const INITIALIZE_TIMEOUT_MS = 12_000;
 
 export interface CodexBridgeOptions {
   /** Override the executable path; defaults to the bundled macOS location or `codex`. */
@@ -68,9 +73,11 @@ export type CodexNotificationHandler = (
 ) => void;
 
 export function resolveCodexExecutable(override?: string): string | undefined {
-  if (override?.trim()) return existsSync(override.trim()) ? override.trim() : undefined;
-  if (existsSync(CODEX_BUNDLED_MACOS)) return CODEX_BUNDLED_MACOS;
-  return undefined;
+  return discoverExecutable({
+    name: "codex",
+    configuredPath: override,
+    extraCandidates: CODEX_BUNDLED_CANDIDATES,
+  });
 }
 
 export class CodexAppServerBridge {
@@ -132,6 +139,7 @@ export class CodexAppServerBridge {
     // stdio transport only: no --listen, so no TCP port is ever opened.
     const child = spawn(this.#executable!, ["app-server"], {
       stdio: ["pipe", "pipe", "pipe"],
+      env: process.env,
     }) as ChildProcessWithoutNullStreams;
     this.#child = child;
     this.#stdoutBuffer = "";

@@ -12,15 +12,26 @@
  * Run: mise exec -- node --import tsx --test packages/services/test/accountBridgeSecurityBoundary.test.ts
  */
 import assert from "node:assert/strict";
-import test from "node:test";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { after, before, test } from "node:test";
+import { cleanupCodexTestIsolation, getIsolatedCodexHome } from "./codexTestIsolation.js";
 import { createAccountBridgeService } from "../src/accounts/accountBridgeService.js";
 import {
   resolveCodexExecutable,
   CodexAppServerBridge,
 } from "../src/accounts/codexAppServerBridge.js";
-import { scanCodexImportableSessions } from "../src/accounts/codexHistoryImportRepo.js";
+import {
+  resolveCodexSessionsDir,
+  scanCodexImportableSessions,
+} from "../src/accounts/codexHistoryImportRepo.js";
 
 const codexInstalled = Boolean(resolveCodexExecutable());
+
+before(() => {
+  process.env.CODEX_HOME = getIsolatedCodexHome();
+});
+after(cleanupCodexTestIsolation);
 
 /** Any key or value that would indicate credential material leaking into the wire shape. */
 function assertNoCredentialMaterial(value: unknown, label: string): void {
@@ -54,7 +65,7 @@ test("connect result type cannot carry the OAuth authUrl to a client", () => {
     status: {
       source: "codex" as const,
       installed: true,
-      state: "connecting" as const,
+      state: "loading" as const,
       sourceSignedIn: false,
       checkedAt: new Date().toISOString(),
     },
@@ -82,26 +93,34 @@ test("claude status is sanitized and reports a real disconnected state", async (
   svc.dispose();
 });
 
-test("codex status while disconnected does not start the app-server", { skip: !codexInstalled }, async () => {
-  const opened: string[] = [];
-  const svc = makeService(opened);
-  const status = await svc.readStatus("codex");
-  assert.equal(status.installed, true);
-  assert.equal(status.state, "disconnected");
-  assert.ok(status.version, "version should be readable without the app-server");
-  assertNoCredentialMaterial(status, "codex disconnected status");
-  svc.dispose();
-});
+test(
+  "codex status while disconnected does not start the app-server",
+  { skip: !codexInstalled },
+  async () => {
+    const opened: string[] = [];
+    const svc = makeService(opened);
+    const status = await svc.readStatus("codex");
+    assert.equal(status.installed, true);
+    assert.equal(status.state, "disconnected");
+    assert.ok(status.version, "version should be readable without the app-server");
+    assertNoCredentialMaterial(status, "codex disconnected status");
+    svc.dispose();
+  },
+);
 
-test("codex bridge initializes and returns only sanitized account data", { skip: !codexInstalled }, async () => {
-  const opened: string[] = [];
-  const svc = makeService(opened);
-  const status = await svc.reconnectBridge("codex");
-  assert.equal(status.state, "connected");
-  assertNoCredentialMaterial(status, "codex connected status");
-  assert.equal(opened.length, 0, "no OAuth URL should be opened for a status read");
-  svc.dispose();
-});
+test(
+  "codex bridge initializes and returns only sanitized account data",
+  { skip: "requires a user Codex login; account tests use an isolated CODEX_HOME" },
+  async () => {
+    const opened: string[] = [];
+    const svc = makeService(opened);
+    const status = await svc.reconnectBridge("codex");
+    assert.equal(status.state, "connected");
+    assertNoCredentialMaterial(status, "codex connected status");
+    assert.equal(opened.length, 0, "no OAuth URL should be opened for a status read");
+    svc.dispose();
+  },
+);
 
 test("disconnect preserves the source Codex login", { skip: !codexInstalled }, async () => {
   const opened: string[] = [];
@@ -121,28 +140,58 @@ test("disconnect preserves the source Codex login", { skip: !codexInstalled }, a
   svc.dispose();
 });
 
-test("bridge stop() is non-terminal while dispose() is terminal", { skip: !codexInstalled }, async () => {
-  const bridge = new CodexAppServerBridge({ clientVersion: "0.0.0-test" });
-  await bridge.ensureStarted();
-  const firstGeneration = bridge.generation;
+test(
+  "bridge stop() is non-terminal while dispose() is terminal",
+  { skip: !codexInstalled },
+  async () => {
+    const bridge = new CodexAppServerBridge({ clientVersion: "0.0.0-test" });
+    await bridge.ensureStarted();
+    const firstGeneration = bridge.generation;
 
-  bridge.stop();
-  await bridge.ensureStarted();
-  assert.ok(bridge.generation > firstGeneration, "stop() then start must advance the generation");
+    bridge.stop();
+    await bridge.ensureStarted();
+    assert.ok(bridge.generation > firstGeneration, "stop() then start must advance the generation");
 
-  bridge.dispose();
-  await assert.rejects(() => bridge.ensureStarted(), /disposed/);
-});
+    bridge.dispose();
+    await assert.rejects(() => bridge.ensureStarted(), /disposed/);
+  },
+);
 
-test("history import works with the account bridge disconnected", { skip: !codexInstalled }, async () => {
-  const opened: string[] = [];
-  const svc = makeService(opened);
-  await svc.disconnect("codex");
-  const candidates = await scanCodexImportableSessions({ limit: 3 });
-  for (const candidate of candidates) {
-    assert.equal(candidate.provider, "codex");
-    assert.doesNotMatch(candidate.sourcePath, /auth\.json/);
+test(
+  "history import works with the account bridge disconnected",
+  { skip: !codexInstalled },
+  async () => {
+    const opened: string[] = [];
+    const svc = makeService(opened);
+    await svc.disconnect("codex");
+    assert.ok(process.env.CODEX_HOME, "Codex home fixture must be set by codexTestIsolation");
+    assert.equal(process.env.CODEX_HOME, getIsolatedCodexHome());
+    const candidates = await scanCodexImportableSessions({ limit: 3 });
+    for (const candidate of candidates) {
+      assert.equal(candidate.provider, "codex");
+      assert.doesNotMatch(candidate.sourcePath, /auth\.json/);
+    }
+    assertNoCredentialMaterial(candidates, "codex history candidates");
+    svc.dispose();
+  },
+);
+
+test("Codex history scanner rejects an unisolated or real user home before filesystem access", async () => {
+  const previousHome = process.env.CODEX_HOME;
+  delete process.env.CODEX_HOME;
+  try {
+    await assert.rejects(() => scanCodexImportableSessions(), /require an isolated CODEX_HOME/);
+    assert.throws(
+      () => resolveCodexSessionsDir(join(homedir(), ".codex")),
+      /cannot use the real Codex home directory/,
+    );
+    assert.throws(() => resolveCodexSessionsDir(), /require an isolated CODEX_HOME/);
+    assert.notEqual(
+      resolveCodexSessionsDir(getIsolatedCodexHome()),
+      join(homedir(), ".codex", "sessions"),
+    );
+  } finally {
+    if (previousHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousHome;
   }
-  assertNoCredentialMaterial(candidates, "codex history candidates");
-  svc.dispose();
 });

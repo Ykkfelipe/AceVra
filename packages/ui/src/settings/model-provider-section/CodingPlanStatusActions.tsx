@@ -74,6 +74,9 @@ export function CodingPlanUpgradeAction({
   return (
     <CodingPlanEntryButton
       bypassGate={upgradePlansVisible}
+      // 已购套餐卡：目录失败时保留“升级/续期”文案并禁用，
+      // 由状态行内的行内提示承担说明与重试，避免把正常账号渲染成错误态。
+      quietError
       type="button"
       size="lg"
       onClick={() => {

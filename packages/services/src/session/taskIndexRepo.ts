@@ -1342,10 +1342,12 @@ export class TaskIndexRepo {
           target: Object.prototype.hasOwnProperty.call(params.meta, "target")
             ? params.meta.target
             : existingMeta?.target,
-          // Claude Code 导入升级成真实 ZCode session 后，protocol snapshot
-          // 本身不知道迁移来源。同步运行态快照时保留已有 migrationSource，避免
-          // 列表过滤和后续切模型把导入任务重新当成普通 ZCode 任务。
+          // 原因：Codex 导入升级成真实 ZCode session 后，protocol snapshot 不包含原始来源
+          // session ID；若直接覆盖，任务索引会丢失重扫去重所需的 provenance。同步快照时保留
+          // 已有来源字段，依据是 task index 中的导入元数据仍是这两个字段的唯一所有者。
           migrationSource: params.meta.migrationSource ?? existingMeta?.migrationSource,
+          migrationSourceSessionId:
+            params.meta.migrationSourceSessionId ?? existingMeta?.migrationSourceSessionId,
           // 同步运行态快照时保留已有 cron automation 身份：运行态 protocol snapshot 的 meta 不带 cron 标记，
           // 不用已存值兜底会在后续 sync 时把 cron 身份冲掉，导致 icon / 分组 / 关联查询失效。
           cronAutomationId: params.meta.cronAutomationId ?? existingMeta?.cronAutomationId,

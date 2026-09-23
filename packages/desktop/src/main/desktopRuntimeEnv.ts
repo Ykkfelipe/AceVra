@@ -60,7 +60,11 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
 export const runtimeApplicationName =
   readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
-  (isLocalDevelopmentRuntime ? "ZCode Dev" : isPreviewPackagedRuntime ? "ZCode Preview" : "ZCode");
+  (isLocalDevelopmentRuntime
+    ? "AceVra Dev"
+    : isPreviewPackagedRuntime
+      ? "AceVra Preview"
+      : "AceVra");
 export const runtimeProtocolScheme =
   readRuntimeEnvOverride("ZCODE_DESKTOP_PROTOCOL_SCHEME") ?? "zcode";
 // Electron 的 app.getPath("home") 不一定跟随测试进程里的 HOME 覆盖。
@@ -572,8 +576,7 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
             : {}),
           ...(rawInheritedEnv.ZCODE_FORK_RELAY_DEVICE_TOKEN?.trim()
             ? {
-                ZCODE_FORK_RELAY_DEVICE_TOKEN:
-                  rawInheritedEnv.ZCODE_FORK_RELAY_DEVICE_TOKEN.trim(),
+                ZCODE_FORK_RELAY_DEVICE_TOKEN: rawInheritedEnv.ZCODE_FORK_RELAY_DEVICE_TOKEN.trim(),
               }
             : {}),
           ...(rawInheritedEnv.ZCODE_FORK_ALLOWED_CLERK_USER_IDS?.trim()

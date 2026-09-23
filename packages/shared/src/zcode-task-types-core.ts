@@ -58,7 +58,7 @@ export interface ZCodeGlmAgentModelStateUpdatePayload {
   };
 }
 /** 外部历史迁移来源。当前只落 Claude Code，后续其它来源继续在这里扩展。 */
-export type ZCodeTaskMigrationSource = "claudeCode";
+export type ZCodeTaskMigrationSource = "claudeCode" | "codex";
 export type ZCodeTaskGoalStatus = "active" | "paused" | "budget_limited" | "complete";
 export type ZCodeTaskTargetChangedAction =
   | "set"
@@ -310,6 +310,8 @@ export interface ZCodeTaskMeta {
   provider?: ZCodeProvider;
   /** 迁移来源；普通新建任务为空，用于识别 Claude Code 原生历史导入。 */
   migrationSource?: ZCodeTaskMigrationSource;
+  /** Codex 原生历史来源 session ID；保存在 task 元数据用于溯源与稳定去重。 */
+  migrationSourceSessionId?: string;
   /**
    * cron 身份标记：该 session 属于哪条 automation。
    *
