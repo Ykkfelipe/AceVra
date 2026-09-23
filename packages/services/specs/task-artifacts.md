@@ -31,7 +31,8 @@ host filesystem.
 integrations (host process only)            renderer (/fork · desktop)
 ─────────────────────────────               ─────────────────────────
 browser-use: interaction/browserExecute     useTaskArtifacts(taskId)
-  result.image {base64} ──┐                   │ listTaskArtifacts (channel)
+  result.image {base64?, hostPath?} ──┐        │ listTaskArtifacts (channel; refreshes
+                                      │        │ while an active task can add artifacts)
                           ▼                   │ readTaskArtifact (chunked)
         registerTaskArtifact ──────────▶ task-artifacts channel
         (verify · copy · index)         (list/read only; registration
@@ -71,6 +72,26 @@ or transmitted. `displayName` is the source basename.
 Only explicitly registered files may be retrieved. There is no path query
 parameter anywhere in the retrieval surface; artifact ids are UUIDs and the
 store layout is derived from `(taskId, artifactId)` internally.
+
+### Browser screenshot source selection and timing
+
+The Electron executor currently returns `image: {base64, mimeType:"image/png"}`.
+The host integration also accepts a future saved-file form in the same image
+object (`hostPath`, with optional `fileName`), but that path is consumed only by
+`TaskArtifactRegistry.registerTaskArtifact` and never leaves the host. If both
+forms are present, bytes win deterministically; exactly one registration is
+attempted. The registry's `(taskId, workspace key, origin, turnId, sha256)`
+idempotency key makes retry/replay return the existing descriptor.
+
+Before the result leaves the host, the hook removes `hostPath`; saved-file-only
+results instead expose only `artifactDelivery.status` (`delivered` or
+`registration_failed`). This lets the model/runtime distinguish capture from
+user delivery without a local path or an invented attachment claim.
+
+`useTaskArtifacts` refreshes the list while a task is mounted. This closes the
+live-turn timing boundary: a successful browser screenshot registered after the
+initial conversation mount becomes an inline card without a remount; a failed
+registration has no descriptor and therefore no delivery UI to misrepresent.
 
 ## Conversation integration
 

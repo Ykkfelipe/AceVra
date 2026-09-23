@@ -56,8 +56,6 @@ async function makeRegistry(): Promise<{ registry: TaskArtifactRegistry; dir: st
   return { registry, dir };
 }
 
-const png = (bytes = [1, 2, 3, 4]) => `image/png`;
-
 test("register PNG bytes → available image artifact; listing is idempotent", async () => {
   const { registry, dir } = await makeRegistry();
   try {
@@ -93,6 +91,30 @@ test("register PNG bytes → available image artifact; listing is idempotent", a
     assert.equal(list.artifacts.length, 1);
     // 描述符不含宿主绝对路径。
     assert.ok(!JSON.stringify(list).includes(dir));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("concurrent browser replay registrations share one artifact", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const registrations = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        registry.registerTaskArtifact({
+          taskId: TASK_ID,
+          scope: { workspacePath: WORKSPACE_A },
+          origin: "browser-use",
+          fileName: "nike.png",
+          mimeType: "image/png",
+          bytes: PNG_BYTES,
+          turnId: "turn-replay",
+        }),
+      ),
+    );
+    assert.equal(new Set(registrations.map(({ artifact }) => artifact.artifactId)).size, 1);
+    const list = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
+    assert.equal(list.artifacts.length, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -226,7 +248,7 @@ test("artifact from another workspace/task scope is not accessible; deleted back
 test("browser-use screenshot result is registered structurally; failures never claim delivery", async () => {
   const { registry } = await makeRegistry();
   const baseExecutor = {
-    async execute(input: { sessionId: string; turnId?: string; workspacePath: string }) {
+    async execute(_input: { sessionId: string; turnId?: string; workspacePath: string }) {
       return {
         ok: true,
         image: { base64: Buffer.from(PNG_BYTES).toString("base64"), mimeType: "image/png" },
@@ -255,8 +277,69 @@ test("browser-use screenshot result is registered structurally; failures never c
   });
   const result = await failingInstrumented.execute({ sessionId: TASK_ID, workspacePath: WORKSPACE_A } as never);
   assert.equal(result.ok, true);
+  assert.deepEqual(result.artifactDelivery, { status: "registration_failed" });
   const unchanged = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
   assert.equal(unchanged.artifacts.length, 1);
+});
+
+test("browser-use saved-path screenshot registers without leaking its host path", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const hostPath = path.join(dir, "electron-screenshot.png");
+    await writeFile(hostPath, PNG_BYTES);
+    const executor = {
+      async execute() {
+        return { ok: true, image: { hostPath, fileName: "nike.png", mimeType: "image/png" } };
+      },
+    };
+    const instrumented = instrumentBrowserExecutorForArtifacts({ executor: executor as never, registry });
+    const delivered = await instrumented.execute({
+      sessionId: TASK_ID,
+      workspacePath: WORKSPACE_A,
+    } as never);
+    assert.deepEqual(delivered.artifactDelivery, { status: "delivered" });
+    assert.equal("hostPath" in (delivered.image ?? {}), false);
+    const list = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
+    assert.equal(list.artifacts.length, 1);
+    assert.equal(list.artifacts[0]?.fileName, "nike.png");
+    assert.ok(!JSON.stringify(list).includes(hostPath));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("browser-use bytes win over saved path so both forms create one artifact", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const hostPath = path.join(dir, "different.png");
+    await writeFile(hostPath, Uint8Array.from([9, 9, 9]));
+    const executor = {
+      async execute() {
+        return {
+          ok: true,
+          image: {
+            base64: Buffer.from(PNG_BYTES).toString("base64"),
+            hostPath,
+            mimeType: "image/png",
+          },
+        };
+      },
+    };
+    const instrumented = instrumentBrowserExecutorForArtifacts({ executor: executor as never, registry });
+    const delivered = await instrumented.execute({
+      sessionId: TASK_ID,
+      turnId: "turn-both",
+      workspacePath: WORKSPACE_A,
+    } as never);
+    assert.deepEqual(delivered.artifactDelivery, { status: "delivered" });
+    assert.equal("hostPath" in (delivered.image ?? {}), false);
+    await instrumented.execute({ sessionId: TASK_ID, turnId: "turn-both", workspacePath: WORKSPACE_A } as never);
+    const list = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
+    assert.equal(list.artifacts.length, 1);
+    assert.equal(list.artifacts[0]?.byteSize, PNG_BYTES.byteLength);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("registerTaskArtifact rejects oversized and empty payloads", async () => {
@@ -389,8 +472,6 @@ test("deliverUserNamedCodexArtifacts end-to-end via notification path registers 
         issuedAt: 0,
       },
     });
-    // 直连底层：通过 codex 内部 export 驱动（等价 bridge 通知）。
-    const { routeCodexNotification } = await import("../src/codex/app/codexTaskRuntime.js");
     // 从 impl 的 onNotification 无法直接触达（fake bridge 未保存 handler），改为
     // 通过 CodexThreadProjection + 集成函数的组合验证：
     const { CodexThreadProjection } = await import("../src/codex/domain/codexProjection.js");

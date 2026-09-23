@@ -15,7 +15,11 @@ interface ExecutorLike {
     workspacePath: string;
     workspaceIdentity?: string;
     command: unknown;
-  }): Promise<{ ok: boolean; image?: { base64: string; mimeType: string }; [k: string]: unknown }>;
+  }): Promise<{
+    ok: boolean;
+    image?: { base64?: string; hostPath?: string; fileName?: string; mimeType: string };
+    [k: string]: unknown;
+  }>;
 }
 
 function safeFileName(now: number, mimeType: string): string {
@@ -34,9 +38,17 @@ export function instrumentBrowserExecutorForArtifacts<T extends ExecutorLike>(op
   const wrapped: ExecutorLike = {
     async execute(input) {
       const result = await executor.execute(input);
-      if (!result.ok || !result.image?.base64) return result;
+      if (!result.ok || !result.image || (!result.image.base64 && !result.image.hostPath)) return result;
+      const returnedImage = result.image.base64
+        ? { base64: result.image.base64, mimeType: result.image.mimeType }
+        : undefined;
       try {
-        const bytes = Uint8Array.from(Buffer.from(result.image.base64, "base64"));
+        // Electron currently returns bytes. If a future executor materializes a
+        // file too, bytes are the deterministic preferred source: never register
+        // both forms and rely on the registry for retry/replay idempotency.
+        const bytes = result.image.base64
+          ? Uint8Array.from(Buffer.from(result.image.base64, "base64"))
+          : undefined;
         await registry.registerTaskArtifact({
           taskId: input.sessionId,
           scope: {
@@ -44,15 +56,27 @@ export function instrumentBrowserExecutorForArtifacts<T extends ExecutorLike>(op
             ...(input.workspaceIdentity ? { workspaceIdentity: input.workspaceIdentity } : {}),
           },
           origin: "browser-use",
-          fileName: safeFileName(Date.now(), result.image.mimeType),
+          fileName: result.image.fileName ?? safeFileName(Date.now(), result.image.mimeType),
           mimeType: result.image.mimeType,
-          bytes,
+          ...(bytes ? { bytes } : { hostPath: result.image.hostPath! }),
           ...(input.turnId ? { turnId: input.turnId } : {}),
         });
+        // A saved-file source is host-private. Do not let it reach the agent,
+        // renderer, relay, or model; report only whether the user-deliverable
+        // artifact was actually registered.
+        return {
+          ...result,
+          ...(returnedImage ? { image: returnedImage } : { image: undefined }),
+          artifactDelivery: { status: "delivered" },
+        };
       } catch {
         // 注册失败绝不影响工具结果，也绝不宣称交付（无 artifact 生成即无卡片）。
+        return {
+          ...result,
+          ...(returnedImage ? { image: returnedImage } : { image: undefined }),
+          artifactDelivery: { status: "registration_failed" },
+        };
       }
-      return result;
     },
   };
   return wrapped as T;

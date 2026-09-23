@@ -32,24 +32,32 @@ export function useTaskArtifacts(params: {
       return;
     }
     let cancelled = false;
-    setLoading(true);
-    void service
-      .listTaskArtifacts({
+    const refresh = (initial: boolean) => {
+      if (initial) setLoading(true);
+      void service
+        .listTaskArtifacts({
         taskId: sessionId,
         workspacePath,
         ...(workspaceIdentity ? { workspaceIdentity } : {}),
-      })
-      .then((result) => {
-        if (!cancelled) setArtifacts(result.artifacts);
-      })
-      .catch(() => {
-        if (!cancelled) setArtifacts([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        })
+        .then((result) => {
+          if (!cancelled) setArtifacts(result.artifacts);
+        })
+        .catch(() => {
+          if (!cancelled && initial) setArtifacts([]);
+        })
+        .finally(() => {
+          if (!cancelled && initial) setLoading(false);
+        });
+    };
+    refresh(true);
+    // Browser/Codex integrations register artifacts asynchronously after the
+    // conversation mounted. Polling this read-only, task-scoped facade lets both
+    // desktop and replayable /fork see delivery without exposing a host path.
+    const interval = window.setInterval(() => refresh(false), 1_000);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [service, sessionId, workspacePath, workspaceIdentity]);
 

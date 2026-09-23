@@ -87,7 +87,9 @@ export async function appendBrowserTurnScreenshot(
       traceContext: state.turnTraceContext,
       signal: state.turnAbortSignal,
     });
-    let displayImage: { base64: string; mimeType: string } | undefined = captured.image;
+    let displayImage: { base64: string; mimeType: string } | undefined = captured.image?.base64
+      ? { base64: captured.image.base64, mimeType: captured.image.mimeType }
+      : undefined;
     if (
       captured.ok &&
       displayImage &&

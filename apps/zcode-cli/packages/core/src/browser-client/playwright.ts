@@ -767,7 +767,10 @@ export class PlaywrightAPI {
   }): Promise<Uint8Array> {
     validateCoordinates("playwright.elementScreenshot", options);
     const result = await runAction(this.run, { name: "elementScreenshot", ...options });
-    if (!result.image) throw new Error("Browser result missing image");
+    if (!result.image?.base64) {
+      if (result.artifactDelivery?.status === "delivered") return new Uint8Array();
+      throw new Error("Browser screenshot was captured but could not be delivered");
+    }
     return base64ToBytes(result.image.base64);
   }
 

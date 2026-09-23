@@ -185,8 +185,8 @@ function mergeBrowserResponseMeta(
   command: BrowserCommand,
   result: BrowserCommandResult,
 ): void {
-  if (result.ok && command.method === "screenshot" && result.image) {
-    session.recordBrowserScreenshot(result.image);
+  if (result.ok && command.method === "screenshot" && result.image?.base64) {
+    session.recordBrowserScreenshot({ base64: result.image.base64, mimeType: result.image.mimeType });
   }
   const meta = result.meta;
   if (!meta) return;

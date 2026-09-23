@@ -15,13 +15,18 @@ export interface CredentialCipherProvider {
 
 interface CredentialCipherProviderOptions {
   env?: NodeJS.ProcessEnv;
+  homeDir?: string;
+  username?: string;
 }
 
 function deriveCipherKey(secret: string): Buffer {
   return createHash("sha256").update(secret).digest();
 }
 
-function defaultCredentialSecret(env: NodeJS.ProcessEnv): string {
+function defaultCredentialSecret(
+  env: NodeJS.ProcessEnv,
+  options: Pick<CredentialCipherProviderOptions, "homeDir" | "username"> = {},
+): string {
   const configuredSecret = env[CREDENTIAL_SECRET_ENV_KEY];
   if (configuredSecret) {
     return configuredSecret;
@@ -29,12 +34,12 @@ function defaultCredentialSecret(env: NodeJS.ProcessEnv): string {
 
   let username = "unknown";
   try {
-    username = userInfo().username;
+    username = options.username ?? userInfo().username;
   } catch {
     // 部分运行环境可能拿不到系统用户，失败时退回默认占位值。
   }
 
-  return `zcode-credential-fallback:${platform()}:${homedir()}:${username}`;
+  return `zcode-credential-fallback:${platform()}:${options.homeDir ?? homedir()}:${username}`;
 }
 
 function base64urlToBuffer(raw: string): Buffer {
@@ -57,7 +62,7 @@ export function createCredentialCipherProvider(
   options: CredentialCipherProviderOptions = {},
 ): CredentialCipherProvider {
   const env = options.env ?? process.env;
-  const key = deriveCipherKey(defaultCredentialSecret(env));
+  const key = deriveCipherKey(defaultCredentialSecret(env, options));
 
   return {
     encrypt(value: string): string {

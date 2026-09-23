@@ -105,6 +105,8 @@ export interface TaskArtifactStoreDeps {
 export class TaskArtifactRegistry {
   readonly #rootDir: string;
   readonly #now: () => number;
+  /** One host owns a registry; serialize read→dedupe→write per task to make replay idempotent. */
+  readonly #taskWriteLocks = new Map<string, Promise<void>>();
 
   constructor(deps: TaskArtifactStoreDeps = {}) {
     this.#rootDir = deps.rootDir ?? path.join(this.#defaultRoot(), "task-artifacts");
@@ -157,7 +159,28 @@ export class TaskArtifactRegistry {
   /** 注册：校验 → 复制字节 → 建索引。失败抛 TaskArtifactRegistrationError，绝不宣称交付。
    *  幂等：同任务内 sha256+origin+turnId 完全一致的重复注册返回既有条目（agent 重试、
    *  连接重放不会产生重复 artifact）。 */
-  async registerTaskArtifact(
+  async #withTaskWriteLock<T>(taskId: string, action: () => Promise<T>): Promise<T> {
+    const previous = this.#taskWriteLocks.get(taskId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const queued = previous.then(() => current);
+    this.#taskWriteLocks.set(taskId, queued);
+    await previous;
+    try {
+      return await action();
+    } finally {
+      release();
+      if (this.#taskWriteLocks.get(taskId) === queued) this.#taskWriteLocks.delete(taskId);
+    }
+  }
+
+  async registerTaskArtifact(params: TaskArtifactRegistration): Promise<TaskArtifactRegistrationResult> {
+    return this.#withTaskWriteLock(params.taskId, () => this.#registerTaskArtifact(params));
+  }
+
+  async #registerTaskArtifact(
     params: TaskArtifactRegistration,
   ): Promise<TaskArtifactRegistrationResult> {
     const scopeKey = resolveWorkspaceKey({

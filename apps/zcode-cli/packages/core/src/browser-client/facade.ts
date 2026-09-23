@@ -487,6 +487,10 @@ export class Tab {
     const command: BrowserCommand = { method: "screenshot", ...opts };
     const result = await this.run(command);
     const image = expectPayload(command, result, result.image, "image");
+    if (!image.base64) {
+      if (result.artifactDelivery?.status === "delivered") return new Uint8Array();
+      throw new Error("Browser screenshot was captured but could not be delivered");
+    }
     return base64ToBytes(image.base64);
   }
 
