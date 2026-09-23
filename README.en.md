@@ -1,7 +1,7 @@
-# ZCode
+# AceVra
 
 <div align="center">
-  <img src="public/logo/icons/1024x1024.png" alt="ZCode" width="128" height="128" />
+  <img src="public/logo/icons/1024x1024.png" alt="AceVra" width="128" height="128" />
 </div>
 <p align="center">
   <a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=47ag983c-8fcb-4d6d-814b-5395193a712c&amp;qr_code=true">Feishu community</a> ·
@@ -11,7 +11,19 @@
   <a href="README.md">简体中文</a> | English
 </p>
 
-ZCode is an AI coding workspace with desktop, browser, and terminal interfaces. This repository contains the clients, backend services, shared UI, and Agent CLI and runtime source code.
+AceVra is a multi-provider AI agent workspace for coding and computer workflows, with desktop, browser, and terminal interfaces. This repository contains the clients, backend services, shared UI, and Agent CLI and runtime source code.
+
+## Capabilities
+
+- Multiple model providers, including Z.ai, Azure OpenAI, and Command Code.
+- Codex and Claude Code account integrations, with local history import where supported by each integration.
+- An embedded Chromium browser, task artifact delivery, and remote workspace support such as SSH and WSL.
+- MCP, plugin, and subagent extensions.
+- A native macOS Computer Use observation foundation with signed, helper-authenticated architecture. Computer Use can observe the screen; general mouse and keyboard actuation is not yet available.
+
+## Upstream and attribution
+
+AceVra is derived from [ZCode](https://github.com/zai-org/ZCode) and retains the applicable Apache 2.0 license, copyright notices, NOTICE, and third-party attributions. AceVra is maintained independently and is not produced or endorsed by Z.ai.
 
 | Interface                    | Purpose                                                                                   | Development command            |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------ |

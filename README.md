@@ -1,7 +1,7 @@
-# ZCode
+# AceVra
 
 <div align="center">
-  <img src="public/logo/icons/1024x1024.png" alt="ZCode" width="128" height="128" />
+  <img src="public/logo/icons/1024x1024.png" alt="AceVra" width="128" height="128" />
 </div>
 <p align="center">
   <a href="https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=47ag983c-8fcb-4d6d-814b-5395193a712c&amp;qr_code=true">飞书社群</a> ·
@@ -11,7 +11,19 @@
   简体中文 | <a href="README.en.md">English</a>
 </p>
 
-ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Agent。本仓库包含客户端、后端服务、共享 UI，以及 Agent CLI 与运行时源码。
+AceVra 是面向编程与计算机工作流的多 Provider AI Agent 工作台，提供桌面应用、浏览器界面和终端 Agent。本仓库包含客户端、后端服务、共享 UI，以及 Agent CLI 与运行时源码。
+
+## 能力概览
+
+- 支持多个模型 Provider，包括 Z.ai、Azure OpenAI 与 Command Code。
+- 集成 Codex 与 Claude Code 账户，并支持导入其本地历史记录（按各集成支持范围）。
+- 提供嵌入式 Chromium 浏览器、任务产物交付，以及 SSH / WSL 等远程工作区能力。
+- 支持 MCP、插件与子 Agent 扩展。
+- 提供 macOS 原生 Computer Use 观察基础及签名、Helper 鉴权架构；当前 Computer Use 可观察屏幕，尚未提供通用鼠标或键盘操作。
+
+## 上游与归属
+
+AceVra 源自 [ZCode](https://github.com/zai-org/ZCode)，并保留适用的 Apache 2.0 许可、版权声明、NOTICE 与第三方归属信息。AceVra 由独立维护者维护，不代表 Z.ai，也不表示 Z.ai 对其背书。
 
 | 入口                 | 用途                                                           | 开发命令                       |
 | -------------------- | -------------------------------------------------------------- | ------------------------------ |
