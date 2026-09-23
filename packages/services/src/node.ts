@@ -779,6 +779,23 @@ export async function runCuaScreenCaptureReadinessProbe(
 }
 
 /**
+ * 功能截图探针的状态，供 `screenCaptureProbeOk` 之外的消费方区分三种情况。
+ *
+ * 为什么需要：`screenCaptureProbeOk === false` 同时覆盖「探针跑了但没通过」和「根本没跑」
+ * （只读刷新按上游约定永不跑主动抓屏；standalone Helper 路径也没有探针）。把两者混成一个
+ * false，任何按它判断的消费方都会把已授权用户读成「屏幕录制被拒绝」——CUA-0.5 已实测
+ * `CGPreflightScreenCaptureAccess` 会被进程缓存，preflight 值可以与功能真值相反。
+ */
+export function resolveCuaScreenCaptureProbeState(
+  screenRecording: "granted" | "denied" | "unknown",
+  queryOptions: CuaPermissionStatusQueryOptions | undefined,
+  probeOk: boolean | undefined,
+): "ok" | "failed" | "not_run" {
+  if (!shouldRunCuaScreenCaptureProbe(screenRecording, queryOptions)) return "not_run";
+  return probeOk === true ? "ok" : "failed";
+}
+
+/**
  * Screen Recording 的展示态取值：优先短命 Helper 读到的 TCC 真值，拿不到才沿用常驻 Helper 的报告。
  *
  * 为什么不能直接信常驻 Helper：macOS 撤销 Screen Recording 对**已运行进程**不生效 ——
@@ -1768,41 +1785,24 @@ export function createLocalServices(options: {
   const isDefaultCuaProductHelperCurrent = (helper: DefaultCuaProductHelper): boolean =>
     defaultCuaProductHelperLifecycle.peek()?.helper === helper;
   // Helper 懒启动：宿主启动时仅探测稳定 socket 上是否有一个
-  // 自启动（SDK 首调拉起）的 Helper。只 ping，绝不拉起；300ms 预算。probe 结果仅用于
+  // 自启动（SDK 首调拉起）的 Helper。只读探测，绝不拉起；~400ms 预算。probe 结果仅用于
   // 状态展示 / PiP 凭据发现；权限详情与 onboarding 仍走显式 host 流。
   const probeStableCuaHelperSocket = async (): Promise<string | null> => {
     const socketPath = resolveBrokerSocketPath();
     try {
-      const { createConnection } = await import("node:net");
-      return await new Promise<string | null>((resolve) => {
-        const socket = createConnection(socketPath);
-        const finish = (value: string | null): void => {
-          socket.destroy();
-          resolve(value);
-        };
-        const timer = setTimeout(() => finish(null), 300);
-        socket.on("connect", () => {
-          clearTimeout(timer);
-          socket.write(`{"id":0,"method":"ping","params":{}}\n`);
-          let buffer = "";
-          socket.on("data", (chunk: Buffer) => {
-            buffer += chunk.toString("utf8");
-            if (buffer.includes("\n")) {
-              try {
-                const nl = buffer.indexOf("\n");
-                const reply = JSON.parse(buffer.slice(0, nl)) as { ok?: boolean };
-                finish(reply.ok === true ? socketPath : null);
-              } catch {
-                finish(null);
-              }
-            }
-          });
-        });
-        socket.on("error", () => {
-          clearTimeout(timer);
-          finish(null);
-        });
+      // 用契约里真正存在的只读方法探活（health 就定义在 permission_status 上），而不是自造的
+      // `ping`：CUA-1 的 Helper 只服务 permission_status/list_apps/list_windows/observe 四个
+      // 方法，任何其它名字一律 not_authorized（这是 fail-closed 白名单，不是遗漏）。旧实现发
+      // `ping`，于是稳定 socket 上明明有 Helper 在服务，这里也永远探不到，设置页会一直显示
+      // 「未运行/正在启动」。同一次往返还带上签名身份校验（probeHelperHealth 内部走
+      // callBrokerMethod，身份不匹配的响应会抛错 → 这里 fail-closed 返回 null）。
+      const { probeHelperHealth } = await import("@zcode/zcode-cua/broker/helperHealth");
+      await probeHelperHealth(socketPath, {
+        timeoutMs: 400,
+        perTryTimeoutMs: 300,
+        pollIntervalMs: 100,
       });
+      return socketPath;
     } catch {
       return null;
     }
@@ -1811,7 +1811,7 @@ export function createLocalServices(options: {
   // 按需启动：拉起 standalone Helper（稳定 socket）。dev 场景（本 Helper 构建内嵌 dev
   // policy）成对带 unsigned-launcher/external-escape argv，让 ad-hoc 签名的本进程也能过
   // 签名门查询；产品 Helper 不嵌 dev policy，这对 argv 无效（产品签名天然过 Team 门）。
-  // 拉起后轮询 ping（5s/100ms），就绪返回 socket 路径，否则 null。
+  // 拉起后轮询 permission_status 探活（5s/100ms），就绪返回 socket 路径，否则 null。
   //
   // dev 判定直接用上游的 isCuaLocalDevelopmentRuntime（@zcode/zcode-cua/broker/server，
   // 即本文件已经用来 import buildHelperOpenArgs 的那个 subpath，可正常导入）。
@@ -1959,6 +1959,12 @@ export function createLocalServices(options: {
             accessibility: CuaPermissionState;
             accessibility_probe_ok?: boolean;
             screen_recording: CuaPermissionState;
+            screen_recording_readout?: {
+              preflight: boolean | null;
+              source: string;
+              cached?: boolean;
+              note?: string;
+            };
           }>({
             socketPath: stable,
             method: "permission_status",
@@ -1970,7 +1976,15 @@ export function createLocalServices(options: {
             accessibility: report.accessibility,
             accessibilityProbeOk: report.accessibility_probe_ok === true,
             screenRecording: report.screen_recording,
+            ...(report.screen_recording_readout
+              ? { screenRecordingReadout: report.screen_recording_readout }
+              : {}),
+            // 这条路径没有跑功能探针，所以 false 只表示「未测量」，不表示屏幕录制被拒绝；state
+            // 让消费方不必猜这个 false 的含义。注意 screenRecording（TCC 记录态）本身也可能陈旧：
+            // 常驻 Helper 的 CGPreflight 是进程缓存的，撤销授权后它会继续报 granted 直到重启
+            // （CUA-0.5 实测）。真正可用与否只有实际抓屏能回答，即 observe 的 effect。
             screenCaptureProbeOk: false,
+            screenCaptureProbeState: "not_run",
           };
         } catch {
           return {
@@ -2022,7 +2036,17 @@ export function createLocalServices(options: {
             report.accessibility_probe?.ok === true &&
             report.accessibility_probe?.classification === "functional",
           screenRecording,
+          ...(report.screen_recording_readout
+            ? { screenRecordingReadout: report.screen_recording_readout }
+            : {}),
           screenCaptureProbeOk,
+          // 显式区分「探针跑了没通过」与「按约定没跑」。二者都是 false，
+          // 只有 state 说得清，消费方不得据 screenCaptureProbeOk 单独判「被拒绝」。
+          screenCaptureProbeState: resolveCuaScreenCaptureProbeState(
+            screenRecording,
+            queryOptions,
+            screenCaptureProbeOk,
+          ),
         };
       } catch (error) {
         return {

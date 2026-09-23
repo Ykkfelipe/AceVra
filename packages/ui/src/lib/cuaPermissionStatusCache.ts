@@ -43,6 +43,12 @@ const CUA_PERMISSION_STATUS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PERMISSION_STATES: readonly CuaPermissionState[] = ["granted", "stale", "denied", "unknown"];
 
+const PROBE_STATES = ["ok", "failed", "not_run"] as const;
+
+function isProbeState(value: unknown): value is (typeof PROBE_STATES)[number] {
+  return PROBE_STATES.includes(value as (typeof PROBE_STATES)[number]);
+}
+
 interface CachedEnvelope {
   savedAt: number;
   status: CuaPermissionStatus;
@@ -93,6 +99,11 @@ function parseCachedStatus(value: unknown): CuaPermissionStatus | null {
   };
   if (typeof candidate.grantOwnerDisplayName === "string") {
     parsed.grantOwnerDisplayName = candidate.grantOwnerDisplayName;
+  }
+  // 探针状态与探针结果必须一起存活：只留布尔值会让缓存回填后重新变成「false 但不知是没跑还是
+  // 没通过」的旧歧义，而这个字段存在的唯一目的就是消除它。
+  if (isProbeState(candidate.screenCaptureProbeState)) {
+    parsed.screenCaptureProbeState = candidate.screenCaptureProbeState;
   }
   return parsed;
 }

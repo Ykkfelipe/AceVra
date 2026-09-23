@@ -22,7 +22,7 @@
 //        [--version X.Y.Z] [--build N] [--out DIR]
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,24 +119,51 @@ mkdirSync(macosDir, { recursive: true });
 const arm64 = join(outDir, `${EXECUTABLE_NAME}-arm64`);
 const x86 = join(outDir, `${EXECUTABLE_NAME}-x86_64`);
 mkdirSync(outDir, { recursive: true });
+// Every .swift file in the directory is compiled together: CUA-1 split the helper into
+// focused files (broker server, observation methods) rather than growing one 400+ line main.
+const swiftSources = readdirSync(here)
+  .filter((name) => name.endsWith(".swift"))
+  .sort()
+  .map((name) => join(here, name));
+if (swiftSources.length === 0) {
+  console.error("[cua-helper] no swift sources found");
+  process.exit(1);
+}
 for (const [target, out] of [
   [MINIMUM_MACOS_TARGET, arm64],
   [X86_TARGET, x86],
 ]) {
   execFileSync(
     "xcrun",
-    ["swiftc", "-O", "-swift-version", "5", "-target", target,
-     "-framework", "AppKit", "-framework", "ApplicationServices",
-     "-framework", "CoreGraphics", "-framework", "ScreenCaptureKit",
-     "-o", out, join(here, "main.swift")],
+    [
+      "swiftc",
+      "-O",
+      "-swift-version",
+      "5",
+      "-target",
+      target,
+      "-framework",
+      "AppKit",
+      "-framework",
+      "ApplicationServices",
+      "-framework",
+      "CoreGraphics",
+      "-framework",
+      "ScreenCaptureKit",
+      "-framework",
+      "ImageIO",
+      "-framework",
+      "UniformTypeIdentifiers",
+      "-o",
+      out,
+      ...swiftSources,
+    ],
     { stdio: "inherit" },
   );
 }
-execFileSync(
-  "lipo",
-  ["-create", arm64, x86, "-output", join(macosDir, EXECUTABLE_NAME)],
-  { stdio: "inherit" },
-);
+execFileSync("lipo", ["-create", arm64, x86, "-output", join(macosDir, EXECUTABLE_NAME)], {
+  stdio: "inherit",
+});
 rmSync(arm64, { force: true });
 rmSync(x86, { force: true });
 
@@ -163,8 +190,17 @@ if (ALLOW_UNSIGNED) {
   }
   execFileSync(
     "codesign",
-    ["--force", "--timestamp=none", "--options", "runtime",
-     "--sign", IDENTITY, "--keychain", KEYCHAIN, appDir],
+    [
+      "--force",
+      "--timestamp=none",
+      "--options",
+      "runtime",
+      "--sign",
+      IDENTITY,
+      "--keychain",
+      KEYCHAIN,
+      appDir,
+    ],
     { stdio: "inherit" },
   );
   signature = IDENTITY;

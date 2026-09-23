@@ -242,8 +242,13 @@ stale conditions) are identity-agnostic and carry over unchanged.
   checking it against the expected requirement; a pid alone is trivially spoofable.
 * **Broker channel authentication is inherited, not built here.** The contract already
   carries a token/`pluginAuthority` transport for the broker; this foundation only proves the
-  identity the channel can be bound to. CUA-1 must keep verifying the peer's signature
-  before honouring broker requests, and must not rely on the TCC grant as a stand-in.
+  identity the channel can be bound to. CUA-1 must keep verifying the peer's signature before
+  honouring broker requests, and must not rely on the TCC grant as a stand-in. **Superseded in
+  part by CUA-1** (see "Helper identity verification" below): the peer *is* resolved to a code
+  signature and validated on every connection, and a launcher-configured expectation is enforced,
+  but CUA-1 configures no expectation because the launcher that would supply one is still a stub —
+  so today the caller identity is verified evidence rather than a gate. That gap is named there
+  rather than left as an unsatisfied "must".
 * Not measured here (and therefore still assumptions): broker token enforcement, the
   `same_pid_keyboard_ambiguity`-style route guards, and anything requiring a Developer ID.
 
@@ -316,3 +321,422 @@ CUA-1 may assume exactly this and nothing more:
 * Accessibility is read via the Helper's own AX authorization; `AXIsProcessTrusted()` is the
   authority, and the granted/denied/stale verdict is computed by the permission owner.
 * Pointer input remains `REQUIRES_FOREGROUND` and is not covered by this foundation.
+
+---
+
+# CUA-1 — observe-only helper behind the broker contract
+
+This section is the implementation authority for CUA-1. It extends the permission/identity
+foundation above; the capability decisions (pointer input is `REQUIRES_FOREGROUND`, background
+AX/keyboard/screenshot are the measured background-safe rungs) come from the archived spike at
+tag `acevra-cua-foundation-v1` and are not re-opened here.
+
+CUA-1 delivers **observation only**. It implements `permissions`, `list_apps`, `list_windows`
+and `observe`, replaces the fail-closed stub with a real `createComputerUseRuntime` **for
+observe-only tools only**, and degrades gracefully when a grant is missing. No input synthesis
+of any kind is added: no AX actions, no keystrokes, no pointer events. Every mutating tool name
+stays fail-closed, unchanged.
+
+## Broker wire format
+
+The contract in `packages/zcode-cua/broker.d.ts` declares the shape but ships as a fail-closed
+placeholder; CUA-1 fills the stubs rather than adding a second package, so the format has to be
+written down once. It is deliberately minimal and boring to reconcile at integration:
+
+* Transport: a Unix domain socket, one JSON object per line, UTF-8, `\n`-terminated.
+* Request: `{ "id"?: string | null, "method": string, "params"?: object }`.
+* Success response: `{ "ok": true, "result": <object> }`.
+* Failure response: `{ "ok": false, "error": { "message": string, "code": string } }`. The nested
+  shape is what `errorResponse` in `packages/zcode-cua/broker.js` already returned before CUA-1,
+  so the helper matches the existing choice instead of rewriting it.
+* The response echoes `id` when the request carried one, so a client can correlate.
+* An unparseable line yields a `bad_request` failure response and the connection stays usable;
+  a line that is not valid UTF-8 JSON is not allowed to kill the server.
+* Response size is capped by the client (`32 MiB` in the node_repl bridge); the helper never
+  emits an unbounded payload — screenshots are referenced, not inlined (see below).
+
+Method classification lives in one place (`isBrokerMethod` / `isReadOnlyBrokerMethod`) because
+it is the gate that decides what the runtime is allowed to expose. CUA-1 registers exactly:
+
+| Method | Kind | Notes |
+|---|---|---|
+| `permission_status` | read-only | the shape `services/node.ts` already consumes: `grant_owner`, `owner.display_name`, `accessibility`, `accessibility_probe_ok`, `screen_recording`, plus the readout/probe split and the identity blocks below |
+| `list_apps` | read-only | running applications, regular activation policy only |
+| `list_windows` | read-only | layer-0 windows with owner pid, bounds, z-order and an `on_screen` flag |
+| `observe` | read-only | one window: ScreenCaptureKit capture plus the AX tree |
+
+Anything else is `not_authorized`. The read-only set is exactly the set the runtime may expose
+while every mutating tool remains fail-closed.
+
+Every result also carries `helper_identity`, the identity the Helper verified for itself (below),
+so the identity is attached to the answer a caller actually uses rather than to a separate
+handshake.
+
+## Helper identity verification (added by CUA-1, measured)
+
+A socket path is not an identity: anything that can write into the runtime data root can bind
+`helper.sock` and answer. The grant is not one either — CUA-0.5 measured that a TCC grant survives
+edits to the signed image. CUA-1 therefore verifies code signatures explicitly, in both directions
+of the hop, and refuses rather than guesses.
+
+**The Helper verifies itself** (`native/cua-helper/CodeIdentity.swift`). Three checks run before a
+report is trusting:
+
+1. `SecCodeCheckValidity` on the running code object — the process satisfies its requirement;
+2. `SecStaticCodeCheckValidity` on a **freshly opened on-disk image** with
+   `kSecCSStrictValidate | kSecCSCheckAllArchitectures`;
+3. `SecCodeCopySigningInformation` on that validated image, so `grant_owner` is the signed
+   identifier rather than `Bundle.main.bundleIdentifier` (a claim the process makes about itself).
+
+Step 2 is not decoration, and the measurement is why: validating the static code *derived from the
+running process* (`SecCodeCopyStaticCode`) **passed** on a binary whose `__text` had been edited,
+because that process was validated when it was executed. Re-opening the image from its own path
+re-hashes every slice and caught the same edit (`errSecCSSignatureFailed`, -67061). A Helper whose
+self-check fails refuses every request with `helper_identity_unverified`; it still binds the socket
+and answers, so the failure is diagnosable rather than a silent hang.
+
+**The client verifies the Helper** (`packages/zcode-cua/broker.js`). `callBrokerMethod` — the one
+function `createComputerUseRuntime.execute` uses — runs `assertHelperIdentity` on every response on
+macOS (the check is a macOS code-signature check; the scoping is explained below):
+
+* `helper_identity.verified` must be `true`, the identifier must be non-empty, and `ad_hoc` must be
+  `false` (an ad-hoc grant dies on the next rebuild, so it is a misconfiguration in a path that
+  expects a stable identity);
+* the identifier must be in `DEFAULT_EXPECTED_HELPER_IDENTIFIERS` (the ids this repository builds,
+  overridable through `ZCODE_CUA_EXPECTED_HELPER_IDS`; an override that names nothing falls back to
+  the default, and an empty expectation list is refused rather than treated as "any identity");
+* if the same response reports `grant_owner`, it must equal the verified identifier. A response
+  whose claim disagrees with its signature is refused, which is what makes every downstream reader
+  of `grant_owner` — including `services/node.ts`, which never looks at the identity block — read a
+  verified value.
+
+**What the identifier list is and is not.** It is a *collision filter*: a signing identifier is
+chosen by whoever signs the binary (`codesign -i …`), so a determined attacker running as the same
+user can mint a self-signed binary carrying `dev.zcode.cua-helper.dev` and pass this check honestly.
+What the list buys is that the product Helper and the dev Helper cannot be silently swapped, that an
+unrelated binary answering on our socket is refused, and that a Helper whose own seal is broken never
+reaches it. The checks that carry real weight are the Helper's own signature validation above and
+the `grant_owner` cross-check. Anchoring the identifier further — a pinned certificate root or team
+identifier — is *possible* with the fields the Helper already reports, but only against a
+launcher-supplied expectation, because a value the Helper reports about itself is not an anchor; that
+belongs with the launcher (below).
+
+The check is macOS-scoped: it is a code-signature check, and the Windows development host
+(`windowsCuaHelperHostSupport.ts`) is a forked Node entry with a per-launch pipe and token transport
+and no signature to verify, so requiring the block there would break its health probe for no gain.
+
+Failures are `helper_identity_missing` / `helper_identity_unverified` / `helper_identity_adhoc` /
+`helper_identity_mismatch` / `helper_identity_policy_missing`. `probeHelperHealth` returns the
+verified identifier as `bundleId`; the previous implementation echoed whatever string the Helper
+typed into its own report.
+
+**The Helper also resolves its caller.** The peer pid comes from `LOCAL_PEERPID` (kernel-supplied
+for a connected socket, not a value the caller can choose), is resolved to a `SecCode`, and is
+validated by the same path as above. `permission_status` reports it as `caller_identity` with
+`caller_required`. Enforcement exists (`--require-peer-identifier` / `ZCODE_CUA_REQUIRED_PEER_ID`,
+`--require-signed-peer`) but is **not configured in CUA-1**, for a measured reason: the caller in
+this fork is a Node process, and its identity is an ad-hoc cdhash that changes with every Node
+build —
+
+```
+caller_identity: identifier "node-55554944106c22c028653b9bbc6a6220adea3466", ad_hoc true,
+                 requirement cdhash H"dad49c1f00e437873726e0e01462cc86c745b4fa"
+```
+
+Naming that as the expected caller would break on the next Node upgrade, and the only component
+that can supply a stable one — the desktop host's `buildHelperOpenArgs`, still a fail-closed stub
+in this fork — does not exist here. So the verification is implemented and reported, and the
+expectation is deferred with the launcher.
+
+Measured verdicts (`run-identity-probe.sh`):
+
+| Case | Result |
+|---|---|
+| control, untouched signed bundle | `verified=true`, identifier `dev.zcode.cua-helper.dev`, accepted by the client |
+| a different expected identifier | refused, `-67050`, names the mismatch |
+| one byte changed in `__text` | refused, `-67061`; `codesign --verify` also fails |
+| bytes appended past the signed limit | refused, `-67010` |
+| the tampered bundle still serving on the socket | client refuses every request: `helper_identity_unverified` |
+| a configured caller identity the caller does not satisfy | client refuses: `peer_not_authorized` |
+| rebuilt from source | accepted again |
+
+Remaining gaps, named rather than implied:
+
+* **Same-uid socket substitution is not excluded.** The check above is the client asking the thing
+  on the other end who it is, and the thing on the other end is the one answering. A local process
+  running as the same user can bind the socket path first, present a self-signed binary carrying an
+  expected identifier, answer `verified: true` and a consistent `grant_owner`, and be used — the
+  client cannot tell it from the real Helper, because the credential that would settle it (the
+  peer's process identity) is not readable from Node (`LOCAL_PEERPID` has no Node binding). What
+  narrows this today: the runtime data root is the user's own, the launcher opens the bundle at the
+  install path rather than an arbitrary binary, the helper unlinks the socket before binding so only
+  one of the two can be listening, and the helper re-modes its observation directory and frames to
+  `0700`/`0600` on every write. Closing it
+  properly needs peer credentials on the client side — a native binding, or a Helper that connects
+  out to a socket the host owns — and is *not* in CUA-1.
+* The `grant_owner` cross-check is an internal-consistency rule, not authenticity: it stops a
+  response whose claim contradicts its own signature, which is what makes the field safe to read
+  downstream, but it cannot make the responder trustworthy by itself.
+* The Helper validates its **executable** image, not the whole bundle's sealed resources. An added
+  file inside the `.app` is not detected. The measured tamper cases above (code edit, append) are.
+* Peer enforcement is off by default (see above), so today the caller identity is evidence, not a
+  gate.
+* The identity check happens once per Helper process. The running image cannot change, so this is
+  correct for the process; it is why the on-disk check in step 2 exists, since the *file* can.
+
+## Result envelope (the contract rule)
+
+Every observe-only result carries the fields the spike's §7 made mandatory, and a call that
+reached an actuator without a trusted readback is `unverifiable`, never `confirmed`:
+
+* `route`: which mechanism produced the observation, from the vocabulary `"workspace"` (app
+  enumeration), `"windowserver"` (window enumeration), `"ax"`, `"screencapturekit"`, `"none"`. When
+  more than one rung contributed, the names are joined with `+` — `observe` with both rungs
+  succeeds as `"screencapturekit+ax"` — so the value is a set, not a single token. The two
+  enumerations do not go through Accessibility, so calling them `"ax"` would overstate what was
+  exercised. Also: the helper emits raw AX `role` strings and the TypeScript side owns the
+  `ROLE_TO_KIND` mapping, so the vocabulary lives in exactly one place and cannot drift.
+* `delivery.mode`: `"background"` for everything CUA-1 does — observation never fronts a window.
+* `effect`: `"confirmed" | "partial" | "unverifiable" | "refused"`.
+* `evidence[]`: what was actually read back (`value_readback`, `window_change`, `pixel_stats`).
+
+For observation the honest mapping is narrow and must not be inflated:
+
+* every rung the caller asked for succeeded — a capture that returned a non-blank frame, and/or an
+  AX walk the AX server served → `confirmed`, with `evidence[]` naming the readback;
+* one of the two requested rungs succeeded and the other did not (for example AX granted but Screen
+  Recording missing, so `observe` returns the tree without pixels) → `partial`;
+* no requested rung succeeded → `refused`, with each missing rung named in `error`.
+
+A **blank capture counts as a failed rung, not as a frame**: CUA-0.5 measured that a missing Screen
+Recording grant yields a uniform frame rather than an error, so a single distinct colour is the
+signature of an ineffective capture. The frame is still returned with its statistics — a window can
+legitimately be uniform — but the effect is `partial` or `refused` and `error` says why.
+
+Because observation has no actuator, `unverifiable` should not appear in CUA-1; it exists in the
+enum for the input rungs CUA-2/3 will add. If it ever appears, that is a bug in the mapping.
+
+## Graceful degradation when a grant is missing
+
+The Helper is the TCC owner and may legitimately run with neither grant (the identity foundation
+proves a LaunchServices-launched Helper holds no grant until authorized). Degradation is per
+rung, never fatal, and always explicit:
+
+| Missing grant | `permission_status` | `list_apps` / `list_windows` | `observe` |
+|---|---|---|---|
+| neither | reports `denied` for both | works (no TCC needed) | `refused`, `error` names both rungs |
+| Accessibility only | `accessibility: denied`, SR as granted | works | `partial`: capture yes, `tree: null` with a reason |
+| Screen Recording only | SR `denied` | works | `partial`: AX tree yes, plus the blank frame with its statistics (not `null`) and a reason; a blank frame no longer counts as a succeeded rung |
+| both | both `granted` | works | `confirmed` |
+
+`list_windows` is deliberately **not** filtered to on-screen windows. Measured on macOS 27,
+`kCGWindowIsOnscreen` is `false` for almost every application window (136 of 137 on this machine,
+including plainly visible ones), so an `optionOnScreenOnly` list returned **1** usable window
+where the user actually had 7. The flag is reported per window and the list is sorted on-screen
+first instead; degenerate entries (under 40 points in either dimension, which is the window
+server's own bookkeeping and 64x64 service stubs) are dropped. Known remaining noise: system
+services such as `CursorUIViewService` publish small titled-or-untitled stubs that pass that
+minimum; `titled_count` is reported so a caller can prefer titled windows, and any stronger
+filter should be added with evidence rather than by blocking a service by name.
+
+Rules that make this trustworthy:
+
+* `list_apps`/`list_windows` never require a grant and must never be gated on one.
+* `observe` returns whatever rung succeeded, and names every rung that did not. It does not
+  throw for a missing permission and does not return `confirmed` for a partial result.
+* `permission_status` is the only method allowed to describe grants, and it reports the Helper's
+  own identity — never the caller's and never inferred from System Settings appearance.
+* Screen Recording is judged by a real capture attempt, not by `CGPreflightScreenCaptureAccess`,
+  because that preflight is process-cached (measured; see restart requirements above).
+
+## Screenshots cross the socket as references, not base64
+
+`observe` does not inline image bytes. It writes the PNG into the helper's own runtime directory
+and returns a path plus pixel statistics (`width`, `height`, `scale`, `distinctSampledColors`,
+`blank`). Three reasons, all from measured behaviour: the node_repl bridge caps responses at
+32 MiB; a blank frame is indistinguishable from a missing grant without pixel statistics; and
+`packages/zcode-cua/frame-contract.*` already treats image content as a distinct, protected kind
+that must be carried deliberately rather than smuggled inside a JSON field.
+
+The result also carries `observation_id` (a UUID the Helper mints, not derived from the path). That
+id is what survives the model-facing boundary below, so the frame stays addressable without either
+side handing a model a filesystem path.
+
+### Where the frame is written, and why it is a flag
+
+`--observation-dir` sets the store; `ZCODE_CUA_OBSERVATION_DIR` and `ZCODE_HOME` remain fallbacks.
+The flag exists because the environment does not cross LaunchServices: a measured `--serve` Helper
+started with `/usr/bin/open` did **not** receive the launcher's `ZCODE_HOME`, fell back to
+`~/.zcode`, and wrote a frame into the product's namespace. A flag travels with the launch. The same
+reasoning applies to `--socket`, which is why the contract passes it explicitly rather than relying
+on the two sides resolving the same default.
+
+## Observation invariants (measured)
+
+Observation must never front, raise, focus or move anything, and "delivery: background" is a claim
+that has to be measured rather than asserted. `run-observe-invariants.mjs` drives the production
+client (`callBrokerMethod`, the same call `createComputerUseRuntime.execute` makes) against a
+Helper launched through LaunchServices, captures one genuine **non-frontmost** window, and records
+before/after with an instrument that needs no TCC permission
+(`native/cua-helper/evidence/InvariantProbe.swift`: frontmost application, `CGEvent` cursor
+position, the full layer-0 window list, and — derived from it — the frontmost application's front
+window, the target window's rank inside its own application, and whether the target is still behind
+the front window). The *global* enumeration index is recorded but not asserted: it also counts every
+other window on the desktop, so it moves by one whenever an unrelated window appears, which is what
+the first archived run showed (both the front window and the target shifted by exactly one).
+
+Latest archived run — `/Users/felipemore/.zcode-fork-cua-home/evidence/observe-invariants-2026-09-23T13-58-44-009Z`,
+`run.log` plus `observation.json` and `report.json`:
+
+| Recorded | Before | After |
+|---|---|---|
+| frontmost application | `com.acevra.desktop.development` (pid 25430) | unchanged |
+| hardware cursor | `508.27, 177.62` | unchanged |
+| front window of the frontmost app | window 5903 | window 5903 |
+| target window (`AceVra Dev`, pid 76803, window 5887) | present, rank 4 in its app, behind the front window | unchanged |
+
+The capture itself: `effect: "confirmed"`, `route: "screencapturekit+ax"`, 2400×1600,
+`distinct_sampled_colors: 65`, `blank: false`, and the AX tree served (8 elements). The frame landed
+in the fork's data root, and a check asserts the product's `~/.zcode/computer-use/observations` did
+not grow. The same run re-proves the observe-only boundary on the live socket (below).
+
+## Bounds on what a model receives
+
+Two independent boundaries, because the helper's socket is host-internal and the model is not.
+
+**In the Helper** (`ObservationLimits`, `Observe.swift`): caller-supplied `max_elements` /
+`max_depth` are *clamped down* to hard ceilings (2000 / 40) rather than taken at face value, so a
+hostile or malformed parameter cannot ask for an unbounded walk; per-string AX text is capped at 512
+characters (a text field's value can be a document); action lists are capped at 32; `list_windows`
+at 500. Every AX string is read through `axBoundedString`, and truncation is counted in
+`strings_truncated` rather than hidden. The attributes the walk may read are an explicit closed list
+(`axReadableAttributes`): role, title, description, value, identifier, enabled, position, size,
+children, windows. `AXDocument`, `AXFilename` and `AXURL` are deliberately **not** read — they are
+how arbitrary host filesystem paths would enter an observation. `axAttribute` refuses any name
+outside that list, so every *string-valued* read is guarded; the two structural reads that need a
+`CFArray` (`kAXWindowsAttribute`, `kAXChildrenAttribute`) call `AXUIElementCopyAttributeValue`
+directly with allowlisted constants, since the generic reader cannot return an element array.
+
+**On the way out** (`packages/zcode-cua/observe-result.js`, applied by
+`createComputerUseRuntime.execute`): the same ceilings are re-applied, plus a 512 KiB total
+serialized budget, because the Helper is not the only thing that can put bytes in front of a model.
+It also removes host paths structurally:
+
+* keys holding a location (`path`, `hostPath`, `absolutePath`, `filePath`, `directory`, …) are
+  dropped, and the frame becomes `image.reference = "helper-observation:<id>"`;
+* absolute paths matching the runtime's own roots or the conventional user/system roots are replaced
+  with `<redacted-host-path>` even inside free text (an error message is the likeliest leak);
+* the byte budget is a ladder, not a tree special case: `windows`, `apps` and `evidence` are halved
+  first, then the tree's elements (keeping the head, which describes the window's chrome and its
+  frontmost controls), and if the payload is still over budget — because the size is in a shape with
+  no array to trim — only the envelope, the pixel facts and the frame reference are kept, with
+  `truncated_for_size` and a named `error`. Halving is what makes it terminate: each pass strictly
+  reduces how many entries are kept, so it reaches zero for any payload.
+
+Facts are preserved: dimensions, pixel statistics, `blank`, `route`, `effect`, `evidence` and every
+AX field a caller reasons about survive intact. Focused tests live in
+`packages/zcode-cua/test/observe-result.test.mjs`.
+
+## Artifact boundary
+
+**Present contract (CUA-1): internal observation screenshots are not artifacts, and cannot become
+one.** The shared system registers what a producer hands it — `bytes` or `hostPath` plus an
+`origin` — and CUA-1 hands it nothing:
+
+* the runtime returns `content: [{ type: "text", text: <sanitized JSON> }]` and no image block, no
+  `artifactDelivery`, and no base64 (`observe-result.test.mjs` asserts this shape, and
+  `hasDeliverablePayload` exists so a future bridge has to argue with a test before registering);
+* `packages/zcode-cua` imports nothing from `task-artifacts`; the only two producers in the tree are
+  `browserUseArtifactHook.ts` (origin `browser-use`) and `codexDeliveryIntegration.ts` (origin
+  `codex`), neither of which is reachable from a CUA call;
+* the observation store (`<ZCODE_HOME>/computer-use/observations`) is a different directory from the
+  artifact store (`<appConfigDir>/task-artifacts`), so nothing can pick a frame up incidentally;
+* host paths are stripped before the result leaves the runtime, so no CUA result presented to a
+  model or client contains one. `run-observe-invariants.mjs` asserts this against live data, and the
+  client-side sanitizer is the only code that touches the payload.
+
+**Deferred, and to whom.** *Explicit user-requested* screenshots becoming normal task artifacts
+(reusing `TaskArtifactRegistry` with a `cua` origin — never a second CUA file store) is deliberately
+**not** implemented here: it crosses into the artifact module's ownership, needs a
+`captureIntent`-equivalent signal that only the protocol layer can place out of a model's reach
+(the browser path's `captureIntent: "observation"` lives in protocol params for exactly that
+reason), and needs a task/session scope the node_repl CUA bridge has but the observe-only runtime
+does not yet consume. The invariant that matters today holds without it: an internal observation has
+no registration path at all, so it cannot accidentally deliver. The integration contract is the one
+just above — the frame is addressable by `observation_id`, and `sanitizeObservationResult` is the
+single place a future bridge would hook.
+
+## Permission semantics: readout versus functional truth
+
+The identity foundation measured that `CGPreflightScreenCaptureAccess()` is process-cached: it stays
+`false` in a process that asked before the grant *while a capture already works*, and stays `true` in
+one that asked before a revocation. A single boolean therefore cannot express Screen Recording, and
+CUA-1 stops pretending it can:
+
+| Field | Meaning |
+|---|---|
+| `screen_recording` | TCC's recorded state, derived from the preflight readout |
+| `screen_recording_readout` | `{ preflight, source, cached: true, note }` — the raw cached value, named as a readout. `cached` is always `true`; nothing else may be inferred from the field |
+| `screen_capture_probe_ok` | the **functional** capture probe: `true`/`false` when one ran, `null` when it did not |
+| `screen_capture_probe_state` | `"ok" \| "failed" \| "not_run"` — the discriminator the boolean cannot carry |
+
+`permission_status` never runs a capture, so it reports `null` / `"not_run"` rather than a `false`
+that reads as a denial. On the TypeScript side, `resolveCuaScreenCaptureProbeState`
+(`services/node.ts`) reports `"not_run"` for the standalone-Helper path and for any read-only
+refresh, and `"failed"` only when a probe actually ran and did not succeed. The settings view keeps
+using the TCC pair (`accessibility` + `screenRecording`) as its readiness criterion and never
+`screenCaptureProbeOk` alone; that split and its reasoning are already recorded in
+`packages/ui/src/lib/cuaPermissionStatusStore.ts`. CUA-1 changes no UI file.
+
+## Lifetime, and what CUA-1 explicitly does not do
+
+* The helper serves one socket until told to stop; `--idle-ms` bounds an unattended run. A
+  permission change is observed by the running process (measured), so no restart is required to
+  serve a newly granted permission.
+* Captured frames do not accumulate: `ObservationStore.retainedFrames` (64) newest PNGs are kept and
+  older ones are pruned on write, so a long observation session cannot grow the data root without
+  bound. Frames are written `0600` inside a `0700` directory.
+* The request line is capped at 1 MiB. A client that never sends a newline is answered with
+  `bad_request` and dropped rather than being allowed to grow the helper's buffer.
+* No input of any kind: no `click`, `type`, `key`, `hotkey`, `scroll`, `drag`, `perform_action`,
+  `set_value`, `launch_app`, `activate_window`, `clipboard_*`, `kill_app`. `createComputerUseRuntime`
+  keeps returning the unavailable error for every one of those names, and the runtime exposes no
+  route that could reach them.
+* No window mutation, no menu invocation, no process termination.
+* No new protocol surface in `packages/shared/src/zcode-protocol-v4/`: the model-facing tool
+  names already exist and are unchanged.
+
+## Acceptance for CUA-1
+
+1. `permission_status`, `list_apps`, `list_windows` and `observe` answer over the broker socket
+   through `callBrokerMethod`, with the request/response shape above.
+2. `isReadOnlyBrokerMethod` is true for exactly those four and `isBrokerMethod` is false for a
+   mutating name, so a mutating call is refused with `not_authorized`.
+3. `observe` on a granted Helper returns `effect: "confirmed"` with a non-blank capture and an
+   AX tree, and frontmost/cursor are untouched (observation never fronts anything).
+4. With Screen Recording absent it returns `effect: "partial"` carrying the AX tree and a blank
+   frame with its statistics (a uniform frame is what a refused capture looks like, so it does not
+   count as a succeeded rung); with Accessibility absent it returns `partial` carrying the image and
+   `tree: null`; with neither it returns `refused`. None of these throw and none report `confirmed`.
+5. `createComputerUseRuntime.execute` dispatches observe-only tool names to the broker and every
+   other tool name still returns the unavailable error.
+6. The helper implements no input synthesis — verifiable by inspection of the sources.
+7. On macOS every result carries a verified `helper_identity`; the client refuses a missing, unverified,
+   ad-hoc, or unexpected identifier, and refuses a `grant_owner` that disagrees with it.
+   `grant_owner`, and `probeHelperHealth().bundleId`, are the verified signing identifier.
+8. A tampered Helper (edited `__text`, appended bytes) fails its own check and is refused
+   end-to-end, even though the tampered bundle still binds the socket and still holds its TCC
+   grants. Measured by `native/cua-helper/run-identity-probe.sh`.
+9. One real non-frontmost window capture leaves the desktop unchanged: the frontmost application is
+   still the same, it is still showing the same front window, the hardware cursor has not moved, and
+   the target window is still present, still ranked the same inside its own application, and still
+   behind the frontmost application's front window. Measured by
+   `native/cua-helper/run-observe-invariants.mjs`, evidence archived under
+   `<ZCODE_CUA_HOME>/evidence/`.
+10. A CUA observation result presented to a model contains no host filesystem path, and carries no
+    deliverable payload (no image content block, no base64, no `artifactDelivery`).
+11. Mutating methods stay refused on direct socket writes, malformed lines produce `bad_request`
+    without killing the connection, and the runtime refuses every unregistered tool name without
+    touching the socket.
+12. AX reads are bounded in the Helper (clamped ceilings, 512-character strings, closed attribute
+    list without `AXDocument`/`AXFilename`/`AXURL`) and bounded again on the way out (512 KiB).

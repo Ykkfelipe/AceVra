@@ -29,6 +29,11 @@ export interface ComputerUseRuntimeOptions {
   refreshMarkerPath?: string;
   ensureBrokerAvailable?: () => Promise<void>;
   env?: Record<string, string | undefined>;
+  /**
+   * Helper signing identifiers this runtime will accept. Defaults to the ids this repository
+   * builds (see `broker.js`); an unknown identity is refused rather than trusted.
+   */
+  expectedHelperIdentifiers?: readonly string[];
 }
 
 export declare function createComputerUseRuntime(

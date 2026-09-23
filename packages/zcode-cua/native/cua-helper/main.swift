@@ -42,6 +42,19 @@ struct Args {
 
 let args = Args(raw: Array(CommandLine.arguments.dropFirst()))
 
+// Resolve the identity policy before anything can serve a request: `helperSelfIdentity` reads it
+// on first use, and a serving process must have decided which helper identity it accepts and
+// which caller identities it will honour.
+cuaIdentityPolicy = resolveHelperIdentityPolicy(args: args)
+
+// The observation store is set from a flag rather than from the environment because the contract
+// launches the Helper through LaunchServices, which does not forward the launcher's environment
+// (measured: a `--serve` helper started with `/usr/bin/open` saw no `ZCODE_HOME` and fell back to
+// `~/.zcode`). A flag is part of the launch; an environment variable is not.
+if let observationDir = args.string("observation-dir"), !observationDir.isEmpty {
+    ObservationStore.override = observationDir
+}
+
 // MARK: - Output
 
 var reportPath: String? = args.string("report")
@@ -332,6 +345,13 @@ func watchPermissionState(
 
 // MARK: - Report
 
+// Serve mode short-circuits the probe: the launcher starts the helper with `--serve`, and the
+// probe path (a single report, then exit) is the permission-proof entry point.
+if args.has("serve") {
+    let socketPath = args.string("socket") ?? defaultBrokerSocketPath()
+    runBrokerSocketServer(socketPath: socketPath, idleMs: args.int("idle-ms") ?? 0)
+}
+
 // JSONSerialization rejects a nil value, so optional entries are added rather than
 // written as nil into the literal.
 var permissionReport: [String: Any] = [
@@ -351,6 +371,12 @@ var report: [String: Any] = [
     "schemaVersion": 1,
     "probe": "cua-helper-dev",
     "identity": codeIdentity(),
+    // The identity the helper resolved for itself through the code-signature API, as opposed to
+    // the strings above that it prints about itself. `verified` is the result of
+    // SecCodeCheckValidity; `identifier`/`cd_hash` come from SecCodeCopySigningInformation. When
+    // `--expected-identifier` is passed, the check is made against that requirement instead of
+    // merely against the image's own seal.
+    "verifiedIdentity": helperSelfIdentity.json,
     "launch": [
         "argv": Array(CommandLine.arguments),
         // The value ZCode publishes as ZCODE_CUA_LAUNCHER_PID and passes through
@@ -388,4 +414,21 @@ emit(report)
 // the real helper's "launched, then consulted" lifecycle.
 if let idleMs = args.int("idle-ms"), idleMs > 0 {
     Thread.sleep(forTimeInterval: Double(idleMs) / 1000.0)
+}
+
+
+/// Default socket location when the launcher does not pass `--socket`.
+///
+/// Mirrors the contract's `resolveBrokerSocketPath` default: the runtime's own data root, so a
+/// fork runtime and the product never contend for one socket.
+func defaultBrokerSocketPath() -> String {
+    if let explicit = ProcessInfo.processInfo.environment["ZCODE_CUA_PERMISSION_BROKER_SOCKET"],
+        !explicit.trimmingCharacters(in: .whitespaces).isEmpty
+    {
+        return explicit.trimmingCharacters(in: .whitespaces)
+    }
+    let home = ProcessInfo.processInfo.environment["ZCODE_HOME"]?.trimmingCharacters(
+        in: .whitespaces)
+    let base = (home?.isEmpty == false ? home! : NSHomeDirectory() + "/.zcode")
+    return (base as NSString).appendingPathComponent("computer-use/helper.sock")
 }
