@@ -72,3 +72,6 @@ packages/desktop/.e2e-network-capture/
 
 # CUA helper build output (dev bundles are signed build artifacts, never source)
 packages/zcode-cua/native/cua-helper/*.app/
+
+# CUA-1.75 peer-identity probe build output (signed binaries are build artifacts, never source)
+packages/zcode-cua/native/peer-identity/build/

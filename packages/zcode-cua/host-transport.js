@@ -1,19 +1,23 @@
-// CUA-1.5 host-owned transport: the trusted host creates the endpoint, the Helper connects out.
+// CUA-1.75 host-owned transport: the trusted host creates the endpoint, the Helper connects
+// out, and the admitted connection is bound to the peer's native identity.
 //
-// Authority for every rule below: packages/zcode-cua/specs/computer-use.md, section
-// "CUA-1.5 — trusted helper transport and peer identity hardening". In one paragraph: a bound
-// socket authenticates nobody, and the broker's clients are Node processes that cannot read
-// kernel peer credentials, so under CUA-1 (Helper binds, clients connect) whoever won the bind
-// race owned every client's identity decision. This module flips the direction — the host owns
+// Authority for every rule below: packages/zcode-cua/specs/computer-use.md, sections
+// "CUA-1.5 — trusted helper transport and peer identity hardening" (the direction flip) and
+// "CUA-1.75 — binding the admitted Helper connection to the native peer identity" (the
+// admission chain). In one paragraph: a bound socket authenticates nobody, so the host owns
 // the only listening socket (fresh 0700 session directory, 0600 socket, per-launch capability
 // token) and the Swift Helper connects out and verifies the LISTENER's code signature against a
-// launcher-pinned designated requirement before serving anything. A same-uid impostor that
-// steals the path therefore receives a connection it cannot get served on: substitution
-// destroys the capability instead of redirecting it.
+// launcher-pinned designated requirement before serving anything; and since a token plus a
+// self-reported pid still cannot prove who is on the connection, the host now binds the
+// accepted socket to the peer's kernel identity (audit token via the native probe), verifies
+// that exact process instance's code signature against the pinned Helper requirement, and
+// requires the peer's exec args to equal the launch contract this host minted. A same-uid
+// claimant without the token, with the wrong code, quoting a borrowed pid, or carrying a
+// different launch contract is refused at admission.
 //
 // This file is the relay runtime (session lifecycle, connection roles, request multiplexing).
 // The admission policy and requirement discovery live in host-transport-policy.js so they stay
-// pure and testable without sockets.
+// pure and testable without sockets; the native probe spawn lives in host-transport-peer.js.
 //
 // Ownership map (one owner each, no second write path):
 //   * this module owns the session (directory, socket, token, helper connection, relay queue);
@@ -22,7 +26,8 @@
 //
 // Failure posture: fail closed. A hello that fails any check is answered with a stable code and
 // disconnected; client requests without the launch token are refused; nothing here ever falls
-// back to a weaker mode on its own (callers decide fallback, per the spec).
+// back to a weaker mode on its own (callers decide fallback, per the spec) — including when
+// the native probe is missing or unverified: no probe, no binding, no admission.
 
 import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
@@ -30,13 +35,13 @@ import { join } from "node:path";
 
 import { isBrokerMethod } from "./broker.js";
 import {
-  collectValidatedHelperPids,
   evaluateHelperHello,
   HELLO_TYPE,
-  isPidAlive,
+  hostConnectHelperArgv,
   preflightHello,
   tokensMatch,
 } from "./host-transport-policy.js";
+import { createPeerIdentityBinder } from "./host-transport-peer.js";
 import { startSessionServer, stopSessionServer } from "./host-transport-session.js";
 
 /** Agent-facing env keys. The socket path existed in CUA-1; the token is CUA-1.5. Re-exported
@@ -47,11 +52,14 @@ export { BROKER_TOKEN_ENV } from "./broker.js";
  * single import surface for the whole transport contract. */
 export {
   buildHostConnectOpenArgs,
-  collectValidatedHelperPids,
   evaluateHelperHello,
   HELLO_TYPE,
+  helperArgvMatches,
+  hostConnectHelperArgv,
+  PEER_PROBE_IDENTIFIER,
   readDesignatedRequirement,
   tokensMatch,
+  verifyPeerProbe,
 } from "./host-transport-policy.js";
 
 /** Client request lines share the Helper's 1 MiB line cap so the two ends agree. */
@@ -87,6 +95,17 @@ export function createCuaBrokerHost(options = {}) {
   const sessionsRoot = join(dataRoot, "computer-use", "sessions");
   const launchToken = randomBytes(32).toString("hex");
   const expectedHelperIdentifiers = options.expectedHelperIdentifiers ?? [];
+  const launchContract = options.launchContract ?? {};
+
+  // The default native binding: spawn the peer-identity probe with the accepted socket fd.
+  // Tests and diagnostics replace the whole binder through `bindPeerIdentity`; either way
+  // admission only ever sees a complete kernel binding report or nothing (fail closed).
+  const defaultBinder = createPeerIdentityBinder({
+    probePath: options.peerProbePath,
+    requirement: launchContract.helperRequirement ?? "",
+    gateRequirement: options.peerProbeRequirement,
+  });
+  const bindPeerIdentity = options.bindPeerIdentity ?? defaultBinder.bind;
 
   let sessionDir = null;
   let socketPath = null;
@@ -247,26 +266,17 @@ export function createCuaBrokerHost(options = {}) {
       }
     });
     socket.on("error", () => socket.destroy());
-    let buffer = remainder;
     const onLine = (line) => dispatchRequestLine(line, context);
     if (firstLine !== null) onLine(firstLine);
-    socket.on("data", (chunk) => {
-      buffer += chunk;
-      for (;;) {
-        const newline = buffer.indexOf("\n");
-        if (newline < 0) {
-          if (Buffer.byteLength(buffer) > MAX_REQUEST_LINE_BYTES) socket.destroy();
-          return;
-        }
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        if (Buffer.byteLength(line) > MAX_REQUEST_LINE_BYTES) {
-          socket.destroy();
-          return;
-        }
-        onLine(line);
-      }
-    });
+    attachLineFraming(socket, remainder, MAX_REQUEST_LINE_BYTES, onLine);
+  }
+
+  /** One stable, path-free hello refusal (spec: no host paths, no token data in errors). */
+  function refuseHello(socket, code, message) {
+    if (socket.writable) {
+      socket.write(`${JSON.stringify({ ok: false, error: { message, code } })}\n`);
+    }
+    socket.destroy();
   }
 
   /** Helper-role admission, then response demultiplexing on the same connection. */
@@ -283,85 +293,78 @@ export function createCuaBrokerHost(options = {}) {
       socket.destroy();
       return;
     }
-    // Shape + token BEFORE the expensive host-derived scan: an unauthenticated peer must not be
-    // able to buy subprocess work with a hello-shaped line. Pre-filter only — the full
-    // evaluation still runs on the scanned facts.
+    // Shape + token BEFORE the native binding: an unauthenticated peer must not be able to buy
+    // subprocess work with a hello-shaped line. Pre-filter only — the full evaluation still
+    // runs on the bound facts.
     if (!preflightHello(parsed, launchToken)) {
-      socket.write(
-        `${JSON.stringify({
-          ok: false,
-          error: {
-            message: "the helper did not present this session's launch token",
-            code: "wrong_helper_token",
-          },
-        })}\n`,
+      refuseHello(
+        socket,
+        "wrong_helper_token",
+        "the helper did not present this session's launch token",
       );
-      socket.destroy();
       return;
     }
-    const validatedPids = options.collectValidatedPids
-      ? await options.collectValidatedPids()
-      : await collectValidatedHelperPidsForExec();
-    const verdict = evaluateHelperHello(parsed, {
-      launchToken,
-      expectedHelperIdentifiers,
-      validatedPids,
-    });
+    // The native binding (spec "Admission event order", step 4): this accepted socket's peer,
+    // as the kernel names it (audit token), code-verified as the exact admitted Helper and
+    // carrying this launch's contract. `null` (no binding, dead peer, unverified probe) is a
+    // refusal below — never a weaker path.
+    const peerBinding = await bindPeerIdentity(socket);
+    let expectedHelperArgv = null;
+    try {
+      expectedHelperArgv = hostConnectHelperArgv({
+        socketPath,
+        launchToken,
+        ...launchContract,
+      });
+    } catch {
+      expectedHelperArgv = null; // an unpinned launch contract admits nothing (fail closed)
+    }
+    const verdict = evaluateHelperHello(
+      parsed,
+      {
+        launchToken,
+        expectedHelperIdentifiers,
+        expectedHelperArgv,
+      },
+      peerBinding,
+    );
     if (!verdict.admitted || stopped || state.helperConnected) {
-      if (!verdict.admitted && socket.writable) {
-        // Refuse with the stable code and its reason only — no host paths, no token data.
-        socket.write(
-          `${JSON.stringify({ ok: false, error: { message: verdict.reason, code: verdict.code } })}\n`,
-        );
-      }
-      socket.destroy();
-      return;
-    }
-    // Liveness recheck at admission time (spec): the scan's pid evidence must still be a live
-    // process. This narrows the scan-to-admission TOCTOU; it does NOT bind the connection to
-    // that pid — Node has no peer-credential binding, so a same-uid claimant that knows the
-    // token and quotes a validated pid can still be admitted (spec, "Remaining limitations").
-    if (!isPidAlive(verdict.pid)) {
-      socket.write(
-        `${JSON.stringify({
-          ok: false,
-          error: { message: verdict.reason, code: "helper_process_unverified" },
-        })}\n`,
-      );
-      socket.destroy();
+      if (!verdict.admitted) refuseHello(socket, verdict.code, verdict.reason);
+      else socket.destroy();
       return;
     }
     state.admitted = { pid: verdict.pid, identifier: verdict.identifier };
-    let buffer = remainder;
     helperSocket = socket;
     state.helperConnected = true;
-    socket.on("data", (chunk) => {
-      buffer += chunk;
-      for (;;) {
-        const newline = buffer.indexOf("\n");
-        if (newline < 0) {
-          if (Buffer.byteLength(buffer) > MAX_RESPONSE_LINE_BYTES) dropHelper();
-          return;
-        }
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        handleHelperLine(line);
-      }
-    });
+    attachLineFraming(socket, remainder, MAX_RESPONSE_LINE_BYTES, handleHelperLine);
     socket.on("error", () => dropHelper());
     socket.on("close", () => {
       if (helperSocket === socket) dropHelper();
     });
   }
 
-  /** The default host-derived scan: ps + codesign via lazily imported execFile. */
-  async function collectValidatedHelperPidsForExec() {
-    const { execFile } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    return collectValidatedHelperPids({
-      installRoots: options.installRoots ?? [],
-      requirement: options.helperRequirement ?? "",
-      runTool: promisify(execFile),
+  /**
+   * Newline framing shared by the client and helper roles: complete lines only, oversized
+   * lines destroy the socket. `initial` carries bytes already received with the first line.
+   */
+  function attachLineFraming(socket, initial, maxBytes, onLine) {
+    let buffer = initial;
+    socket.on("data", (chunk) => {
+      buffer += chunk;
+      for (;;) {
+        const newline = buffer.indexOf("\n");
+        if (newline < 0) {
+          if (Buffer.byteLength(buffer) > maxBytes) socket.destroy();
+          return;
+        }
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        if (Buffer.byteLength(line) > maxBytes) {
+          socket.destroy();
+          return;
+        }
+        onLine(line);
+      }
     });
   }
 

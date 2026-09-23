@@ -84,6 +84,24 @@ export function resolveHelperAppCandidate(env: NodeJS.ProcessEnv = process.env):
 }
 
 /**
+ * The native peer-identity probe (CUA-1.75): built and signed by
+ * `packages/zcode-cua/native/peer-identity/build-peer-identity-probe.mjs` into the same dev
+ * install root as the Helper. Environment override first, then the install candidates. A
+ * session without the probe refuses helper admission (no fallback), so it is resolved before
+ * the endpoint is created.
+ */
+export function resolvePeerIdentityProbe(env: NodeJS.ProcessEnv = process.env): string | null {
+  const { baseRoot } = dataRootOf(env);
+  const explicit = env?.ZCODE_CUA_PEER_IDENTITY_PROBE?.trim();
+  const candidates = [
+    ...(explicit ? [explicit] : []),
+    join(baseRoot, "dev", "peer-identity-probe"),
+    join(baseRoot, "peer-identity-probe"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+/**
  * Start a hardened session: host endpoint → pinned requirements → Helper launch → admission.
  * Darwain-only; on any other platform this reports a stable failure so callers fall back.
  */
@@ -94,6 +112,10 @@ export async function startHardenedCuaHelperSession(
   const env = options.env ?? process.env;
   const appPath = resolveHelperAppCandidate(env);
   if (!appPath) return { ok: false, reason: "helper_app_missing" };
+  // No probe, no binding, no admission (spec "CUA-1.75"): refuse before the endpoint exists so
+  // the caller falls back to the CUA-1 standalone flow instead of waiting out a timeout.
+  const peerProbePath = resolvePeerIdentityProbe(env);
+  if (!peerProbePath) return { ok: false, reason: "peer_probe_missing" };
 
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
@@ -108,17 +130,29 @@ export async function startHardenedCuaHelperSession(
   // host cannot make that promise and the hardened transport refuses to start (fail closed).
   const hostRequirement = await readDesignatedRequirement(process.execPath, runTool);
   if (!hostRequirement) return { ok: false, reason: "host_identity_unavailable" };
+  // The probe binary's own requirement is pinned HERE, at session start (CUA-1.75): the binder
+  // re-verifies the probe against this string before every spawn, so a probe swapped after
+  // this read fails the gate. Unsigned probe → fail closed.
+  const peerProbeRequirement = await readDesignatedRequirement(peerProbePath, runTool);
+  if (!peerProbeRequirement) return { ok: false, reason: "peer_probe_requirement_unavailable" };
 
   const host = createCuaBrokerHost({
     env,
-    installRoots: [computerUseRoot],
-    helperRequirement,
-    // 与客户端同一份期望身份列表（碰撞过滤器）；真正承载信任的是 admission 的
-    // host-derived codesign 校验，列表只是第一道 refuses-unrelated-binary 的门。
+    // 与客户端同一份期望身份列表（碰撞过滤器）；真正承载信任的是 CUA-1.75 的 native peer
+    // binding（audit token → 该进程实例的 codesign 校验）加 launch-contract 等值检查，
+    // 列表只是第一道 refuses-unrelated-binary 的门。
     expectedHelperIdentifiers: resolveExpectedHelperIdentifiers({ env }),
+    launchContract: {
+      hostRequirement,
+      helperRequirement,
+      observationDir: join(computerUseRoot, "observations"),
+      idleMs: 15_000,
+    },
+    peerProbePath,
+    peerProbeRequirement,
   });
   await host.start();
-  const observationDir = join(computerUseRoot, "observations");
+  // 与 admission 侧同源：launch args 由同一个 builder 生成，contract 等值检查才能成立。
   const launchArgs = () =>
     buildHostConnectOpenArgs({
       appPath,
@@ -126,7 +160,7 @@ export async function startHardenedCuaHelperSession(
       launchToken: host.token,
       hostRequirement,
       helperRequirement,
-      observationDir,
+      observationDir: join(computerUseRoot, "observations"),
       idleMs: 15_000,
     });
   const launchAndAwaitAdmission = async (): Promise<boolean> => {

@@ -987,6 +987,9 @@ nested-code checking, and reports `bundle_validated` in the identity envelope.
 
 ## Remaining limitations (named, not implied)
 
+Items 3 and 4 are closed (and item 1's helper-impersonation half bounded) by CUA-1.75 below;
+that section carries its own measured facts and its own named residual.
+
 1. **Client→listener authentication from Node is still impossible.** A same-uid attacker who
    wins the bind race on the client-facing session socket _and_ knows the launch token (readable
    via `ps` from the Helper's launch arguments) can answer clients with fabricated responses. It
@@ -1040,3 +1043,264 @@ nested-code checking, and reports `bundle_validated` in the identity envelope.
    enforcement, single-session, re-admission after restart, malformed-message fail-closed
    behaviour, and socket-permission assertions; the live verification script drives the four
    methods through the final transport with observation invariants intact.
+
+# CUA-1.75 — binding the admitted Helper connection to the native peer identity
+
+This section is the implementation authority for CUA-1.75. It changes **admission identity
+only**: no method is added, no input synthesis appears, the wire format is untouched, the
+Helper binary is not modified, and the CUA-1 observe-only behaviour is preserved end to end
+(see "What CUA-1.75 preserves"). Its single job is to eliminate the ambiguity CUA-1.5 named as
+its admission limit: Node could verify that _a_ helper-looking process existed and that the
+connection carried the launch token, but could not prove that **the connected Unix-socket peer
+was that exact process** — and could not tell a genuine Helper the _host_ launched from the
+same binary an _attacker_ launched with arguments of their choosing.
+
+CUA-1.75 closes CUA-1.5 "Remaining limitations" items 3 (both halves) and 4, and bounds item
+1's helper-impersonation half. The required property, end to end:
+
+```
+connected socket → kernel-derived peer identity → native code-signing verification
+                 → exact admitted Helper identity
+```
+
+## Admission event order (owners and sequence)
+
+```
+ trusted host (Node, packages/zcode-cua host-transport)        native sidecar (Swift)
+ ┌──────────────────────────────────────────────────────────────────────────────────┐
+ │ 1. accept() on the host-owned session socket (0600 in 0700 dir)                  │
+ │ 2. first line: `hello`-shaped → Helper role (anything else: token-gated client)  │
+ │ 3. preflight: hello shape + launch token (constant-time) — BEFORE any spawn,     │
+ │    so an unauthenticated peer cannot buy native work                              │
+ │ 4. spawn peer-identity probe; the ACCEPTED SOCKET FD is inherited as fd 3        │
+ │    (public child_process stdio passthrough; no SCM_RIGHTS needed)                │
+ │                                    │  a. getsockopt(LOCAL_PEERTOKEN) — audit     │
+ │                                    │     token of the connected peer (kernel)    │
+ │                                    │  b. LOCAL_PEERPID/LOCAL_PEERCRED cross-check│
+ │                                    │  c. SecCodeCopyGuestWithAttributes          │
+ │                                    │     (kSecGuestAttributeAudit) — the exact   │
+ │                                    │     process INSTANCE (pid + pidversion)     │
+ │                                    │  d. describeCode (shared source with the    │
+ │                                    │     Helper's CodeIdentity.swift): dynamic   │
+ │                                    │     validity + fresh on-disk strict/all-arch│
+ │                                    │     + bundle nested-code + signing info,    │
+ │                                    │     against the launcher-pinned requirement │
+ │                                    │  e. KERN_PROCARGS2 of the bound pid — the   │
+ │                                    │     peer's exec argv                        │
+ │ 5. policy (pure JS): token ✓ + identity rules + hello-pid consistency +          │
+ │    launch-contract equality → admit ONE helper connection                        │
+ │ 6. relay token-gated client requests onto it (unchanged); drop → re-admit on a   │
+ │    fresh hello (restart/reconnect, unchanged)                                    │
+ └──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+One owner each, unchanged from CUA-1.5: the host module owns the session and the admission
+decision; the probe owns only kernel/Security queries and answers one JSON report; services
+owns launch and requirement discovery. Nothing in the chain ever falls back to a weaker mode:
+a session without the probe (or without a kernel binding) refuses helper admission and the
+caller falls back to the CUA-1 standalone flow, exactly as CUA-1.5's failures do.
+
+## Measured platform facts (macOS 27.0, 2026-09-23 — this fork's verification host)
+
+Every mechanism below is measured on this macOS version, not assumed from headers:
+
+| Fact                                                                                    | Result                                                                                                                                      |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getsockopt(SOL_LOCAL, LOCAL_PEERTOKEN)` on an accepted AF_UNIX stream socket           | works; 32-byte `audit_token_t`, word order `[auid, euid, egid, ruid, rgid, pid, asid, pidversion]`                                          |
+| `LOCAL_PEERPID` / `LOCAL_PEERCRED` cross-checks                                         | agree with the token's `pid` / `euid` (so the token layout reading is self-verifying)                                                       |
+| `SecCodeCopyGuestWithAttributes(kSecGuestAttributeAudit)`                               | resolves the live peer; validity + signing information obtained                                                                             |
+| same call with the token's **pidversion** bumped                                        | fails `-67065` — resolution is bound to the process **instance**, so a reused pid number cannot resolve                                     |
+| same calls after the peer **exits** (socket half-closed)                                | `LOCAL_PEERTOKEN`/`LOCAL_PEERPID` return **ENOTCONN** — a dead peer cannot be bound or authorized                                           |
+| `sysctl(KERN_PROCARGS2)` of the bound pid                                               | returns the peer's exec argv **with argument boundaries intact** (spaced values survive)                                                    |
+| same read after the owner rewrites its argv memory (`process.title`)                    | the **rewritten** view is returned — argv is NOT an immutable kernel record (see the binding's limits)                                      |
+| Node `child_process` stdio fd passthrough of the accepted socket fd into a spawned tool | works; the tool queries the socket at its stdio slot (fd 3)                                                                                 |
+| `sendmsg(SCM_CREDS)` / spontaneous per-message credentials, STREAM and DGRAM            | `EINVAL`, no cmsg delivered, `struct cmsgcred` absent from this SDK — **no per-writer identity exists** on this platform's Unix sockets     |
+| LaunchServices `/usr/bin/open -a <app> --args …`                                        | the Helper's `argv[1..]` is exactly the `--args` tail — verbatim, boundaries preserved (also true for direct exec of the bundle executable) |
+| the dev Helper's signing options (`build-dev-helper.mjs`)                               | `--options runtime` — hardened runtime, so dyld injection and `task_for_pid` into the Helper are platform-blocked                           |
+
+## Why a small Swift sidecar, and not a native Node addon
+
+Both were evaluated; the sidecar integrates more cleanly with this host, for measured reasons:
+
+- The peer query must run **in a process holding the accepted fd**. That rules out any
+  out-of-process design that would have to move the fd (no SCM_RIGHTS API exists in Node —
+  moving it would itself need native code), and it rules in either an in-process addon or a
+  child that inherits the fd. `child_process` stdio passthrough delivers the fd with **public
+  API**; a Node addon would need a build toolchain (node-gyp/clang + headers) and an
+  Electron-ABI story for the desktop host, none of which this repository otherwise carries.
+- The code-signing verification must not drift from the Helper's own. The sidecar compiles the
+  **same `CodeIdentity.swift` source** (its `describeCode` — dynamic + on-disk + bundle +
+  signing-info) into the probe target, so the two verifications cannot disagree; a C port in an
+  addon would be a second implementation to keep in lockstep.
+- Cost is one spawn per helper admission (not per request), bounded by a hard timeout, and the
+  failure posture is fail-closed: no probe binary, no binding, no admission.
+
+## The native probe (`peer-identity`)
+
+Input: fd **3** is the accepted socket (inherited); `--requirement <DR>` is the
+launcher-pinned Helper designated requirement (the same string the Helper's self-check is
+anchored to). Output: one JSON line on stdout, exit 0 only with a complete report:
+
+- `binding` — the audit token fields (pid, pidversion, euid, …) plus the cross-check results;
+- `identity` — the `describeCode` report (`verified`, `identifier`, `team_id`, `cd_hash`,
+  `requirement`, `ad_hoc`, `bundle_validated`, `reason`, …) for the peer resolved **from the
+  audit token**, checked against `--requirement`;
+- `peer_args` — the bound pid's exec argv from `KERN_PROCARGS2`.
+
+Any failure (no token, unresolved instance, failed validation, unreadable args, or the
+probe's own kernel cross-checks disagreeing — both `LOCAL_PEERPID` and `LOCAL_PEERCRED` must
+agree with the audit token, and the binder requires those agreements in the report) is
+reported with `verified: false` or an error code and **never** produces a partial pass.
+
+**The probe binary is itself gated before any of its verdicts are trusted.** The probe is
+trusted code in the admission chain, and it lives in a same-uid-writable install root, so the
+binder gate requires ALL of: the probe's on-disk designated requirement **equals** the
+requirement pinned at session start (launcher-read — the same anchoring shape as the Helper's
+`helperRequirement`, so a binary swapped after that read fails the equality); the requirement
+carries the probe identifier (collision filter, same weight as the helper identifier list);
+the signature is **not ad-hoc** (`Signature=adhoc` refused, exactly as the helper admission
+refuses ad-hoc helpers); and the seal validates strictly, all-architectures, against the
+pinned requirement. This gate re-runs **before every spawn** — a one-time, session-cached
+check would leave the whole session open to a swap between admissions (adversarial-review
+findings 1 and 2, both addressed).
+
+## Admission rules (the policy half, pure and total)
+
+`evaluateHelperHello` keeps its shape and its check order; the host-derived facts it consumes
+change from "a validated-pid set" to "the peer binding report". Checks, in order:
+
+1. hello shape (`helper_hello`) — `bad_hello`;
+2. `launch_token` equal to the session token (constant-time) — `wrong_helper_token`
+   (this stays the pre-spawn preflight as in CUA-1.5);
+3. peer binding present and kernel-consistent (probe report exists, token was available,
+   `LOCAL_PEERPID` agreed with the token pid) — `peer_identity_unavailable`;
+4. identity rules against the **host-derived** report — `verified: true`, non-empty
+   identifier, not ad-hoc, identifier in the expected list — codes `helper_identity_*`
+   unchanged. The hello's `helper_identity` envelope is no longer a source of trust; if
+   present it must merely agree with the host-derived report (a claim that contradicts the
+   peer's own signature is refused exactly as CUA-1 refused self-contradiction);
+5. **hello-pid consistency**: the hello's `pid` (still self-reported; the Helper binary is
+   unchanged) must equal the audit-token pid. The kernel value is authoritative — a quoted
+   pid is never consulted for authorization, so a stale, recycled or borrowed pid cannot
+   authorize anything — `helper_process_unverified`;
+6. **launch-contract equality**: the peer's exec argv flag-set must equal, name for name and
+   value for value, the host-connect args the host minted (`buildHostConnectOpenArgs`'s
+   `--args` tail: `--connect`, `--launch-token`, `--require-host-requirement`,
+   `--expected-requirement`, `--observation-dir`, `--idle-ms`) — `helper_launch_contract_mismatch`;
+7. one helper connection per session; re-admission only after close (unchanged).
+
+Stable refusal codes (superset of CUA-1.5's): `bad_hello`, `wrong_helper_token`,
+`peer_identity_unavailable`, `helper_identity_policy_missing`, `helper_identity_missing`,
+`helper_identity_unverified`, `helper_identity_adhoc`, `helper_identity_mismatch`,
+`helper_process_unverified`, `helper_launch_contract_mismatch`.
+
+Check 6 is what rejects a **genuine Helper that an attacker launched** with arguments of
+their choosing: the audit token and the code signature cannot distinguish it from the
+host-launched one (same binary, same instance quality), but its `--require-host-requirement`
+— or any other contract field — differs from the pinned contract the host minted for this
+launch. This holds even when the attacker's requirement is one the host would also satisfy
+(e.g. a weakened or parenthesized variant of the real DR): textual equality with the pinned
+contract is required, not "would match".
+
+## What the launch-contract check is, and is not
+
+The argv is read from the peer pid via `KERN_PROCARGS2`, which is **not** an immutable kernel
+record (measured: a process that rewrites its argv memory changes what outsiders read). Its
+weight rests on two measured/structural facts, named so the trust is explicit:
+
+- the decision only ever applies to a peer already bound by audit token **and** verified as
+  running the approved Helper image (`describeCode`, requirement-anchored); the approved
+  Helper code reads its arguments once at startup and never rewrites argv memory, so for any
+  process that passes checks 3–4 the read argv is the argv that process consumed;
+- rewriting the running Helper's memory needs a debugger or dyld injection, which the Helper's
+  hardened runtime blocks (measured in the build flags); forging argv at exec time forges it
+  _consistently_ (what the kernel read and what the Helper consumed are the same bytes at
+  exec) and is then caught by check 6 as a contract mismatch.
+
+Under the model — no debugger control of the verified process — check 6 makes the admitted
+connection indistinguishable from the one the host itself launched, which is the "exact
+admitted Helper identity" of the required property.
+
+## What CUA-1.75 preserves
+
+- The four methods, the wire format, the result envelope, the observation limits, the
+  sanitizer and the artifact boundary are byte-for-byte unchanged; all CUA-1 observe
+  behaviour and its invariants still pass through the final transport.
+- Every mutating tool name stays unreachable; the actuator boundary is untouched.
+- The Helper binary is unchanged (still LOCAL_PEERPID-verifies the listener against
+  `--require-host-requirement` before serving; still hard-fails closed on a listener that
+  does not match) — the helper→host direction keeps exactly its CUA-1.5 strength.
+- Host-owned socket, fresh 0700 session directory, 0600 socket, random per-launch capability
+  token, token stripping before forwarding, constant-time compares: all unchanged.
+- `--serve` bind mode and token-less `callBrokerMethod` for standalone/diagnostic use:
+  unchanged. The CUA-1 standalone flow remains the caller-decided fallback when the hardened
+  session cannot start (now including "probe binary missing").
+- The product-host stubs in `broker-server.js` stay fail-closed.
+
+## Remaining limitations (named, not implied)
+
+1. **Per-writer identity does not exist on this platform's Unix sockets** (measured:
+   `SCM_CREDS` is unimplemented). The audit token identifies the process that _connected_;
+   any process the verified Helper handed the connected fd to could write on the connection
+   under that identity. This is bounded, not closed: the verified Helper code never forks or
+   exports the connection, its hardened runtime blocks injection and `task_for_pid`, and an
+   unverified process that merely _creates_ the connection binds as itself and fails checks
+   3–4 (an "exec-wrapper" that connects before exec is likewise caught — the bound instance
+   must pass `describeCode` _and_ the launch contract of the image it ends up running).
+   Closing this completely needs per-message credentials (not available here) or a Mach/XPC
+   transport whose messages carry per-message audit tokens — a different transport, out of
+   CUA-1.75 scope.
+2. **The launch token remains `ps`-visible** in launch arguments (unchanged from CUA-1.5) —
+   discovery-resistance, not a same-uid boundary. CUA-1.75 is what makes token possession
+   insufficient: with it, the token only opens the door to the binding checks. Because the full
+   launch contract is also visible, a same-uid attacker can launch a genuine, correctly signed
+   Helper with an exact copy of the valid arguments; that process still satisfies this phase's
+   verified-peer identity chain, but host-created launch provenance is not proven. Closing that
+   stronger property requires a non-argv launch credential or a different transport and is outside
+   CUA-1.75.
+3. **The probe binary is trusted code, bounded not proven.** Its gate (session-pinned
+   requirement equality + identifier + non-ad-hoc + strict seal validation, re-run before
+   every spawn) shrinks the substitution window to the gap between one verification and the
+   next exec of the same path; a same-uid writer that wins exactly that gap — or substitutes
+   the probe before session start, which is the same pre-start substitution bound the Helper
+   requirement discovery already carries — can substitute the verifier. Named, consistent
+   with the CUA-1.5 model; closing it fully needs installer-owned provisioning of the pinned
+   requirement (product integration).
+4. **`socket._handle.fd` is a Node-internal accessor** (there is no public API for the
+   accepted fd). It is read synchronously immediately before the probe spawn — no await in
+   between, so the fd number cannot be recycled onto a different connection by an interleaved
+   accept (adversarial-review finding 3). A Node that removed the accessor would fail closed
+   (the probe cannot be given a fd, admission is refused) — availability risk, not a security
+   hole.
+5. **Admission is checked once per connection.** The running image cannot change and the
+   audit identity is fixed for the life of the connection, so nothing re-checks per request;
+   a disk swap of the bundle after start is not re-detected until the next launch (unchanged
+   from CUA-1).
+6. The hello `pid` field remains self-reported (Helper binary unchanged) — but is now only a
+   consistency witness against the kernel pid, never a source of authority.
+
+## Acceptance for CUA-1.75
+
+1. A genuine Helper connection (real launch contract, approved signing identity) is admitted
+   and serves the four CUA-1 methods.
+2. A helper-looking connection whose peer fails the pinned requirement (wrong signer,
+   tampered or re-signed bundle) is refused (`helper_identity_unverified`).
+3. A genuine Helper launched by an attacker with a different `--require-host-requirement` —
+   including a requirement the host would still satisfy — is refused
+   (`helper_launch_contract_mismatch`).
+4. A fake same-uid client (any unverified process speaking the hello wire format, token and
+   fabricated envelope included) is refused on its own kernel identity
+   (`helper_identity_*` / `peer_identity_unavailable`); quoting another process's pid in the
+   hello never helps (`helper_process_unverified`).
+5. A stale or recycled pid authorizes nothing: hello pid claims are never consulted
+   (consistency only), a dead peer cannot be bound at all (ENOTCONN), and audit-token
+   resolution refuses a mismatched pidversion (`-67065`).
+6. Reconnect after Helper restart re-runs the full binding on the fresh connection and is
+   admitted again.
+7. All CUA-1 observe methods and their result-envelope invariants still pass through the
+   final transport.
+8. All actuator names remain unavailable.
+
+Deterministic tests cover the policy half (codes above, contract equality, pid consistency);
+`native/peer-identity/run-cua175-verification.mjs` drives the live matrix on macOS with the
+real probe and real Helper.
