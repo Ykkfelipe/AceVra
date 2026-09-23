@@ -27,7 +27,10 @@ function parseEmbeddedMcpResult(value: string): EmbeddedMcpResult | undefined {
     if (!Array.isArray(candidate.content)) return undefined;
     if (
       candidate.content.some(
-        (block) => !block || typeof block !== "object" || typeof (block as { type?: unknown }).type !== "string",
+        (block) =>
+          !block ||
+          typeof block !== "object" ||
+          typeof (block as { type?: unknown }).type !== "string",
       )
     ) {
       return undefined;
@@ -113,7 +116,7 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
     // node_repl 若用 message-only 隐藏通用 MCP 失败前缀，只消费
     // 模型结果文本的分析链路无法区分成功与失败。继续只返回结构化 error.message，
     // 不混入错误类型、堆栈或失败前日志，并让通用 bridge 根据 isError 投影稳定标记。
-    textParts.push(run.error.message);
+    textParts.push(run.error.code ? `${run.error.code}: ${run.error.message}` : run.error.message);
   } else {
     if (run.logs) textParts.push(run.logs);
     if (structuredResults.length === 0 && run.result !== undefined && !embedded) {
@@ -139,8 +142,7 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
             (image) =>
               !structuredContent.some(
                 (block) =>
-                  block.type === "image" &&
-                  (block as { data?: string }).data === image.base64,
+                  block.type === "image" && (block as { data?: string }).data === image.base64,
               ),
           )
           .map((image) => ({
@@ -156,18 +158,21 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
   return {
     content: content.length > 0 ? content : [{ type: "text" as const, text: "(no output)" }],
     ...(run.error || embedded?.isError || structuredIsError ? { isError: true } : {}),
-    ...(structuredContentResult?.structuredContent !== undefined
-      ? { structuredContent: structuredContentResult.structuredContent }
-      : embedded?.structuredContent !== undefined
-        ? { structuredContent: embedded.structuredContent }
-        : {}),
+    ...(run.error?.code
+      ? { structuredContent: { code: run.error.code, message: run.error.message } }
+      : structuredContentResult?.structuredContent !== undefined
+        ? { structuredContent: structuredContentResult.structuredContent }
+        : embedded?.structuredContent !== undefined
+          ? { structuredContent: embedded.structuredContent }
+          : {}),
     ...(Object.keys(responseMeta).length > 0 ||
     (run.images?.length ?? 0) > 0 ||
     structuredContent.some((block) => block.type === "image")
       ? {
           _meta: {
             ...responseMeta,
-            ...((run.images?.length ?? 0) > 0 || structuredContent.some((block) => block.type === "image")
+            ...((run.images?.length ?? 0) > 0 ||
+            structuredContent.some((block) => block.type === "image")
               ? { "zcode/nodeReplEmittedImage": true }
               : {}),
             ...(browserScreenshotContentIndices && browserScreenshotContentIndices.length > 0

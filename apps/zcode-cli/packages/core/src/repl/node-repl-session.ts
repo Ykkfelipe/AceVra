@@ -2,6 +2,7 @@ import { createContext, runInContext, type Context } from "node:vm";
 import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { IifeContextExecutor, type ReplExecutor } from "./executors.js";
+import { hasTopLevelStaticImport } from "./instrument.js";
 import {
   PROCESS_MODULE_IDS,
   createReplRequire,
@@ -52,7 +53,7 @@ export interface NodeReplRunResult {
   /** 本次 run 期间 nodeRepl.write + console 收集的输出。 */
   logs: string;
   /** 抛错时的结构化错误（不崩进程）。 */
-  error?: { name: string; message: string; stack?: string };
+  error?: { name: string; message: string; stack?: string; code?: string };
   /** 本次 run 期间 nodeRepl.emitImage 收集的图片（如截图）。 */
   images?: NodeReplImage[];
   /** images 中确认来自本次显式 tab.screenshot() 的索引。 */
@@ -312,7 +313,11 @@ export class NodeReplSession {
       throw new TypeError("nodeRepl.emitStructuredResult requires a content array");
     }
     for (const block of candidate.content) {
-      if (!block || typeof block !== "object" || typeof (block as { type?: unknown }).type !== "string") {
+      if (
+        !block ||
+        typeof block !== "object" ||
+        typeof (block as { type?: unknown }).type !== "string"
+      ) {
         throw new TypeError("nodeRepl.emitStructuredResult content blocks require a type");
       }
     }
@@ -399,6 +404,18 @@ export class NodeReplSession {
       cuaApps,
     };
     try {
+      // vm.Script 不接受静态 ESM 声明；在执行前给出可恢复的错误，避免浏览器动作根本未开始却被误判为插件故障。
+      if (hasTopLevelStaticImport(code)) {
+        return {
+          logs: buffer,
+          error: {
+            name: "SyntaxError",
+            code: "node_repl_static_import_unsupported",
+            message:
+              "Static ESM imports are unsupported in node_repl. Use await import(...) instead.",
+          },
+        };
+      }
       // 执行委托给 executor（默认路线 B：instrument 顶层声明 → async-IIFE → runInContext），
       // 使顶层 const/let/var/function/class 跨 js 调用持久（复制到 globalThis）。
       const value = await this.executor.run(

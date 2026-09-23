@@ -16,7 +16,11 @@ import {
 } from "@zcode/core/repl";
 import { createComputerUseRuntime, type ComputerUseRuntime } from "@zcode/zcode-cua";
 import { z } from "zod";
-import { createBrowserBridgeGlobals, type ActiveNodeReplCall } from "./browser-bridge.js";
+import {
+  createBrowserBridgeGlobals,
+  prepareBrowserRuntimeGlobals,
+  type ActiveNodeReplCall,
+} from "./browser-bridge.js";
 import {
   createComputerUseBridgeGlobals,
   type ActiveCuaNodeReplCall,
@@ -44,10 +48,7 @@ const pluginRoot = process.env.ZCODE_PLUGIN_ROOT ?? process.cwd();
 // CUA 与 Browser Use 共用 node_repl host，但文档和 native 依赖必须按领域隔离；
 // 否则 CUA skill 会因为 host root 恰好来自 Browser Use 而再次产生隐式依赖。
 const browserDocumentationRoot = resolve(pluginRoot, "docs");
-const cuaDocumentationRoot = resolve(
-  process.env.ZCODE_CUA_PLUGIN_ROOT ?? pluginRoot,
-  "docs",
-);
+const cuaDocumentationRoot = resolve(process.env.ZCODE_CUA_PLUGIN_ROOT ?? pluginRoot, "docs");
 const jsInputSchema = z
   .object({
     code: z.string(),
@@ -115,13 +116,21 @@ export function setNodeReplMcpProcessTitle(target: { title: string } = process):
  */
 export function createInProcessNodeReplExecutor(): NodeReplExecutor {
   return async (input) => {
-    let activeCall: ActiveNodeReplCall | undefined;
-    let activeCuaCall: ActiveCuaNodeReplCall | undefined;
+    let activeCall: ActiveNodeReplCall | undefined = {
+      generation: 1,
+      requestMeta: input.requestMeta,
+      signal: input.signal,
+    };
+    let activeCuaCall: ActiveCuaNodeReplCall | undefined = {
+      generation: 1,
+      requestMeta: input.requestMeta,
+      signal: input.signal,
+    };
     let session: NodeReplSession;
     const generation = 1;
     session = new NodeReplSession({
-      injectedGlobals: () =>
-        ({
+      injectedGlobals: () => {
+        const globals: Record<PropertyKey, unknown> = {
           ...createBrowserBridgeGlobals({
             documentationRoot: browserDocumentationRoot,
             generation,
@@ -135,19 +144,15 @@ export function createInProcessNodeReplExecutor(): NodeReplExecutor {
             session: () => session,
             documentationRoot: cuaDocumentationRoot,
           }),
-        }),
+        };
+        // 子代理没有 Browser 权限；不能让 eager setup 的可用性检查阻断其余 node_repl 能力。
+        if (process.env.ZCODE_PLUGIN_ROOT && input.requestMeta.runtime_scope !== "subagent") {
+          prepareBrowserRuntimeGlobals(globals);
+        }
+        return globals;
+      },
       restrictProcess: true,
     });
-    activeCall = {
-      generation,
-      requestMeta: input.requestMeta,
-      signal: input.signal,
-    };
-    activeCuaCall = {
-      generation,
-      requestMeta: input.requestMeta,
-      signal: input.signal,
-    };
     try {
       return await session.run(input.code, {
         requestMeta: input.requestMeta,
@@ -166,8 +171,7 @@ export function createNodeReplMcpRuntime(
   input: { executeJs?: NodeReplExecutor; cuaRuntime?: ComputerUseRuntime } = {},
 ): NodeReplMcpRuntime {
   const executeJs = input.executeJs ?? executeJsInWorker;
-  const cuaRuntime =
-    input.cuaRuntime ?? captureComputerUseRuntimeFromEnvironment();
+  const cuaRuntime = input.cuaRuntime ?? captureComputerUseRuntimeFromEnvironment();
   const cuaBroker = cuaRuntime
     ? createNodeReplCuaBroker({ runtime: cuaRuntime, platform: process.platform })
     : undefined;

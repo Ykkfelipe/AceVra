@@ -52,4 +52,5 @@ export const JS_TOOL_DESCRIPTION =
   "runtime, browser, or imported bindings from an earlier call. " +
   "Import only `node:*` builtins and absolute `file://` URLs built from the official skill root, " +
   'for example `await import(pathToFileURL(join(root, "scripts", "client.mjs")).href)`; ' +
-  "bare package specifiers do not resolve. Bootstrap the requested official capability in every call.";
+  "bare package specifiers do not resolve. Browser Use is initialized by the host before every call; " +
+  "write browser actions directly. Bootstrap Computer Use using its official skill in every call.";

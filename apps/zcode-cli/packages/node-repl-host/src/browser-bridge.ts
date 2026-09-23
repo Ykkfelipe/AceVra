@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createConnection } from "node:net";
-import type { BrowserClientTransport } from "@zcode/core/browser-client";
+import { setupBrowserRuntime, type BrowserClientTransport } from "@zcode/core/browser-client";
 import type { NodeReplRequestMeta, NodeReplSession } from "@zcode/core/repl";
 import type { BrowserCommand, BrowserCommandResult } from "@zcode/shared";
 // 只加载 broker 协议；shared 总入口会在每个 Worker 中初始化无关领域的 schema。
@@ -12,6 +12,7 @@ import {
 import {
   BROWSER_UNAVAILABLE_IN_SUBAGENT_MESSAGE,
   NODE_REPL_BROWSER_BRIDGE_SYMBOL,
+  readNodeReplBrowserRuntimeBridge,
 } from "./runtime-bridge.js";
 
 const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
@@ -88,6 +89,17 @@ export function createBrowserBridgeGlobals(input: {
       assertAvailable,
     },
   };
+}
+
+/** MCP fresh kernel 直接复用 core 的浏览器 facade，模型无需拼接插件路径或加载模块。 */
+export function prepareBrowserRuntimeGlobals(globals: Record<PropertyKey, unknown>): void {
+  const bridge = readNodeReplBrowserRuntimeBridge(globals);
+  setupBrowserRuntime({
+    globals: globals as Record<string, unknown>,
+    transport: bridge,
+    documentationRoot: bridge.documentationRoot,
+    assertAvailable: bridge.assertAvailable,
+  });
 }
 
 function requestContext(meta: NodeReplRequestMeta): BrokerContext {
@@ -186,7 +198,10 @@ function mergeBrowserResponseMeta(
   result: BrowserCommandResult,
 ): void {
   if (result.ok && command.method === "screenshot" && result.image?.base64) {
-    session.recordBrowserScreenshot({ base64: result.image.base64, mimeType: result.image.mimeType });
+    session.recordBrowserScreenshot({
+      base64: result.image.base64,
+      mimeType: result.image.mimeType,
+    });
   }
   const meta = result.meta;
   if (!meta) return;

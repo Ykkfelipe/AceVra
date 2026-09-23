@@ -31,6 +31,35 @@ export function parseReplCode(code: string): ParseReplCodeResult {
   }
 }
 
+/** 只检查真实顶层 import 声明；词法 token 排除了注释、字符串和动态 import()。 */
+export function hasTopLevelStaticImport(code: string): boolean {
+  const tokens: Array<{ value: string; kind: string }> = [];
+  try {
+    parseModule(code, {
+      next: true,
+      onToken: (kind, start, end) => {
+        tokens.push({ kind, value: code.slice(start, end) });
+      },
+    });
+  } catch {
+    // REPL 允许顶层 return；解析器仍已提供错误位置之前的 token，可识别先于它的 import。
+  }
+
+  let braceDepth = 0;
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (token.value === "{" && token.kind === "Punctuator") braceDepth++;
+    else if (token.value === "}" && token.kind === "Punctuator") braceDepth--;
+    if (braceDepth !== 0 || token.kind !== "Keyword" || token.value !== "import") continue;
+    // `o.import` / `o?.import` 是属性名而非声明；meriyah 仍把它标成 Keyword，不能据此拒绝。
+    const previous = tokens[index - 1];
+    if (previous && (previous.value === "." || previous.value === "?.")) continue;
+    const next = tokens[index + 1];
+    if (next && next.value !== "(" && next.value !== ".") return true;
+  }
+  return false;
+}
+
 /**
  * 递归收集一个 binding pattern 里声明的所有标识符名。
  * 覆盖：Identifier / ObjectPattern（含 shorthand 与 RestElement）/ ArrayPattern（含空位与 RestElement）
