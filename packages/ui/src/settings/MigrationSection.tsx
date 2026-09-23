@@ -29,10 +29,12 @@ export function MigrationSection({
   workspacePath,
   workspaceIdentity,
   isDesktop,
+  source = "claude",
 }: {
   workspacePath: string | null;
   workspaceIdentity?: string;
   isDesktop?: boolean;
+  source?: "claude" | "codex";
 }) {
   const { intl, locale } = useZCodeIntl();
   const {
@@ -62,6 +64,7 @@ export function MigrationSection({
     workspacePath,
     workspaceIdentity,
     isDesktop,
+    source,
   });
 
   const dateTimeFormatter = useMemo(
@@ -79,7 +82,15 @@ export function MigrationSection({
       : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <h3 className="text-ui-base font-medium text-foreground">
+        {intl.formatMessage({
+          id:
+            source === "codex"
+              ? "settings.accounts.import.codexTitle"
+              : "settings.accounts.import.claudeTitle",
+        })}
+      </h3>
       <Card className="border border-border bg-card py-0 shadow-none">
         <CardHeader className="border-b border-border">
           <CardAction>

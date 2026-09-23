@@ -233,10 +233,9 @@ onboarding (`OnboardingDialog.tsx:61`) and Settings (`MigrationSection.tsx:61`, 
 `useClaudeSessionMigration` hook, so it is already re-runnable after onboarding. Per
 "do not duplicate it", this stays as is; only its presentation moved with the section.
 
-Codex (to build): the equivalent local store is `~/.codex/sessions/{year}/…` plus
-`~/.codex/thread_history_1.sqlite` (~134 MB; tables `thread_items`, `thread_turns`). This is
-the same store used successfully in this project to recover lost work, so its shape is known.
-It should reuse `ZCodeImportSessionsResult` with `provider: "codex"` alongside the existing
+Codex history import reads local rollout JSONL files under `~/.codex/sessions/{year}/…`.
+`thread_history_1.sqlite` is not part of the import contract. The live scanner reuses
+`ZCodeImportSessionsResult` with `provider: "codex"` alongside the existing
 `provider: "claude"`.
 
 ## Proposed shape
@@ -278,3 +277,70 @@ validation subset. The account's actual capability is the full catalogue: 76 mod
 `GET /provider/v1/models`, of which 68 support `/chat/completions` and 8 (the Claude family)
 are `/messages`-only. Exposing more is a configuration change requiring no code; the
 `/messages` models additionally need a second provider entry with `anthropic-messages`.
+
+## Live account status termination and Codex history parity (2026-09-23)
+
+### Account status ownership and terminal behavior
+
+`createAccountBridgeService` owns host-side harness-link state; the source CLI/App Server owns
+source sign-in state and credentials. Renderer `useAccountBridge` owns only request presentation
+state and sanitized snapshots. Every host status read must resolve to exactly one status for its
+source. `readAllStatuses` may combine independent source reads, but each adapter has bounded
+process/request timeouts so one source cannot strand the other. A connected state requires an
+enabled harness bridge and a verified signed-in source account; signed-out or disabled links are
+disconnected. Missing executables are not-installed. Launch/protocol failures are error and can
+be retried. Codex usage is optional: `account/rateLimits/read` failure leaves a signed-in account
+connected without usage.
+
+```mermaid
+sequenceDiagram
+  participant UI as Account hook
+  participant S as Accounts service
+  participant C as Codex bridge
+  participant L as Local source
+  UI->>S: readAllAccountStatuses
+  par Codex
+    S->>C: resolve executable / start / initialize
+    C->>L: app-server stdio JSON-RPC
+    S->>C: account/read
+    C-->>S: account or bounded error
+    opt signed-in account
+      S->>C: account/rateLimits/read
+      C-->>S: usage or partial failure
+    end
+  and Claude
+    S->>L: claude auth status --json (bounded)
+    L-->>S: sanitized auth state or bounded error
+  end
+  S-->>UI: terminal per-source status
+```
+
+### Executable discovery
+
+Codex discovery must consider an explicit configured path, executable names found on the
+process PATH, and known macOS app-bundle locations without assuming one Homebrew prefix. Claude
+uses the same host PATH lookup and configured-path precedence. Child processes inherit the
+normalized host environment. Never put a user-specific home path into source.
+
+### Codex local import boundary
+
+Codex history import reads rollout JSONL session files only. The observed format starts with a
+`session_meta` header (`payload.session_id`, `cwd`, `timestamp`, `cli_version`); conversation
+records include `response_item` messages and tool-call/result payloads plus `event_msg` and
+`turn_context`. The scanner must use Codex's configured home when supplied by the existing
+App Server initialization, otherwise the standard per-user Codex home; it must never inspect
+`auth.json` or import credentials. It filters by workspace, activity range, and limit, and
+marks an already imported `codex` source session by stable source identity.
+
+A source adapter parses Codex records into the existing import-history/task creation contract.
+Migration UI remains one shared `MigrationSection` with source-specific scan/import adapters;
+Claude's existing parser and Codex's rollout parser stay source-specific. Imported tasks carry
+`migrationSource = codex` and original source session id in task metadata. The task index is the
+idempotency owner: check the stable `(source, original session id)` before creation, and use a
+deterministic task id so a retry cannot create a second task. Only user-visible user/assistant
+text is converted; tool calls/results, reasoning, metadata, unknown record types and credentials
+are ignored.
+
+Codex rollout sessions are local Codex history only. Account/App Server APIs do not establish
+availability of general chatgpt.com conversations; no browser scraping, cookie copying, or
+invented cloud-history endpoint is permitted.

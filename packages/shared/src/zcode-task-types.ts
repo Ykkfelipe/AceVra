@@ -108,6 +108,7 @@ export interface ZCodeImportableSessionCandidate {
   updatedAt: number;
   createdAt?: number;
   previewTitle?: string;
+  alreadyImported?: boolean;
 }
 
 export interface ZCodeImportedSessionResultItem {

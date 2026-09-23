@@ -53,13 +53,12 @@ export function AccountBridgeDetail({
       source={source}
       bridge={bridge}
       migrationSlot={
-        source === "claude-code" ? (
-          <MigrationSection
-            workspacePath={workspacePath}
-            {...(workspaceIdentity ? { workspaceIdentity } : {})}
-            {...(isDesktop === undefined ? {} : { isDesktop })}
-          />
-        ) : null
+        <MigrationSection
+          source={source === "codex" ? "codex" : "claude"}
+          workspacePath={workspacePath}
+          {...(workspaceIdentity ? { workspaceIdentity } : {})}
+          {...(isDesktop === undefined ? {} : { isDesktop })}
+        />
       }
     />
   );
@@ -75,10 +74,9 @@ export function AccountBridgeDetailView({
   bridge: ReturnType<typeof useAccountBridge>;
   migrationSlot?: ReactNode;
 }) {
-  const { intl, locale } = useZCodeIntl();
+  const { intl } = useZCodeIntl();
   const {
     statusFor,
-    codexCandidates,
     busy,
     loading,
     refreshing,
@@ -86,7 +84,6 @@ export function AccountBridgeDetailView({
     connect,
     reconnectBridge,
     disconnect,
-    scanCodexHistory,
     refreshStatuses,
   } = bridge;
 
@@ -221,50 +218,7 @@ export function AccountBridgeDetailView({
         )}
       </StatusCardSurface>
 
-      {isCodex ? (
-        <StatusCardSurface
-          title={intl.formatMessage({ id: "settings.accounts.import.codexTitle" })}
-          statusMeta={
-            <span className="text-ui-base text-foreground-subtle">
-              {intl.formatMessage({ id: "settings.accounts.import.codexDescription" })}
-            </span>
-          }
-          trailingAction={
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              disabled={busy !== null}
-              onClick={() => void scanCodexHistory(10)}
-            >
-              {busy === "codex-history" ? (
-                <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
-              ) : null}
-              {intl.formatMessage({ id: "settings.accounts.action.scan" })}
-            </Button>
-          }
-        >
-          {codexCandidates.length > 0 ? (
-            <ul className="flex flex-col gap-1">
-              {codexCandidates.map((candidate) => (
-                <li
-                  key={candidate.sessionId}
-                  className="flex items-center justify-between gap-3 rounded-md bg-background/50 px-2 py-1"
-                >
-                  <span className="min-w-0 truncate text-ui-base">
-                    {candidate.workspacePath.split("/").pop() || candidate.workspacePath}
-                  </span>
-                  <span className="shrink-0 text-ui-sm text-foreground-subtle tabular-nums">
-                    {new Date(candidate.updatedAt).toLocaleDateString(locale)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </StatusCardSurface>
-      ) : (
-        migrationSlot
-      )}
+      {migrationSlot}
     </div>
   );
 }

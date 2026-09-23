@@ -22,7 +22,10 @@ import { createServiceLogger } from "#src/logger/serviceLogger.js";
 const logger = createServiceLogger("codex-history-import");
 
 export function resolveCodexSessionsDir(codexHome?: string): string {
-  return join(codexHome?.trim() || join(homedir(), ".codex"), "sessions");
+  return join(
+    codexHome?.trim() || process.env.CODEX_HOME?.trim() || join(homedir(), ".codex"),
+    "sessions",
+  );
 }
 
 /** Read only the first line of a rollout; the header is all we need for a candidate. */
@@ -92,7 +95,8 @@ export async function scanCodexImportableSessions(
     if (options.modifiedSince !== undefined && updatedAt < options.modifiedSince) continue;
 
     const header = await readRolloutHeader(file);
-    const payload = (header?.payload ?? null) as Record<string, unknown> | null;
+    if (header?.type !== "session_meta") continue;
+    const payload = (header.payload ?? null) as Record<string, unknown> | null;
     if (!payload) continue;
     const sessionId = typeof payload.session_id === "string" ? payload.session_id : undefined;
     const cwd = typeof payload.cwd === "string" ? payload.cwd : undefined;
@@ -111,7 +115,19 @@ export async function scanCodexImportableSessions(
   }
 
   candidates.sort((a, b) => b.updatedAt - a.updatedAt);
-  const limited = options.limit ? candidates.slice(0, options.limit) : candidates;
+  // Codex may write multiple rollout files for a fork while retaining the same source id.
+  // Keep the newest transcript so the picker and stable task identity expose one candidate.
+  const newestBySessionId = new Map<string, ZCodeImportableSessionCandidate>();
+  for (const candidate of candidates) {
+    const existing = newestBySessionId.get(candidate.sessionId);
+    if (!existing || candidate.updatedAt > existing.updatedAt) {
+      newestBySessionId.set(candidate.sessionId, candidate);
+    }
+  }
+  const uniqueCandidates = [...newestBySessionId.values()].sort(
+    (a, b) => b.updatedAt - a.updatedAt,
+  );
+  const limited = options.limit ? uniqueCandidates.slice(0, options.limit) : uniqueCandidates;
   logger.info(
     undefined,
     `codex history scan dir=${dir} files=${files.length} candidates=${limited.length}`,

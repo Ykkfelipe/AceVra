@@ -1997,10 +1997,10 @@ const enUS: Record<string, string> = {
   "settings.accounts.error.status_refresh_failed":
     "Could not read account status from the local client.",
   "settings.accounts.error.connect_failed": "Connecting failed.",
-  "settings.accounts.error.codex_history_scan_failed": "Could not read Codex's local transcripts.",
   "settings.accounts.import.codexTitle": "Import Codex history",
   "settings.accounts.import.codexDescription":
     "Reads Codex's local transcripts. Works whether or not the account is connected.",
+  "settings.accounts.import.claudeTitle": "Import Claude Code history",
   "settings.accounts.usage.unavailable": "No included-usage window is available.",
   "settings.accounts.usage.managedByClaude":
     "Usage information is not available through this connection.",
@@ -2044,10 +2044,11 @@ const enUS: Record<string, string> = {
   "settings.migration.limitHint": "This scan will return up to {max} sessions.",
   "settings.migration.scan": "Scan sessions",
   "settings.migration.scanFailedTitle": "Scan failed",
-  "settings.migration.scanFailedDescription": "Failed to read Claude native history: {error}",
+  "settings.migration.scanFailedDescription": "Failed to read local history: {error}",
   "settings.migration.candidatesTitle": "Candidates",
   "settings.migration.candidatesDescription":
     "Select one or more sessions to import. Each imported session is written back into the task list for its own workspace.",
+  "settings.migration.alreadyImported": "Already imported",
   "settings.migration.candidatesCount": "{count} candidates",
   "settings.migration.selectedCount": "{count} selected",
   "settings.migration.selectAll": "Select all",

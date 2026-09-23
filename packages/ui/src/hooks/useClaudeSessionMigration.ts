@@ -59,7 +59,9 @@ export function useClaudeSessionMigration(params: {
   workspacePath: string | null;
   workspaceIdentity?: string;
   isDesktop?: boolean;
+  source?: "claude" | "codex";
 }) {
+  const source = params.source ?? "claude";
   const zcodeTaskService = useZCodeTaskService(
     params.workspacePath ?? undefined,
     undefined,
@@ -117,18 +119,32 @@ export function useClaudeSessionMigration(params: {
     [params.workspacePath],
   );
 
-  const toggleSessionSelection = useCallback((sessionId: string) => {
-    setSelectedSessionIds((previous) => {
-      if (previous.includes(sessionId)) {
-        return previous.filter((current) => current !== sessionId);
+  const toggleSessionSelection = useCallback(
+    (sessionId: string) => {
+      if (
+        candidates.some(
+          (candidate) => candidate.sessionId === sessionId && candidate.alreadyImported,
+        )
+      ) {
+        return;
       }
+      setSelectedSessionIds((previous) => {
+        if (previous.includes(sessionId)) {
+          return previous.filter((current) => current !== sessionId);
+        }
 
-      return [...previous, sessionId];
-    });
-  }, []);
+        return [...previous, sessionId];
+      });
+    },
+    [candidates],
+  );
 
   const selectAllSessions = useCallback(() => {
-    setSelectedSessionIds(candidates.map((candidate) => candidate.sessionId));
+    setSelectedSessionIds(
+      candidates
+        .filter((candidate) => !candidate.alreadyImported)
+        .map((candidate) => candidate.sessionId),
+    );
   }, [candidates]);
 
   const clearSelectedSessions = useCallback(() => {
@@ -147,18 +163,24 @@ export function useClaudeSessionMigration(params: {
       logger.info(
         `[Migration] 开始扫描 Claude 原生历史 workspaceFilter=${effectiveWorkspacePath ?? "all"} range=${range} limit=${scanLimit ?? "unlimited"}`,
       );
-      const nextCandidates = await zcodeTaskService.scanImportableClaudeSessions({
+      const scanOptions = {
         workspacePath: effectiveWorkspacePath,
         ...(effectiveWorkspaceIdentity ? { workspaceIdentity: effectiveWorkspaceIdentity } : {}),
         modifiedSince: resolveModifiedSince(range),
         ...(scanLimit === undefined ? {} : { limit: scanLimit }),
-      });
+      };
+      const nextCandidates =
+        source === "codex"
+          ? await zcodeTaskService.scanImportableCodexSessions(scanOptions)
+          : await zcodeTaskService.scanImportableClaudeSessions(scanOptions);
       setCandidates(nextCandidates);
       // 关键业务逻辑：重扫后只保留仍然可见的勾选项。
       // 这样用户调筛选条件或刷新结果时，不会把已经不在当前列表里的旧 session 混进导入请求。
       setSelectedSessionIds((previous) =>
         previous.filter((sessionId) =>
-          nextCandidates.some((candidate) => candidate.sessionId === sessionId),
+          nextCandidates.some(
+            (candidate) => candidate.sessionId === sessionId && !candidate.alreadyImported,
+          ),
         ),
       );
       logger.info(
@@ -178,6 +200,7 @@ export function useClaudeSessionMigration(params: {
     range,
     scanLimit,
     supportState.supported,
+    source,
   ]);
 
   const importSessions = useCallback(
@@ -193,11 +216,15 @@ export function useClaudeSessionMigration(params: {
         logger.info(
           `[Migration] 开始导入 Claude 原生历史 workspaceFilter=${effectiveWorkspacePath ?? "all"} selected=${sessionIds.length}`,
         );
-        const result = await zcodeTaskService.importClaudeSessions({
+        const importOptions = {
           workspacePath: effectiveWorkspacePath,
           ...(effectiveWorkspaceIdentity ? { workspaceIdentity: effectiveWorkspaceIdentity } : {}),
           sessionIds,
-        });
+        };
+        const result =
+          source === "codex"
+            ? await zcodeTaskService.importCodexSessions(importOptions)
+            : await zcodeTaskService.importClaudeSessions(importOptions);
         setLastImportResult(result);
         const handledSessionIds = new Set([
           ...result.imported.map((item) => item.sessionId),
@@ -207,6 +234,21 @@ export function useClaudeSessionMigration(params: {
         setSelectedSessionIds((previous) =>
           previous.filter((sessionId) => !handledSessionIds.has(sessionId)),
         );
+        if (source === "codex") {
+          const importedIds = new Set(result.imported.map((item) => item.sessionId));
+          const duplicateIds = new Set(
+            result.skipped
+              .filter((item) => item.reason === "already_imported")
+              .map((item) => item.sessionId),
+          );
+          setCandidates((previous) =>
+            previous.map((candidate) =>
+              importedIds.has(candidate.sessionId) || duplicateIds.has(candidate.sessionId)
+                ? { ...candidate, alreadyImported: true }
+                : candidate,
+            ),
+          );
+        }
         if (result.imported.length > 0) {
           const importedWorkspacePaths = new Set(result.imported.map((item) => item.workspacePath));
           // Claude 导入之前通过 bumpTaskListVersion 让各处任务列表整轮重查，
@@ -239,6 +281,7 @@ export function useClaudeSessionMigration(params: {
       effectiveWorkspacePath,
       supportState.supported,
       tabStoreApi,
+      source,
     ],
   );
 

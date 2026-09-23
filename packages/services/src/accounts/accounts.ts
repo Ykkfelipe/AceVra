@@ -3,7 +3,6 @@ import type {
   AccountBridgeConnectResult,
   AccountBridgeSource,
   AccountBridgeStatus,
-  ZCodeImportableSessionCandidate,
 } from "@zcode/shared";
 import { createServiceDescriptor } from "../descriptors.js";
 import type { CommandCodeStatus } from "./commandCodeStatusAdapter.js";
@@ -30,14 +29,6 @@ export interface IAccountsService {
   reconnectAccountBridge(source: AccountBridgeSource): Promise<AccountBridgeStatus>;
   /** Command Code account/usage status from its supported CLI surface. */
   readCommandCodeStatus(): Promise<CommandCodeStatus>;
-  /** Codex history candidates. Works regardless of account connection state. */
-  scanCodexHistory(options?: {
-    workspacePath?: string;
-    modifiedSince?: number;
-    limit?: number;
-  }): Promise<readonly ZCodeImportableSessionCandidate[]>;
 }
 
-export const IAccountsService = createServiceDescriptor<IAccountsService>(
-  ServiceChannels.Accounts,
-);
+export const IAccountsService = createServiceDescriptor<IAccountsService>(ServiceChannels.Accounts);

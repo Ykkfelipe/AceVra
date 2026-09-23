@@ -149,6 +149,11 @@ import {
 import { claudeNativeSessionImportRepo } from "#src/session/claude-native/claudeNativeSessionImportRepo.js";
 import { importClaudeNativeSessions } from "#src/session/claude-native/claudeNativeSessionImportService.js";
 import { buildImportedClaudeTaskId } from "#src/session/claude-native/buildImportedClaudeTaskFile.js";
+import { scanCodexImportableSessions } from "#src/accounts/codexHistoryImportRepo.js";
+import {
+  buildImportedCodexTaskId,
+  importCodexNativeSessions,
+} from "#src/accounts/codexNativeSessionImportService.js";
 import {
   readLegacyImportedClaudeHistory,
   repairImportedClaudeSessionSnapshot,
@@ -2660,6 +2665,75 @@ export function createZCodeTaskServiceAdapter(
             },
             meta,
             // 导入沿用 task_meta_changed 旧语义。
+            "task_meta_changed",
+          );
+        },
+      });
+    },
+
+    async scanImportableCodexSessions(params: {
+      workspacePath?: string;
+      workspaceIdentity?: string;
+      modifiedSince?: number;
+      limit?: number;
+    }): Promise<ZCodeImportableSessionCandidate[]> {
+      void params.workspaceIdentity;
+      const candidates = await scanCodexImportableSessions(params);
+      return Promise.all(
+        candidates.map(async (candidate) => ({
+          ...candidate,
+          alreadyImported: Boolean(
+            await taskIndexRepo.getTaskMeta({
+              taskId: buildImportedCodexTaskId(candidate.workspacePath, candidate.sessionId),
+            }),
+          ),
+        })),
+      );
+    },
+
+    async importCodexSessions(params: {
+      workspacePath?: string;
+      workspaceIdentity?: string;
+      sessionIds: string[];
+    }): Promise<ZCodeImportSessionsResult> {
+      return importCodexNativeSessions({
+        taskIndexRepo,
+        workspacePath: params.workspacePath,
+        workspaceIdentity: params.workspaceIdentity,
+        sessionIds: params.sessionIds,
+        createImportedSession: async (source) => {
+          const targetWorkspaceIdentity = params.workspacePath
+            ? params.workspaceIdentity
+            : undefined;
+          const taskId = buildImportedCodexTaskId(source.workspacePath, source.sessionId);
+          const snapshot = await options.zcodeAgentService.createSession({
+            workspacePath: source.workspacePath,
+            workspaceIdentity: targetWorkspaceIdentity,
+            sessionId: taskId,
+            sessionTraceId: createSessionTraceId(),
+            persistence: "immediate",
+            importedHistory: {
+              source: "codex",
+              sourceSessionId: source.sessionId,
+              title: source.title,
+              model: source.model,
+              createdAt: source.createdAt,
+              updatedAt: source.updatedAt,
+              messages: source.messages,
+            },
+          });
+          const meta = await syncTaskIndexSnapshot(snapshot);
+          return syncTaskIndexMeta({ ...meta, migrationSource: "codex" });
+        },
+        onTaskImported: (meta) => {
+          rememberIndexedTaskMeta(meta);
+          emitWorkspaceTaskListChanged(
+            {
+              workspacePath: meta.workspacePath,
+              workspaceIdentity: meta.workspaceIdentity,
+              taskId: meta.taskId,
+            },
+            meta,
             "task_meta_changed",
           );
         },

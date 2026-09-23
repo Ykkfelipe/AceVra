@@ -75,7 +75,6 @@ export function ModelSettingsFixtureHarness({
   const [, setFixtureAction] = useState(0);
   const bridge = {
     statusFor: (source: AccountBridgeStatus["source"]) => (source === "codex" ? codex : claude),
-    codexCandidates: [],
     busy: null,
     loading: false,
     refreshing: false,
@@ -83,7 +82,6 @@ export function ModelSettingsFixtureHarness({
     connect: async () => {},
     reconnectBridge: async () => {},
     disconnect: async () => {},
-    scanCodexHistory: async () => {},
     refreshStatuses: async () => {},
   } as unknown as Parameters<typeof AccountBridgeDetailView>[0]["bridge"];
   const navigationGroups = [
