@@ -1,4 +1,5 @@
 import { CodingPlanEntryButton, useCodingPlanEntryGate } from "@/settings/CodingPlanEntryButton.js";
+import { isCodingPlanActionDisabled } from "@/settings/model-provider-section/codingPlanEntryPresentation.js";
 /* eslint-disable max-lines -- Coding Plan/Start Plan 状态卡集中编排状态、动作和套餐区块，当前先保持同一文件避免拆散状态语义。 */
 import {
   BIGMODEL_PROVIDER_ID,
@@ -384,7 +385,6 @@ export function CodingPlanStatusPanel({
   const inlineDisconnectVisible = canDisconnectProvider && !isPurchased;
   const planTitle = resolveCodingPlanStatusCardTitle({
     isPurchased,
-    isUnavailable,
     isStartPlanProvider,
     inactivePlanTitle,
     rawPlanLevel,
@@ -429,6 +429,8 @@ export function CodingPlanStatusPanel({
         renewTime={subscriptionRenewTime}
         expireTime={subscriptionExpireTime}
         extraAction={upgradeCatalogNotice}
+        // 套餐目录加载失败时，管理入口缺少可信的套餐上下文；目录恢复后再开放套餐操作。
+        manageDisabled={isCodingPlanActionDisabled(entryGate.status)}
         manageLabel={
           canManageCodingPlan
             ? intl.formatMessage({
@@ -626,7 +628,7 @@ function CodingPlanEntryGateNotice({ onRetry }: { onRetry?: () => void }) {
     <button
       type="button"
       onClick={onRetry}
-      className="text-ui-base font-medium text-warning underline-offset-2 hover:underline disabled:pointer-events-none disabled:opacity-50"
+      className="text-ui-base text-foreground-subtle underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-50"
       disabled={!onRetry}
     >
       {intl.formatMessage({ id: "settings.modelProvider.codingPlan.planDetailsUnavailable" })}
@@ -653,7 +655,6 @@ function hasStartPlanEntitlementQuota(
 
 function resolveCodingPlanStatusCardTitle({
   isPurchased,
-  isUnavailable = false,
   isStartPlanProvider,
   inactivePlanTitle,
   rawPlanLevel,
@@ -662,7 +663,6 @@ function resolveCodingPlanStatusCardTitle({
   codingPlanTitle,
 }: {
   isPurchased: boolean;
-  isUnavailable?: boolean;
   isStartPlanProvider: boolean;
   inactivePlanTitle?: string | null;
   rawPlanLevel: string;

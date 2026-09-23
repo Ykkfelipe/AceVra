@@ -94,9 +94,9 @@ export function AccountBridgeDetail({
           onClick={() => void refreshStatuses()}
         >
           {loading || refreshing ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
           ) : (
-            <RefreshCwIcon className="size-3.5" />
+            <RefreshCwIcon className="size-3.5" aria-hidden="true" />
           )}
         </Button>
       </div>
@@ -136,7 +136,9 @@ export function AccountBridgeDetail({
             disabled={loading || busy !== null || status?.installed === false}
             onClick={() => void connect(source)}
           >
-            {actionBusy ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
+            {actionBusy ? (
+              <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
+            ) : null}
             {intl.formatMessage({
               id: verifiedSignedIn
                 ? "settings.accounts.action.reconnect"
@@ -171,7 +173,9 @@ export function AccountBridgeDetail({
                   disabled={busy !== null || !status?.installed}
                   onClick={() => void reconnectBridge("codex")}
                 >
-                  {busy === "codex" ? <Loader2Icon className="size-3 animate-spin" /> : null}
+                  {busy === "codex" ? (
+                    <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
+                  ) : null}
                   {intl.formatMessage({ id: "settings.accounts.action.restartBridge" })}
                 </Button>
               ) : null}
@@ -205,7 +209,9 @@ export function AccountBridgeDetail({
               disabled={busy !== null}
               onClick={() => void scanCodexHistory(10)}
             >
-              {busy === "codex-history" ? <Loader2Icon className="size-3.5 animate-spin" /> : null}
+              {busy === "codex-history" ? (
+                <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : null}
               {intl.formatMessage({ id: "settings.accounts.action.scan" })}
             </Button>
           }
@@ -241,9 +247,8 @@ export function AccountBridgeDetail({
 }
 
 /**
- * Claude Code does not publish a local usage or rate-limit surface: its CLI has no
- * usage/limits command and its auth status reports only login state. The panel therefore states
- * that plainly rather than drawing invented 5-hour or weekly figures.
+ * The local Claude connection status has no usage fields. Describe that limitation narrowly
+ * rather than making a universal claim about Claude's APIs or drawing invented quota figures.
  */
 function ClaudeUsageNote() {
   const { intl } = useZCodeIntl();

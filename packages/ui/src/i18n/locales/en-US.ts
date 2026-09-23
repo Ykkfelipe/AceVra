@@ -2003,7 +2003,7 @@ const enUS: Record<string, string> = {
     "Reads Codex's local transcripts. Works whether or not the account is connected.",
   "settings.accounts.usage.unavailable": "No included-usage window is available.",
   "settings.accounts.usage.managedByClaude":
-    "Usage limits are managed by Claude. Claude Code exposes no local rate-limit data, so no figures are shown here.",
+    "Usage information is not available through this connection.",
   "settings.accounts.usage.windowDuration": "Usage window ({minutes} min)",
   "settings.accounts.usage.windowUnspecified": "Usage window",
   "settings.accounts.usage.blocked.rateLimitReached":
@@ -3149,6 +3149,8 @@ const enUS: Record<string, string> = {
     "Command Code CLI status is unavailable.",
   "settings.modelProvider.commandCodeCli.signedOut": "Signed out",
   "settings.modelProvider.commandCodeCli.refresh": "Refresh Command Code CLI status",
+  "settings.modelProvider.commandCodeCli.defaultModel": "Default model",
+  "settings.modelProvider.commandCodeCli.contextWindow": "Context window ({count} tokens)",
   "settings.modelProvider.commandCodeCli.usageUnavailable":
     "Plan and usage metrics are not shown: the CLI exposes them only through its interactive /usage overlay, so no figures are inferred.",
   "settings.usage.sectionTitle": "Usage stats",

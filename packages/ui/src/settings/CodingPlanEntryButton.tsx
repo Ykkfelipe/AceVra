@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { useOptionalCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
+import { resolveCodingPlanEntryPresentation } from "./model-provider-section/codingPlanEntryPresentation.js";
 
 export function useCodingPlanEntryGate() {
   const dialog = useOptionalCodingPlanUpgradeDialog();
@@ -37,28 +38,30 @@ export function CodingPlanEntryButton({
   quietError?: boolean;
 }) {
   const gate = useCodingPlanEntryGate();
-  const status = bypassGate ? "ready" : gate.status;
-  const quietFailure = quietError && status === "error";
+  const presentation = resolveCodingPlanEntryPresentation(gate.status, {
+    bypassGate,
+    quietError,
+  });
   return (
     <Button
       {...props}
-      disabled={disabled || status === "loading" || quietFailure}
+      disabled={disabled || presentation.disabled}
       // 静默失败时按钮保留自身语义（文案、aria-label、title 都不再被错误串替换），
       // 说明与重试由调用方的行内提示承担；此时按钮是禁用的，不会执行购买动作。
-      aria-label={status === "ready" || quietFailure ? props["aria-label"] : gate.label}
-      aria-busy={status === "loading"}
-      title={status === "ready" || quietFailure ? props.title : gate.label}
+      aria-label={presentation.showChildren ? props["aria-label"] : gate.label}
+      aria-busy={presentation.status === "loading"}
+      title={presentation.showChildren ? props.title : gate.label}
       onClick={(event) => {
-        if (status === "error") {
+        if (presentation.activation === "retry") {
           event.preventDefault();
           event.stopPropagation();
           gate.retry?.();
           return;
         }
-        if (status === "ready") onClick?.(event);
+        if (presentation.activation === "run") onClick?.(event);
       }}
     >
-      {status === "ready" || quietFailure ? children : gate.label}
+      {presentation.showChildren ? children : gate.label}
     </Button>
   );
 }

@@ -20,18 +20,19 @@ import { Button } from "@/components/ui/button.js";
 import { useCommandCodeStatus } from "@/hooks/useCommandCodeStatus.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { StatusDot } from "@/settings/StatusDot.js";
+import { resolveCommandCodeCliMetadata } from "./commandCodeStatusPresentation.js";
 
 /** Personal provider id of the Command Code Provider API integration. */
 export const COMMAND_CODE_PROVIDER_ID = "command-code";
 
 export function CommandCodeCliStatus() {
-  const { intl } = useZCodeIntl();
+  const { intl, locale } = useZCodeIntl();
   const { status, loading, refresh } = useCommandCodeStatus();
 
   if (loading && !status) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border bg-surface p-4 text-ui-base text-foreground-subtle">
-        <Loader2Icon className="size-4 animate-spin" />
+        <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
         <span>{intl.formatMessage({ id: "common.loading" })}</span>
       </div>
     );
@@ -39,10 +40,17 @@ export function CommandCodeCliStatus() {
 
   const installed = status?.installed === true;
   const authenticated = status?.authenticated === true;
+  const metadata = resolveCommandCodeCliMetadata(status, locale);
   // status 为 null 只可能是这次读取本身失败（未安装由适配器以 installed:false 表达）。
   // 读取失败不能报成“未安装”，那是一个没有依据的结论。
   const statusUnavailable = status === null;
-  const tone = statusUnavailable ? "subtle" : !installed ? "subtle" : authenticated ? "green" : "amber";
+  const tone = statusUnavailable
+    ? "subtle"
+    : !installed
+      ? "subtle"
+      : authenticated
+        ? "green"
+        : "amber";
 
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
@@ -91,12 +99,34 @@ export function CommandCodeCliStatus() {
           onClick={() => void refresh()}
         >
           {loading ? (
-            <Loader2Icon className="size-3.5 animate-spin" />
+            <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
           ) : (
-            <RefreshCwIcon className="size-3.5" />
+            <RefreshCwIcon className="size-3.5" aria-hidden="true" />
           )}
         </Button>
       </div>
+      {metadata.defaultModel || metadata.contextWindow ? (
+        <div className="mt-2 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-ui-sm text-foreground-subtle">
+          {metadata.defaultModel ? (
+            <span className="min-w-0 break-words">
+              {intl.formatMessage({ id: "settings.modelProvider.commandCodeCli.defaultModel" })}
+              {": "}
+              <span className="font-mono">{metadata.defaultModel}</span>
+            </span>
+          ) : null}
+          {metadata.defaultModel && metadata.contextWindow ? (
+            <span aria-hidden="true">·</span>
+          ) : null}
+          {metadata.contextWindow ? (
+            <span>
+              {intl.formatMessage(
+                { id: "settings.modelProvider.commandCodeCli.contextWindow" },
+                { count: metadata.contextWindow },
+              )}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       <p className="mt-2 text-ui-sm text-foreground-subtle">
         {intl.formatMessage({ id: "settings.modelProvider.commandCodeCli.usageUnavailable" })}
       </p>

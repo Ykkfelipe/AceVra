@@ -23,14 +23,21 @@ plan or preset node, so the default selection lands on account nodes only in the
 case where no provider node exists at all.
 
 **Command Code has exactly one presence.** It is a real personal model provider
-(`command-code`, seeded by `officialProviderMetadataImporter`) *and* a CLI account held
+(`command-code`, seeded by `officialProviderMetadataImporter`) _and_ a CLI account held
 separately by `~/.commandcode/auth.json`. Previously both were surfaced in Model Settings —
 the provider under `custom` and a look-alike "Command Code" account card — which read as a
 duplicate. The CLI status now renders as a compact strip inside the Command Code provider
 detail (`model-provider-section/CommandCodeCliStatus.tsx`) and is no longer part of the
 accounts screens.
 
-Two *distinct* features, deliberately not conflated:
+The compact provider detail must retain all useful fields from the supported local CLI
+status payload: authenticated state, user, version, default model, and context window. The
+default model and context window are metadata about the CLI execution account, not duplicate
+provider identity or quota data; render them as a wrapping metadata line rather than restoring
+the former multi-row account card. Quota and plan figures remain absent unless a supported
+local status surface returns them.
+
+Two _distinct_ features, deliberately not conflated:
 
 1. **Account connection** — sign in to Codex / Claude Code through their own supported
    mechanisms. The source app owns and refreshes its credentials. ZCode never reads, copies
@@ -61,14 +68,14 @@ codex app-server generate-ts --out <dir>            # TypeScript bindings
 
 `ClientRequest.json` defines 101 request methods. The relevant ones:
 
-| Method | Purpose |
-| --- | --- |
-| `account/login/start` | begin login |
-| `account/login/cancel` | cancel an in-flight login |
-| `account/logout` | disconnect |
-| `account/read` | sanitized account info |
+| Method                    | Purpose                       |
+| ------------------------- | ----------------------------- |
+| `account/login/start`     | begin login                   |
+| `account/login/cancel`    | cancel an in-flight login     |
+| `account/logout`          | disconnect                    |
+| `account/read`            | sanitized account info        |
 | `account/rateLimits/read` | plan limits / usage allowance |
-| `account/usage/read` | token usage summary |
+| `account/usage/read`      | token usage summary           |
 
 Transport: `codex app-server --listen` accepts `stdio://` (default), `unix://PATH` or
 `ws://IP:PORT`. `codex app-server daemon` manages a shared local daemon and
@@ -81,10 +88,12 @@ Transport: `codex app-server --listen` accepts `stdio://` (default), `unix://PAT
 For subscription sign-in we send `{ type: "chatgpt" }` and get back:
 
 ```jsonc
-{ "type": "chatgpt",
-  "authUrl": "…",   // schema description: "URL the client should open in a browser
-                    //  to initiate the OAuth flow."
-  "loginId": "…" }
+{
+  "type": "chatgpt",
+  "authUrl": "…", // schema description: "URL the client should open in a browser
+  //  to initiate the OAuth flow."
+  "loginId": "…",
+}
 ```
 
 ZCode opens `authUrl` in the user's browser. Completion arrives as
@@ -113,18 +122,40 @@ login is preserved because ZCode never writes to it.
 error — usage is an optional data plane). The response's `rateLimits` snapshot is mapped by
 `packages/services/src/accounts/accountBridgeMapping.ts` into `AccountBridgeUsage`:
 
-| Backend field | Contract field |
-| --- | --- |
-| `ordinaryUsageAllowed` | `ordinaryUsageAllowed` |
+| Backend field                                                                         | Contract field                                                               |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `ordinaryUsageAllowed`                                                                | `ordinaryUsageAllowed`                                                       |
 | `rateLimits.primary.usedPercent` / `.resetsAt` (Unix seconds) / `.windowDurationMins` | `primaryUsedPercent` / `primaryResetsAt` (ISO) / `primaryWindowDurationMins` |
-| `rateLimits.secondary.*` | `secondaryUsedPercent` / `secondaryResetsAt` / `secondaryWindowDurationMins` |
-| `rateLimits.rateLimitReachedType` | `blockedReason`, allowlisted to the documented enum values |
+| `rateLimits.secondary.*`                                                              | `secondaryUsedPercent` / `secondaryResetsAt` / `secondaryWindowDurationMins` |
+| `rateLimits.rateLimitReachedType`                                                     | `blockedReason`, allowlisted to the documented enum values                   |
 
-Verified against the bundled `codex-cli 0.155.0-alpha.9.2` app-server schema
-(`codex app-server generate-json-schema`) and a live local read: `primary` is
-`windowDurationMins: 300` (5 hours) and `secondary` is `10080` (weekly). The UI names each
-window from the reported length instead of assuming which one is the 5-hour window, and it
-renders a window only when a used percentage was reported, so it never draws an invented bar.
+The acceptance read on 2026-09-23 used the installed Codex App Server directly over stdio
+(`initialize`, `account/read`, `account/rateLimits/read`) without invoking inference. Its
+sanitized response shape was:
+
+```json
+{
+  "ordinaryUsageAllowed": true,
+  "rateLimits": {
+    "primary": { "usedPercent": 2, "windowDurationMins": 300, "resetsAt": 1790164641 },
+    "secondary": { "usedPercent": 16, "windowDurationMins": 10080, "resetsAt": 1790729023 },
+    "rateLimitReachedType": null
+  },
+  "rateLimitsByLimitId": {
+    "codex": {
+      "primary": { "usedPercent": 2, "windowDurationMins": 300, "resetsAt": 1790164641 },
+      "secondary": { "usedPercent": 16, "windowDurationMins": 10080, "resetsAt": 1790729023 }
+    }
+  }
+}
+```
+
+Account identifiers, account email, and credential material are deliberately omitted. This
+live response confirms that this connected account currently supplies both percentages, reset
+times, and the window durations. The UI names a window from its returned duration (300 minutes
+→ 5 hours; 10080 minutes → weekly), not from primary/secondary position. Unknown durations
+remain generic. A window is rendered only when `usedPercent` exists, and a reset is shown only
+when `resetsAt` exists; neither is synthesized.
 `account/rateLimits/updated` push notifications are still not consumed; usage is read on
 demand with the rest of the status.
 
@@ -139,18 +170,25 @@ the source was actually asked, and the UI only states "Signed in"/"Signed out" w
 
 Installed: `claude 2.1.202` at `~/.local/bin/claude`. Officially supported commands:
 
-| Command | Purpose |
-| --- | --- |
-| `claude auth login [--claudeai\|--console\|--sso] [--email <e>]` | browser sign-in; `--claudeai` (subscription) is the default |
-| `claude auth logout` | disconnect |
-| `claude auth status --json` | sanitized status |
-| `claude setup-token` | long-lived token for programmatic use (subscription required) |
+| Command                                                          | Purpose                                                       |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `claude auth login [--claudeai\|--console\|--sso] [--email <e>]` | browser sign-in; `--claudeai` (subscription) is the default   |
+| `claude auth logout`                                             | disconnect                                                    |
+| `claude auth status --json`                                      | sanitized status                                              |
+| `claude setup-token`                                             | long-lived token for programmatic use (subscription required) |
 
 `claude auth status --json` on this machine returns:
 
 ```json
-{ "loggedIn": true, "authMethod": "claude.ai", "apiProvider": "firstParty",
-  "email": "…", "orgId": "…", "orgName": "…", "subscriptionType": "pro" }
+{
+  "loggedIn": true,
+  "authMethod": "claude.ai",
+  "apiProvider": "firstParty",
+  "email": "…",
+  "orgId": "…",
+  "orgName": "…",
+  "subscriptionType": "pro"
+}
 ```
 
 Again **no token is exposed** — the status surface carries login state, auth method, API
@@ -163,16 +201,18 @@ same account tokens as Codex.
 ZCode would then hold, which is the credential-custody outcome we are avoiding. Prefer
 `auth login` + `auth status`.
 
-### Claude quota: not available, and not invented
+### Claude quota: do not invent unavailable values
 
-Investigated on the installed `claude 2.1.202`: `claude --help` lists no usage, limits, quota,
-cost or stats command, and probing each candidate name with `--json` returns
-`error: unknown option '--json'`. No local cache or state file exposing Claude rate-limit or
-plan-usage data was found either. `claude auth status --json` is the only supported local
-account surface, and it reports plan identity but no usage.
+The installed `claude 2.1.202` documents `claude auth status --json` as a local status
+surface; its observed output reports login, auth method, provider, and subscription identity,
+but no quota fields. Do not generalize this observation into a claim about every Claude usage
+API. The account screen should say only that usage information is not available through this
+connection, and must show no estimated 5-hour or weekly figures.
 
-The Claude account screen therefore states that usage limits are managed by Claude and shows
-no 5-hour or weekly figures. Inventing or estimating them is explicitly out of scope.
+Disconnect is available only while the harness bridge is connected. It stops that bridge and
+does not invoke `claude auth logout`; source sign-in and harness connection are distinct states.
+At approximately 420 px, detail metadata must remain readable, action rows must wrap, and no
+nested action button should become full width through a broad descendant selector.
 
 ### Asymmetry worth designing around
 
@@ -219,7 +259,7 @@ It should reuse `ZCodeImportSessionsResult` with `provider: "codex"` alongside t
 ## Open questions before implementation
 
 1. **Remote browser flow.** The relay is used from a phone. `authUrl` must be opened in a
-   browser that can complete the OAuth and hand back to the *local* Codex daemon. Opening it
+   browser that can complete the OAuth and hand back to the _local_ Codex daemon. Opening it
    on the phone will likely fail, because the callback targets localhost on the Mac. Options:
    restrict connect to host-side sessions, or surface a QR/copy-link for the Mac. Needs a
    decision.

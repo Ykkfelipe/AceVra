@@ -1889,8 +1889,7 @@ const zhCN: Record<string, string> = {
   "settings.accounts.import.codexDescription":
     "读取 Codex 的本地会话记录；账号是否连接都可以使用。",
   "settings.accounts.usage.unavailable": "暂无包含额度的用量窗口。",
-  "settings.accounts.usage.managedByClaude":
-    "用量限制由 Claude 管理。Claude Code 不提供本地额度数据，因此这里不展示任何数字。",
+  "settings.accounts.usage.managedByClaude": "此连接未提供用量信息。",
   "settings.accounts.usage.windowDuration": "用量窗口（{minutes} 分钟）",
   "settings.accounts.usage.windowUnspecified": "用量窗口",
   "settings.accounts.usage.blocked.rateLimitReached": "包含额度已用尽，窗口重置后恢复。",
@@ -2946,6 +2945,8 @@ const zhCN: Record<string, string> = {
   "settings.modelProvider.commandCodeCli.statusUnavailable": "暂时无法读取 Command Code CLI 状态。",
   "settings.modelProvider.commandCodeCli.signedOut": "未登录",
   "settings.modelProvider.commandCodeCli.refresh": "刷新 Command Code CLI 状态",
+  "settings.modelProvider.commandCodeCli.defaultModel": "默认模型",
+  "settings.modelProvider.commandCodeCli.contextWindow": "上下文窗口（{count} tokens）",
   "settings.modelProvider.commandCodeCli.usageUnavailable":
     "不展示套餐与用量数据：CLI 只通过交互式 /usage 浮层提供这些信息，因此这里不推测任何数字。",
   "settings.modelProvider.presetDescription":
