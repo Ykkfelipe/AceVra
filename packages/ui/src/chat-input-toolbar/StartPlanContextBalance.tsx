@@ -6,6 +6,7 @@ import type { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { getContextQuotaMeterGridClass } from "@/chat-input-toolbar/contextQuotaMeterGrid.js";
 import { formatStartPlanBucketResetTime } from "@/lib/codingPlanQuotaPresentation.js";
 import { formatQuotaModelDisplayName } from "@/settings/model-provider-section/quotaModelDisplayName.js";
+import { SHOW_PROVIDER_PLAN_PURCHASES } from "@/lib/forkProductPolicy.js";
 
 export interface ChatStartPlanBalanceConfig {
   loading: boolean;
@@ -138,7 +139,7 @@ export function ChatStartPlanBalancePanel({
             <Loader2Icon className="size-3.5 shrink-0 animate-spin text-foreground-subtle" />
           ) : null}
         </div>
-        {config.onUpgradeClick ? (
+        {SHOW_PROVIDER_PLAN_PURCHASES && config.onUpgradeClick ? (
           <CodingPlanEntryButton
             type="button"
             size="xs"

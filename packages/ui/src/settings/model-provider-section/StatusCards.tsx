@@ -1,5 +1,6 @@
 import { CodingPlanEntryButton, useCodingPlanEntryGate } from "@/settings/CodingPlanEntryButton.js";
 import { isCodingPlanActionDisabled } from "@/settings/model-provider-section/codingPlanEntryPresentation.js";
+import { SHOW_PROVIDER_PLAN_PURCHASES } from "@/lib/forkProductPolicy.js";
 /* eslint-disable max-lines -- Coding Plan/Start Plan 状态卡集中编排状态、动作和套餐区块，当前先保持同一文件避免拆散状态语义。 */
 import {
   BIGMODEL_PROVIDER_ID,
@@ -275,14 +276,19 @@ export function CodingPlanStatusPanel({
     ? formatQuotaModelDisplayName(rawPlanLevel)
     : normalizedPlanLevel;
   const canUpgrade =
+    SHOW_PROVIDER_PLAN_PURCHASES &&
     // Max 已是最高档但仍需要续期入口，不能因为不可升级就隐藏按钮。
-    upgradeActionVisible && isPurchased && !isChecking && !isUnsupported;
+    upgradeActionVisible &&
+    isPurchased &&
+    !isChecking &&
+    !isUnsupported;
   // 升级入口依赖全局套餐目录（inventory）。目录请求失败只说明升级/续期暂时不可用，
   // 不代表当前账号的套餐身份或额度有问题——账号身份与额度来自另一条权益链路。
   // 因此这里把目录失败降级成状态行内的一句提示，而不是把卡片主操作换成大号错误按钮。
   const entryGate = useCodingPlanEntryGate();
   const upgradeCatalogUnavailable = canUpgrade && entryGate.status === "error";
   const canManageCodingPlan =
+    SHOW_PROVIDER_PLAN_PURCHASES &&
     !isDisconnected &&
     !isChecking &&
     !isUnsupported &&
@@ -292,7 +298,10 @@ export function CodingPlanStatusPanel({
   const disconnectedStartPlanPricingVisible =
     isStartPlanProvider && (isDisconnected || isNotPurchased);
   const startPlanCardVisible =
-    startPlanPreviewVisible && disconnectedStartPlanPricingVisible && !upgradePlansVisible;
+    SHOW_PROVIDER_PLAN_PURCHASES &&
+    startPlanPreviewVisible &&
+    disconnectedStartPlanPricingVisible &&
+    !upgradePlansVisible;
   const startPlanPreview = useStartPlanPreview({
     enabled: startPlanCardVisible,
   });
@@ -357,7 +366,12 @@ export function CodingPlanStatusPanel({
     />
   ) : null;
   const buyAction =
-    !isStartPlanProvider && !canUpgrade && isNotPurchased && !isChecking && !isUnsupported ? (
+    SHOW_PROVIDER_PLAN_PURCHASES &&
+    !isStartPlanProvider &&
+    !canUpgrade &&
+    isNotPurchased &&
+    !isChecking &&
+    !isUnsupported ? (
       <CodingPlanEntryButton
         type="button"
         size="lg"

@@ -79,10 +79,7 @@ import { usePlanIdentitySnapshot } from "@/hooks/usePlanIdentitySnapshot.js";
 import { useBaseWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { useWorkspaceHomePath } from "@/hooks/useWorkspaceHomePath.js";
 import { prepareWorkspaceWithZCodeSessionService } from "@/hooks/useWorkspacePrepare.js";
-import {
-  createCodingPlanFunnelContext,
-  resolveCodingPlanEntryPlanState,
-} from "@/lib/codingPlanFunnelTelemetry.js";
+import { SHOW_PROVIDER_PLAN_PURCHASES } from "@/lib/forkProductPolicy.js";
 import { decodeCustomModelValue, encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import { parseModelPickerValue } from "@/lib/zcodeSessionProjection.js";
 import { captureComposerRecentSubmission } from "@/lib/composerRecent.js";
@@ -2592,11 +2589,7 @@ export function SessionPane({
       // zcode 模型就绪门禁（Codex 用自己的模型）。slash 命令、附件与共享上下文在 Codex
       // 后端尚不支持——必须显式 blocked，绝不能静默回落 ZCode 后端执行用户消息。
       if (sessionId === null && draftBackendRef.current === "codex") {
-        if (
-          slashCommand !== null ||
-          readyAttachments.length > 0 ||
-          sharedContextRefs?.length
-        ) {
+        if (slashCommand !== null || readyAttachments.length > 0 || sharedContextRefs?.length) {
           toast(intl.formatMessage({ id: "chat.toolbar.backend.codex.unsupportedInput" }));
           return "blocked" as const;
         }
@@ -4048,34 +4041,6 @@ export function SessionPane({
         : BUILTIN_MODEL_PROVIDER_IDS.zaiIndividualCodingPlan;
     codingPlanUpgradeDialog.openCodingPlanUpgrade({ providerId });
   }, [codingPlanUpgradeDialog, sharedSettings?.providerFamilyDomain]);
-  const handleOpenQuotaUpgrade = useCallback(() => {
-    const providerId = quotaBanner.upgradeProviderId;
-    if (!providerId || !codingPlanUpgradeDialog) return;
-    const eventText = intl.formatMessage({
-      id: quotaBanner.upgradeActionLabelId,
-    });
-    // 横幅只建立漏斗上下文；coding_plan_upgrade_ck 仍由真实购买面板打开后统一上报。
-    codingPlanUpgradeDialog.openCodingPlanUpgrade({
-      providerId,
-      funnelContext: createCodingPlanFunnelContext({
-        providerId,
-        upgradeSource: "session_quota_alert",
-        eventRegion: "app.session",
-        eventText,
-        entryPlanState: resolveCodingPlanEntryPlanState({
-          providerId,
-          displayStatus: "purchased",
-          planLevel: "start",
-        }),
-      }),
-    });
-  }, [
-    codingPlanUpgradeDialog,
-    intl,
-    quotaBanner.upgradeActionLabelId,
-    quotaBanner.upgradeProviderId,
-  ]);
-
   const handleConfirmShareDisclosure = useCallback(async () => {
     if (!sessionId || !shareDraft || sharePublishing) return;
     const productTurnIds = getConversationShareSelectedProductTurnIds(
@@ -4484,7 +4449,7 @@ export function SessionPane({
       error={composerError}
       onDismissError={handleDismissComposerError}
       onOpenModelSettings={handleOpenModelSettings}
-      onOpenModelUpgrade={handleOpenModelUpgrade}
+      onOpenModelUpgrade={SHOW_PROVIDER_PLAN_PURCHASES ? handleOpenModelUpgrade : undefined}
       onOpenCodeViewer={onOpenCodeViewer}
       suppressGoalCommands={selectionSideChat}
       appSlashCommands={appSlashCommands}
@@ -4555,12 +4520,6 @@ export function SessionPane({
         <ConversationQuotaBanner
           state={quotaBanner.state}
           onShown={quotaBanner.markShown}
-          upgradeActionLabelId={quotaBanner.upgradeActionLabelId}
-          onUpgrade={
-            quotaBanner.upgradeProviderId && codingPlanUpgradeDialog
-              ? handleOpenQuotaUpgrade
-              : undefined
-          }
           onDismiss={quotaBanner.dismiss}
         />
       ) : null}

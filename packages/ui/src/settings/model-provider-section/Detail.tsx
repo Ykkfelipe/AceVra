@@ -59,6 +59,7 @@ import {
   resolveCodingPlanEntryPlanState,
 } from "@/lib/codingPlanFunnelTelemetry.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
+import { SHOW_PROVIDER_PLAN_PURCHASES } from "@/lib/forkProductPolicy.js";
 import { useProviderSettingsView } from "@/hooks/useProviderSettingsView.js";
 import type { ProviderSettingsView } from "@zcode/services";
 import type { SavePersonalModelDraftInput } from "@zcode/provider";
@@ -613,7 +614,8 @@ export function ModelProviderSectionDetail({
         ),
     );
     const planSupplementalContent =
-      isStartPlanProvider && hasActivePaidPlan ? null : anonymousPurchaseChoiceBannersVisible ||
+      !SHOW_PROVIDER_PLAN_PURCHASES ||
+      (isStartPlanProvider && hasActivePaidPlan) ? null : anonymousPurchaseChoiceBannersVisible ||
         purchaseChoiceBannersVisible ? (
         <CodingPlanPurchaseChoiceBanners
           providerId={selectedNavItem.presetId}
