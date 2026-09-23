@@ -18,10 +18,9 @@ import ImageIO
 import ScreenCaptureKit
 import UniformTypeIdentifiers
 
-/// The methods this helper serves. Everything else is refused, which is what makes the
-/// read-only boundary enforceable in one place.
-let observeOnlyBrokerMethods: Set<String> = [
-    "permission_status", "list_apps", "list_windows", "observe",
+/// The methods this helper serves. Everything else is refused at the native dispatch boundary.
+let supportedBrokerMethods: Set<String> = [
+    "permission_status", "list_apps", "list_windows", "observe", "press", "set_value",
 ]
 
 // MARK: - Observation bounds
@@ -577,12 +576,23 @@ func axSnapshot(pid: pid_t, maxElements: Int, maxDepth: Int) -> [String: Any] {
     }
 
     var elements: [[String: Any]] = []
-    var truncated = false
+    let observationId = UUID().uuidString.lowercased()
+    let observedWindows = Array(windows.prefix(elementCeiling))
+    let windowIdentityKeys = observedWindows.map { window in
+        semanticWindowIdentityKey(
+            identifier: axString(window, kAXIdentifierAttribute as String),
+            title: axString(window, kAXTitleAttribute as String))
+    }
+    let windowIdentityCounts = Dictionary(grouping: windowIdentityKeys.compactMap { $0 }, by: { $0 })
+        .mapValues(\.count)
+    var truncated = windows.count > observedWindows.count
     var stringsTruncated = 0
-    var queue: [(AXUIElement, Int, Int?)] = windows.map { ($0, 0, nil) }
+    var queue: [(AXUIElement, Int, Int?, Int, [Int])] = observedWindows.enumerated().map {
+        ($0.element, 0, nil, $0.offset, [])
+    }
     var index = 0
 
-    while let (element, depth, parent) = queue.first {
+    while let (element, depth, parent, windowOrdinal, elementPath) = queue.first {
         queue.removeFirst()
         if elements.count >= elementCeiling {
             truncated = true
@@ -618,6 +628,26 @@ func axSnapshot(pid: pid_t, maxElements: Int, maxDepth: Int) -> [String: Any] {
         {
             entry["actions"] = Array(names.prefix(ObservationLimits.maxActionsPerElement))
         }
+        let observedActions = actionNames as? [String] ?? []
+        if semanticReferenceEligible(
+            element: element, role: entry["role"] as? String ?? "", actions: observedActions,
+            label: axString(element, kAXTitleAttribute as String)
+                ?? axString(element, kAXDescriptionAttribute as String) ?? ""),
+           let reference = rememberSemanticTarget(
+                observationId: observationId, pid: pid, windowOrdinal: windowOrdinal,
+                windowIdentifier: observedWindows.indices.contains(windowOrdinal)
+                    ? axString(observedWindows[windowOrdinal], kAXIdentifierAttribute as String) : nil,
+                windowTitle: observedWindows.indices.contains(windowOrdinal)
+                    ? axString(observedWindows[windowOrdinal], kAXTitleAttribute as String) : nil,
+                path: elementPath,
+                windowIdentityUnique: windowIdentityKeys.indices.contains(windowOrdinal)
+                    && windowIdentityCounts[windowIdentityKeys[windowOrdinal] ?? ""] == 1,
+                role: entry["role"] as? String ?? "",
+                identifier: axString(element, kAXIdentifierAttribute as String),
+                label: axString(element, kAXTitleAttribute as String)
+                    ?? axString(element, kAXDescriptionAttribute as String) ?? "") {
+            entry["semantic_ref"] = reference
+        }
         if textTruncated { stringsTruncated += 1 }
         elements.append(entry)
 
@@ -633,8 +663,9 @@ func axSnapshot(pid: pid_t, maxElements: Int, maxDepth: Int) -> [String: Any] {
                 // the tree is incomplete when it is complete.
                 if !children.isEmpty { truncated = true }
             } else {
-                for child in children {
-                    queue.append((child, depth + 1, parentIndex))
+                for (childIndex, child) in children.enumerated() {
+                    queue.append((child, depth + 1, parentIndex, windowOrdinal,
+                                  elementPath + [childIndex]))
                 }
             }
         }
@@ -647,6 +678,7 @@ func axSnapshot(pid: pid_t, maxElements: Int, maxDepth: Int) -> [String: Any] {
         "element_count": elements.count,
         "truncated": truncated,
         "strings_truncated": stringsTruncated,
+        "observation_id": observationId,
         "elements": elements,
     ]
 }

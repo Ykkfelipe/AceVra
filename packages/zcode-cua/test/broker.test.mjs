@@ -48,15 +48,27 @@ const VERIFIED_IDENTITY = Object.freeze({
 });
 
 describe("method registry", () => {
-  it("registers exactly the four observe-only methods", () => {
+  it("registers CUA observation and bounded semantic methods", () => {
     for (const method of ["permission_status", "list_apps", "list_windows", "observe"]) {
       assert.equal(isBrokerMethod(method), true, `${method} should be a broker method`);
       assert.equal(isReadOnlyBrokerMethod(method), true, `${method} should be read-only`);
     }
+    for (const method of ["press", "set_value"]) {
+      assert.equal(isBrokerMethod(method), true);
+      assert.equal(isReadOnlyBrokerMethod(method), false);
+    }
   });
 
   it("refuses every mutating name so it can never reach an actuator", () => {
-    for (const method of ["left_click", "type", "key", "scroll", "drag", "set_value", "kill_app"]) {
+    for (const method of [
+      "left_click",
+      "type",
+      "key",
+      "scroll",
+      "drag",
+      "kill_app",
+      "unknown_actuator",
+    ]) {
       assert.equal(isBrokerMethod(method), false, `${method} must not be a broker method`);
       assert.equal(isReadOnlyBrokerMethod(method), false);
     }
@@ -294,7 +306,7 @@ describe("client transport", () => {
   });
 });
 
-describe("observe-only runtime", () => {
+describe("Computer Use runtime", () => {
   let dir;
   let socketPath;
   let server;
@@ -323,6 +335,15 @@ describe("observe-only runtime", () => {
           height: 50,
           blank: false,
         },
+      }),
+      press: async (params) => ({
+        operation: "press",
+        semantic_ref: params.semantic_ref,
+        classification: "BEST_EFFORT_BACKGROUND",
+        route: "accessibility_action",
+        effect: "unknown",
+        evidence: [{ api_status: 0, verification: "unproven" }],
+        helper_identity: VERIFIED_IDENTITY,
       }),
     };
     server = createServer((socket) => {
@@ -369,6 +390,20 @@ describe("observe-only runtime", () => {
     assert.equal(parsed.effect, "partial");
   });
 
+  it("routes provider-independent semantic press and preserves unknown effect", async () => {
+    const runtime = createComputerUseRuntime({ brokerSocketPath: socketPath });
+    const result = await runtime.execute({
+      toolName: "computer.press",
+      arguments: { semantic_ref: "opaque-ref" },
+      context: {},
+    });
+    const parsed = JSON.parse(result.content[0].text);
+    assert.equal(parsed.operation, "press");
+    assert.equal(parsed.semantic_ref, "opaque-ref");
+    assert.equal(parsed.effect, "unknown");
+    assert.equal(parsed.evidence[0].verification, "unproven");
+  });
+
   it("never hands a host filesystem path to the model", async () => {
     const runtime = createComputerUseRuntime({ brokerSocketPath: socketPath });
     const result = await runtime.execute({
@@ -387,13 +422,20 @@ describe("observe-only runtime", () => {
     assert.equal(parsed.image.blank, false);
   });
 
-  it("keeps every mutating tool fail-closed without touching the socket", async () => {
+  it("keeps arbitrary input tools fail-closed without touching the socket", async () => {
     const runtime = createComputerUseRuntime({ brokerSocketPath: socketPath });
     const before = seen.length;
-    for (const toolName of ["left_click", "type", "key", "scroll", "set_value", "kill_app"]) {
+    for (const toolName of [
+      "left_click",
+      "type",
+      "key",
+      "scroll",
+      "kill_app",
+      "unknown_actuator",
+    ]) {
       const result = await runtime.execute({ toolName, arguments: {}, context: {} });
       assert.equal(result.isError, true, `${toolName} must fail closed`);
-      assert.match(result.content[0].text, /observation only/);
+      assert.match(result.content[0].text, /supported tools/);
     }
     assert.equal(seen.length, before, "no mutating call may reach the socket");
   });

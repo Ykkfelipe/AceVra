@@ -1,23 +1,24 @@
 /**
- * Model-facing tool name to broker method.
+ * Model-facing provider-independent tool name to broker method.
  *
- * CUA-1 ships observation only, so this map is deliberately short and the rest of the surface
- * stays fail-closed: `left_click`, `type`, `key`, `scroll`, `drag`, `set_value`,
+ * Coordinate and keyboard input stays fail-closed: `left_click`, `type`, `key`, `scroll`, `drag`,
  * `perform_action`, `launch_app`, `activate_window`, `clipboard_*` and `kill_app` are not
  * reachable through this runtime at all. `zoom` is also left unmapped on purpose — the broker
  * has no crop rung, and answering a crop request with a whole-window capture would silently
  * change what the caller asked for.
  */
-const OBSERVE_ONLY_TOOL_METHODS = Object.freeze({
+const MODEL_TOOL_METHODS = Object.freeze({
   list_apps: "list_apps",
   list_windows: "list_windows",
   get_app_state: "observe",
   screenshot: "observe",
   request_access: "permission_status",
+  "computer.press": "press",
+  "computer.set_value": "set_value",
 });
 
-const OBSERVATION_TOOL_HINT =
-  "this build supports observation only (list_apps, list_windows, get_app_state, screenshot, request_access).";
+const MODEL_TOOL_HINT =
+  "supported tools: list_apps, list_windows, get_app_state, screenshot, request_access, computer.press, computer.set_value.";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
@@ -26,7 +27,7 @@ function unavailable(text) {
 }
 
 /**
- * Observe-only Computer Use runtime.
+ * Computer Use runtime using the verified Helper broker.
  *
  * The broker module is imported lazily so this entry point stays free of node builtins for a
  * consumer that only reads its types, and so a runtime that never executes a tool never opens a
@@ -46,12 +47,12 @@ export function createComputerUseRuntime(options = {}) {
   return {
     async execute(input) {
       const toolName = typeof input?.toolName === "string" ? input.toolName : "";
-      const method = Object.prototype.hasOwnProperty.call(OBSERVE_ONLY_TOOL_METHODS, toolName)
-        ? OBSERVE_ONLY_TOOL_METHODS[toolName]
+      const method = Object.prototype.hasOwnProperty.call(MODEL_TOOL_METHODS, toolName)
+        ? MODEL_TOOL_METHODS[toolName]
         : undefined;
       if (!method) {
         return unavailable(
-          `Computer Use tool '${toolName || "(unnamed)"}' is not available: ${OBSERVATION_TOOL_HINT}`,
+          `Computer Use tool '${toolName || "(unnamed)"}' is not available: ${MODEL_TOOL_HINT}`,
         );
       }
 
@@ -83,9 +84,7 @@ export function createComputerUseRuntime(options = {}) {
         const code = error && typeof error.code === "string" ? error.code : "unknown";
         const message = error instanceof Error ? error.message : String(error);
         const { redactHostPaths } = await import("./observe-result.js");
-        return unavailable(
-          `Computer Use observation failed (${code}): ${redactHostPaths(message)}`,
-        );
+        return unavailable(`Computer Use request failed (${code}): ${redactHostPaths(message)}`);
       }
     },
     async closeSession() {},

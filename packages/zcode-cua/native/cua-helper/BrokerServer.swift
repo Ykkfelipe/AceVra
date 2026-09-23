@@ -46,9 +46,11 @@ func brokerSerialize(_ object: [String: Any]) -> Data {
 
 // MARK: - Dispatch
 
-/// Route one request. The read-only set is enforced here, which is what keeps every mutating
-/// tool fail-closed: a name that is not in `observeOnlyBrokerMethods` never reaches an actuator,
-/// because in CUA-1 there is no actuator to reach.
+/// Set only after the pinned host-connect handshake succeeds. Legacy bind mode never has an
+/// actuator capability, even when a method name is otherwise recognized.
+var cuaHostConnectSessionActive = false
+
+/// Route one request. Only the explicit CUA-2 semantic methods can reach the AX actuator.
 ///
 /// Two identity gates run before any method does:
 ///  1. the helper's own verified identity. A helper whose signed image no longer validates
@@ -73,10 +75,14 @@ func brokerDispatch(
     guard let method = request["method"] as? String else {
         return brokerFail("request has no method", code: "bad_request", id: request["id"])
     }
-    guard observeOnlyBrokerMethods.contains(method) else {
+    guard supportedBrokerMethods.contains(method) else {
         return brokerFail(
-            "method '\(method)' is not available in CUA-1 (observe-only)", code: "not_authorized",
+            "method '\(method)' is not available", code: "not_authorized",
             id: request["id"])
+    }
+    if ["press", "set_value"].contains(method), !cuaHostConnectSessionActive {
+        return brokerFail("semantic actions require the peer-bound host session",
+                          code: "not_authorized", id: request["id"])
     }
     let params = request["params"] as? [String: Any] ?? [:]
     switch method {
@@ -94,6 +100,27 @@ func brokerDispatch(
         // A refused observation is a successful call carrying `effect: "refused"`, not a
         // transport error: the caller asked for an observation and got an honest answer.
         return brokerOk(observeResult(params: params), id: request["id"])
+    case "press":
+        guard Set(params.keys).isSubset(of: ["semantic_ref"]) else {
+            return brokerFail("press accepts only semantic_ref", code: "bad_request", id: request["id"])
+        }
+        var result = performSemanticPress(params)
+        result.merge(brokerEnvelope(route: result["route"] as? String ?? "accessibility_action",
+                                    effect: result["effect"] as? String ?? "unknown")) {
+            current, _ in current
+        }
+        return brokerOk(result, id: request["id"])
+    case "set_value":
+        guard Set(params.keys).isSubset(of: ["semantic_ref", "value"]) else {
+            return brokerFail("set_value accepts only semantic_ref and value",
+                              code: "bad_request", id: request["id"])
+        }
+        var result = performSemanticSetValue(params)
+        result.merge(brokerEnvelope(route: result["route"] as? String ?? "accessibility_action",
+                                    effect: result["effect"] as? String ?? "unknown")) {
+            current, _ in current
+        }
+        return brokerOk(result, id: request["id"])
     default:
         return brokerFail("unreachable", code: "internal", id: request["id"])
     }
@@ -233,6 +260,7 @@ func runBrokerHostClient(socketPath: String, launchToken: String, connectTimeout
 
     // The verified host is the only caller on this connection; its identity was checked against
     // the pinned requirement above, so serve without the per-connection peer gate bind mode uses.
+    cuaHostConnectSessionActive = true
     serveBrokerRequests(fd, peer: nil)
     close(fd)
     exit(0)  // the host session ended; an unattended helper does not linger

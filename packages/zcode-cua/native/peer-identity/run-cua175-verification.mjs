@@ -357,7 +357,24 @@ if (host.helperConnected) {
     }
   }
 
-  // Case 8 (host hop): actuator names stay unavailable.
+  // Case 8 (host hop): legacy input names stay unavailable; semantic methods require a live
+  // observation reference and fail with a typed refusal when called without one.
+  for (const method of ["press", "set_value"]) {
+    check(
+      isBrokerMethod(method),
+      `case 8: CUA-2 semantic method ${method} is explicitly registered`,
+    );
+    try {
+      const result = await host.callMethod(method, {});
+      check(
+        result?.effect === "refused",
+        `case 8: ${method} without a target is refused`,
+        result?.effect,
+      );
+    } catch (error) {
+      check(false, `case 8: ${method} returns a typed refusal`, error.code);
+    }
+  }
   for (const method of [
     "click",
     "left_click",
@@ -366,7 +383,6 @@ if (host.helperConnected) {
     "press_key",
     "scroll",
     "drag",
-    "set_value",
     "launch_app",
   ]) {
     if (isBrokerMethod(method)) {

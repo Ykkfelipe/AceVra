@@ -1,5 +1,45 @@
 # Computer Use permission and identity foundation
 
+## CUA-2: bounded semantic Accessibility actions
+
+The signed Helper remains the sole owner of observation snapshots, semantic references,
+Accessibility mutations, and post-state verification. The Node runtime exposes only normalized
+`press` and `set_value` calls and forwards them through the existing per-launch token and
+peer-bound host relay. No second socket, legacy fallback, coordinate input, keyboard synthesis,
+app activation, or provider-specific tool is introduced.
+
+An AX observation issues an opaque `semantic_ref` for each returned element. The Helper retains
+the corresponding bounded locator (observation id, pid and process start identity, window ordinal
+plus hashed window identifier/title fingerprints, child-index path, role, and hashed element
+identifier/title fingerprint) for at most 60 seconds and 256
+references. It does not serialize AX pointers. Actions resolve the locator again against the live
+AX tree and refuse on a restarted process, changed/missing/ambiguous window, missing path, role mismatch,
+fingerprint mismatch, expired reference, or unavailable Accessibility permission. Resolution
+never searches for a nearby replacement. Document/path/URL attributes remain outside the
+observation allowlist.
+
+`computer.press` calls only an advertised `AXPress`; it is confirmed only when the AX call succeeds
+and the targeted control's own value changes. An app-wide tree change, target disappearance, or
+AX API success alone does not prove the requested effect. `computer.set_value` calls only
+`AXUIElementSetAttributeValue(AXValue)` on text fields, checkboxes, and sliders with a matching
+bounded scalar/string value. No keyboard fallback is permitted. The exact Helper route is
+`accessibility_action`; permission is Accessibility only. Screen Recording is not required.
+
+Both calls are `BEST_EFFORT_BACKGROUND`: AX can trigger app behavior, so the Helper samples the
+frontmost pid, focused-window identity, the referenced window identity and main/focused state, and
+cursor location before and after. Any changed or unreadable invariant prevents `confirmed`. The
+Helper re-reads the target and confirms `set_value` only when the requested value matches. String
+values are compared inside the Helper; returned evidence includes only type and length, never
+field contents. An API success without observable proof is `unknown`. Results carry operation,
+route, bounded pre/post facts, background invariants, and verification. Refusals include stable codes such as `stale_target`,
+`permission_required`, `unsupported_role`, `action_not_supported`, `invalid_value`, and
+`not_authorized`.
+
+Event order: runtime call → host token/peer validation → Helper policy → fresh AX resolution →
+semantic mutation → fresh AX readback → foreground/window/cursor invariant comparison → effect result.
+The Helper serializes requests; references expire rather than replay across launches. Observation
+screenshots remain internal and are never registered as artifacts.
+
 Scope: the macOS permission/identity contract for the first-party Computer Use Helper — who
 owns the TCC grants, how the Helper is signed and installed, what survives a rebuild, and
 what CUA-1 may assume. Feature behaviour (observation, AX actions, input) is out of scope

@@ -19,7 +19,7 @@
 // Usage:
 //   node packages/zcode-cua/native/cua-helper/build-dev-helper.mjs [--allow-unsigned]
 //        [--bundle-id ID] [--app-name NAME] [--install-root DIR]
-//        [--version X.Y.Z] [--build N] [--out DIR]
+//        [--version X.Y.Z] [--build N] [--out DIR] [--arch universal|arm64|x86_64]
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -57,6 +57,7 @@ const APP_NAME = argValue("--app-name", DEV_HELPER_APP_NAME);
 const BUNDLE_ID = argValue("--bundle-id", DEV_HELPER_BUNDLE_ID);
 const VERSION = argValue("--version", "0.0.1");
 const BUILD = argValue("--build", "1");
+const ARCH = argValue("--arch", "universal");
 const ALLOW_UNSIGNED = has("--allow-unsigned");
 const SIGNING_DIR = resolve(
   argValue("--signing-dir", process.env.CUA_SIGNING_DIR?.trim() || join(CUA_HOME, "signing")),
@@ -118,8 +119,12 @@ const outDir = has("--out") ? resolve(argValue("--out")) : join(here, "build");
 rmSync(appDir, { recursive: true, force: true });
 mkdirSync(macosDir, { recursive: true });
 
-// Build both slices and lipo them: the product ships universal, and a helper that
-// only runs on the build host would hide that constraint until release.
+if (!["universal", "arm64", "x86_64"].includes(ARCH)) {
+  console.error(`[cua-helper] unsupported --arch ${ARCH}; use universal, arm64, or x86_64`);
+  process.exit(1);
+}
+// Release/default builds remain universal. A selected architecture exists for deterministic
+// local acceptance when the installed Command Line Tools omit the other architecture's runtime.
 const arm64 = join(outDir, `${EXECUTABLE_NAME}-arm64`);
 const x86 = join(outDir, `${EXECUTABLE_NAME}-x86_64`);
 mkdirSync(outDir, { recursive: true });
@@ -133,10 +138,11 @@ if (swiftSources.length === 0) {
   console.error("[cua-helper] no swift sources found");
   process.exit(1);
 }
-for (const [target, out] of [
+const slices = [
   [MINIMUM_MACOS_TARGET, arm64],
   [X86_TARGET, x86],
-]) {
+].filter(([target]) => ARCH === "universal" || target.startsWith(ARCH));
+for (const [target, out] of slices) {
   execFileSync(
     "xcrun",
     [
@@ -165,9 +171,13 @@ for (const [target, out] of [
     { stdio: "inherit" },
   );
 }
-execFileSync("lipo", ["-create", arm64, x86, "-output", join(macosDir, EXECUTABLE_NAME)], {
-  stdio: "inherit",
-});
+if (ARCH === "universal") {
+  execFileSync("lipo", ["-create", arm64, x86, "-output", join(macosDir, EXECUTABLE_NAME)], {
+    stdio: "inherit",
+  });
+} else {
+  execFileSync("cp", [slices[0][1], join(macosDir, EXECUTABLE_NAME)]);
+}
 rmSync(arm64, { force: true });
 rmSync(x86, { force: true });
 

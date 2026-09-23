@@ -85,6 +85,21 @@ describe("host path disclosure", () => {
     assert.equal(result.tree.elements.length, 3);
   });
 
+  it("preserves an opaque semantic reference without serializing locator internals", () => {
+    const input = observePayload({
+      tree: {
+        ok: true,
+        observation_id: "obs-opaque",
+        element_count: 1,
+        elements: [{ index: 0, role: "AXButton", label: "Continue", semantic_ref: "9af2-opaque" }],
+      },
+    });
+    const { result } = sanitizeObservationResult(input);
+    assert.equal(result.tree.elements[0].semantic_ref, "9af2-opaque");
+    assert.equal(JSON.stringify(result).includes("child_index"), false);
+    assert.equal(JSON.stringify(result).includes("pointer"), false);
+  });
+
   it("never mutates the input", () => {
     const input = observePayload();
     sanitizeObservationResult(input);

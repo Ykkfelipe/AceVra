@@ -644,6 +644,31 @@ describe("CUA-1.75 transport session (in-process relay)", () => {
     assert.equal(response.error.code, "wrong_caller");
   });
 
+  it("forwards semantic actions only inside the admitted token-gated host session", async () => {
+    const helper = fakeHelper(host);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    try {
+      const refused = await clientCall(host, { token: undefined, method: "press" });
+      assert.equal(refused.ok, false);
+      assert.equal(refused.error.code, "missing_session_capability");
+      assert.equal(helper.received.length, 0, "unauthenticated actuation must not reach the peer");
+
+      const forwarded = await clientCall(host, {
+        token: host.token,
+        method: "press",
+        params: { semantic_ref: "opaque-ref" },
+      });
+      await helper.waitForRequest();
+      assert.equal(forwarded.ok, true);
+      assert.equal(helper.received[0].method, "press");
+      assert.deepEqual(helper.received[0].params, { semantic_ref: "opaque-ref" });
+      assert.equal("token" in helper.received[0], false);
+    } finally {
+      helper.socket.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+  });
+
   it("keeps unregistered and mutating method names off the helper connection", async () => {
     for (const method of ["left_click", "type", "__proto__", "observe; drop", ""]) {
       const response = await clientCall(host, { token: host.token, method });

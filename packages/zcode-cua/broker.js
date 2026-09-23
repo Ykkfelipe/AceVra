@@ -187,16 +187,17 @@ export const actionUnavailable = brokerErrorFactory("action_unavailable");
 export const foregroundRequired = brokerErrorFactory("foreground_required");
 
 /**
- * The observe-only method registry, and the single place the read-only boundary is enforced.
+ * Broker method registry, and the single place method names are authorized.
  *
- * `packages/zcode-cua/specs/computer-use.md` names exactly these four. CUA-1 ships no mutating
- * method, so a mutating tool name cannot reach an actuator through this path even by mistake.
+ * Semantic methods are explicitly enumerated; arbitrary input and unknown methods remain refused.
  */
 const BROKER_METHOD_KINDS = Object.freeze({
   permission_status: "read",
   list_apps: "read",
   list_windows: "read",
   observe: "read",
+  press: "mutating",
+  set_value: "mutating",
 });
 
 export function isBrokerMethod(method) {
@@ -259,7 +260,7 @@ export async function dispatchRequest(backend, request) {
     return errorResponse("request has no method", { code: "bad_request" });
   }
   if (!isBrokerMethod(request.method)) {
-    return errorResponse(`method '${request.method}' is not available in CUA-1 (observe-only)`, {
+    return errorResponse(`method '${request.method}' is not available`, {
       code: "not_authorized",
     });
   }
@@ -325,7 +326,7 @@ function encodeRequestLine(method, params, id, token) {
 }
 
 /**
- * Call one observe-only method on a running Helper.
+ * Call one explicitly registered method on a running Helper.
  *
  * Every failure throws a `BrokerError` with a stable `code`, because callers must distinguish
  * "the grant is missing" from "the Helper is not running" to degrade accurately.
@@ -347,7 +348,7 @@ export async function callBrokerMethod(args) {
     throw new BrokerError("a broker socket path is required", { code: "no_socket" });
   }
   if (!isBrokerMethod(method)) {
-    throw new BrokerError(`method '${method}' is not available in CUA-1 (observe-only)`, {
+    throw new BrokerError(`method '${method}' is not available`, {
       code: "not_authorized",
     });
   }
