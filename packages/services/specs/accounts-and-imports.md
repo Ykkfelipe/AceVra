@@ -345,3 +345,12 @@ ignored.
 Codex rollout sessions are local Codex history only. Account/App Server APIs do not establish
 availability of general chatgpt.com conversations; no browser scraping, cookie copying, or
 invented cloud-history endpoint is permitted.
+
+### Isolated test filesystem boundary
+
+Codex history scanner/import tests and account tests that may launch a Codex client must set
+`CODEX_HOME` to a temporary directory before exercising the code and remove it afterward.
+In a Node test runner process, resolving the Codex sessions directory without an explicit home
+or `CODEX_HOME` fails with a clear isolation error. This guard is test-only: normal application
+execution retains the standard `~/.codex` fallback. The regression suite verifies the isolated
+scanner cannot discover or read entries from the user's real Codex sessions directory.

@@ -12,15 +12,26 @@
  * Run: mise exec -- node --import tsx --test packages/services/test/accountBridgeSecurityBoundary.test.ts
  */
 import assert from "node:assert/strict";
-import test from "node:test";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { after, before, test } from "node:test";
+import { cleanupCodexTestIsolation, getIsolatedCodexHome } from "./codexTestIsolation.js";
 import { createAccountBridgeService } from "../src/accounts/accountBridgeService.js";
 import {
   resolveCodexExecutable,
   CodexAppServerBridge,
 } from "../src/accounts/codexAppServerBridge.js";
-import { scanCodexImportableSessions } from "../src/accounts/codexHistoryImportRepo.js";
+import {
+  resolveCodexSessionsDir,
+  scanCodexImportableSessions,
+} from "../src/accounts/codexHistoryImportRepo.js";
 
 const codexInstalled = Boolean(resolveCodexExecutable());
+
+before(() => {
+  process.env.CODEX_HOME = getIsolatedCodexHome();
+});
+after(cleanupCodexTestIsolation);
 
 /** Any key or value that would indicate credential material leaking into the wire shape. */
 function assertNoCredentialMaterial(value: unknown, label: string): void {
@@ -99,7 +110,7 @@ test(
 
 test(
   "codex bridge initializes and returns only sanitized account data",
-  { skip: !codexInstalled },
+  { skip: "requires a user Codex login; account tests use an isolated CODEX_HOME" },
   async () => {
     const opened: string[] = [];
     const svc = makeService(opened);
@@ -153,6 +164,8 @@ test(
     const opened: string[] = [];
     const svc = makeService(opened);
     await svc.disconnect("codex");
+    assert.ok(process.env.CODEX_HOME, "Codex home fixture must be set by codexTestIsolation");
+    assert.equal(process.env.CODEX_HOME, getIsolatedCodexHome());
     const candidates = await scanCodexImportableSessions({ limit: 3 });
     for (const candidate of candidates) {
       assert.equal(candidate.provider, "codex");
@@ -162,3 +175,23 @@ test(
     svc.dispose();
   },
 );
+
+test("Codex history scanner rejects an unisolated or real user home before filesystem access", async () => {
+  const previousHome = process.env.CODEX_HOME;
+  delete process.env.CODEX_HOME;
+  try {
+    await assert.rejects(() => scanCodexImportableSessions(), /require an isolated CODEX_HOME/);
+    assert.throws(
+      () => resolveCodexSessionsDir(join(homedir(), ".codex")),
+      /cannot use the real Codex home directory/,
+    );
+    assert.throws(() => resolveCodexSessionsDir(), /require an isolated CODEX_HOME/);
+    assert.notEqual(
+      resolveCodexSessionsDir(getIsolatedCodexHome()),
+      join(homedir(), ".codex", "sessions"),
+    );
+  } finally {
+    if (previousHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousHome;
+  }
+});

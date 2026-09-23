@@ -22,10 +22,21 @@ import { createServiceLogger } from "#src/logger/serviceLogger.js";
 const logger = createServiceLogger("codex-history-import");
 
 export function resolveCodexSessionsDir(codexHome?: string): string {
-  return join(
-    codexHome?.trim() || process.env.CODEX_HOME?.trim() || join(homedir(), ".codex"),
-    "sessions",
-  );
+  const configuredHome = codexHome?.trim() || process.env.CODEX_HOME?.trim();
+  if (!configuredHome && process.env.NODE_TEST_CONTEXT) {
+    throw new Error(
+      "Codex history tests require an isolated CODEX_HOME or an explicit codexHome option",
+    );
+  }
+  if (configuredHome && process.env.NODE_TEST_CONTEXT) {
+    const homeDirectory = homedir();
+    const normalizedHome = configuredHome.replace(/[\\/]+$/, "");
+    const normalizedRealCodexHome = join(homeDirectory, ".codex");
+    if (normalizedHome === normalizedRealCodexHome) {
+      throw new Error("Codex history tests cannot use the real Codex home directory");
+    }
+  }
+  return join(configuredHome || join(homedir(), ".codex"), "sessions");
 }
 
 /** Read only the first line of a rollout; the header is all we need for a candidate. */

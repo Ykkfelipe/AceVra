@@ -3,9 +3,16 @@ import { mkdtemp, rm, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { after, before } from "node:test";
+import { cleanupCodexTestIsolation, getIsolatedCodexHome } from "./codexTestIsolation.js";
 import { createAccountBridgeService } from "../src/accounts/accountBridgeService.js";
 import { CodexAppServerBridge } from "../src/accounts/codexAppServerBridge.js";
 import { discoverExecutable } from "../src/accounts/executableDiscovery.js";
+
+before(() => {
+  process.env.CODEX_HOME = getIsolatedCodexHome();
+});
+after(cleanupCodexTestIsolation);
 
 async function executable(content: string): Promise<{ dir: string; path: string }> {
   const dir = await mkdtemp(join(tmpdir(), "zcode-account-"));

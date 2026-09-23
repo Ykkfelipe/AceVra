@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { after, before } from "node:test";
+import { cleanupCodexTestIsolation, getIsolatedCodexHome } from "./codexTestIsolation.js";
 import { zcodeSessionImportHistorySchema } from "@zcode/shared";
 import { parseCodexRollout } from "../src/accounts/codexHistoryImportParser.js";
 import { scanCodexImportableSessions } from "../src/accounts/codexHistoryImportRepo.js";
@@ -10,6 +12,11 @@ import {
   buildImportedCodexTaskId,
   importCodexNativeSessions,
 } from "../src/accounts/codexNativeSessionImportService.js";
+
+before(() => {
+  process.env.CODEX_HOME = getIsolatedCodexHome();
+});
+after(cleanupCodexTestIsolation);
 
 test("Codex rollout scan parses visible messages and import retries are idempotent", async () => {
   const temp = await mkdtemp(join(tmpdir(), "zcode-codex-history-"));
