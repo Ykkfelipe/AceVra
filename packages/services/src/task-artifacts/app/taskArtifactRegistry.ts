@@ -27,7 +27,7 @@ import {
 } from "@zcode/shared";
 import { PROTOCOL_V4_LIMITS } from "@zcode/shared/zcode-protocol-v4";
 import { resolveWorkspaceKey } from "@zcode/shared";
-import { getDataBaseDir } from "#src/paths.js";
+import { getAppConfigDir } from "#src/paths.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
 const logger = createServiceLogger("task-artifacts");
@@ -93,7 +93,7 @@ function descriptorOf(meta: StoredArtifactMeta, backingExists: boolean): TaskArt
 }
 
 export interface TaskArtifactStoreDeps {
-  /** store 根目录；缺省 `<dataBaseDir>/task-artifacts`。测试注入临时目录。 */
+  /** store 根目录；缺省 `<appConfigDir>/task-artifacts`（~/.zcode/v2/task-artifacts）。测试注入临时目录。 */
   readonly rootDir?: string;
   readonly now?: () => number;
 }
@@ -112,7 +112,7 @@ export class TaskArtifactRegistry {
   }
 
   #defaultRoot(): string {
-    return getDataBaseDir();
+    return getAppConfigDir();
   }
 
   get rootDir(): string {
