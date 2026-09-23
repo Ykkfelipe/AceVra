@@ -2324,6 +2324,11 @@ export const zcodeBrowserExecuteParamsSchema = z
     clientMode: browserClientModeSchema.optional(),
     sessionContext: browserSessionContextKindSchema.optional(),
     command: browserCommandSchema,
+    /**
+     * 截图的采集意图。"observation" = 运行时自动的轮尾观察截图，host 不得登记为任务 artifact；
+     * 缺省 = 模型/用户显式请求。放在 params 而非 BrowserCommand，模型编写的 cell 无法设置。
+     */
+    captureIntent: z.literal("observation").optional(),
   })
   .strict();
 export type ZCodeBrowserExecuteParams = z.infer<typeof zcodeBrowserExecuteParamsSchema>;

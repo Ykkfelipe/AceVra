@@ -84,6 +84,9 @@ export async function appendBrowserTurnScreenshot(
       sessionId: runtime.sessionId,
       turnId: String(state.turnId),
       command: { method: "screenshot", tabId: activeTab.tabId },
+      // 轮尾截图是运行时内部观察状态，不是用户请求的交付物：显式标注，host 据此不登记 artifact，
+      // 不依赖 sha256 去重掩盖（页面变化时去重无效）。
+      captureIntent: "observation",
       traceContext: state.turnTraceContext,
       signal: state.turnAbortSignal,
     });

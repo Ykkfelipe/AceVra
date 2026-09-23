@@ -32,6 +32,8 @@ export interface BrowserAmbientContextExecutor {
     clientMode: BrowserClientMode;
     sessionContext: "live" | "cached";
     command: BrowserCommand;
+    /** "observation" = 运行时自动观察截图；artifact 装饰器据此跳过登记并在下发前剥离。 */
+    captureIntent?: "observation";
   }): Promise<{ ok: boolean; [key: string]: unknown }>;
 }
 

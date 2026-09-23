@@ -531,6 +531,11 @@ export interface BrowserControlExecuteInput {
   sessionId: string;
   turnId?: string;
   command: BrowserCommand;
+  /**
+   * 只由运行时内部生产者设置："observation" 表示自动轮尾观察截图，不是用户交付物，
+   * host 不会把它登记为任务 artifact。模型经 node_repl/broker 发起的命令不携带此字段。
+   */
+  captureIntent?: "observation";
   traceContext?: TraceContext;
   signal?: AbortSignal;
 }

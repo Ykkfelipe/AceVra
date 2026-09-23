@@ -21,6 +21,7 @@ interface ExecutorLike {
     workspacePath: string;
     workspaceIdentity?: string;
     command: unknown;
+    captureIntent?: "observation";
   }): Promise<{
     ok: boolean;
     image?: { base64?: string; hostPath?: string; fileName?: string; mimeType: string };
@@ -46,7 +47,16 @@ export function instrumentBrowserExecutorForArtifacts<T extends ExecutorLike>(op
   // 被误判为 protocol_parse_error 并关掉整个 agent 连接。这里改为 Proxy 装饰：
   // 只拦截 execute，其余成员（list 及未来新增方法）原样委托给原 executor。
   const instrumentedExecute: ExecutorLike["execute"] = async (input) => {
-    const result = await executor.execute(input);
+    // captureIntent 只服务于本装饰器的登记决策，不下发给 main 执行桥。
+    const { captureIntent, ...executorInput } = input;
+    const result = await executor.execute(executorInput);
+    // 运行时自动轮尾观察截图不是用户交付物：显式跳过登记，不依赖 sha256 去重掩盖。
+    if (captureIntent === "observation") {
+      // 宿主路径永不出 host：观察截图同样只保留 bytes 形式。
+      if (!result.image?.hostPath) return result;
+      const { hostPath: _hostPath, fileName: _fileName, ...image } = result.image;
+      return { ...result, image: image.base64 ? image : undefined };
+    }
     if (!result.ok || !result.image || (!result.image.base64 && !result.image.hostPath))
       return result;
     const returnedImage = result.image.base64

@@ -27,8 +27,10 @@ import {
   type TaskArtifactDescriptor,
 } from "@zcode/shared";
 import { setDataBaseDir } from "../src/paths.js";
+import { homedir } from "node:os";
 import {
   instrumentBrowserExecutorForArtifacts,
+  resolveTaskArtifactScope,
   TaskArtifactRegistry,
   TaskArtifactRegistrationError,
   TaskArtifactRetrievalError,
@@ -614,4 +616,333 @@ test("readTaskArtifact preserves MIME and chunks bytes in order", async () => {
     path.join(registry.rootDir, TASK_ID, `${registered.artifact.artifactId}.bin`),
   );
   assert.deepEqual([...stored], [...bytes]);
+});
+
+// ---- 任务作用域规范化（真实 ZCode 会话 id 为 sess_<uuid>） ----
+
+const LIVE_SESSION_ID = `sess_${TASK_ID}`;
+/** 另一张不同字节的 PNG：模拟页面在显式截图与轮尾观察截图之间发生变化。 */
+const PNG_BYTES_CHANGED = Uint8Array.from([...PNG_BYTES, 0x01, 0x02, 0x03]);
+
+test("task scope: bare UUID and sess_<uuid> resolve to one canonical scope; malformed and path-like ids fail", () => {
+  assert.deepEqual(resolveTaskArtifactScope(TASK_ID), { canonicalTaskId: TASK_ID });
+  assert.deepEqual(resolveTaskArtifactScope(LIVE_SESSION_ID), { canonicalTaskId: TASK_ID });
+  assert.deepEqual(resolveTaskArtifactScope(`sess_${TASK_ID.toUpperCase()}`), {
+    canonicalTaskId: TASK_ID,
+  });
+  for (const bad of [
+    "",
+    "sess_",
+    "sess_not-a-uuid",
+    `sess_${TASK_ID}x`,
+    `sess_sess_${TASK_ID}`,
+    `SESS_${TASK_ID}`,
+    `task_${TASK_ID}`,
+    `sess_../${TASK_ID}`,
+    `../${TASK_ID}`,
+    `${TASK_ID}/..`,
+    `sess_${TASK_ID}/../../etc`,
+    "..",
+    "/etc/passwd",
+    `C:\\${TASK_ID}`,
+  ]) {
+    assert.equal(resolveTaskArtifactScope(bad), null, `must reject ${JSON.stringify(bad)}`);
+  }
+});
+
+test("registry: sess_<uuid> registers, and both id forms read the same artifact from one directory", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const registered = await registry.registerTaskArtifact({
+      taskId: LIVE_SESSION_ID,
+      scope: { workspacePath: WORKSPACE_A },
+      origin: "browser-use",
+      fileName: "example.png",
+      mimeType: "image/png",
+      bytes: PNG_BYTES,
+      turnId: "turn-live",
+    });
+    // 逻辑 id 原样保留在描述符中（renderer 以 live sess_ 形式查询）。
+    assert.equal(registered.artifact.taskId, LIVE_SESSION_ID);
+    const viaSession = await registry.listTaskArtifacts({
+      taskId: LIVE_SESSION_ID,
+      workspacePath: WORKSPACE_A,
+    });
+    const viaUuid = await registry.listTaskArtifacts({
+      taskId: TASK_ID,
+      workspacePath: WORKSPACE_A,
+    });
+    assert.deepEqual(viaSession.artifacts, viaUuid.artifacts);
+    assert.equal(viaSession.artifacts.length, 1);
+    const read = await registry.readTaskArtifact({
+      taskId: TASK_ID,
+      artifactId: registered.artifact.artifactId,
+      offset: 0,
+      workspacePath: WORKSPACE_A,
+    });
+    assert.deepEqual(Buffer.from(read.dataBase64, "base64"), Buffer.from(PNG_BYTES));
+    // 只有规范 UUID 成为目录名；sess_ 前缀从不出现在文件系统路径中。
+    const { readdir } = await import("node:fs/promises");
+    assert.deepEqual(await readdir(path.join(dir, "store")), [TASK_ID]);
+
+    // 同一逻辑任务的两种写法共用 dedupe：同 bytes/origin/turn 不产生第二个 artifact。
+    const again = await registry.registerTaskArtifact({
+      taskId: TASK_ID,
+      scope: { workspacePath: WORKSPACE_A },
+      origin: "browser-use",
+      fileName: "example.png",
+      mimeType: "image/png",
+      bytes: PNG_BYTES,
+      turnId: "turn-live",
+    });
+    assert.equal(again.artifact.artifactId, registered.artifact.artifactId);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("registry: malformed and traversal task ids are rejected on register, list and read", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    for (const taskId of ["sess_nope", `sess_../${TASK_ID}`, `../../${TASK_ID}`, `${TASK_ID}/x`]) {
+      await assert.rejects(
+        registry.registerTaskArtifact({
+          taskId,
+          scope: { workspacePath: WORKSPACE_A },
+          origin: "browser-use",
+          fileName: "x.png",
+          mimeType: "image/png",
+          bytes: PNG_BYTES,
+        }),
+        (error: TaskArtifactRegistrationError) => error.reasonCode === "artifact_invalid_scope",
+      );
+      // list 对非法 id 与未注册一致：空清单，不泄露区别。
+      const listed = await registry.listTaskArtifacts({ taskId, workspacePath: WORKSPACE_A });
+      assert.equal(listed.artifacts.length, 0);
+      await assert.rejects(
+        registry.readTaskArtifact({
+          taskId,
+          artifactId: TASK_ID_2,
+          offset: 0,
+          workspacePath: WORKSPACE_A,
+        }),
+        (error: TaskArtifactRetrievalError) => error.code === "artifact_not_registered",
+      );
+    }
+    const { readdir } = await import("node:fs/promises");
+    assert.deepEqual(await readdir(dir), [], "no store directory is created for rejected ids");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("browser-use: live sess_<uuid> screenshot registers and the renderer lookup by that id finds it", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const executor = {
+      async list() {
+        return [];
+      },
+      async execute() {
+        return {
+          ok: true,
+          image: { base64: Buffer.from(PNG_BYTES).toString("base64"), mimeType: "image/png" },
+        };
+      },
+    };
+    const instrumented = instrumentBrowserExecutorForArtifacts({ executor, registry });
+    const result = await instrumented.execute({
+      requestId: "r-live",
+      sessionId: LIVE_SESSION_ID,
+      turnId: "turn-live",
+      workspaceKey: WORKSPACE_A,
+      workspacePath: WORKSPACE_A,
+      command: { method: "screenshot" },
+    });
+    assert.deepEqual(result.artifactDelivery, { status: "delivered" });
+    // useTaskArtifacts 以 live 会话 id 作为 taskId 查询。
+    const listed = await registry.listTaskArtifacts({
+      taskId: LIVE_SESSION_ID,
+      workspacePath: WORKSPACE_A,
+    });
+    assert.equal(listed.artifacts.length, 1);
+    assert.equal(listed.artifacts[0]?.mimeType, "image/png");
+    assert.equal(listed.artifacts[0]?.taskId, LIVE_SESSION_ID);
+    assert.ok(!JSON.stringify(listed).includes(dir), "descriptor never contains a host path");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("browser-use: automatic observation screenshot is never registered even when the page changed", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const received: unknown[] = [];
+    let nextBytes = PNG_BYTES;
+    const executor = {
+      async list() {
+        return [];
+      },
+      async execute(input: unknown) {
+        received.push(input);
+        return {
+          ok: true,
+          image: { base64: Buffer.from(nextBytes).toString("base64"), mimeType: "image/png" },
+        };
+      },
+    };
+    const instrumented = instrumentBrowserExecutorForArtifacts({ executor, registry });
+    const base = {
+      requestId: "r",
+      sessionId: LIVE_SESSION_ID,
+      turnId: "turn-page-change",
+      workspaceKey: WORKSPACE_A,
+      workspacePath: WORKSPACE_A,
+      command: { method: "screenshot" },
+    };
+    const explicit = await instrumented.execute(base);
+    assert.deepEqual(explicit.artifactDelivery, { status: "delivered" });
+
+    // 页面在两次截图之间变化：字节不同，sha256 去重无法合并；只能靠显式 captureIntent 排除。
+    nextBytes = PNG_BYTES_CHANGED;
+    const observation = await instrumented.execute({ ...base, captureIntent: "observation" });
+    assert.equal(observation.ok, true);
+    assert.equal("artifactDelivery" in observation, false, "observation never claims delivery");
+    assert.ok(observation.image?.base64, "observation image still reaches the runtime display");
+
+    const listed = await registry.listTaskArtifacts({
+      taskId: LIVE_SESSION_ID,
+      workspacePath: WORKSPACE_A,
+    });
+    assert.equal(listed.artifacts.length, 1);
+    assert.equal(listed.artifacts[0]?.byteSize, PNG_BYTES.byteLength);
+    // captureIntent 只服务于登记决策，不下发给 main 执行桥。
+    assert.equal(
+      received.every((input) => !("captureIntent" in (input as object))),
+      true,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("browser-use: observation screenshot with a saved-file source never exposes the host path", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const hostPath = path.join(dir, "observation.png");
+    const executor = {
+      async list() {
+        return [];
+      },
+      async execute() {
+        return {
+          ok: true,
+          image: { base64: "AAAA", hostPath, fileName: "o.png", mimeType: "image/png" },
+        };
+      },
+    };
+    const instrumented = instrumentBrowserExecutorForArtifacts({ executor, registry });
+    const result = await instrumented.execute({
+      requestId: "r",
+      sessionId: LIVE_SESSION_ID,
+      workspaceKey: WORKSPACE_A,
+      workspacePath: WORKSPACE_A,
+      command: { method: "screenshot" },
+      captureIntent: "observation",
+    });
+    assert.ok(!JSON.stringify(result).includes(hostPath));
+    assert.equal(
+      (await registry.listTaskArtifacts({ taskId: LIVE_SESSION_ID, workspacePath: WORKSPACE_A }))
+        .artifacts.length,
+      0,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- store 根目录跟随进程数据根（custom fork 隔离） ----
+
+test("store root follows the isolated app-data root and never falls back to the real home", async () => {
+  const dataBase = await mkdtemp(path.join(tmpdir(), "task-artifacts-data-base-"));
+  try {
+    setDataBaseDir(dataBase);
+    const registry = new TaskArtifactRegistry();
+    const expectedRoot = path.join(dataBase, ".zcode", "v2", "task-artifacts");
+    assert.equal(registry.rootDir, expectedRoot);
+    assert.ok(!registry.rootDir.startsWith(path.join(homedir(), ".zcode")));
+    await registry.registerTaskArtifact({
+      taskId: LIVE_SESSION_ID,
+      scope: { workspacePath: WORKSPACE_A },
+      origin: "browser-use",
+      fileName: "iso.png",
+      mimeType: "image/png",
+      bytes: PNG_BYTES,
+    });
+    const { readdir } = await import("node:fs/promises");
+    assert.deepEqual(await readdir(expectedRoot), [TASK_ID]);
+
+    // 数据根在构造之后才切换（setDataBaseDir 晚于服务装配）时，store 也必须跟随，不能停留在旧根。
+    const later = await mkdtemp(path.join(tmpdir(), "task-artifacts-data-base-later-"));
+    try {
+      setDataBaseDir(later);
+      assert.equal(registry.rootDir, path.join(later, ".zcode", "v2", "task-artifacts"));
+    } finally {
+      await rm(later, { recursive: true, force: true });
+    }
+  } finally {
+    // 不把全局数据根留在已删除的临时目录上，避免污染同进程后续测试。
+    setDataBaseDir(null);
+    await rm(dataBase, { recursive: true, force: true });
+  }
+});
+
+test("registry: concurrent registrations through both id forms serialize into one artifact", async () => {
+  const { registry, dir } = await makeRegistry();
+  try {
+    const register = (taskId: string) =>
+      registry.registerTaskArtifact({
+        taskId,
+        scope: { workspacePath: WORKSPACE_A },
+        origin: "browser-use",
+        fileName: "race.png",
+        mimeType: "image/png",
+        bytes: PNG_BYTES,
+        turnId: "turn-race",
+      });
+    const results = await Promise.all([
+      register(TASK_ID),
+      register(LIVE_SESSION_ID),
+      register(TASK_ID.toUpperCase()),
+      register(`sess_${TASK_ID.toUpperCase()}`),
+    ]);
+    assert.equal(new Set(results.map((result) => result.artifact.artifactId)).size, 1);
+    const listed = await registry.listTaskArtifacts({
+      taskId: LIVE_SESSION_ID,
+      workspacePath: WORKSPACE_A,
+    });
+    assert.equal(listed.artifacts.length, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveDataBaseDir: fork dev env resolves beneath the fork home, not the official ~/.zcode", async () => {
+  const { resolveDataBaseDir } = await import("../src/paths.js");
+  const forkHome = path.join(tmpdir(), "fork-dev-home-fixture");
+  assert.equal(
+    resolveDataBaseDir({ env: { ZCODE_DATA_BASE_DIR: forkHome }, homeDir: "/home/real" }),
+    forkHome,
+  );
+  assert.equal(
+    resolveDataBaseDir({
+      env: { ZCODE_HOME: path.join(forkHome, ".zcode") },
+      homeDir: "/home/real",
+    }),
+    forkHome,
+  );
+  assert.equal(
+    resolveDataBaseDir({ env: { ZCODE_FORK_DEV: "1" }, homeDir: "/home/real" }),
+    path.join("/home/real", ".zcode-fork-dev-home"),
+  );
 });

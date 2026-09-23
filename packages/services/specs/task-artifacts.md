@@ -46,11 +46,11 @@ Codex: turn/completed + user-named          ConversationTimeline
 
 ### State ownership
 
-| State                       | Owner                                                                                            | Persisted |
-| --------------------------- | ------------------------------------------------------------------------------------------------ | --------- |
-| artifact metadata + bytes   | host task-artifact store (`~/.zcode/v2/task-artifacts/<taskId>/<artifactId>.bin` + `index.json`) | yes       |
-| artifact rows (codex tasks) | `CodexThreadProjection` (in-memory, host-owned)                                                  | no        |
-| artifact list (zcode tasks) | renderer fetch, id-keyed                                                                         | no        |
+| State                       | Owner                                                                                                        | Persisted |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| artifact metadata + bytes   | host task-artifact store (`<appConfigDir>/task-artifacts/<canonicalTaskId>/<artifactId>.bin` + `index.json`) | yes       |
+| artifact rows (codex tasks) | `CodexThreadProjection` (in-memory, host-owned)                                                              | no        |
+| artifact list (zcode tasks) | renderer fetch, id-keyed                                                                                     | no        |
 
 Bytes are **copied** into the store at registration. The original host path is
 used only for the existence check and the copy; it is never persisted, logged,
@@ -72,6 +72,58 @@ or transmitted. `displayName` is the source basename.
 Only explicitly registered files may be retrieved. There is no path query
 parameter anywhere in the retrieval surface; artifact ids are UUIDs and the
 store layout is derived from `(taskId, artifactId)` internally.
+
+### Task scope normalization
+
+Real ZCode runtime sessions are identified as `sess_<uuid>`; Codex tasks and
+older callers use a bare UUID. `resolveTaskArtifactScope(taskId)` is the single
+parser for every task-scoped registry operation (register, list, read, meta
+lookup, full listing, and the per-task write lock):
+
+| input                                                                    | result                        |
+| ------------------------------------------------------------------------ | ----------------------------- |
+| `<uuid>` (any hex case)                                                  | canonical `<uuid>` lowercased |
+| `sess_<uuid>`                                                            | the same canonical `<uuid>`   |
+| anything else (`sess_` without a UUID, `..`, separators, other prefixes) | rejected                      |
+
+Only the canonical UUID is ever used as a filesystem component. The id supplied
+by the first registration of an artifact is kept in its stored metadata and
+returned as `descriptor.taskId` (for ZCode sessions that is the live `sess_`
+id). Deduplicated re-registrations and lookups through the other form return
+that same stored value; consumers must not compare `descriptor.taskId` strings
+across forms. Rejection maps to `artifact_invalid_scope` on registration and to
+the uniform `artifact_not_registered` fault on retrieval.
+
+Known limitation: runtime child sessions whose ids are not `sess_<uuid>`
+(`sess_workflow_*`, `sess_subagent_*`, `sess_wf-actor*`) are rejected, so an
+explicit screenshot there logs a warning and produces no card. Subagents are
+already denied browser access by the broker; mapping workflow children to their
+parent task is out of scope for this change.
+
+The store root is resolved once per public operation and passed through, so a
+single registration never splits bytes and index across two data roots.
+
+### Store root
+
+The store root is resolved on every operation as
+`<getAppConfigDir()>/task-artifacts`. `getAppConfigDir()` follows the process
+data base (`setDataBaseDir` › `ZCODE_DATA_BASE_DIR` › fork/home default), so the
+custom fork dev host (launched with `ZCODE_DATA_BASE_DIR=~/.zcode-fork-dev-home`)
+stores beneath `~/.zcode-fork-dev-home/.zcode/v2/task-artifacts` and never falls
+back to the official `~/.zcode`. Tests inject `rootDir` or a temporary data base.
+
+### Explicit vs automatic screenshots
+
+Only explicit screenshots (a model/user `tab.screenshot()` through node_repl or
+the browser broker) become artifacts. The runtime's automatic end-of-turn
+observation screenshot (`source: "browser_turn_end"`) sets
+`captureIntent: "observation"` on its `BrowserControlPort.execute` call; the
+agent broker forwards it in `interaction/browserExecute` params; the host
+handler passes it to the executor; the artifact hook skips registration for it
+and strips the flag before calling the underlying executor. The flag lives in
+protocol params, not in `BrowserCommand`, so model-authored cells cannot set it.
+Absent means explicit. SHA-256 deduplication is not relied on to hide
+observation captures.
 
 ### Browser screenshot source selection and timing
 

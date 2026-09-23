@@ -29,10 +29,9 @@ import { PROTOCOL_V4_LIMITS } from "@zcode/shared/zcode-protocol-v4";
 import { resolveWorkspaceKey } from "@zcode/shared";
 import { getAppConfigDir } from "#src/paths.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { isUuidLike, resolveTaskArtifactScope } from "./taskArtifactScope.js";
 
 const logger = createServiceLogger("task-artifacts");
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 /** 单读 chunk 上限：与 v4 attachment 分块上限对齐，独立声明避免耦合漂移。 */
 const READ_CHUNK_MAX_BYTES = PROTOCOL_V4_LIMITS.attachmentChunkMaxBytes;
@@ -54,9 +53,7 @@ interface TaskIndexFile {
   artifacts: StoredArtifactMeta[];
 }
 
-export function isUuidLike(value: string): boolean {
-  return UUID_RE.test(value);
-}
+export { isUuidLike, resolveTaskArtifactScope };
 
 export function fileNameFromPath(hostPath: string): string {
   return hostPath.replace(/\\/gu, "/").split("/").filter(Boolean).at(-1) ?? hostPath;
@@ -93,7 +90,10 @@ function descriptorOf(meta: StoredArtifactMeta, backingExists: boolean): TaskArt
 }
 
 export interface TaskArtifactStoreDeps {
-  /** store 根目录；缺省 `<appConfigDir>/task-artifacts`（~/.zcode/v2/task-artifacts）。测试注入临时目录。 */
+  /**
+   * store 根目录；缺省每次操作时解析 `<getAppConfigDir()>/task-artifacts`，跟随进程数据根
+   * （custom fork dev host 下即 `~/.zcode-fork-dev-home/.zcode/v2/task-artifacts`）。测试注入临时目录。
+   */
   readonly rootDir?: string;
   readonly now?: () => number;
 }
@@ -103,42 +103,44 @@ export interface TaskArtifactStoreDeps {
  * `<root>/<taskId>/index.json`（整文件原子重写；条目少，无并发写者）。
  */
 export class TaskArtifactRegistry {
-  readonly #rootDir: string;
+  readonly #rootDirOverride: string | undefined;
   readonly #now: () => number;
   /** One host owns a registry; serialize read→dedupe→write per task to make replay idempotent. */
   readonly #taskWriteLocks = new Map<string, Promise<void>>();
 
   constructor(deps: TaskArtifactStoreDeps = {}) {
-    this.#rootDir = deps.rootDir ?? path.join(this.#defaultRoot(), "task-artifacts");
+    this.#rootDirOverride = deps.rootDir;
     this.#now = deps.now ?? (() => Date.now());
   }
 
-  #defaultRoot(): string {
-    return getAppConfigDir();
-  }
-
+  /** 每次解析，避免构造时刻早于 setDataBaseDir 而把 store 固定在错误的数据根。 */
   get rootDir(): string {
-    return this.#rootDir;
+    return this.#rootDirOverride ?? path.join(getAppConfigDir(), "task-artifacts");
   }
 
-  #taskDir(taskId: string): string {
-    if (!isUuidLike(taskId)) {
-      throw new TaskArtifactRetrievalError(TASK_ARTIFACT_FAULT_CODES.notRegistered);
-    }
-    return path.join(this.#rootDir, taskId);
+  /** 检索面的 scope 解析：非法 id 与未注册同一错误码，不向调用方泄露区别。 */
+  #canonicalTaskId(taskId: string): string {
+    const scope = resolveTaskArtifactScope(taskId);
+    if (!scope) throw new TaskArtifactRetrievalError(TASK_ARTIFACT_FAULT_CODES.notRegistered);
+    return scope.canonicalTaskId;
   }
 
-  #bytesPath(taskId: string, artifactId: string): string {
+  // root 由每个公开操作解析一次后传入：单次操作内数据根切换不会让 bytes 与 index 落到不同根。
+  #taskDir(root: string, taskId: string): string {
+    return path.join(root, this.#canonicalTaskId(taskId));
+  }
+
+  #bytesPath(root: string, taskId: string, artifactId: string): string {
     if (!isUuidLike(artifactId)) {
       throw new TaskArtifactRetrievalError(TASK_ARTIFACT_FAULT_CODES.notRegistered);
     }
-    // 双重保险：两个分量都已被 UUID 形状校验，join 结果不可能逃出 root。
-    return path.join(this.#taskDir(taskId), `${artifactId}.bin`);
+    // 双重保险：两个分量都已被 UUID 形状校验（taskId 经规范化），join 结果不可能逃出 root。
+    return path.join(this.#taskDir(root, taskId), `${artifactId}.bin`);
   }
 
-  async #readIndex(taskId: string): Promise<TaskIndexFile> {
+  async #readIndex(root: string, taskId: string): Promise<TaskIndexFile> {
     try {
-      const raw = await readFile(path.join(this.#taskDir(taskId), "index.json"), "utf8");
+      const raw = await readFile(path.join(this.#taskDir(root, taskId), "index.json"), "utf8");
       const parsed = JSON.parse(raw) as TaskIndexFile;
       return { artifacts: Array.isArray(parsed.artifacts) ? parsed.artifacts : [] };
     } catch {
@@ -146,11 +148,11 @@ export class TaskArtifactRegistry {
     }
   }
 
-  async #writeIndex(taskId: string, index: TaskIndexFile): Promise<void> {
-    await mkdir(this.#taskDir(taskId), { recursive: true });
-    const target = path.join(this.#taskDir(taskId), "index.json");
+  async #writeIndex(root: string, taskId: string, index: TaskIndexFile): Promise<void> {
+    await mkdir(this.#taskDir(root, taskId), { recursive: true });
+    const target = path.join(this.#taskDir(root, taskId), "index.json");
     // 原子重写：写同目录 temp 后 rename 覆盖，避免读到半截 index。
-    const temp = path.join(this.#taskDir(taskId), `index.json.tmp-${randomUUID()}`);
+    const temp = path.join(this.#taskDir(root, taskId), `index.json.tmp-${randomUUID()}`);
     await writeFile(temp, JSON.stringify(index), "utf8");
     const { rename } = await import("node:fs/promises");
     await rename(temp, target);
@@ -176,12 +178,26 @@ export class TaskArtifactRegistry {
     }
   }
 
-  async registerTaskArtifact(params: TaskArtifactRegistration): Promise<TaskArtifactRegistrationResult> {
-    return this.#withTaskWriteLock(params.taskId, () => this.#registerTaskArtifact(params));
+  async registerTaskArtifact(
+    params: TaskArtifactRegistration,
+  ): Promise<TaskArtifactRegistrationResult> {
+    const scope = resolveTaskArtifactScope(params.taskId);
+    if (!scope) {
+      throw new TaskArtifactRegistrationError(
+        "artifact_invalid_scope",
+        "taskId must be a UUID or sess_<uuid>",
+      );
+    }
+    // 锁按规范 UUID：同一任务的 UUID 与 sess_ 两种写法共享一次 read→dedupe→write 串行化。
+    const root = this.rootDir;
+    return this.#withTaskWriteLock(scope.canonicalTaskId, () =>
+      this.#registerTaskArtifact(params, root),
+    );
   }
 
   async #registerTaskArtifact(
     params: TaskArtifactRegistration,
+    root: string,
   ): Promise<TaskArtifactRegistrationResult> {
     const scopeKey = resolveWorkspaceKey({
       workspacePath: params.scope.workspacePath,
@@ -189,9 +205,6 @@ export class TaskArtifactRegistry {
     });
     if (!scopeKey?.trim()) {
       throw new TaskArtifactRegistrationError("artifact_invalid_scope");
-    }
-    if (!isUuidLike(params.taskId)) {
-      throw new TaskArtifactRegistrationError("artifact_invalid_scope", "taskId must be a UUID");
     }
     const fileName = params.fileName.trim();
     if (
@@ -235,7 +248,7 @@ export class TaskArtifactRegistry {
     }
 
     const sha256 = createHash("sha256").update(bytes).digest("hex");
-    const index = await this.#readIndex(params.taskId);
+    const index = await this.#readIndex(root, params.taskId);
     const scopeKeyForIndex = resolveWorkspaceKey({
       workspacePath: params.scope.workspacePath,
       workspaceIdentity: params.scope.workspaceIdentity,
@@ -251,7 +264,7 @@ export class TaskArtifactRegistry {
       return {
         artifact: descriptorOf(
           existing,
-          existsSync(this.#bytesPath(params.taskId, existing.artifactId)),
+          existsSync(this.#bytesPath(root, params.taskId, existing.artifactId)),
         ),
         ...(params.turnId ? { turnId: params.turnId } : {}),
       };
@@ -271,10 +284,10 @@ export class TaskArtifactRegistry {
       workspaceKey: scopeKey,
     };
 
-    await mkdir(this.#taskDir(params.taskId), { recursive: true });
-    await writeFile(this.#bytesPath(params.taskId, artifactId), bytes);
+    await mkdir(this.#taskDir(root, params.taskId), { recursive: true });
+    await writeFile(this.#bytesPath(root, params.taskId, artifactId), bytes);
     index.artifacts.push(meta);
-    await this.#writeIndex(params.taskId, index);
+    await this.#writeIndex(root, params.taskId, index);
     logger.info(
       undefined,
       `task artifact registered taskId=${params.taskId} origin=${meta.origin} bytes=${meta.byteSize}`,
@@ -288,25 +301,27 @@ export class TaskArtifactRegistry {
   async listTaskArtifacts(
     params: TaskArtifactListParams,
   ): Promise<{ artifacts: readonly TaskArtifactDescriptor[] }> {
+    const root = this.rootDir;
     const scopeKey = resolveWorkspaceKey({
       workspacePath: params.workspacePath,
       workspaceIdentity: params.workspaceIdentity,
     });
-    const index = await this.#readIndex(params.taskId);
+    const index = await this.#readIndex(root, params.taskId);
     const artifacts = index.artifacts
       .filter((meta) => meta.workspaceKey === scopeKey)
       .map((meta) =>
-        descriptorOf(meta, existsSync(this.#bytesPath(params.taskId, meta.artifactId))),
+        descriptorOf(meta, existsSync(this.#bytesPath(root, params.taskId, meta.artifactId))),
       );
     return { artifacts };
   }
 
   async readTaskArtifact(params: TaskArtifactReadParams): Promise<TaskArtifactReadResult> {
+    const root = this.rootDir;
     const scopeKey = resolveWorkspaceKey({
       workspacePath: params.workspacePath,
       workspaceIdentity: params.workspaceIdentity,
     });
-    const index = await this.#readIndex(params.taskId);
+    const index = await this.#readIndex(root, params.taskId);
     const meta = index.artifacts.find(
       (candidate) =>
         candidate.artifactId === params.artifactId && candidate.workspaceKey === scopeKey,
@@ -322,7 +337,7 @@ export class TaskArtifactRegistry {
     );
     let bytes: Buffer;
     try {
-      bytes = await readFile(this.#bytesPath(params.taskId, params.artifactId));
+      bytes = await readFile(this.#bytesPath(root, params.taskId, params.artifactId));
     } catch {
       throw new TaskArtifactRetrievalError(TASK_ARTIFACT_FAULT_CODES.backingMissing);
     }
@@ -352,17 +367,17 @@ export class TaskArtifactRegistry {
     taskId: string;
     artifactId: string;
   }): Promise<StoredArtifactMeta | null> {
-    const index = await this.#readIndex(params.taskId);
-    return (
-      index.artifacts.find((candidate) => candidate.artifactId === params.artifactId) ?? null
-    );
+    const root = this.rootDir;
+    const index = await this.#readIndex(root, params.taskId);
+    return index.artifacts.find((candidate) => candidate.artifactId === params.artifactId) ?? null;
   }
 
   /** 宿主内部全量清单（不做 scope 收敛；供投影冷恢复重建 artifact 行）。 */
   async listAllTaskArtifacts(taskId: string): Promise<readonly TaskArtifactDescriptor[]> {
-    const index = await this.#readIndex(taskId);
+    const root = this.rootDir;
+    const index = await this.#readIndex(root, taskId);
     return index.artifacts.map((meta) =>
-      descriptorOf(meta, existsSync(this.#bytesPath(taskId, meta.artifactId))),
+      descriptorOf(meta, existsSync(this.#bytesPath(root, taskId, meta.artifactId))),
     );
   }
 

@@ -101,6 +101,7 @@ export function handleBrowserExecuteRequest(
         clientMode: parsed.data.clientMode ?? "desktop-continuous",
         sessionContext: parsed.data.sessionContext ?? "live",
         command: parsed.data.command,
+        ...(parsed.data.captureIntent ? { captureIntent: parsed.data.captureIntent } : {}),
       }),
     )
     .then((result) => client.respond(requestId, result))

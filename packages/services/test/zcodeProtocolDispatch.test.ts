@@ -340,3 +340,33 @@ test("browserExecute: executor receives defaulted params and the workspaceIdenti
   ]);
   assert.deepEqual(replies, [{ kind: "result", id: 4, payload: { ok: true } }]);
 });
+
+test("browserExecute: captureIntent from protocol params reaches the executor only when present", async () => {
+  const received: Array<Record<string, unknown>> = [];
+  const executor = executorWith(
+    async () => [],
+    async (input) => {
+      received.push(input as unknown as Record<string, unknown>);
+      return { ok: true };
+    },
+  );
+  const client = recordingResponder([]);
+  const workspace = { workspacePath: "/tmp/ws" };
+  handleBrowserExecuteRequest({
+    client,
+    executor,
+    requestId: 5,
+    params: EXECUTE_PARAMS,
+    workspace,
+  });
+  handleBrowserExecuteRequest({
+    client,
+    executor,
+    requestId: 6,
+    params: { ...EXECUTE_PARAMS, captureIntent: "observation" },
+    workspace,
+  });
+  await settle();
+  assert.equal("captureIntent" in received[0]!, false);
+  assert.equal(received[1]!.captureIntent, "observation");
+});

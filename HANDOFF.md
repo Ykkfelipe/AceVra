@@ -593,12 +593,21 @@ Commit `faf00e9` (+ store-root fix). Spec: `packages/services/specs/task-artifac
 - Browser RPC handlers live in `zcodeAgentBrowserRpc.ts` behind a promise boundary.
 - Zero-inference drill (stub on 127.0.0.1:18765): list, example.com navigation and a
   1280x720 PNG screenshot all work with no agent restart.
-- **Open (needs a decision):** the artifact registry requires a bare-UUID `taskId`, but ZCode
-  runtime sessions are `sess_<uuid>`, so real browser screenshots fail with
-  `artifact_invalid_scope` (now logged at warn). The runtime's turn-end screenshot
-  (`source: browser_turn_end`) also goes through the same hook.
-- The task-artifact store resolves to the real `~/.zcode/v2/task-artifacts`, not the fork
-  dev home, even under the isolated env.
+- Task scope: `resolveTaskArtifactScope` accepts a bare UUID or `sess_<uuid>` and maps both to
+  one lowercase UUID, the only value ever used as a directory name. The live `sess_` id stays in
+  the descriptor. Before this, every real ZCode session failed with `artifact_invalid_scope`.
+- Automatic turn-end screenshots carry `captureIntent: "observation"` (runtime producer →
+  broker → protocol params → host → hook) and are never registered. Only explicit screenshots
+  are. This does not rely on SHA dedup.
+- Store root resolves per operation from `getAppConfigDir()`, so the fork dev host writes to
+  `~/.zcode-fork-dev-home/.zcode/v2/task-artifacts`. The single entry in the real
+  `~/.zcode/v2/task-artifacts` is a phase-11 fixture, not a leak from the dev host.
+- `/fork` against the `:3030` relay: the relay keys devices by owner. With
+  `ZCODE_FORK_ALLOW_UNAUTHENTICATED=1` the web owner is `local-development`, so launch the
+  desktop with `ZCODE_FORK_ALLOWED_CLERK_USER_IDS=local-development`. Otherwise the Mac shows
+  offline and the client loops on the direct `/fork/ws` path (close 1013).
+- Observed, not fixed: after a `/fork` socket reconnect the selected task was deselected despite
+  the "task stays selected" banner; the artifact card's size label is clipped at its right edge.
 
 ## Environment note
 

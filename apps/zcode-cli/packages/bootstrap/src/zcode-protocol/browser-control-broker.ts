@@ -72,6 +72,7 @@ export function createProtocolBrowserControlBroker(
       sessionId,
       turnId,
       command,
+      captureIntent,
       traceContext,
       signal,
     }) {
@@ -109,6 +110,7 @@ export function createProtocolBrowserControlBroker(
             browserId,
             browserGeneration,
             command,
+            ...(captureIntent ? { captureIntent } : {}),
           },
           zcodeBrowserExecuteResultSchema,
           buildRequestOptions(traceContext, signal),

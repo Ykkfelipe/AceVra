@@ -13,5 +13,6 @@ export {
   TaskArtifactRetrievalError,
   fileNameFromPath,
   isUuidLike,
+  resolveTaskArtifactScope,
 } from "./app/taskArtifactRegistry.js";
 export { instrumentBrowserExecutorForArtifacts } from "./app/browserUseArtifactHook.js";
