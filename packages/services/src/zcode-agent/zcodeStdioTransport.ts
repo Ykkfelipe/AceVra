@@ -31,6 +31,16 @@ const PROCESS_TREE_FORCE_AFTER_MS = 2_000;
 const PROCESS_TREE_WINDOWS_TASKKILL_TIMEOUT_MS = 1_000;
 const PROCESS_TREE_WINDOWS_EXIT_OBSERVATION_GRACE_MS = 250;
 const processTreeLogger = createServiceLogger("zcode-agent-process-tree");
+const transportLogger = createServiceLogger("zcode-stdio-transport");
+
+/** 仅记录帧的路由元数据（method/id），不记录 params，避免日志泄漏用户内容。 */
+function describeProtocolMessage(message: ZCodeProtocolMessage): { method?: string; id?: string } {
+  const record = message as { method?: unknown; id?: unknown };
+  return {
+    ...(typeof record.method === "string" ? { method: record.method } : {}),
+    ...(record.id !== undefined ? { id: String(record.id) } : {}),
+  };
+}
 
 export class ZCodeStdioTransport implements ZCodeProtocolTransport {
   readonly kind = "stdio" as const;
@@ -246,15 +256,28 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
     if (line.trim().length === 0) {
       return;
     }
+    let parsed: ZCodeProtocolMessage;
     try {
-      const parsed = zcodeProtocolMessageSchema.parse(JSON.parse(line));
+      parsed = zcodeProtocolMessageSchema.parse(JSON.parse(line));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.fireClose({ reason: `protocol_parse_error: ${reason}` });
+      return;
+    }
+    // 修复依据：解析与分发曾共用一个 catch，任何 handler 同步抛错（如 browserList 包装器
+    // 缺 list）都被误报为 protocol_parse_error 并关闭整个 agent 连接，真实错误从不落日志。
+    // 只有真正的帧解析失败才关闭连接；分发失败记录真实错误后保持连接。请求级错误回复由
+    // ZCodeProtocolClient 负责（它知道 request id 语义），这里是其余监听者的兜底边界。
+    try {
       // 协议帧分发曾同步查询系统进程表，telemetry/streaming 高峰会阻塞
       // Host event loop 并让 subagent 面板无输出。运行期 data plane 只做解析和转发；
       // 完整进程树查询严格留在 dispose cleanup 边界。
       this.messageEmitter.fire(parsed);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      this.fireClose({ reason: `protocol_parse_error: ${reason}` });
+      transportLogger.warn(undefined, "ZCode protocol message dispatch failed", {
+        ...describeProtocolMessage(parsed),
+        error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+      });
     }
   }
 

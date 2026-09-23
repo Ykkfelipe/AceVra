@@ -32,8 +32,6 @@ import {
   ZCODE_PROTOCOL_VERSION,
   zcodeMcpListResultSchema,
   zcodePermissionRequestParamsSchema,
-  zcodeBrowserListParamsSchema,
-  zcodeBrowserExecuteParamsSchema,
   zcodePluginsConfigureResultSchema,
   zcodePluginsInstallResultSchema,
   zcodePluginsListResultSchema,
@@ -307,6 +305,7 @@ import {
   collectBrowserAmbientContext,
   type BrowserAmbientContextExecutor,
 } from "./zcodeAgentBrowserAmbientContext.js";
+import { handleBrowserExecuteRequest, handleBrowserListRequest } from "./zcodeAgentBrowserRpc.js";
 import {
   createCuaOperationTurnTracker,
   type CuaOperationWorkspaceTarget,
@@ -2387,94 +2386,24 @@ export function createZCodeAgentService(
           return;
         }
 
-        // browser-use discovery：backend 在线状态与 plugin/skill 是否暴露是两层状态。
-        // executor 缺省时返回空列表，禁止 facade 伪造 IAB available。
         if (request.method === zcodeProtocolMethods.interactionBrowserList) {
-          const parsed = zcodeBrowserListParamsSchema.safeParse(request.params);
-          if (!parsed.success) {
-            void client.respondError(request.id, {
-              code: -32602,
-              message: "Invalid interaction/browserList params",
-              data: parsed.error.flatten(),
-            });
-            return;
-          }
-          const executor = options?.browserControlExecutor;
-          if (!executor) {
-            void client.respond(request.id, { browsers: [] });
-            return;
-          }
-          void executor
-            .list(parsed.data)
-            .then((browsers) => client.respond(request.id, { browsers }))
-            .catch((error: unknown) => {
-              void client.respondError(request.id, {
-                code: -32603,
-                message: error instanceof Error ? error.message : String(error),
-              });
-            });
+          handleBrowserListRequest({
+            client,
+            executor: options?.browserControlExecutor,
+            requestId: request.id,
+            params: request.params,
+          });
           return;
         }
 
-        // browser-use：agent 的 agent.browsers.* 经 interaction/browserExecute 到达这里。
-        // 纯 RPC 中继——转发给 main（WebContentsView+CDP）执行后 respondResult，不 emitSessionEvent、
-        // 不进 pending map（区别于 permission 的 UI 阻塞语义）。executor 缺省则 backend_unavailable。
         if (request.method === zcodeProtocolMethods.interactionBrowserExecute) {
-          const parsed = zcodeBrowserExecuteParamsSchema.safeParse(request.params);
-          if (!parsed.success) {
-            void client.respondError(request.id, {
-              code: -32602,
-              message: "Invalid interaction/browserExecute params",
-              data: parsed.error.flatten(),
-            });
-            return;
-          }
-          const executor = options?.browserControlExecutor;
-          if (!executor) {
-            void client.respond(request.id, {
-              ok: false,
-              error: {
-                code: "backend_unavailable",
-                message: "browser control not available",
-              },
-              elapsedMs: 0,
-            });
-            return;
-          }
-          void executor
-            .execute({
-              requestId: parsed.data.requestId,
-              ...(parsed.data.browserId ? { browserId: parsed.data.browserId } : {}),
-              ...(parsed.data.browserGeneration !== undefined
-                ? { browserGeneration: parsed.data.browserGeneration }
-                : {}),
-              sessionId: parsed.data.sessionId,
-              ...(parsed.data.turnId ? { turnId: parsed.data.turnId } : {}),
-              workspaceKey: parsed.data.workspaceKey ?? resolveWorkspaceKey(workspace),
-              workspacePath: parsed.data.workspacePath ?? workspace.workspacePath,
-              ...((parsed.data.workspaceIdentity ?? workspace.workspaceIdentity)
-                ? {
-                    workspaceIdentity: parsed.data.workspaceIdentity ?? workspace.workspaceIdentity,
-                  }
-                : {}),
-              ...(parsed.data.remoteSessionId
-                ? { remoteSessionId: parsed.data.remoteSessionId }
-                : {}),
-              clientMode: parsed.data.clientMode ?? "desktop-continuous",
-              sessionContext: parsed.data.sessionContext ?? "live",
-              command: parsed.data.command,
-            })
-            .then((result) => client.respond(request.id, result))
-            .catch((error: unknown) => {
-              void client.respond(request.id, {
-                ok: false,
-                error: {
-                  code: "execution_error",
-                  message: error instanceof Error ? error.message : String(error),
-                },
-                elapsedMs: 0,
-              });
-            });
+          handleBrowserExecuteRequest({
+            client,
+            executor: options?.browserControlExecutor,
+            requestId: request.id,
+            params: request.params,
+            workspace,
+          });
           return;
         }
 

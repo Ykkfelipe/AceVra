@@ -10,7 +10,10 @@ import type {
 } from "@zcode/shared";
 import type { V4Method } from "@zcode/shared/zcode-protocol-v4";
 import type { z } from "zod";
+import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import type { ZCodeProtocolTransport } from "./zcodeProtocolTransport.js";
+
+const protocolClientLogger = createServiceLogger("zcode-protocol-client");
 
 /** 客户端可发的方法名：旧 zcodeProtocolMethods + v4/*（并存，收敛为 v4）。 */
 type ZCodeProtocolClientMethod = ZCodeProtocolMethod | V4Method;
@@ -293,7 +296,26 @@ export class ZCodeProtocolClient implements IDisposable {
     }
 
     if ("method" in message && "id" in message) {
-      this.requestEmitter.fire(message as ZCodeProtocolRequest);
+      const request = message as ZCodeProtocolRequest;
+      try {
+        this.requestEmitter.fire(request);
+      } catch (error) {
+        // 修复依据：handler 同步抛错曾一路冒泡到 stdio transport 并被当成解析失败断开连接。
+        // 约定：handler 若要同步抛错，必须在回复或启动异步工作之前抛出，否则同一 id 会收到两次回复。
+        // 请求语义允许回复，所以记录真实错误并以 -32603 回复该 id，连接保持可用。
+        const detail = error instanceof Error ? error.message : String(error);
+        protocolClientLogger.warn(request.trace?.traceId, "ZCode protocol request handler threw", {
+          method: request.method,
+          id: String(request.id),
+          error: error instanceof Error ? (error.stack ?? error.message) : detail,
+        });
+        if (!this.disposed) {
+          void this.respondError(request.id, {
+            code: -32603,
+            message: `Request handler failed: ${detail}`,
+          }).catch(() => undefined);
+        }
+      }
       return;
     }
 
@@ -314,7 +336,20 @@ export class ZCodeProtocolClient implements IDisposable {
           );
         }
       }
-      this.notificationEmitter.fire(message as ZCodeProtocolNotification);
+      const notification = message as ZCodeProtocolNotification;
+      try {
+        this.notificationEmitter.fire(notification);
+      } catch (error) {
+        // 通知没有 id，协议上不存在合法回复；只记录真实错误，不断开连接。
+        protocolClientLogger.warn(
+          notification.trace?.traceId,
+          "ZCode protocol notification handler threw",
+          {
+            method: notification.method,
+            error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+          },
+        );
+      }
     }
   }
 

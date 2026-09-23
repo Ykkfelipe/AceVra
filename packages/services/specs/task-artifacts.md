@@ -2,7 +2,7 @@
 
 Status: implemented as a host-side registry + retrieval channel with renderer
 integration. No protocol-breaking change: the v4 conversation contract already
-defines `artifactRowSchema` (kind:"artifact") and this phase only *produces*
+defines `artifactRowSchema` (kind:"artifact") and this phase only _produces_
 those rows where the harness owns the projection, plus a new task-scoped
 delivery channel for byte retrieval.
 
@@ -16,14 +16,14 @@ host filesystem.
 
 ## Existing concepts reused (survey results)
 
-| Concept | Reuse |
-| ------- | ----- |
-| `artifactRowSchema` (v4 frozen contract: artifactVersionId/logicalArtifactKey/displayName/artifactType/mimeType/sizeBytes/sha256/ref/state) | the conversation representation; already rendered by `ArtifactRowView` |
-| `attachmentRefSchema` (`ref`/`fileName`/`mime`/`bytes`, opaque refs only) | the ref discipline: content never travels in frames, only opaque ids |
-| `conversationAttachmentReadV4` chunked authorized read + `PROTOCOL_V4_LIMITS.attachmentChunkMaxBytes` | the retrieval shape (offset/limit → dataBase64/totalBytes/mediaType) |
-| `browserCommandResult.image {base64, mimeType:"image/png"}` | screenshot bytes already arrive at the host in the `interaction/browserExecute` result — no filesystem dependency |
-| share-layer artifact row construction (sha256, sizeBytes, `zcode-artifact://` refs) | descriptor discipline |
-| codex module pattern (channel facade + host-internal impl + relay passthrough) | service layout |
+| Concept                                                                                                                                     | Reuse                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `artifactRowSchema` (v4 frozen contract: artifactVersionId/logicalArtifactKey/displayName/artifactType/mimeType/sizeBytes/sha256/ref/state) | the conversation representation; already rendered by `ArtifactRowView`                                            |
+| `attachmentRefSchema` (`ref`/`fileName`/`mime`/`bytes`, opaque refs only)                                                                   | the ref discipline: content never travels in frames, only opaque ids                                              |
+| `conversationAttachmentReadV4` chunked authorized read + `PROTOCOL_V4_LIMITS.attachmentChunkMaxBytes`                                       | the retrieval shape (offset/limit → dataBase64/totalBytes/mediaType)                                              |
+| `browserCommandResult.image {base64, mimeType:"image/png"}`                                                                                 | screenshot bytes already arrive at the host in the `interaction/browserExecute` result — no filesystem dependency |
+| share-layer artifact row construction (sha256, sizeBytes, `zcode-artifact://` refs)                                                         | descriptor discipline                                                                                             |
+| codex module pattern (channel facade + host-internal impl + relay passthrough)                                                              | service layout                                                                                                    |
 
 ## Architecture
 
@@ -46,11 +46,11 @@ Codex: turn/completed + user-named          ConversationTimeline
 
 ### State ownership
 
-| State | Owner | Persisted |
-| ----- | ----- | --------- |
-| artifact metadata + bytes | host task-artifact store (`~/.zcode/v2/task-artifacts/<taskId>/<artifactId>.bin` + `index.json`) | yes |
-| artifact rows (codex tasks) | `CodexThreadProjection` (in-memory, host-owned) | no |
-| artifact list (zcode tasks) | renderer fetch, id-keyed | no |
+| State                       | Owner                                                                                            | Persisted |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | --------- |
+| artifact metadata + bytes   | host task-artifact store (`~/.zcode/v2/task-artifacts/<taskId>/<artifactId>.bin` + `index.json`) | yes       |
+| artifact rows (codex tasks) | `CodexThreadProjection` (in-memory, host-owned)                                                  | no        |
+| artifact list (zcode tasks) | renderer fetch, id-keyed                                                                         | no        |
 
 Bytes are **copied** into the store at registration. The original host path is
 used only for the existence check and the copy; it is never persisted, logged,
@@ -87,6 +87,34 @@ Before the result leaves the host, the hook removes `hostPath`; saved-file-only
 results instead expose only `artifactDelivery.status` (`delivered` or
 `registration_failed`). This lets the model/runtime distinguish capture from
 user delivery without a local path or an invented attachment claim.
+A registration failure is logged at `warn` by the hook (task id, turn id and
+registry reason code only — never a path or bytes); it is never silent.
+
+### Executor interface preservation
+
+`instrumentBrowserExecutorForArtifacts` is a decorator over the full
+`BrowserAmbientContextExecutor` interface (`list` + `execute`). It intercepts
+only `execute`; every other member (`list` today, anything added later) is
+delegated to the original executor with the same `this`, arguments, results
+and rejections. The wrapper must never be a partial object cast to the full
+type: the host `interaction/browserList` handler calls `executor.list(...)`,
+and a missing `list` previously threw `TypeError` synchronously inside the
+stdio dispatch path, which tore down the whole agent connection.
+
+Host browser RPC handlers (`interaction/browserList`, `interaction/browserExecute`)
+invoke the executor through a promise boundary, so a synchronous executor throw
+and an asynchronous rejection produce the same structured error response and
+never escape into the transport dispatcher.
+
+### Transport error semantics (stdio)
+
+`ZCodeStdioTransport` distinguishes parse failures from dispatch failures:
+
+| failure                                     | behaviour                                                                                           |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| invalid JSON / schema-invalid frame         | `protocol_parse_error` close (unchanged)                                                            |
+| valid request, handler throws               | `ZCodeProtocolClient` logs the error and replies `-32603` to that request id; connection stays open |
+| valid notification/response, handler throws | logged only (no reply is valid for these); connection stays open                                    |
 
 `useTaskArtifacts` refreshes the list while a task is mounted. This closes the
 live-turn timing boundary: a successful browser screenshot registered after the
@@ -113,9 +141,9 @@ not name are never uploaded. If registration fails, no artifact row is appended
 
 - `listTaskArtifacts({taskId, workspacePath, workspaceIdentity?})` →
   descriptors `{artifactId, taskId, fileName, mimeType, byteSize, sha256,
-  origin, createdAt, state:"available"|"missing"}`. No host paths.
+origin, createdAt, state:"available"|"missing"}`. No host paths.
 - `readTaskArtifact({taskId, artifactId, offset, limit, workspacePath,
-  workspaceIdentity?})` → `{dataBase64, totalBytes, mediaType, nextOffset}`;
+workspaceIdentity?})` → `{dataBase64, totalBytes, mediaType, nextOffset}`;
   chunk bounded by `PROTOCOL_V4_LIMITS.attachmentChunkMaxBytes`; MIME served
   from stored metadata (preserved, not sniffed).
 - Authorization: relay/device auth (existing channel transport) + workspace key

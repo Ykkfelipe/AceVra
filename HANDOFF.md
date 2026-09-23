@@ -584,6 +584,22 @@ Commit `faf00e9` (+ store-root fix). Spec: `packages/services/specs/task-artifac
   + agent inference). The registration hook it would exercise is unit-tested with the same
   result schema; the delivery path is fully E2E-proven above.
 
+## Browser-crash repair (2026-09-22)
+
+- `instrumentBrowserExecutorForArtifacts` is now a Proxy (only `execute` intercepted); the old
+  partial wrapper dropped `list`, so `interaction/browserList` threw synchronously.
+- `ZCodeStdioTransport` closes only on real parse failures. Request-handler throws get a
+  `-32603` reply from `ZCodeProtocolClient`; notification-handler throws are logged only.
+- Browser RPC handlers live in `zcodeAgentBrowserRpc.ts` behind a promise boundary.
+- Zero-inference drill (stub on 127.0.0.1:18765): list, example.com navigation and a
+  1280x720 PNG screenshot all work with no agent restart.
+- **Open (needs a decision):** the artifact registry requires a bare-UUID `taskId`, but ZCode
+  runtime sessions are `sess_<uuid>`, so real browser screenshots fail with
+  `artifact_invalid_scope` (now logged at warn). The runtime's turn-end screenshot
+  (`source: browser_turn_end`) also goes through the same hook.
+- The task-artifact store resolves to the real `~/.zcode/v2/task-artifacts`, not the fork
+  dev home, even under the isolated env.
+
 ## Environment note
 
 The dev stack is started from the two commands in "Running the dev loop". When those are

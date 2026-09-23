@@ -147,8 +147,7 @@ test("register arbitrary file (from hostPath) → downloadable card descriptor; 
         mimeType: "application/x-msdownload",
         bytes: new Uint8Array([1]),
       }),
-      (error: TaskArtifactRegistrationError) =>
-        error.reasonCode === "artifact_mime_not_allowed",
+      (error: TaskArtifactRegistrationError) => error.reasonCode === "artifact_mime_not_allowed",
     );
     assert.ok(isAllowedTaskArtifactMimeType("image/png"));
     assert.ok(!isAllowedTaskArtifactMimeType("application/x-msdownload"));
@@ -255,7 +254,10 @@ test("browser-use screenshot result is registered structurally; failures never c
       };
     },
   };
-  const instrumented = instrumentBrowserExecutorForArtifacts({ executor: baseExecutor as never, registry });
+  const instrumented = instrumentBrowserExecutorForArtifacts({
+    executor: baseExecutor as never,
+    registry,
+  });
   await instrumented.execute({
     sessionId: TASK_ID,
     turnId: "turn-9",
@@ -275,11 +277,59 @@ test("browser-use screenshot result is registered structurally; failures never c
     executor: failingExecutor as never,
     registry,
   });
-  const result = await failingInstrumented.execute({ sessionId: TASK_ID, workspacePath: WORKSPACE_A } as never);
+  const result = await failingInstrumented.execute({
+    sessionId: TASK_ID,
+    workspacePath: WORKSPACE_A,
+  } as never);
   assert.equal(result.ok, true);
   assert.deepEqual(result.artifactDelivery, { status: "registration_failed" });
-  const unchanged = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
+  const unchanged = await registry.listTaskArtifacts({
+    taskId: TASK_ID,
+    workspacePath: WORKSPACE_A,
+  });
   assert.equal(unchanged.artifacts.length, 1);
+});
+
+test("browser-use instrumentation preserves the full executor interface (list delegates, execute instrumented)", async () => {
+  // 回归：旧包装器只返回 execute，host 的 interaction/browserList 调 list 时同步抛错并拖垮 agent 连接。
+  const { registry } = await makeRegistry();
+  const listCalls: unknown[] = [];
+  const listResult = [{ browserId: "b-1" }];
+  const listError = new Error("list backend offline");
+  let failList = false;
+  const original = {
+    marker: "original",
+    list(input: unknown) {
+      assert.equal(this, original, "list must run with the original executor as this");
+      listCalls.push(input);
+      return failList ? Promise.reject(listError) : Promise.resolve(listResult);
+    },
+    async execute(_input: unknown) {
+      return {
+        ok: true,
+        image: { base64: Buffer.from(PNG_BYTES).toString("base64"), mimeType: "image/png" },
+      };
+    },
+  };
+  const wrapped = instrumentBrowserExecutorForArtifacts({ executor: original, registry });
+
+  assert.equal(typeof wrapped.list, "function");
+  assert.equal(wrapped.marker, "original");
+  const listInput = { requestId: "r-1", sessionId: TASK_ID };
+  assert.equal(await wrapped.list(listInput), listResult);
+  assert.deepEqual(listCalls, [listInput]);
+  assert.equal(listCalls[0], listInput, "arguments pass through by identity");
+  failList = true;
+  await assert.rejects(wrapped.list(listInput), (error) => error === listError);
+
+  const executed = await wrapped.execute({
+    sessionId: TASK_ID,
+    turnId: "turn-iface",
+    workspacePath: WORKSPACE_A,
+  } as never);
+  assert.deepEqual(executed.artifactDelivery, { status: "delivered" });
+  const list = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
+  assert.equal(list.artifacts.length, 1);
 });
 
 test("browser-use saved-path screenshot registers without leaking its host path", async () => {
@@ -292,7 +342,10 @@ test("browser-use saved-path screenshot registers without leaking its host path"
         return { ok: true, image: { hostPath, fileName: "nike.png", mimeType: "image/png" } };
       },
     };
-    const instrumented = instrumentBrowserExecutorForArtifacts({ executor: executor as never, registry });
+    const instrumented = instrumentBrowserExecutorForArtifacts({
+      executor: executor as never,
+      registry,
+    });
     const delivered = await instrumented.execute({
       sessionId: TASK_ID,
       workspacePath: WORKSPACE_A,
@@ -325,7 +378,10 @@ test("browser-use bytes win over saved path so both forms create one artifact", 
         };
       },
     };
-    const instrumented = instrumentBrowserExecutorForArtifacts({ executor: executor as never, registry });
+    const instrumented = instrumentBrowserExecutorForArtifacts({
+      executor: executor as never,
+      registry,
+    });
     const delivered = await instrumented.execute({
       sessionId: TASK_ID,
       turnId: "turn-both",
@@ -333,7 +389,11 @@ test("browser-use bytes win over saved path so both forms create one artifact", 
     } as never);
     assert.deepEqual(delivered.artifactDelivery, { status: "delivered" });
     assert.equal("hostPath" in (delivered.image ?? {}), false);
-    await instrumented.execute({ sessionId: TASK_ID, turnId: "turn-both", workspacePath: WORKSPACE_A } as never);
+    await instrumented.execute({
+      sessionId: TASK_ID,
+      turnId: "turn-both",
+      workspacePath: WORKSPACE_A,
+    } as never);
     const list = await registry.listTaskArtifacts({ taskId: TASK_ID, workspacePath: WORKSPACE_A });
     assert.equal(list.artifacts.length, 1);
     assert.equal(list.artifacts[0]?.byteSize, PNG_BYTES.byteLength);
@@ -475,9 +535,8 @@ test("deliverUserNamedCodexArtifacts end-to-end via notification path registers 
     // 从 impl 的 onNotification 无法直接触达（fake bridge 未保存 handler），改为
     // 通过 CodexThreadProjection + 集成函数的组合验证：
     const { CodexThreadProjection } = await import("../src/codex/domain/codexProjection.js");
-    const { deliverUserNamedCodexArtifacts } = await import(
-      "../src/codex/app/codexDeliveryIntegration.js"
-    );
+    const { deliverUserNamedCodexArtifacts } =
+      await import("../src/codex/app/codexDeliveryIntegration.js");
     const projection = new CodexThreadProjection("codex-test", () => 0);
     projection.beginUserTurn({ text: "send me proof.png", turnId: "turn-1", commandId: "c-1" });
     projection.applyNotification({
@@ -545,11 +604,14 @@ test("readTaskArtifact preserves MIME and chunks bytes in order", async () => {
     workspacePath: WORKSPACE_A,
   });
   assert.equal(second.nextOffset, null);
-  const merged = Buffer.from(first.dataBase64, "base64").toString("hex") +
+  const merged =
+    Buffer.from(first.dataBase64, "base64").toString("hex") +
     Buffer.from(second.dataBase64, "base64").toString("hex");
   assert.equal(merged, Buffer.from(bytes).toString("hex"));
   // 注册元数据与读取上限
   assert.ok(TASK_ARTIFACT_MAX_BYTES > 0);
-  const stored = await readFile(path.join(registry.rootDir, TASK_ID, `${registered.artifact.artifactId}.bin`));
+  const stored = await readFile(
+    path.join(registry.rootDir, TASK_ID, `${registered.artifact.artifactId}.bin`),
+  );
   assert.deepEqual([...stored], [...bytes]);
 });
