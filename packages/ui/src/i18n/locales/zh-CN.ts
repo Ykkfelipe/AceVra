@@ -497,14 +497,14 @@ const zhCN: Record<string, string> = {
     "项目“{projectName}”会从侧边栏移除，但不会删除磁盘上的文件。",
 
   // 登录
-  "welcome.title": "Welcome to ZCode",
+  "welcome.title": "Welcome to AceVra",
   "welcome.username": "用户名",
   "welcome.password": "密码",
   "welcome.login": "登录",
   "welcome.loggingIn": "登录中...",
   "welcome.loginFailed": "登录失败",
-  "login.title": "欢迎来到 ZCode",
-  "login.description": "连接账号，开始使用 ZCode",
+  "login.title": "欢迎来到 AceVra",
+  "login.description": "连接账号，开始使用 AceVra",
   "login.oauth.activeProviderHint": "当前已登录提供方：{provider}。新登录会替换当前登录身份。",
   "login.oauth.loadingProviders": "正在加载登录提供方...",
   "login.oauth.noProviders": "当前没有可用的登录提供方，请稍后重试。",

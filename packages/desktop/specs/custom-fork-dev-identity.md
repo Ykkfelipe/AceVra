@@ -2,9 +2,11 @@
 
 ## Behavior
 
-The local fork uses a separate development identity: `ZCode Fork Dev`, the
+The local fork uses a separate development identity: `AceVra Dev`, the
 `~/.zcode-fork-dev-home` storage root, its own Electron user-data/session directories, and the
-`zcode-fork:` deep-link scheme. The renderer shows `Custom Fork Dev` only in this local runtime.
+`zcode-fork:` deep-link scheme. The renderer shows `AceVra Dev` only in this local runtime. The
+welcome/login screen uses AceVra product-facing labels; internal package names and the
+`zcode://` protocol are unchanged.
 Packaged preview and production builds retain their existing identities.
 
 ## Ownership and invariants
