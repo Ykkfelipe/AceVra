@@ -94,6 +94,25 @@ export function PresetProviderPlaceholderCard({
   );
 }
 
+/** Shared data-free plan card shell for live account status and isolated visual fixtures. */
+export function CodingPlanStatusCardView({
+  title,
+  statusMeta,
+  trailingAction,
+  children,
+}: {
+  title: string;
+  statusMeta: ReactNode;
+  trailingAction?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <StatusCardSurface title={title} statusMeta={statusMeta} trailingAction={trailingAction}>
+      {children}
+    </StatusCardSurface>
+  );
+}
+
 export function CodingPlanStatusPanel({
   providerId,
   providerName,
@@ -556,7 +575,7 @@ export function CodingPlanStatusPanel({
   const planCards =
     isStartPlanProvider && isPurchased && startPlanEntries.length > 0
       ? startPlanEntries.map(({ plan, limits: planLimits }, index) => (
-          <StatusCardSurface
+          <CodingPlanStatusCardView
             key={`${plan.productId}:${index}`}
             title={plan.productName.trim() || planTitle}
             statusMeta={
@@ -582,10 +601,10 @@ export function CodingPlanStatusPanel({
                 embedded
               />
             ) : null}
-          </StatusCardSurface>
+          </CodingPlanStatusCardView>
         ))
       : [
-          <StatusCardSurface
+          <CodingPlanStatusCardView
             key="current-plan"
             title={planTitle}
             statusMeta={statusContent}
@@ -616,7 +635,7 @@ export function CodingPlanStatusPanel({
                 />
               )
             ) : null}
-          </StatusCardSurface>,
+          </CodingPlanStatusCardView>,
         ];
 
   return (
@@ -636,7 +655,7 @@ export function CodingPlanStatusPanel({
  * 目录查询失败只影响升级/续期这一个动作，所以提示放在状态行内保持低噪，并且必须保留重试入口；
  * 卡片主操作同时被禁用（见 CodingPlanUpgradeAction），用户不会点到一个无效的购买入口。
  */
-function CodingPlanEntryGateNotice({ onRetry }: { onRetry?: () => void }) {
+export function CodingPlanEntryGateNotice({ onRetry }: { onRetry?: () => void }) {
   const { intl } = useZCodeIntl();
   return (
     <button
@@ -968,7 +987,7 @@ function resolveGenericUsageLimitLabel(
   });
 }
 
-function PlanUsageMetricCard({
+export function PlanUsageMetricCard({
   action,
   infoDescription,
   label,

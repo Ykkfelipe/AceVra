@@ -26,8 +26,21 @@ import { resolveCommandCodeCliMetadata } from "./commandCodeStatusPresentation.j
 export const COMMAND_CODE_PROVIDER_ID = "command-code";
 
 export function CommandCodeCliStatus() {
-  const { intl, locale } = useZCodeIntl();
   const { status, loading, refresh } = useCommandCodeStatus();
+  return <CommandCodeCliStatusView status={status} loading={loading} onRefresh={refresh} />;
+}
+
+/** Shared, service-free presentation used by the local fixture harness. */
+export function CommandCodeCliStatusView({
+  status,
+  loading,
+  onRefresh = () => {},
+}: {
+  status: ReturnType<typeof useCommandCodeStatus>["status"];
+  loading: boolean;
+  onRefresh?: () => void | Promise<void>;
+}) {
+  const { intl, locale } = useZCodeIntl();
 
   if (loading && !status) {
     return (
@@ -96,7 +109,7 @@ export function CommandCodeCliStatus() {
             id: "settings.modelProvider.commandCodeCli.refresh",
           })}
           disabled={loading}
-          onClick={() => void refresh()}
+          onClick={() => void onRefresh()}
         >
           {loading ? (
             <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />

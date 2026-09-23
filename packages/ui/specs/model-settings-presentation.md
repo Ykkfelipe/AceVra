@@ -14,6 +14,13 @@
 - Z.ai sign-in credentials are owned by `OAuthCredentialRepo` and the encrypted local
   credential service. They must survive an app restart; account/plan/usage presentation is
   restored or refreshed from that saved session rather than copied into renderer state.
+- Account detail and Command Code status use live wrappers that acquire state and pass it to
+  presentation views. The views accept sanitized status and action props and do not call
+  services/hooks. Development fixtures render those same views with literal response-shaped
+  values and inert callbacks; fixture code never reads local account state or invokes requests.
+- Z.ai's existing `CodingPlanStatusPanel` remains the presentation owner for plan and quota
+  state. The detail view boundary receives navigation/status/usage facts and explicit actions;
+  optional catalog lookup failure is represented independently from authenticated usage.
 
 ## Product rules
 
@@ -51,3 +58,5 @@
    usable navigation.
 7. After Z.ai sign-in, restart the app and confirm the account remains connected while plan,
    catalog, and usage data refresh from their owning services.
+8. Development presentation fixtures render the same account and status views without service
+   contexts. Fixture callbacks are inert and no fixture path calls a live service.

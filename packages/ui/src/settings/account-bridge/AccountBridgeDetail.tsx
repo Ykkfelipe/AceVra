@@ -47,6 +47,34 @@ export function AccountBridgeDetail({
   workspaceIdentity,
   isDesktop,
 }: AccountBridgeDetailProps) {
+  const bridge = useAccountBridge();
+  return (
+    <AccountBridgeDetailView
+      source={source}
+      bridge={bridge}
+      migrationSlot={
+        source === "claude-code" ? (
+          <MigrationSection
+            workspacePath={workspacePath}
+            {...(workspaceIdentity ? { workspaceIdentity } : {})}
+            {...(isDesktop === undefined ? {} : { isDesktop })}
+          />
+        ) : null
+      }
+    />
+  );
+}
+
+/** Shared presentation boundary; fixtures pass deterministic bridge props and an inert slot. */
+export function AccountBridgeDetailView({
+  source,
+  bridge,
+  migrationSlot = null,
+}: {
+  source: AccountBridgeSource;
+  bridge: ReturnType<typeof useAccountBridge>;
+  migrationSlot?: ReactNode;
+}) {
   const { intl, locale } = useZCodeIntl();
   const {
     statusFor,
@@ -60,7 +88,7 @@ export function AccountBridgeDetail({
     disconnect,
     scanCodexHistory,
     refreshStatuses,
-  } = useAccountBridge();
+  } = bridge;
 
   const status = statusFor(source);
   const isCodex = source === "codex";
@@ -235,12 +263,7 @@ export function AccountBridgeDetail({
           ) : null}
         </StatusCardSurface>
       ) : (
-        // 复用既有 Claude 迁移实现，作为同级 section 渲染：保留单一容器层级，不再套一层卡片。
-        <MigrationSection
-          workspacePath={workspacePath}
-          {...(workspaceIdentity ? { workspaceIdentity } : {})}
-          {...(isDesktop === undefined ? {} : { isDesktop })}
-        />
+        migrationSlot
       )}
     </div>
   );
