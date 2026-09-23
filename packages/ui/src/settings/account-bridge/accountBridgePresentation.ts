@@ -30,7 +30,7 @@ export function resolveAccountBridgeStatusView(
   switch (status.state) {
     case "connected":
       return { tone: "green", labelId: "settings.accounts.bridge.connected", spinning: false };
-    case "connecting":
+    case "loading":
       return { tone: "amber", labelId: "settings.accounts.bridge.connecting", spinning: true };
     case "error":
       return { tone: "red", labelId: "settings.accounts.bridge.error", spinning: false };

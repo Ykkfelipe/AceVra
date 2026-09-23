@@ -54,7 +54,7 @@ test("connect result type cannot carry the OAuth authUrl to a client", () => {
     status: {
       source: "codex" as const,
       installed: true,
-      state: "connecting" as const,
+      state: "loading" as const,
       sourceSignedIn: false,
       checkedAt: new Date().toISOString(),
     },
@@ -82,26 +82,34 @@ test("claude status is sanitized and reports a real disconnected state", async (
   svc.dispose();
 });
 
-test("codex status while disconnected does not start the app-server", { skip: !codexInstalled }, async () => {
-  const opened: string[] = [];
-  const svc = makeService(opened);
-  const status = await svc.readStatus("codex");
-  assert.equal(status.installed, true);
-  assert.equal(status.state, "disconnected");
-  assert.ok(status.version, "version should be readable without the app-server");
-  assertNoCredentialMaterial(status, "codex disconnected status");
-  svc.dispose();
-});
+test(
+  "codex status while disconnected does not start the app-server",
+  { skip: !codexInstalled },
+  async () => {
+    const opened: string[] = [];
+    const svc = makeService(opened);
+    const status = await svc.readStatus("codex");
+    assert.equal(status.installed, true);
+    assert.equal(status.state, "disconnected");
+    assert.ok(status.version, "version should be readable without the app-server");
+    assertNoCredentialMaterial(status, "codex disconnected status");
+    svc.dispose();
+  },
+);
 
-test("codex bridge initializes and returns only sanitized account data", { skip: !codexInstalled }, async () => {
-  const opened: string[] = [];
-  const svc = makeService(opened);
-  const status = await svc.reconnectBridge("codex");
-  assert.equal(status.state, "connected");
-  assertNoCredentialMaterial(status, "codex connected status");
-  assert.equal(opened.length, 0, "no OAuth URL should be opened for a status read");
-  svc.dispose();
-});
+test(
+  "codex bridge initializes and returns only sanitized account data",
+  { skip: !codexInstalled },
+  async () => {
+    const opened: string[] = [];
+    const svc = makeService(opened);
+    const status = await svc.reconnectBridge("codex");
+    assert.equal(status.state, "connected");
+    assertNoCredentialMaterial(status, "codex connected status");
+    assert.equal(opened.length, 0, "no OAuth URL should be opened for a status read");
+    svc.dispose();
+  },
+);
 
 test("disconnect preserves the source Codex login", { skip: !codexInstalled }, async () => {
   const opened: string[] = [];
@@ -121,28 +129,36 @@ test("disconnect preserves the source Codex login", { skip: !codexInstalled }, a
   svc.dispose();
 });
 
-test("bridge stop() is non-terminal while dispose() is terminal", { skip: !codexInstalled }, async () => {
-  const bridge = new CodexAppServerBridge({ clientVersion: "0.0.0-test" });
-  await bridge.ensureStarted();
-  const firstGeneration = bridge.generation;
+test(
+  "bridge stop() is non-terminal while dispose() is terminal",
+  { skip: !codexInstalled },
+  async () => {
+    const bridge = new CodexAppServerBridge({ clientVersion: "0.0.0-test" });
+    await bridge.ensureStarted();
+    const firstGeneration = bridge.generation;
 
-  bridge.stop();
-  await bridge.ensureStarted();
-  assert.ok(bridge.generation > firstGeneration, "stop() then start must advance the generation");
+    bridge.stop();
+    await bridge.ensureStarted();
+    assert.ok(bridge.generation > firstGeneration, "stop() then start must advance the generation");
 
-  bridge.dispose();
-  await assert.rejects(() => bridge.ensureStarted(), /disposed/);
-});
+    bridge.dispose();
+    await assert.rejects(() => bridge.ensureStarted(), /disposed/);
+  },
+);
 
-test("history import works with the account bridge disconnected", { skip: !codexInstalled }, async () => {
-  const opened: string[] = [];
-  const svc = makeService(opened);
-  await svc.disconnect("codex");
-  const candidates = await scanCodexImportableSessions({ limit: 3 });
-  for (const candidate of candidates) {
-    assert.equal(candidate.provider, "codex");
-    assert.doesNotMatch(candidate.sourcePath, /auth\.json/);
-  }
-  assertNoCredentialMaterial(candidates, "codex history candidates");
-  svc.dispose();
-});
+test(
+  "history import works with the account bridge disconnected",
+  { skip: !codexInstalled },
+  async () => {
+    const opened: string[] = [];
+    const svc = makeService(opened);
+    await svc.disconnect("codex");
+    const candidates = await scanCodexImportableSessions({ limit: 3 });
+    for (const candidate of candidates) {
+      assert.equal(candidate.provider, "codex");
+      assert.doesNotMatch(candidate.sourcePath, /auth\.json/);
+    }
+    assertNoCredentialMaterial(candidates, "codex history candidates");
+    svc.dispose();
+  },
+);

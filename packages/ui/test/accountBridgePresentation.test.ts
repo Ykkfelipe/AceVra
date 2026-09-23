@@ -36,14 +36,17 @@ test("bridge state maps to the shipped status tones and labels", () => {
     labelId: "settings.accounts.bridge.notInstalled",
     spinning: false,
   });
-  assert.deepEqual(resolveAccountBridgeStatusView(status({ installed: false, state: "not-installed" })), {
-    tone: "subtle",
-    labelId: "settings.accounts.bridge.notInstalled",
-    spinning: false,
-  });
+  assert.deepEqual(
+    resolveAccountBridgeStatusView(status({ installed: false, state: "not-installed" })),
+    {
+      tone: "subtle",
+      labelId: "settings.accounts.bridge.notInstalled",
+      spinning: false,
+    },
+  );
   assert.equal(resolveAccountBridgeStatusView(status({ state: "connected" })).tone, "green");
   assert.equal(
-    resolveAccountBridgeStatusView(status({ state: "connecting" })).spinning,
+    resolveAccountBridgeStatusView(status({ state: "loading" })).spinning,
     true,
     "connecting must spin",
   );
@@ -128,7 +131,10 @@ test("names the blocked reason only for documented backend values", () => {
 
 test("makes a raw plan identifier presentable without changing its claim", () => {
   assert.equal(formatAccountPlanLabel("plus"), "Plus");
-  assert.equal(formatAccountPlanLabel("self_serve_business_usage_based"), "Self Serve Business Usage Based");
+  assert.equal(
+    formatAccountPlanLabel("self_serve_business_usage_based"),
+    "Self Serve Business Usage Based",
+  );
   assert.equal(formatAccountPlanLabel("  "), undefined);
   assert.equal(formatAccountPlanLabel(undefined), undefined);
 });

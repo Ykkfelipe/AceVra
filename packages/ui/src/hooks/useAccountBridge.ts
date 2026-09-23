@@ -11,15 +11,12 @@
  * this harness hands work to.
  */
 import { useCallback, useEffect, useState } from "react";
-import type {
-  AccountBridgeSource,
-  AccountBridgeStatus,
-  ZCodeImportableSessionCandidate,
-} from "@zcode/shared";
+import type { AccountBridgeSource, AccountBridgeStatus } from "@zcode/shared";
 import { useAccountsService } from "@/hooks/useAccountsService.js";
 import { logger } from "@/logger.js";
+import { readAccountStatusWithDeadline } from "@/lib/accountStatusRequest.js";
 
-type AccountBridgeBusy = AccountBridgeSource | "codex-history";
+type AccountBridgeBusy = AccountBridgeSource;
 
 /** Failures the renderer itself observes. Each maps to one localized line. */
 interface AccountBridgeFailure {
@@ -32,17 +29,11 @@ interface AccountBridgeFailure {
   readonly reason?: string;
 }
 
-type AccountBridgeFailureCode =
-  | "status_refresh_failed"
-  | "connect_failed"
-  | "codex_history_scan_failed";
+type AccountBridgeFailureCode = "status_refresh_failed" | "connect_failed";
 
 export function useAccountBridge() {
   const accountsService = useAccountsService();
   const [statuses, setStatuses] = useState<readonly AccountBridgeStatus[]>([]);
-  const [codexCandidates, setCodexCandidates] = useState<
-    readonly ZCodeImportableSessionCandidate[]
-  >([]);
   const [busy, setBusy] = useState<AccountBridgeBusy | null>(null);
   const [loading, setLoading] = useState(true);
   /**
@@ -55,11 +46,37 @@ export function useAccountBridge() {
   const refreshStatuses = useCallback(async () => {
     setRefreshing(true);
     try {
-      setStatuses(await accountsService.readAllAccountStatuses());
+      const nextStatuses = await Promise.all(
+        (["codex", "claude-code"] as const).map((source) =>
+          readAccountStatusWithDeadline(source, () => accountsService.readAccountStatus(source)),
+        ),
+      );
+      setStatuses(nextStatuses);
       // 只清除本次读取失败留下的提示；连接失败等原因不能被随后成功的状态读取掩盖。
       setLastError((current) => (current?.code === "status_refresh_failed" ? null : current));
     } catch (error) {
       logger.warn("[accounts] status refresh failed", error);
+      const checkedAt = new Date().toISOString();
+      setStatuses([
+        {
+          source: "codex",
+          installed: true,
+          state: "error",
+          sourceSignedIn: false,
+          sourceSignInChecked: false,
+          checkedAt,
+          error: "status_read_failed",
+        },
+        {
+          source: "claude-code",
+          installed: true,
+          state: "error",
+          sourceSignedIn: false,
+          sourceSignInChecked: false,
+          checkedAt,
+          error: "status_read_failed",
+        },
+      ]);
       setLastError({ code: "status_refresh_failed" });
     } finally {
       setRefreshing(false);
@@ -130,24 +147,6 @@ export function useAccountBridge() {
     [accountsService],
   );
 
-  const scanCodexHistory = useCallback(
-    async (limit = 10) => {
-      setBusy("codex-history");
-      try {
-        setCodexCandidates(await accountsService.scanCodexHistory({ limit }));
-        setLastError((current) =>
-          current?.code === "codex_history_scan_failed" ? null : current,
-        );
-      } catch (error) {
-        logger.warn("[accounts] codex history scan failed", error);
-        setLastError({ code: "codex_history_scan_failed" });
-      } finally {
-        setBusy(null);
-      }
-    },
-    [accountsService],
-  );
-
   const statusFor = useCallback(
     (source: AccountBridgeSource) => statuses.find((s) => s.source === source),
     [statuses],
@@ -156,7 +155,6 @@ export function useAccountBridge() {
   return {
     statuses,
     statusFor,
-    codexCandidates,
     busy,
     loading,
     refreshing,
@@ -164,7 +162,6 @@ export function useAccountBridge() {
     connect,
     reconnectBridge,
     disconnect,
-    scanCodexHistory,
     refreshStatuses,
   };
 }

@@ -27,6 +27,7 @@ import type {
 } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { CodexAppServerBridge } from "#src/accounts/codexAppServerBridge.js";
+import { discoverExecutable } from "#src/accounts/executableDiscovery.js";
 import {
   mapClaudeAuthStatusIdentity,
   mapCodexAccountUsage,
@@ -80,7 +81,11 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       ...(deps.codexExecutablePath ? { executablePath: deps.codexExecutablePath } : {}),
       ...(deps.clientVersion ? { clientVersion: deps.clientVersion } : {}),
     });
-  const claudeBin = deps.claudeExecutablePath ?? "claude";
+  const claudeBin = discoverExecutable({
+    name: "claude",
+    configuredPath: deps.claudeExecutablePath,
+    extraCandidates: ["~/.local/bin/claude", "~/.claude/local/claude"],
+  });
 
   const links: Record<AccountBridgeSource, HarnessLinkState> = {
     codex: { enabled: false },
@@ -109,7 +114,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
     const bin = codex.executablePath;
     if (!bin) return undefined;
     try {
-      const { stdout } = await execFileAsync(bin, ["--version"], { timeout: 15_000 });
+      const { stdout } = await execFileAsync(bin, ["--version"], { timeout: 10_000 });
       return stdout.trim().split(/\s+/).pop();
     } catch {
       return undefined;
@@ -133,7 +138,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       return { ...base, state: "disconnected", sourceSignedIn: false, sourceSignInChecked: false };
     }
     try {
-      const result = (await codex.call("account/read", {})) as {
+      const result = (await codex.call("account/read", {}, 15_000)) as {
         account?: Record<string, unknown> | null;
         requiresOpenaiAuth?: boolean;
       };
@@ -141,15 +146,16 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       let usage: AccountBridgeUsage | undefined;
       try {
         // 用量是可选数据面：读失败只代表本次没有 usage，不影响账号连接状态。
-        usage = mapCodexAccountUsage(await codex.call("account/rateLimits/read", {}));
+        usage = mapCodexAccountUsage(await codex.call("account/rateLimits/read", {}, 8_000));
       } catch {
         usage = undefined;
       }
       const identity = mapCodexIdentity(account);
+      const signedIn = Boolean(account);
       return {
         ...base,
-        state: "connected",
-        sourceSignedIn: Boolean(account),
+        state: signedIn && links.codex.enabled ? "connected" : "disconnected",
+        sourceSignedIn: signedIn,
         sourceSignInChecked: true,
         ...(identity ? { identity } : {}),
         ...(usage ? { usage } : {}),
@@ -242,6 +248,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
    * so a non-zero exit must not be treated as a failure when stdout parses.
    */
   async function claudeExec(args: string[], timeoutMs = 20_000): Promise<string> {
+    if (!claudeBin) throw new Error("claude_not_installed");
     try {
       const { stdout } = await execFileAsync(claudeBin, args, {
         timeout: timeoutMs,
@@ -257,10 +264,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
 
   async function readClaudeStatus(): Promise<AccountBridgeStatus> {
     const checkedAt = nowIso();
-    let version: string | undefined;
-    try {
-      version = (await claudeExec(["--version"], 15_000)).trim().split(/\s+/)[0];
-    } catch {
+    if (!claudeBin) {
       return {
         source: "claude-code",
         installed: false,
@@ -270,6 +274,20 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
         checkedAt,
       };
     }
+    let version: string | undefined;
+    try {
+      version = (await claudeExec(["--version"], 10_000)).trim().split(/\s+/)[0];
+    } catch (error) {
+      return {
+        source: "claude-code",
+        installed: true,
+        state: "error",
+        sourceSignedIn: false,
+        sourceSignInChecked: false,
+        checkedAt,
+        error: sanitizeError(error),
+      };
+    }
     const base = {
       source: "claude-code" as const,
       installed: true,
@@ -277,7 +295,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       checkedAt,
     };
     try {
-      const raw = await claudeExec(["auth", "status", "--json"]);
+      const raw = await claudeExec(["auth", "status", "--json"], 15_000);
       // 交给 mapper 做字段级校验；这里只把 JSON 当作未知结构，不用窄化的类型断言假装已校验。
       const parsed = JSON.parse(raw) as unknown;
       // `claude auth status --json` also reports email and subscriptionType; both are
@@ -286,7 +304,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       const loggedIn = (parsed as { loggedIn?: unknown } | null)?.loggedIn === true;
       return {
         ...base,
-        state: links["claude-code"].enabled ? "connected" : "disconnected",
+        state: loggedIn && links["claude-code"].enabled ? "connected" : "disconnected",
         sourceSignedIn: loggedIn,
         sourceSignInChecked: true,
         ...(identity ? { identity } : {}),
@@ -305,21 +323,41 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
   async function connectClaude(): Promise<AccountBridgeConnectResult> {
     const before = await readClaudeStatus();
     if (!before.installed) {
-      return { source: "claude-code", started: false, error: "claude_not_installed", status: before };
+      return {
+        source: "claude-code",
+        started: false,
+        error: "claude_not_installed",
+        status: before,
+      };
     }
     links["claude-code"].enabled = true;
     if (before.sourceSignedIn) {
       // Already signed in at the source; enabling the bridge is all that is required.
-      return { source: "claude-code", started: true, completed: true, status: await readClaudeStatus() };
+      return {
+        source: "claude-code",
+        started: true,
+        completed: true,
+        status: await readClaudeStatus(),
+      };
     }
     try {
       // Explicit user action only. Claude owns the browser flow and its own credentials.
       await claudeExec(["auth", "login", "--claudeai"], LOGIN_COMPLETION_TIMEOUT_MS);
-      return { source: "claude-code", started: true, completed: true, status: await readClaudeStatus() };
+      return {
+        source: "claude-code",
+        started: true,
+        completed: true,
+        status: await readClaudeStatus(),
+      };
     } catch (error) {
       const reason = sanitizeError(error);
       links["claude-code"].lastError = reason;
-      return { source: "claude-code", started: true, error: reason, status: await readClaudeStatus() };
+      return {
+        source: "claude-code",
+        started: true,
+        error: reason,
+        status: await readClaudeStatus(),
+      };
     }
   }
 
@@ -330,7 +368,35 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       return source === "codex" ? readCodexStatus() : readClaudeStatus();
     },
     async readAllStatuses(): Promise<readonly AccountBridgeStatus[]> {
-      return Promise.all([readCodexStatus(), readClaudeStatus()]);
+      const [codexStatus, claudeStatus] = await Promise.allSettled([
+        readCodexStatus(),
+        readClaudeStatus(),
+      ]);
+      const checkedAt = nowIso();
+      return [
+        codexStatus.status === "fulfilled"
+          ? codexStatus.value
+          : {
+              source: "codex",
+              installed: codex.installed,
+              state: "error",
+              sourceSignedIn: false,
+              sourceSignInChecked: false,
+              checkedAt,
+              error: "status_read_failed",
+            },
+        claudeStatus.status === "fulfilled"
+          ? claudeStatus.value
+          : {
+              source: "claude-code",
+              installed: Boolean(claudeBin),
+              state: "error",
+              sourceSignedIn: false,
+              sourceSignInChecked: false,
+              checkedAt,
+              error: "status_read_failed",
+            },
+      ];
     },
     async connect(source: AccountBridgeSource): Promise<AccountBridgeConnectResult> {
       return source === "codex" ? connectCodex() : connectClaude();

@@ -18,7 +18,7 @@ export type AccountBridgeSource = "codex" | "claude-code";
 export type AccountBridgeConnectionState =
   | "not-installed"
   | "disconnected"
-  | "connecting"
+  | "loading"
   | "connected"
   | "error";
 
