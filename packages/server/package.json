@@ -4,12 +4,14 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./service-channel": "./src/serviceChannelServer.ts",
     "./stdio": "./src/stdio.ts",
     "./remote": "./src/remote/index.ts",
     "./remote/*.js": "./src/remote/*.ts"
   },
   "scripts": {
-    "dev": "tsup --watch --onSuccess 'node dist/entry-http.js'",
+    "dev": "node ../../scripts/dev-server.mjs",
+    "dev:watch": "tsup --watch --onSuccess 'node dist/entry-http.js'",
     "build": "tsup && pnpm run build:remote",
     "build:remote": "tsx build-remote.ts",
     "lint": "oxlint",

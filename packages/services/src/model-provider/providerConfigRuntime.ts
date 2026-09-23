@@ -8,6 +8,7 @@ import {
 import type { ModelProviderConfig } from "./legacyModelProviderSerialized.js";
 import { getAppConfigDir } from "../paths.js";
 import { importLegacyPersonalProviderConfig } from "./legacyPersonalProviderConfigImporter.js";
+import { importOfficialProviderMetadata } from "./officialProviderMetadataImporter.js";
 
 export interface ProviderConfigRuntimeOptions {
   readonly zcodeBuiltinFilePath: string;
@@ -20,6 +21,9 @@ export interface ProviderConfigRuntimeOptions {
   readonly personalFilePath?: string;
   readonly personalPollingIntervalMs?: number | false;
   readonly readLegacyProviders?: () => Promise<readonly ModelProviderConfig[]>;
+  readonly officialProviderMetadataSourcePath?: string;
+  readonly onOfficialProviderMetadataImportError?: () => void;
+  readonly onOfficialProviderMetadataImported?: (providerIds: readonly string[]) => void;
   readonly watch?: boolean;
 }
 
@@ -30,8 +34,18 @@ export interface ProviderConfigRuntimeOptions {
 export class ProviderConfigRuntime {
   readonly configService: NodeProviderConfigRuntime["configService"];
   readonly #runtime: NodeProviderConfigRuntime;
+  readonly #personalFilePath: string;
+  readonly #officialProviderMetadataSourcePath?: string;
+  readonly #onOfficialProviderMetadataImportError?: () => void;
+  readonly #onOfficialProviderMetadataImported?: (providerIds: readonly string[]) => void;
+  #officialMetadataImportComplete = false;
 
   constructor(options: ProviderConfigRuntimeOptions) {
+    this.#officialProviderMetadataSourcePath = options.officialProviderMetadataSourcePath;
+    this.#onOfficialProviderMetadataImportError = options.onOfficialProviderMetadataImportError;
+    this.#onOfficialProviderMetadataImported = options.onOfficialProviderMetadataImported;
+    this.#personalFilePath =
+      options.personalFilePath ?? join(getAppConfigDir(), PERSONAL_PROVIDER_CONFIG_FILE_NAME);
     const runtimeOptions: NodeProviderConfigRuntimeOptions = {
       zcodeBuiltinFilePath: options.zcodeBuiltinFilePath,
       zcodeBuiltinActiveFilePath: options.zcodeBuiltinActiveFilePath,
@@ -40,8 +54,7 @@ export class ProviderConfigRuntime {
       onZCodeBuiltinRefreshError: options.onZCodeBuiltinRefreshError,
       onPersonalConfigRecovery: options.onPersonalConfigRecovery,
       onPersonalConfigPollingError: options.onPersonalConfigPollingError,
-      personalFilePath:
-        options.personalFilePath ?? join(getAppConfigDir(), PERSONAL_PROVIDER_CONFIG_FILE_NAME),
+      personalFilePath: this.#personalFilePath,
       personalPollingIntervalMs: options.personalPollingIntervalMs,
       watch: options.watch,
       ...(options.readLegacyProviders
@@ -58,7 +71,24 @@ export class ProviderConfigRuntime {
   }
 
   start(): Promise<void> {
-    return this.#runtime.start();
+    return this.#runtime.start().then(async () => {
+      const sourceFilePath = this.#officialProviderMetadataSourcePath;
+      if (!sourceFilePath || this.#officialMetadataImportComplete) return;
+      this.#officialMetadataImportComplete = true;
+      try {
+        const result = await importOfficialProviderMetadata({
+          sourceFilePath,
+          targetFilePath: this.#personalFilePath,
+          updateTarget: (transform) => this.#runtime.personalRepository.update(transform),
+        });
+        if (result.importedProviderIds.length > 0) {
+          this.#onOfficialProviderMetadataImported?.(result.importedProviderIds);
+        }
+      } catch {
+        // Source parse/I/O errors never include file contents or credential values in logs.
+        this.#onOfficialProviderMetadataImportError?.();
+      }
+    });
   }
 
   get personalRepository(): NodeProviderConfigRuntime["personalRepository"] {

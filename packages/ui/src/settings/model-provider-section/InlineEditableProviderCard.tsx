@@ -153,6 +153,7 @@ export function InlineEditableProviderCard({
   headerVisible = true,
   headerActionsVisible,
   settingsRevision,
+  canConfigureCredentials = false,
 }: {
   provider: ProviderSettingsFormProvider;
   onSave: (config: ProviderSettingsFormProvider) => void | Promise<void>;
@@ -180,6 +181,7 @@ export function InlineEditableProviderCard({
   headerVisible?: boolean;
   headerActionsVisible?: boolean;
   settingsRevision?: number;
+  canConfigureCredentials?: boolean;
 }) {
   const { intl } = useZCodeIntl();
   const { dismissFeedback, showFeedback } = useProviderDetailFeedback();
@@ -824,7 +826,7 @@ export function InlineEditableProviderCard({
           />
         )}
 
-        {isApiKeyProvider ? (
+        {isApiKeyProvider && canConfigureCredentials ? (
           <ProviderApiKeySection
             apiKeyValue={apiKeyValue}
             apiKeyVisible={apiKeyVisible}
@@ -837,6 +839,15 @@ export function InlineEditableProviderCard({
             onApiKeyCompositionEnd={handleTechnicalInputCompositionEnd}
             onToggleApiKeyVisibility={() => setApiKeyVisible((value) => !value)}
           />
+        ) : isApiKeyProvider ? (
+          <p className="text-ui-sm text-foreground-subtle" data-testid="provider-credential-state">
+            {intl.formatMessage({
+              id:
+                provider.credentialState === "configured"
+                  ? "settings.modelProvider.credentialConfigured"
+                  : "settings.modelProvider.credentialMissing",
+            })}
+          </p>
         ) : null}
 
         <ProviderModelsSection

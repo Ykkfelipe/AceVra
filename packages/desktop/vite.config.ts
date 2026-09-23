@@ -186,7 +186,10 @@ export default defineConfig(({ mode }) => {
       },
       dedupe: ["react", "react-dom", "lucide-react"],
     },
-    server: { port: 5174, strictPort: true },
+    server: {
+      port: Number(process.env.ZCODE_DESKTOP_DEV_RENDERER_PORT) || 5174,
+      strictPort: true,
+    },
     define: {
       __ZCODE_ENDPOINT_ENV__: JSON.stringify(pickProductEndpointEnv(env)),
       __ZCODE_VERSION__: JSON.stringify(buildMetadata.appVersion),

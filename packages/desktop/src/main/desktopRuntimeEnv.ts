@@ -564,6 +564,29 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     ...(bundledCuaHelperAppPath
       ? { [ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV]: bundledCuaHelperAppPath }
       : {}),
+    ...(rawInheritedEnv.ZCODE_FORK_DEV?.trim() === "1"
+      ? {
+          ZCODE_FORK_DEV: "1",
+          ...(rawInheritedEnv.ZCODE_FORK_RELAY_URL?.trim()
+            ? { ZCODE_FORK_RELAY_URL: rawInheritedEnv.ZCODE_FORK_RELAY_URL.trim() }
+            : {}),
+          ...(rawInheritedEnv.ZCODE_FORK_RELAY_DEVICE_TOKEN?.trim()
+            ? {
+                ZCODE_FORK_RELAY_DEVICE_TOKEN:
+                  rawInheritedEnv.ZCODE_FORK_RELAY_DEVICE_TOKEN.trim(),
+              }
+            : {}),
+          ...(rawInheritedEnv.ZCODE_FORK_ALLOWED_CLERK_USER_IDS?.trim()
+            ? {
+                ZCODE_FORK_ALLOWED_CLERK_USER_IDS:
+                  rawInheritedEnv.ZCODE_FORK_ALLOWED_CLERK_USER_IDS.trim(),
+              }
+            : {}),
+          ...(rawInheritedEnv.ZCODE_FORK_DEVICE_NAME?.trim()
+            ? { ZCODE_FORK_DEVICE_NAME: rawInheritedEnv.ZCODE_FORK_DEVICE_NAME.trim() }
+            : {}),
+        }
+      : {}),
     ...(resolvedGlmBinaryPath ? { GLM_BINARY_PATH: resolvedGlmBinaryPath } : {}),
     ...(resolvedLarkCliBinaryPath ? { ZCODE_LARK_CLI_BINARY: resolvedLarkCliBinaryPath } : {}),
   };

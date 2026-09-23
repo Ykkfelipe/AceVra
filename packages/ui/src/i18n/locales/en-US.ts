@@ -2454,6 +2454,8 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.apiFormat.title.responses": "Responses",
   "settings.modelProvider.apiFormat.title.anthropicMessages": "Anthropic messages",
   "settings.modelProvider.apiKey": "API key",
+  "settings.modelProvider.credentialConfigured": "Credential configured on this desktop",
+  "settings.modelProvider.credentialMissing": "Credential not configured on this desktop",
   "settings.modelProvider.apiKeyPlaceholder": "Enter API key",
   "settings.modelProvider.apiKeyDisabledHint": "Set an API key to enable this provider.",
   "settings.modelProvider.getApiKey": "Get API key",

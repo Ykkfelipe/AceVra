@@ -4,6 +4,7 @@ export { ServiceCollection } from "./collection.js";
 export {
   IModelSelectionService,
   IProviderSettingsService,
+  createRemoteProviderSettingsCredentialGuard,
   type ModelSelectionView,
   type ModelSelectionViewInput,
   type ProviderSettingsProviderView,
@@ -73,7 +74,10 @@ export { ITerminalService } from "./terminal/terminal.js";
 export { ISettingService } from "./setting/setting.js";
 
 // Credential service — ICredentialService is both a type (interface) and value (descriptor)
-export { ICredentialService } from "./credential/credential.js";
+export {
+  ICredentialService,
+  createRendererCredentialDeniedService,
+} from "./credential/credential.js";
 
 // Broadcast service — IBroadcastService is both a type (interface) and value (descriptor)
 export { IBroadcastService } from "./broadcast/broadcast.js";

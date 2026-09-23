@@ -9,22 +9,11 @@ import { serve } from "@hono/node-server";
 import { createNodeWebSocket } from "@hono/node-ws";
 import type { WebSocket } from "ws";
 import {
-  Emitter,
-  VSBuffer,
-  SocketProtocol,
-  ChannelServer,
-  LoggingChannelServer,
-  type ISocket,
-} from "@zcode/rpc";
-import {
   ServiceCollection,
-  IZCodeAgentService,
-  createZCodeAgentConnectionScope,
   IFileService,
   IGitService,
   ISystemService,
   ITerminalService,
-  IProviderProvisioningTargetService,
 } from "@zcode/services";
 import {
   formatLogPrefix,
@@ -55,94 +44,14 @@ import {
   authenticateCustomForkClerk,
   isCustomForkClerkUserAllowed,
 } from "./customForkClerkAuth.js";
-
-function wrapWebSocket(ws: WebSocket): ISocket {
-  const onData = new Emitter<VSBuffer>();
-  const onClose = new Emitter<void>();
-  const onEnd = new Emitter<void>();
-
-  ws.on("message", (raw: Buffer | ArrayBuffer | Buffer[]) => {
-    const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
-    onData.fire(VSBuffer.wrap(new Uint8Array(buf)));
-  });
-  ws.on("close", () => {
-    onClose.fire();
-    onEnd.fire();
-  });
-  ws.on("error", () => {
-    onClose.fire();
-    onEnd.fire();
-  });
-
-  return {
-    onData: onData.event,
-    onClose: onClose.event,
-    onEnd: onEnd.event,
-    write(buffer: VSBuffer) {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(buffer.buffer);
-      }
-    },
-    end() {
-      ws.close();
-    },
-    drain() {
-      return Promise.resolve();
-    },
-    dispose() {
-      ws.close();
-    },
-  };
-}
-
-const log = (...args: unknown[]) =>
-  console.log(formatLogPrefix("zcode-server:http", process.pid), ...args);
-
-export function setupChannelServer(
-  ws: WebSocket,
-  services: ServiceCollection,
-  clientMode: "desktop-continuous" | "web-remote-replayable",
-) {
-  const socket = wrapWebSocket(ws);
-  const protocol = new SocketProtocol(socket);
-  const rawServer = new ChannelServer(protocol, "server");
-  // 用日志中间件包装，统一记录所有 RPC 调用
-  const server = new LoggingChannelServer(rawServer, log);
-  const agentService = services.getOptional(IZCodeAgentService);
-  const connectionScope = agentService
-    ? createZCodeAgentConnectionScope(agentService, {
-        connectionId: `server-ws-${randomUUID()}`,
-        clientMode,
-        role: clientMode === "desktop-continuous" ? "trusted-host-relay" : "terminal-client",
-      })
-    : undefined;
-  const overrides = new Map<string, unknown>();
-  if (connectionScope) {
-    overrides.set(IZCodeAgentService.channelName, connectionScope.service);
-  }
-  // Provisioning 携带跨 Environment 凭据，只允许 Desktop trusted host 使用；普通 Web
-  // remote/replayable 客户端即使知道频道名，也不能获得 target 写入接口。
-  if (
-    clientMode !== "desktop-continuous" &&
-    services.getOptional(IProviderProvisioningTargetService)
-  ) {
-    overrides.set(IProviderProvisioningTargetService.channelName, {
-      apply: async () => {
-        throw new Error("Provider Provisioning 仅支持受信 Desktop Host");
-      },
-    });
-  }
-  services.exposeOnChannelServer(server, overrides);
-  socket.onClose(() => {
-    void connectionScope?.dispose();
-    rawServer.dispose();
-  });
-}
+import { setupChannelServer } from "./serviceChannelServer.js";
 
 /** 存储 web 模式下的远程连接，key 为随机 ID */
 const remoteConnections = new Map<string, RemoteConnection>();
 const customForkTickets = new Map<string, { expiresAt: number; userId: string }>();
 const CUSTOM_FORK_TICKET_TTL_MS = 30_000;
+const log = (...args: unknown[]) =>
+  console.log(formatLogPrefix("zcode-server", process.pid), ...args);
 
 function issueCustomForkTicket(userId: string): string {
   const ticket = randomUUID();
@@ -326,7 +235,7 @@ function staticContentType(filePath: string): string {
 }
 
 export function createHttpServer(
-  services: ServiceCollection,
+  services: ServiceCollection | undefined,
   port = 3030,
   options: HttpServerOptions = {},
 ) {
@@ -457,7 +366,12 @@ export function createHttpServer(
     "/ws",
     upgradeWebSocket(() => ({
       onOpen(_event, ws) {
-        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
+        const socket = ws.raw as WebSocket;
+        if (!services) {
+          socket.close(1013, "Attach to the custom Electron Host through the relay");
+          return;
+        }
+        setupChannelServer(socket, services, "web-remote-replayable");
       },
     })),
   );
@@ -470,7 +384,12 @@ export function createHttpServer(
           ws.close(4001, "Invalid or expired connection ticket");
           return;
         }
-        setupChannelServer(ws.raw as WebSocket, services, "web-remote-replayable");
+        const socket = ws.raw as WebSocket;
+        if (!services) {
+          socket.close(1013, "Attach to the custom Electron Host through the relay");
+          return;
+        }
+        setupChannelServer(socket, services, "web-remote-replayable");
       },
     })),
   );
@@ -547,7 +466,12 @@ export function createHttpServer(
 
   const upgradeTrustedHostWebSocket = upgradeWebSocket(() => ({
     onOpen(_event, ws) {
-      setupChannelServer(ws.raw as WebSocket, services, "desktop-continuous");
+      const socket = ws.raw as WebSocket;
+      if (!services) {
+        socket.close(1013, "This server only brokers the custom Electron Host");
+        return;
+      }
+      setupChannelServer(socket, services, "desktop-continuous");
     },
   }));
   app.use("/ws/host", async (c, next) => {

@@ -23,6 +23,7 @@ import type { ProviderRegistryView } from "./registry.js";
 import {
   serializeRegistryModelConfig,
   serializeRegistryProviderConfig,
+  type RegistryProviderConfig,
   type ProviderConfigResolution,
   type RegistryModelConfigObject,
 } from "./resolver.js";
@@ -152,6 +153,8 @@ export interface ProviderSettingsProviderView extends Pick<
 > {
   readonly enabled: boolean;
   readonly accountState?: import("./account-provider-state.js").AccountProviderState;
+  /** Presence only; raw API keys and auth headers remain Host-only. */
+  readonly credentialState?: "configured" | "missing";
   readonly providerId: ProviderId;
   /** 当前 Effective Config 是否已经进入 Registry，可用于模型选择和创建。 */
   readonly executable: boolean;
@@ -190,6 +193,7 @@ export interface ModelSelectionProviderView extends Pick<
   "providerName" | "templateId"
 > {
   readonly providerId: ProviderId;
+  readonly credentialState?: "configured" | "missing";
   readonly config: ProviderConfigObject;
   readonly models: readonly ModelSelectionModelView[];
 }
@@ -575,7 +579,8 @@ export function projectModelSelectionProviderView(
     providerId: provider.providerId,
     providerName: provider.providerName,
     templateId: provider.templateId,
-    config: serializeRegistryProviderConfig(provider.config),
+    credentialState: resolveCredentialState(provider.config),
+    config: sanitizeProviderConfigForClient(serializeRegistryProviderConfig(provider.config)),
     models: Object.freeze(
       provider.models.map((model) =>
         Object.freeze({
@@ -591,6 +596,42 @@ function requireSnapshot(source: ProviderRegistryFacadeSource): ProviderRegistry
   const snapshot = source.getSnapshot();
   if (!snapshot) throw new Error("ProviderRegistryService 尚未 start()");
   return snapshot;
+}
+
+/** Remove manually configured secrets before any provider projection leaves the Host. */
+export function sanitizeProviderConfigForClient(
+  config: ProviderConfigObject,
+): ProviderConfigObject {
+  const access = config.access;
+  const safeAccess =
+    access && (access.type === "api-key" || access.type === "zhipu-coding-plan-api-key")
+      ? {
+          type: access.type,
+          ...(access.apiKeyManagementUrl
+            ? { apiKeyManagementUrl: access.apiKeyManagementUrl }
+            : {}),
+        }
+      : access;
+  const safeApi = config.api
+    ? {
+        type: config.api.type,
+        ...(config.api.baseUrl ? { baseUrl: config.api.baseUrl } : {}),
+      }
+    : config.api;
+  return Object.freeze({ ...config, access: safeAccess, api: safeApi });
+}
+
+function resolveCredentialState(
+  config: ProviderConfig | RegistryProviderConfig,
+): "configured" | "missing" | undefined {
+  const access = config.access;
+  if (!access || (access.type !== "api-key" && access.type !== "zhipu-coding-plan-api-key")) {
+    return undefined;
+  }
+  const configured =
+    Boolean(access.apiKey?.trim()) ||
+    Object.values(config.api?.headers ?? {}).some((value) => Boolean(value.trim()));
+  return configured ? "configured" : "missing";
 }
 
 function requireEffectiveProvider(
@@ -621,16 +662,25 @@ function createProviderSettingsView(input: {
       providerName: provider.providerName,
       templateId: provider.templateId,
       enabled: provider.enabled,
+      credentialState: resolveCredentialState(provider.config),
       ...(input.accountStates?.[provider.providerId]
         ? { accountState: input.accountStates[provider.providerId] }
         : {}),
       executable: executableProviderIds.has(provider.providerId),
-      ...(provider.templateConfig ? { templateConfig: provider.templateConfig.toJSON() } : {}),
-      ...(provider.effectiveBuiltinConfig
-        ? { effectiveBuiltinConfig: provider.effectiveBuiltinConfig.toJSON() }
+      ...(provider.templateConfig
+        ? { templateConfig: sanitizeProviderConfigForClient(provider.templateConfig.toJSON()) }
         : {}),
-      ...(personalConfig ? { personalConfig: personalConfig.toJSON() } : {}),
-      effectiveConfig: provider.config.toJSON(),
+      ...(provider.effectiveBuiltinConfig
+        ? {
+            effectiveBuiltinConfig: sanitizeProviderConfigForClient(
+              provider.effectiveBuiltinConfig.toJSON(),
+            ),
+          }
+        : {}),
+      ...(personalConfig
+        ? { personalConfig: sanitizeProviderConfigForClient(personalConfig.toJSON()) }
+        : {}),
+      effectiveConfig: sanitizeProviderConfigForClient(provider.config.toJSON()),
       issues: provider.providerIssues,
       models: Object.freeze(
         provider.models.map((model) => {
@@ -674,7 +724,7 @@ function createProviderSettingsView(input: {
           Object.freeze({
             templateId,
             templateNameMap: template.templateNameMap,
-            config: template.config.toJSON(),
+            config: sanitizeProviderConfigForClient(template.config.toJSON()),
           }),
         ),
     ),

@@ -256,6 +256,7 @@ export function ModelProviderSectionDetail({
   accountsWorkspacePath,
   accountsWorkspaceIdentity,
   accountsIsDesktop,
+  canConfigureProviderCredentials = false,
 }: {
   selectedNavItem: ModelProviderNavItem | null;
   navigationItems?: ModelProviderNavItem[];
@@ -309,6 +310,7 @@ export function ModelProviderSectionDetail({
   accountsWorkspacePath?: string | null;
   accountsWorkspaceIdentity?: string;
   accountsIsDesktop?: boolean;
+  canConfigureProviderCredentials?: boolean;
 }) {
   const { intl } = useZCodeIntl();
   const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
@@ -439,6 +441,7 @@ export function ModelProviderSectionDetail({
       <ProviderFamilyDetailShell header={presetFamilyHeader}>
         <InlineEditableProviderCard
           provider={presetProvider}
+          canConfigureCredentials={canConfigureProviderCredentials}
           onSave={onSave}
           {...modelEditingProps}
           onReorderModelIds={
@@ -719,6 +722,7 @@ export function ModelProviderSectionDetail({
         <ProviderFamilyDetailShell header={codingPlanFamilyHeader}>
           <InlineEditableProviderCard
             provider={dedicatedProvider}
+            canConfigureCredentials={canConfigureProviderCredentials}
             onSave={onSave}
             {...modelEditingProps}
             onReorderModelIds={
@@ -865,6 +869,7 @@ export function ModelProviderSectionDetail({
     // 仅展示预设模板声明的入口，不根据地址猜测自定义 Provider 的 Key 控制台。
     <InlineEditableProviderCard
       provider={customProvider}
+      canConfigureCredentials={canConfigureProviderCredentials}
       onSave={onSave}
       {...modelEditingProps}
       onDelete={() => onDelete(customProvider)}

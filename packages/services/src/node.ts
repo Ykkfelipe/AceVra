@@ -1569,6 +1569,24 @@ export function createLocalServices(options: {
     // 已发布 config.json 保存的是 ZCode 用户配置；清理第三方 ACP 不能移除这条升级路径。
     // Repository 仅在新 Personal 配置不存在时导入，并保留旧文件以便回滚。
     readLegacyProviders: () => readLegacyZCodeConfigProviders(),
+    ...(process.env.ZCODE_FORK_DEV?.trim() === "1"
+      ? {
+          officialProviderMetadataSourcePath:
+            process.env.ZCODE_FORK_PROVIDER_IMPORT_SOURCE?.trim() ||
+            join(homedir(), ".zcode", "v2", PERSONAL_PROVIDER_CONFIG_FILE_NAME),
+          onOfficialProviderMetadataImported: (providerIds: readonly string[]) => {
+            providerConfigLog.info(undefined, "Official provider metadata imported into fork", {
+              providerIds,
+            });
+          },
+          onOfficialProviderMetadataImportError: () => {
+            providerConfigLog.warn(
+              undefined,
+              "Official provider metadata import skipped; fork configuration is preserved",
+            );
+          },
+        }
+      : {}),
   });
   const accountProviderConfigSource = createAccountProviderConfigSource({
     configSource: providerConfigRuntime.configService,

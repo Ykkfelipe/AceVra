@@ -9,7 +9,30 @@ import { DATA_BASE_DIR_FORBIDDEN_WINDOWS_INSTALL_DIR_ERROR_CODE } from "@zcode/s
 let _dataBaseDir: string | null = null;
 export const ZCODE_WINDOWS_APP_INSTALL_DIR_ENV = "ZCODE_WINDOWS_APP_INSTALL_DIR";
 const envDataBaseDir = process.env.ZCODE_DATA_BASE_DIR?.trim() || null;
-const defaultDataBaseDir = process.env.HOME?.trim() || homedir();
+const defaultDataBaseDir = resolveDataBaseDir({ env: process.env, homeDir: homedir() });
+
+export interface ResolveDataBaseDirOptions {
+  readonly env?: Record<string, string | undefined>;
+  readonly homeDir?: string;
+}
+
+/**
+ * Resolve one process's data base from explicit overrides and product mode.
+ * Custom-fork dev gets an isolated default even when it is launched outside mise;
+ * regular ZCode keeps its existing HOME-based default.
+ */
+export function resolveDataBaseDir(options: ResolveDataBaseDirOptions = {}): string {
+  const env = options.env ?? process.env;
+  const explicit = env.ZCODE_DATA_BASE_DIR?.trim();
+  if (explicit) return explicit;
+  const homeDir = options.homeDir ?? homedir();
+  const explicitZcodeHome = env.ZCODE_HOME?.trim();
+  if (explicitZcodeHome && basename(explicitZcodeHome) === ".zcode") {
+    return join(explicitZcodeHome, "..");
+  }
+  if (env.ZCODE_FORK_DEV?.trim() === "1") return join(homeDir, ".zcode-fork-dev-home");
+  return env.HOME?.trim() || homeDir;
+}
 
 interface DataBaseDirTargetValidationOptions {
   platform?: NodeJS.Platform | string;
@@ -30,7 +53,7 @@ export function setDataBaseDir(dir: string | null): void {
   _dataBaseDir = dir?.trim() || null;
 }
 
-/** Get the current base directory. Priority: setDataBaseDir() > env ZCODE_DATA_BASE_DIR > homedir(). */
+/** Get the current base directory. Priority: setDataBaseDir() > startup environment resolution. */
 export function getDataBaseDir(): string {
   if (_dataBaseDir) return _dataBaseDir;
   if (envDataBaseDir) return envDataBaseDir;

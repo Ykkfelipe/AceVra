@@ -15,6 +15,7 @@
  */
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
 import { randomUUID } from "node:crypto";
+import { startCustomForkHostRelay } from "./customForkHostRelay.js";
 import {
   MessagePortProtocol,
   ChannelServer,
@@ -31,6 +32,8 @@ import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
 import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
 import {
   ServiceCollection,
+  ICredentialService,
+  createRendererCredentialDeniedService,
   IFileService,
   IClientConfigService,
   IMediaPreviewService,
@@ -1564,6 +1567,7 @@ console.error = (...args: unknown[]) => {
 let databaseStartup: ReturnType<typeof createHostDatabaseStartup> | undefined;
 const pendingStartupAttachments = new Map<string, () => void>();
 let activeServices: ServiceCollection | null = null;
+let activeCustomForkHostRelay: ReturnType<typeof startCustomForkHostRelay> = null;
 let activeHostApiNetworkTransport: HostApiNetworkTransport | null = null;
 /** 本地 host services 的资源遥测订阅；远端连接的订阅由各自的 connection handle 持有。 */
 let activeLocalResourceTelemetry: IDisposable | null = null;
@@ -1989,6 +1993,7 @@ function exposeServicesOnMessagePort(
   const controllerAttachment = windowHostControllerRuntime.createAttachmentService();
   const overrides = new Map<string, unknown>([
     [IWindowControllerService.channelName, controllerAttachment],
+    [ICredentialService.channelName, createRendererCredentialDeniedService()],
   ]);
   // 远端媒体必须按 attachment 的 clientMode 选择数据面：桌面使用 Host loopback Range，手机保持 inline。
   const remoteMediaPreviewProxy =
@@ -2122,6 +2127,8 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
     stopHostNetworkTelemetry();
     hostSelfResourceTelemetry.stop();
     disposeLocalResourceTelemetry();
+    activeCustomForkHostRelay?.dispose();
+    activeCustomForkHostRelay = null;
     disposeAttachedServicePorts();
     windowHostControllerRuntime.dispose();
     for (const key of Array.from(cronRunSubscriptions.keys())) {
@@ -2191,6 +2198,8 @@ function disposeHostResourcesBestEffort(reason: string): void {
   logger.info(`disposing host resources, reason=${reason}`);
   stopHostNetworkTelemetry();
   disposeLocalResourceTelemetry();
+  activeCustomForkHostRelay?.dispose();
+  activeCustomForkHostRelay = null;
   disposeAttachedServicePorts();
   windowHostControllerRuntime.dispose();
   for (const key of Array.from(cronRunSubscriptions.keys())) {
@@ -2894,6 +2903,11 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
             scope: { kind: "local" },
             port,
           });
+        activeCustomForkHostRelay?.dispose();
+        activeCustomForkHostRelay = startCustomForkHostRelay({
+          services,
+          onLog: (message, fields) => logger.info(message, fields),
+        });
         logWindowHostTopology("base-attachment-ready");
         logger.info("local services ready, all channels registered");
       },

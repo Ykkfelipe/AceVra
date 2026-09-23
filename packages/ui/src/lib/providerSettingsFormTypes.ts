@@ -10,7 +10,7 @@ import type {
 /** 设置页面在一次编辑会话中使用的 Provider 状态。 */
 export interface ProviderSettingsFormProvider extends Pick<
   ProviderSettingsProviderView,
-  "providerName" | "templateId"
+  "providerName" | "templateId" | "credentialState"
 > {
   providerId: string;
   /** 仅本次显式改名的补丁；其他编辑不得把继承名称物化成个人配置。 */

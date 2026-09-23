@@ -1825,6 +1825,7 @@ export function SettingsPage({
                               accountsWorkspacePath={activeWorkspacePath}
                               accountsWorkspaceIdentity={activeWorkspaceIdentity}
                               accountsIsDesktop={Boolean(isDesktop)}
+                              canConfigureProviderCredentials={Boolean(isDesktop)}
                             />
                           </ServiceProvider>
                         ) : activeSection === "memory" ? (

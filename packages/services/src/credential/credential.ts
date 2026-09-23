@@ -17,3 +17,11 @@ export interface ICredentialService {
 export const ICredentialService = createServiceDescriptor<ICredentialService>(
   ServiceChannels.Credential,
 );
+
+/** Renderer attachments never receive the raw credential-store capability. */
+export function createRendererCredentialDeniedService(): ICredentialService {
+  const denied = async (): Promise<never> => {
+    throw new Error("Credential storage is host-only");
+  };
+  return Object.freeze({ load: denied, save: denied, delete: denied });
+}

@@ -17,7 +17,7 @@ run = "mise exec -- node scripts/mise-run.mjs pnpm bootstrap"
 
 [tasks.dev]
 description = "Start the desktop app in an isolated local test environment."
-env = { ZCODE_DESKTOP_APPLICATION_NAME = "ZCode Fork Dev", ZCODE_DESKTOP_HOME_DIR = "{{env.HOME}}/.zcode-fork-dev-home", ZCODE_DESKTOP_PROTOCOL_SCHEME = "zcode-fork", ZCODE_DATA_BASE_DIR = "{{env.HOME}}/.zcode-fork-dev-home", ZCODE_HOME = "{{env.HOME}}/.zcode-fork-dev-home/.zcode" }
+env = { ZCODE_FORK_DEV = "1", ZCODE_FORK_SERVER_MODE = "relay-broker", ZCODE_FORK_ALLOWED_CLERK_USER_IDS = "user_3Jf3aAXOGiPHUSjYDqLcGTmmYRe", ZCODE_FORK_RELAY_URL = "ws://localhost:3030", ZCODE_FORK_RELAY_DEVICE_TOKEN = "local-relay-development-token", ZCODE_DESKTOP_APPLICATION_NAME = "ZCode Fork Dev", ZCODE_DESKTOP_HOME_DIR = "{{env.HOME}}/.zcode-fork-dev-home", ZCODE_DESKTOP_PROTOCOL_SCHEME = "zcode-fork", ZCODE_DATA_BASE_DIR = "{{env.HOME}}/.zcode-fork-dev-home", ZCODE_HOME = "{{env.HOME}}/.zcode-fork-dev-home/.zcode" }
 run = "mise exec -- node scripts/mise-run.mjs pnpm dev:desktop:test"
 
 [tasks.dev-desktop-prod]
@@ -26,7 +26,7 @@ run = "mise exec -- node scripts/mise-run.mjs pnpm dev:desktop:prod"
 
 [tasks.dev-web]
 description = "Start the server and web client dev servers."
-env = { ZCODE_FORK_ALLOWED_CLERK_USER_IDS = "user_3Jf3aAXOGiPHUSjYDqLcGTmmYRe", ZCODE_FORK_CLERK_AUTHORIZED_PARTIES = "http://localhost:5173", ZCODE_FORK_RELAY_URL = "ws://localhost:3030", ZCODE_FORK_RELAY_DEVICE_TOKEN = "local-relay-development-token" }
+env = { ZCODE_FORK_DEV = "1", ZCODE_FORK_SERVER_MODE = "relay-broker", ZCODE_DATA_BASE_DIR = "{{env.HOME}}/.zcode-fork-dev-home", ZCODE_HOME = "{{env.HOME}}/.zcode-fork-dev-home/.zcode", ZCODE_DESKTOP_HOME_DIR = "{{env.HOME}}/.zcode-fork-dev-home", ZCODE_FORK_ALLOWED_CLERK_USER_IDS = "user_3Jf3aAXOGiPHUSjYDqLcGTmmYRe", ZCODE_FORK_CLERK_AUTHORIZED_PARTIES = "http://localhost:5173", ZCODE_FORK_RELAY_URL = "ws://localhost:3030", ZCODE_FORK_RELAY_DEVICE_TOKEN = "local-relay-development-token" }
 run = "mise exec -- node scripts/mise-run.mjs pnpm dev:web"
 
 [tasks.typecheck]

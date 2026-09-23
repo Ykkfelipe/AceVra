@@ -70,6 +70,51 @@ export interface IProviderSettingsService {
   ): Promise<ModelConnectivityResult>;
 }
 
+/** Reject credential-bearing provider writes from every non-local attachment. */
+export function createRemoteProviderSettingsCredentialGuard(
+  service: IProviderSettingsService,
+): IProviderSettingsService {
+  return new Proxy(service, {
+    get(target, property, receiver) {
+      if (property === "createPersonalProvider") {
+        return async (input?: Parameters<IProviderSettingsService["createPersonalProvider"]>[0]) => {
+          if (input?.initialConfig && containsProviderCredentialField(input.initialConfig)) {
+            throw new Error("Provider credentials can only be configured in the local desktop app");
+          }
+          return target.createPersonalProvider(input);
+        };
+      }
+      if (property === "savePersonalProviderOverlay") {
+        return async (
+          providerId: Parameters<IProviderSettingsService["savePersonalProviderOverlay"]>[0],
+          config: Parameters<IProviderSettingsService["savePersonalProviderOverlay"]>[1],
+          metadata?: Parameters<IProviderSettingsService["savePersonalProviderOverlay"]>[2],
+        ) => {
+          if (containsProviderCredentialField(config)) {
+            throw new Error("Provider credentials can only be configured in the local desktop app");
+          }
+          return target.savePersonalProviderOverlay(providerId, config, metadata);
+        };
+      }
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+function containsProviderCredentialField(config: ProviderConfigObject): boolean {
+  const access = config.access;
+  if (
+    access &&
+    (access.type === "api-key" || access.type === "zhipu-coding-plan-api-key") &&
+    Object.hasOwn(access, "apiKey")
+  ) {
+    return true;
+  }
+  // 凭据字段即使为空也可能清除或覆盖 Host 已保存的值，远端写入必须按字段出现与否拒绝。
+  return Object.keys(config.api?.headers ?? {}).length > 0;
+}
+
 export const IProviderSettingsService = createServiceDescriptor<IProviderSettingsService>(
   ServiceChannels.ProviderSettings,
 );

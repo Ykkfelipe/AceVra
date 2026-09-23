@@ -242,6 +242,7 @@ export function ModelProviderSection({
   accountsWorkspacePath,
   accountsWorkspaceIdentity,
   accountsIsDesktop,
+  canConfigureProviderCredentials = false,
 }: {
   workspacePath?: string;
   connectivityWorkspacePath?: string;
@@ -251,6 +252,7 @@ export function ModelProviderSection({
   accountsWorkspacePath?: string | null;
   accountsWorkspaceIdentity?: string;
   accountsIsDesktop?: boolean;
+  canConfigureProviderCredentials?: boolean;
 } = {}) {
   const { intl, locale } = useZCodeIntl();
   const confirmDialog = useConfirmDialog();
@@ -1112,6 +1114,7 @@ export function ModelProviderSection({
           accountsWorkspacePath={accountsWorkspacePath}
           accountsWorkspaceIdentity={accountsWorkspaceIdentity}
           accountsIsDesktop={accountsIsDesktop}
+          canConfigureProviderCredentials={canConfigureProviderCredentials}
           connectionSettingsFailed={familyConnectionSettingsFailed}
           startPlanSubscriptionCount={(() => {
             const providerId =
