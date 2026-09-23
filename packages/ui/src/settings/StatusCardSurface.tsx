@@ -35,7 +35,7 @@ export function StatusCardSurface({
           </div>
         </div>
         {trailingAction ? (
-          <div className="shrink-0 max-sm:flex max-sm:w-full max-sm:[&>button]:w-full">
+          <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2 max-sm:w-full">
             {trailingAction}
           </div>
         ) : null}
