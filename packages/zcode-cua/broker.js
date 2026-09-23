@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { DEV_CUA_HELPER_BUNDLE_ID, HELPER_BUNDLE_ID } from "./broker-helper-constants.js";
 
 export const BROKER_SOCKET_ENV = "ZCODE_CUA_PERMISSION_BROKER_SOCKET";
+export const BROKER_TOKEN_ENV = "ZCODE_CUA_PERMISSION_BROKER_TOKEN";
 export const BROKER_UNAVAILABLE_ENV = "ZCODE_CUA_PERMISSION_BROKER_UNAVAILABLE";
 export const EXPECTED_HELPER_IDS_ENV = "ZCODE_CUA_EXPECTED_HELPER_IDS";
 
@@ -318,9 +319,13 @@ export function resolveBrokerSocketPath(options = {}) {
   return join(home, "computer-use", "helper.sock");
 }
 
-function encodeRequestLine(method, params, id) {
+function encodeRequestLine(method, params, id, token) {
   const request = { id: id ?? null, method };
   if (params !== undefined) request.params = params;
+  // CUA-1.5: when the host launched a hardened session, agents carry the per-launch capability
+  // token in their env; the host's relay checks it (constant-time) and strips it before the
+  // Helper sees the request. Absent token = CUA-1 standalone behaviour, unchanged.
+  if (token) request.token = token;
   return `${JSON.stringify(request)}\n`;
 }
 
@@ -341,6 +346,7 @@ export async function callBrokerMethod(args) {
     timeoutMs = 5000,
     requireVerifiedIdentity = defaultRequireVerifiedHelperIdentity(),
     expectedHelperIdentifiers = resolveExpectedHelperIdentifiers(),
+    token = process.env?.[BROKER_TOKEN_ENV],
   } = args ?? {};
   if (typeof socketPath !== "string" || !socketPath) {
     throw new BrokerError("a broker socket path is required", { code: "no_socket" });
@@ -377,7 +383,7 @@ export async function callBrokerMethod(args) {
     timer.unref?.();
 
     socket.setEncoding("utf8");
-    socket.on("connect", () => socket.write(encodeRequestLine(method, params, "1")));
+    socket.on("connect", () => socket.write(encodeRequestLine(method, params, "1", token)));
     socket.on("data", (chunk) => {
       buffer += chunk;
       const newline = buffer.indexOf("\n");

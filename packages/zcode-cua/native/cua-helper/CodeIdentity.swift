@@ -45,6 +45,9 @@ struct CodeIdentityReport {
     /// The identifier this report was checked against, and where that expectation came from.
     var expectedIdentifier: String
     var expectationSource: String
+    /// Whether the enclosing bundle (not just the executable image) was validated — CUA-1.5.
+    /// False for a bare non-bundle binary; informational, never a substitute for `verified`.
+    var bundleValidated: Bool
     /// Empty when `verified`; otherwise why the check failed.
     var reason: String
 
@@ -59,6 +62,7 @@ struct CodeIdentityReport {
             "pid": pid,
             "expected_identifier": expectedIdentifier,
             "expectation_source": expectationSource,
+            "bundle_validated": bundleValidated,
             "reason": reason,
         ]
     }
@@ -68,7 +72,8 @@ struct CodeIdentityReport {
         CodeIdentityReport(
             verified: false, identifier: "", teamIdentifier: "", cdHash: "",
             requirement: "", adHoc: false, pid: pid,
-            expectedIdentifier: expected, expectationSource: source, reason: reason)
+            expectedIdentifier: expected, expectationSource: source, bundleValidated: false,
+            reason: reason)
     }
 }
 
@@ -80,14 +85,25 @@ struct HelperIdentityPolicy {
     /// i.e. self-consistency only — the external expectation belongs to the caller, which holds
     /// the contract constant. See the client-side check in packages/zcode-cua/broker.js.
     var expectedSelfIdentifier: String
+    /// Full code requirement (Apple requirement language) this helper's own signature must
+    /// satisfy — CUA-1.5. When set it takes precedence over `expectedSelfIdentifier` and is
+    /// enforced in both the dynamic and the on-disk validation, so the anchor is the launcher's
+    /// certificate (or cdhash), never a bundle id an impostor can self-sign.
+    var expectedSelfRequirement: String
     /// Expected identifier of the process allowed to call the broker socket. Empty means
     /// "report the caller, do not enforce"; a non-empty value is enforced on every request.
     var requiredPeerIdentifier: String
+    /// Full code requirement the *listener* must satisfy before the helper serves anything on a
+    /// host-owned connection (CUA-1.5 `--connect` mode). Connect mode refuses to start without
+    /// one: a helper that would serve any listener that reaches it would re-open the same-uid
+    /// substitution gap the mode exists to close.
+    var requiredHostRequirement: String
     /// Refuse to serve when the caller's signature does not validate at all.
     var requireSignedPeer: Bool
 
     static let `default` = HelperIdentityPolicy(
-        expectedSelfIdentifier: "", requiredPeerIdentifier: "", requireSignedPeer: false)
+        expectedSelfIdentifier: "", expectedSelfRequirement: "", requiredPeerIdentifier: "",
+        requiredHostRequirement: "", requireSignedPeer: false)
 }
 
 /// Set once from main.swift before the socket server starts. A `var` global with an initializer
@@ -108,7 +124,11 @@ func resolveHelperIdentityPolicy(args: Args) -> HelperIdentityPolicy {
     }
     return HelperIdentityPolicy(
         expectedSelfIdentifier: value("expected-identifier", "ZCODE_CUA_EXPECTED_HELPER_ID"),
+        expectedSelfRequirement: value(
+            "expected-requirement", "ZCODE_CUA_EXPECTED_HELPER_REQUIREMENT"),
         requiredPeerIdentifier: value("require-peer-identifier", "ZCODE_CUA_REQUIRED_PEER_ID"),
+        requiredHostRequirement: value(
+            "require-host-requirement", "ZCODE_CUA_REQUIRED_HOST_REQUIREMENT"),
         requireSignedPeer: args.has("require-signed-peer")
             || environment["ZCODE_CUA_REQUIRE_SIGNED_PEER"] == "1")
 }
@@ -124,6 +144,13 @@ func resolveHelperIdentityPolicy(args: Args) -> HelperIdentityPolicy {
 private let strictDynamicFlags = SecCSFlags(rawValue: UInt32(kSecCSStrictValidate))
 private let strictStaticFlags = SecCSFlags(
     rawValue: UInt32(kSecCSCheckAllArchitectures) | UInt32(kSecCSStrictValidate))
+/// The bundle-level re-validation (CUA-1.5): all architectures, strict, and nested code —
+/// measured to pass on a bundle with no embedded frameworks and to cover a product helper that
+/// later gains one. Resources and the executable are validated by default; these opt-outs are
+/// not passed.
+private let strictBundleFlags = SecCSFlags(
+    rawValue: UInt32(kSecCSCheckAllArchitectures) | UInt32(kSecCSCheckNestedCode)
+        | UInt32(kSecCSStrictValidate))
 
 private func signingInformationFlags() -> SecCSFlags {
     SecCSFlags(rawValue: UInt32(kSecCSSigningInformation) | UInt32(kSecCSRequirementInformation))
@@ -152,35 +179,52 @@ private func requirementText(_ information: [String: Any]) -> String {
 
 /// Validate one code object and describe it from its signature.
 ///
-/// Three checks run, in this order, and each was added because a measurement showed the previous
+/// Four checks run, in this order, and each was added because a measurement showed the previous
 /// set was insufficient:
 ///
 ///  1. `SecCodeCheckValidity` on the dynamic code — the running process satisfies the requirement.
+///     The requirement is the launcher-pinned full requirement text when one is configured
+///     (CUA-1.5: certificate- or cdhash-anchored), otherwise the identifier form CUA-1 used.
 ///  2. `SecStaticCodeCheckValidity` on a **freshly opened on-disk image** with strict + all-architecture
 ///     flags — the check that actually catches an in-place edit. Opening the static code *from the
 ///     running process* (`SecCodeCopyStaticCode`) is not enough: a measured `__text` tamper left
 ///     that check passing, because the process was validated when it was executed. Re-opening the
 ///     image from its path re-hashes every slice, which is what caught the same tamper
-///     (`errSecCSSignatureFailed`, -67061).
-///  3. `SecCodeCopySigningInformation` on that validated on-disk image, so the identifier reported
+///     (`errSecCSSignatureFailed`, -67061). For a bundle-resident binary the resolved path is the
+///     `.app` (measured), so this check already covers the bundle's seal.
+///  3. An explicit bundle-level validation with `kSecCSCheckNestedCode` added, recorded as
+///     `bundle_validated`. CUA-1.5 measured (`run-bundle-validity-probe.sh`) that added files
+///     under the bundle — `Resources/`, `Contents/`, even the bundle root — are rejected
+///     (-67054 / -67014) and modified sealed resources are rejected (-67030); the explicit step
+///     keeps that coverage stated in code rather than implied by path shape, and extends it to
+///     nested code a product helper may later embed.
+///  4. `SecCodeCopySigningInformation` on that validated on-disk image, so the identifier reported
 ///     downstream comes from the signature that was just verified rather than from the process's
 ///     own description of itself.
 ///
 /// The order matters: a report with `verified: false` never carries a trusted identifier.
 func describeCode(
-    _ code: SecCode, pid: Int, expectedIdentifier: String, expectationSource: String
+    _ code: SecCode, pid: Int, expectedIdentifier: String, expectedRequirement: String,
+    expectationSource: String
 ) -> CodeIdentityReport {
     // A configured expectation is checked with the platform's own requirement language, so it is
-    // the same mechanism `codesign -r-` prints rather than a string comparison we invented.
+    // the same mechanism `codesign -r-` prints rather than a string comparison we invented. The
+    // full-requirement form wins when present: an identifier is chosen by whoever signs the
+    // binary, while the requirement text can anchor the certificate root or cdhash.
     var requirement: SecRequirement?
-    if !expectedIdentifier.isEmpty {
+    var requirementSourceText = ""
+    if !expectedRequirement.isEmpty {
+        requirementSourceText = expectedRequirement
+    } else if !expectedIdentifier.isEmpty {
+        requirementSourceText = "identifier \"\(expectedIdentifier)\""
+    }
+    if !requirementSourceText.isEmpty {
         var raw: SecRequirement?
-        let requirementText = "identifier \"\(expectedIdentifier)\""
-        let status = SecRequirementCreateWithString(
-            requirementText as CFString, [], &raw)
+        let status = SecRequirementCreateWithString(requirementSourceText as CFString, [], &raw)
         if status != errSecSuccess {
             return CodeIdentityReport.failed(
-                "expected identifier \(expectedIdentifier) is not a valid code requirement",
+                "expected code requirement from \(expectationSource) is not a valid code "
+                    + "requirement (status \(status))",
                 pid: pid, expected: expectedIdentifier, source: expectationSource)
         }
         requirement = raw
@@ -192,8 +236,8 @@ func describeCode(
             requirement == nil
                 ? "SecCodeCheckValidity failed (status \(validity)); the running image is not "
                     + "the code its signature describes"
-                : "code does not satisfy the \(expectationSource) expected identifier "
-                    + "\"\(expectedIdentifier)\" (status \(validity))",
+                : "code does not satisfy the \(expectationSource) expected requirement "
+                    + "(status \(validity))",
             pid: pid, expected: expectedIdentifier, source: expectationSource)
     }
 
@@ -229,6 +273,30 @@ func describeCode(
             pid: pid, expected: expectedIdentifier, source: expectationSource)
     }
 
+    // CUA-1.5: explicit bundle-level validation. Measured behaviour lives in the spec; the point
+    // of the separate step is that the bundle seal (resources + nested code) is validated
+    // deliberately, and `bundle_validated` says so in the report rather than relying on the
+    // resolved path happening to be the bundle.
+    let onDiskPath = (pathURL as URL).path
+    var bundleValidated = false
+    if let bundleURL = enclosingBundleURL(of: onDiskPath) {
+        var bundleCode: SecStaticCode?
+        let bundleOpenStatus = SecStaticCodeCreateWithPath(bundleURL as CFURL, [], &bundleCode)
+        guard bundleOpenStatus == errSecSuccess, let bundleCode else {
+            return CodeIdentityReport.failed(
+                "enclosing bundle could not be opened for validation (status \(bundleOpenStatus))",
+                pid: pid, expected: expectedIdentifier, source: expectationSource)
+        }
+        let bundleValidity = SecStaticCodeCheckValidity(bundleCode, strictBundleFlags, requirement)
+        guard bundleValidity == errSecSuccess else {
+            return CodeIdentityReport.failed(
+                "bundle validation failed (status \(bundleValidity)); a sealed resource or "
+                    + "nested image no longer matches its signature",
+                pid: pid, expected: expectedIdentifier, source: expectationSource)
+        }
+        bundleValidated = true
+    }
+
     var informationRaw: CFDictionary?
     guard SecCodeCopySigningInformation(onDiskCode, signingInformationFlags(), &informationRaw)
         == errSecSuccess,
@@ -261,7 +329,19 @@ func describeCode(
         pid: pid,
         expectedIdentifier: expectedIdentifier,
         expectationSource: expectationSource,
+        bundleValidated: bundleValidated,
         reason: "")
+}
+
+/// The `.app`/`.bundle` root enclosing an on-disk image path, or nil for a bare binary. The
+/// path comes from `SecCodeCopyPath` — the image the kernel mapped — never from caller input.
+private func enclosingBundleURL(of path: String) -> URL? {
+    let url = URL(fileURLWithPath: path)
+    let extensionValue = url.pathExtension.lowercased()
+    if extensionValue == "app" || extensionValue == "bundle" { return url }
+    let components = url.pathComponents
+    guard components.count >= 3, components.suffix(2) == ["Contents", "MacOS"] else { return nil }
+    return URL(fileURLWithPath: components.dropLast(3).joined(separator: "/"))
 }
 
 // MARK: - Self
@@ -281,12 +361,14 @@ let helperSelfIdentity: CodeIdentityReport = {
     let source = policy.expectedSelfIdentifier.isEmpty ? "signature" : "configured"
     return describeCode(
         code, pid: Int(getpid()), expectedIdentifier: policy.expectedSelfIdentifier,
-        expectationSource: source)
+        expectedRequirement: policy.expectedSelfRequirement, expectationSource: source)
 }()
 
 /// A `list_apps`-sized short form for result envelopes. The full report (including the
 /// designated requirement) is carried by `permission_status`, which is where a caller looks
-/// when it needs to explain *why* the helper is trusted.
+/// when it needs to explain *why* the helper is trusted. `bundle_validated` travels in the
+/// short form too: CUA-1.5's sealed-bundle check must be visible to every caller, not only to
+/// the ones that read the full report.
 func shortIdentityJSON(_ report: CodeIdentityReport) -> [String: Any] {
     [
         "verified": report.verified,
@@ -294,6 +376,7 @@ func shortIdentityJSON(_ report: CodeIdentityReport) -> [String: Any] {
         "cd_hash": report.cdHash,
         "ad_hoc": report.adHoc,
         "pid": report.pid,
+        "bundle_validated": report.bundleValidated,
         "reason": report.reason,
     ]
 }
@@ -328,7 +411,38 @@ func peerCodeIdentity(_ fd: Int32) -> CodeIdentityReport {
     }
     return describeCode(
         code, pid: Int(pid), expectedIdentifier: policy.requiredPeerIdentifier,
-        expectationSource: policy.requiredPeerIdentifier.isEmpty ? "none" : "configured")
+        expectedRequirement: "", expectationSource: policy.requiredPeerIdentifier.isEmpty
+            ? "none" : "configured")
+}
+
+/// The identity of the *listener* the helper connected out to, validated against the full
+/// requirement the launcher pinned (CUA-1.5). This is the gate that makes host-owned transport
+/// substitution fail closed: a same-uid impostor that wins the bind race receives the helper's
+/// connection, but its code does not satisfy the launcher's certificate- or cdhash-anchored
+/// requirement, so the helper refuses to serve it and exits. The pid here is only the handle
+/// the kernel gives us for the connected socket; the requirement, not the pid, is the anchor.
+func hostPeerIdentity(_ fd: Int32) -> CodeIdentityReport {
+    let policy = cuaIdentityPolicy
+    var pid: pid_t = 0
+    var length = socklen_t(MemoryLayout<pid_t>.size)
+    let pidStatus = getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &length)
+    guard pidStatus == 0, pid > 0 else {
+        return CodeIdentityReport.failed(
+            "LOCAL_PEERPID unavailable for the host connection",
+            expected: policy.requiredHostRequirement, source: "configured")
+    }
+
+    var code: SecCode?
+    let attributes = [kSecGuestAttributePid as String: pid] as CFDictionary
+    let copyStatus = SecCodeCopyGuestWithAttributes(nil, attributes, [], &code)
+    guard copyStatus == errSecSuccess, let code else {
+        return CodeIdentityReport.failed(
+            "the host's process could not be resolved to a code object (status \(copyStatus))",
+            pid: Int(pid), expected: policy.requiredHostRequirement, source: "configured")
+    }
+    return describeCode(
+        code, pid: Int(pid), expectedIdentifier: "", expectedRequirement:
+            policy.requiredHostRequirement, expectationSource: "configured")
 }
 
 /// Whether a request from this peer may be honoured. Reporting is always allowed; enforcement

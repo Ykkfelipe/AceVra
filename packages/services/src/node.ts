@@ -506,6 +506,11 @@ import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHe
 import { DEV_HELPER_APP_NAME, HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import { resolveBrokerSocketPath } from "@zcode/zcode-cua/broker/socketPath";
 import {
+  BROKER_TOKEN_ENV,
+  startHardenedCuaHelperSession,
+  type HardenedCuaHelperSession,
+} from "#src/cua-permission-broker/darwinCuaHelperTransport.js";
+import {
   DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
   resolveSafeEndpointHostname,
   ZCODE_JWT_INVALID_BROADCAST_CHANNEL,
@@ -1539,7 +1544,11 @@ export function createLocalServices(options: {
         });
       },
       resolveTeamPlanApiKey: (access) =>
-        resolveAccountTeamPlanRuntimeApiKey({ apiClient, credentialService, access }),
+        resolveAccountTeamPlanRuntimeApiKey({
+          apiClient,
+          credentialService,
+          access,
+        }),
     }),
   );
   const providerConfigLog = createServiceLogger("provider-config");
@@ -1566,7 +1575,9 @@ export function createLocalServices(options: {
         }),
     },
     onZCodeBuiltinRefreshError: (error) => {
-      providerConfigLog.warn(undefined, "ZCode Built-in Config 远端刷新失败", { error });
+      providerConfigLog.warn(undefined, "ZCode Built-in Config 远端刷新失败", {
+        error,
+      });
     },
     onPersonalConfigRecovery: (event) => {
       providerConfigLog.warn(
@@ -1749,6 +1760,45 @@ export function createLocalServices(options: {
     new CuaHelperLifecycleManager<ManagedDefaultCuaProductHelper>(async (managed) => {
       await managed.helper.host.stop();
     });
+  // CUA-1.5 hardened transport session（standalone Helper 走 host-owned socket + Helper
+  // connect-out）。同一时刻至多一个 session；启动失败回退 CUA-1 稳定 socket 流程（下方
+  // launchStandaloneCuaHelperForStatus 保持原逻辑作为 fallback）。session 归本服务图所有：
+  // 进程退出随之结束，Helper 因连接 EOF/idle 退出，不留下孤儿 socket。
+  let hardenedCuaHelperSession: HardenedCuaHelperSession | null = null;
+  // 启动 promise 记忆化：并发调用（状态页连续查询）共享同一次启动，否则输家会
+  // 泄漏整个 session（socket + 已准入 Helper，且 owner pid 存活导致永不被 prune）。
+  let hardenedCuaHelperSessionStart: Promise<HardenedCuaHelperSession | null> | null = null;
+  const ensureHardenedCuaHelperSession = (): Promise<HardenedCuaHelperSession | null> => {
+    if (hardenedCuaHelperSession) return Promise.resolve(hardenedCuaHelperSession);
+    hardenedCuaHelperSessionStart ??= startHardenedCuaHelperSession({
+      env: process.env,
+      logger: createServiceLogger("cua-host-transport"),
+    })
+      .then((started) => {
+        if (!started.ok) {
+          // Fail-closed fallback：硬化的启动途径不可用时记录原因并走 CUA-1 流程；
+          // 这里不做二次弱化重试——fallback 的语义就是「CUA-1 原样」。清掉记忆化，
+          // 让之后的设置页查询可以重新尝试硬化启动（瞬时原因可能已消失）。
+          hardenedCuaHelperSessionStart = null;
+          createServiceLogger("cua-host-transport").warn(
+            undefined,
+            "[cua-host-transport] hardened helper session unavailable, falling back to standalone flow",
+            { reason: started.reason },
+          );
+          return null;
+        }
+        hardenedCuaHelperSession = started.session;
+        return hardenedCuaHelperSession;
+      })
+      .catch(() => {
+        hardenedCuaHelperSessionStart = null;
+        return null;
+      });
+    return hardenedCuaHelperSessionStart;
+  };
+  // 读取器：`hardenedCuaHelperSession` 由上方闭包写入，直接读会被 TS 控制流收窄成 never。
+  const peekHardenedCuaHelperSession = (): HardenedCuaHelperSession | null =>
+    hardenedCuaHelperSession;
   const createManagedDefaultCuaProductHelper = (
     context?: CuaProductMcpServerResolverContext,
   ): ManagedDefaultCuaProductHelper | undefined => {
@@ -1826,8 +1876,19 @@ export function createLocalServices(options: {
   // 哪天 host bundle 也补上 __ZCODE_LOCAL_DEVELOPMENT_RUNTIME__ define（Helper 侧已经有），
   // 编译期门自动生效，不需要再回来改这里。
 
+  // 拉起 standalone Helper。CUA-1.5 起优先走硬化传输（host-owned session socket + Helper
+  // connect-out，双向 designated requirement + per-launch token）；硬化途径不可用（签名信息
+  // 缺失 / Helper 未准入等，均有稳定 reason）时逐字回退 CUA-1 稳定 socket 流程。返回值语义
+  // 保持「可用 socket 路径」：硬化路径返回 session socket，回退路径返回稳定 socket。
   const launchStandaloneCuaHelperForStatus = async (): Promise<string | null> => {
     if (process.platform !== "darwin") return null;
+    const hardened = await ensureHardenedCuaHelperSession();
+    if (hardened) {
+      if (!hardened.host.helperConnected) {
+        await hardened.relaunch();
+      }
+      if (hardened.host.helperConnected) return hardened.socketPath;
+    }
     const { existsSync } = await import("node:fs");
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
@@ -1857,7 +1918,10 @@ export function createLocalServices(options: {
       socketPath,
       exitLogPath: `${socketPath}.settings.exit.log`,
       ...(isCuaLocalDevelopmentRuntime(process.env)
-        ? { allowUnsignedLauncherLocalDev: true, allowExternalBrokerClientLocalDev: true }
+        ? {
+            allowUnsignedLauncherLocalDev: true,
+            allowExternalBrokerClientLocalDev: true,
+          }
         : {}),
     });
     try {
@@ -1936,8 +2000,68 @@ export function createLocalServices(options: {
       const helper = peeked && isDefaultCuaProductHelperCurrent(peeked) ? peeked : undefined;
       const host = helper ? helper.macPermissionHost : undefined;
       if (!host || !host.running) {
-        // Helper 按需启动：设置页查询 = 拉起 standalone Helper（稳定 socket、
-        // 无 launcher-pid → 300s 无访问自动休眠，不进托管体系）。拉起后经稳定 socket 查真值。
+        // standalone 权限查询（无托管 host）。CUA-1.5 的查询路由按「哪条传输真的在服务」：
+        //   1. 本服务图已有硬化 session → 经 relay 查询（Helper 掉线先在同一 session 重启，
+        //      同一 socket/token/requirement，relay 重新准入；身份真值来自 admission 时 host
+        //      自己用 codesign 做过的 host-derived 校验，比信封自报更强）；
+        //   2. 稳定 socket 上有 CUA-1 自启动 Helper → callBrokerMethod 直连（含信封身份校验）；
+        //   3. 都没有 → launchStandaloneCuaHelperForStatus（硬化优先，逐字回退 CUA-1），
+        //      再按返回的 socket 属于哪条传输查询。
+        const mapStandaloneReport = (report: {
+          grant_owner: string;
+          owner?: { display_name?: string };
+          accessibility: CuaPermissionState;
+          accessibility_probe_ok?: boolean;
+          screen_recording: CuaPermissionState;
+          screen_recording_readout?: {
+            preflight: boolean | null;
+            source: string;
+            cached?: boolean;
+            note?: string;
+          };
+        }) =>
+          ({
+            grantOwner: report.grant_owner,
+            grantOwnerDisplayName: report.owner?.display_name ?? report.grant_owner,
+            accessibility: report.accessibility,
+            accessibilityProbeOk: report.accessibility_probe_ok === true,
+            screenRecording: report.screen_recording,
+            ...(report.screen_recording_readout
+              ? { screenRecordingReadout: report.screen_recording_readout }
+              : {}),
+            // 这条路径没有跑功能探针，所以 false 只表示「未测量」，不表示屏幕录制被拒绝；
+            // state 让消费方不必猜这个 false 的含义。注意 screenRecording（TCC 记录态）本身
+            // 也可能陈旧：常驻 Helper 的 CGPreflight 是进程缓存的，撤销授权后它会继续报
+            // granted 直到重启（CUA-0.5 实测）。真正可用与否只有实际抓屏能回答，即 observe
+            // 的 effect。
+            screenCaptureProbeOk: false,
+            screenCaptureProbeState: "not_run",
+          }) as const;
+        if (hardenedCuaHelperSession) {
+          const session = peekHardenedCuaHelperSession();
+          if (!session) {
+            return {
+              available: false,
+              reason: "ZCode Computer Use is starting up; retry in a moment.",
+              idle: true,
+            } satisfies { available: false; reason: string; idle: true };
+          }
+          try {
+            if (!session.host.helperConnected) await session.relaunch();
+            const report = await session.host.callMethod<Parameters<typeof mapStandaloneReport>[0]>(
+              "permission_status",
+              undefined,
+              { timeoutMs: 3_000 },
+            );
+            return mapStandaloneReport(report);
+          } catch {
+            return {
+              available: false,
+              reason: "ZCode Computer Use is starting up; retry in a moment.",
+              idle: true,
+            } satisfies { available: false; reason: string; idle: true };
+          }
+        }
         let stable = await probeStableCuaHelperSocket();
         if (!stable) {
           stable = await launchStandaloneCuaHelperForStatus();
@@ -1950,42 +2074,23 @@ export function createLocalServices(options: {
             idle: true,
           } satisfies { available: false; reason: string; idle: true };
         }
-        // standalone Helper 上直接查权限真值（身份模式，无 token）。
         try {
+          // launchStandaloneCuaHelperForStatus 可能创建了硬化 session——此时返回的 socket 是
+          // session socket（token 门控），必须走 relay 查询而不是无 token 直连。
+          const launchedSession = peekHardenedCuaHelperSession();
+          if (launchedSession && stable === launchedSession.socketPath) {
+            const report = await launchedSession.host.callMethod<
+              Parameters<typeof mapStandaloneReport>[0]
+            >("permission_status", undefined, { timeoutMs: 3_000 });
+            return mapStandaloneReport(report);
+          }
           const { callBrokerMethod } = await import("@zcode/zcode-cua/broker/helperHealth");
-          const report = await callBrokerMethod<{
-            grant_owner: string;
-            owner?: { display_name?: string };
-            accessibility: CuaPermissionState;
-            accessibility_probe_ok?: boolean;
-            screen_recording: CuaPermissionState;
-            screen_recording_readout?: {
-              preflight: boolean | null;
-              source: string;
-              cached?: boolean;
-              note?: string;
-            };
-          }>({
+          const report = await callBrokerMethod<Parameters<typeof mapStandaloneReport>[0]>({
             socketPath: stable,
             method: "permission_status",
             timeoutMs: 3000,
           });
-          return {
-            grantOwner: report.grant_owner,
-            grantOwnerDisplayName: report.owner?.display_name ?? report.grant_owner,
-            accessibility: report.accessibility,
-            accessibilityProbeOk: report.accessibility_probe_ok === true,
-            screenRecording: report.screen_recording,
-            ...(report.screen_recording_readout
-              ? { screenRecordingReadout: report.screen_recording_readout }
-              : {}),
-            // 这条路径没有跑功能探针，所以 false 只表示「未测量」，不表示屏幕录制被拒绝；state
-            // 让消费方不必猜这个 false 的含义。注意 screenRecording（TCC 记录态）本身也可能陈旧：
-            // 常驻 Helper 的 CGPreflight 是进程缓存的，撤销授权后它会继续报 granted 直到重启
-            // （CUA-0.5 实测）。真正可用与否只有实际抓屏能回答，即 observe 的 effect。
-            screenCaptureProbeOk: false,
-            screenCaptureProbeState: "not_run",
-          };
+          return mapStandaloneReport(report);
         } catch {
           return {
             available: false,
@@ -2237,13 +2342,17 @@ export function createLocalServices(options: {
       cuaProductHelperWorkspaceRegistry.setEnabled(context, Boolean(cuaProductHelperHost));
       let cuaProductHelperEnv: Record<string, string> = {};
       if (!helper && cuaPluginEnabled && process.platform === "darwin") {
-        // 懒启动：无托管 host 时注入稳定 socket；无 token（身份模式）、无 pluginAuthority
-        // （其校验方就是 host，host 缺席时无意义）。SDK ensureBrokerAvailable 负责拉起。
-        // pluginAuthority 是 agent 进程内的 config-provenance 随机数（bootstrap 捕获后写进
-        // node_repl 配置 env，core 比对两者证明该配置出自本 bootstrap 而非用户配置文件）；
-        // 它不需要 host——托管态由 host 铸造，懒启动态在此按 spawn 铸造，语义与校验完全一致。
+        // 懒启动：无托管 host 时注入 standalone Helper 的 socket。CUA-1.5：硬化 session 在
+        // → 注入 session socket + per-launch token（relay 对每个请求做常时比较后剥离，
+        // Helper 永远看不到 token）；session 不在 → 注入稳定 socket（CUA-1 身份模式，无
+        // token）。pluginAuthority 是 agent 进程内的 config-provenance 随机数（bootstrap
+        // 捕获后写进 node_repl 配置 env，core 比对两者证明该配置出自本 bootstrap 而非用户
+        // 配置文件）；它不需要 host——托管态由 host 铸造，懒启动态在此按 spawn 铸造，语义
+        // 与校验完全一致。
+        const hardened = peekHardenedCuaHelperSession();
         cuaProductHelperEnv = {
-          [BROKER_SOCKET_ENV]: resolveBrokerSocketPath(),
+          [BROKER_SOCKET_ENV]: hardened?.socketPath ?? resolveBrokerSocketPath(),
+          ...(hardened ? { [BROKER_TOKEN_ENV]: hardened.token } : {}),
           [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: randomBytes(16).toString("hex"),
         };
         cuaProductHelperWorkspaceRegistry.setEnabled(context, false);
@@ -2402,7 +2511,9 @@ export function createLocalServices(options: {
   // 账号桥与执行后端共享同一 bridge 实例（generation fencing / restart 预算保持 bridge 权威）。
   // 执行策略默认 safeInteractive（审批开启 + 只读沙箱）；只有 ZCODE_CODEX_EXECUTION_POLICY
   // 显式指名预设才会改变，未知名称 fail closed 回落默认并告警。
-  const codexPolicyResolution = resolveCodexExecutionPolicy(process.env.ZCODE_CODEX_EXECUTION_POLICY);
+  const codexPolicyResolution = resolveCodexExecutionPolicy(
+    process.env.ZCODE_CODEX_EXECUTION_POLICY,
+  );
   if (codexPolicyResolution.adoptedDefault) {
     createServiceLogger("codex-execution").warn(
       undefined,

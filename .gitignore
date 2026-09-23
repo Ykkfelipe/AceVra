@@ -69,3 +69,6 @@ packages/desktop/.e2e-artifacts/
 packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
+
+# CUA helper build output (dev bundles are signed build artifacts, never source)
+packages/zcode-cua/native/cua-helper/*.app/

@@ -135,6 +135,11 @@ func runBrokerSocketServer(socketPath: String, idleMs: Int) -> Never {
             "broker: bind/listen failed at \(socketPath) (errno \(errno))\n".data(using: .utf8)!)
         exit(70)
     }
+    // Least privilege for the socket file: the accept loop only needs the owner. The parent
+    // directory is the launcher's data root; in host-connect mode (CUA-1.5) the helper binds
+    // nothing at all, and this chmod keeps the standalone bind mode from relying on the
+    // launching process's umask.
+    chmod(socketPath, 0o600)
 
     var lastActivity = Date()
     while true {
@@ -157,12 +162,140 @@ func runBrokerSocketServer(socketPath: String, idleMs: Int) -> Never {
     }
 }
 
+// MARK: - Host-owned transport (CUA-1.5)
+
+/// Connect out to the host-owned session socket, verify the listener's code identity against
+/// the launcher-pinned requirement, announce this helper, and serve the observe-only broker
+/// protocol on that one connection.
+///
+/// Note on `idleMs`: deliberately not applied in connect mode. Unlike bind mode, an idle
+/// connection here is a live host session — the host owns the lifetime and closes the
+/// connection when the session ends, and EOF (not idleness) is what ends this helper. The
+/// argument is accepted because the launch contract always passes it.
+///
+/// Why connect instead of bind (spec "Why the transport direction flips"): the clients of a
+/// bound socket are Node processes with no peer-credential binding, so a same-uid impostor that
+/// won the bind race owned every client's identity decision. Here the *serving* party is the
+/// connection initiator: the pid on the far end comes from the kernel (`LOCAL_PEERPID`), and a
+/// listener whose code does not satisfy `cuaIdentityPolicy.requiredHostRequirement` receives
+/// nothing — the helper exits without serving, so substitution destroys the capability instead
+/// of redirecting it.
+///
+/// Connection lifecycle: EOF from the host ends the helper (exit 0). The host relays client
+/// traffic over this connection; a helper restart is a fresh launch + fresh handshake, and the
+/// host re-admits a new connection only after this one closes.
+func runBrokerHostClient(socketPath: String, launchToken: String, connectTimeoutMs: Int,
+                         idleMs: Int) -> Never {
+    signal(SIGPIPE, SIG_IGN)
+
+    guard !cuaIdentityPolicy.requiredHostRequirement.isEmpty else {
+        // Fail closed at launch, not at the first connection: a host-connect helper without a
+        // pinned listener requirement would serve whatever holds the socket.
+        FileHandle.standardError.write(
+            "broker: --connect requires --require-host-requirement\n".data(using: .utf8)!)
+        exit(78)
+    }
+
+    let fd = connectBrokerSocket(path: socketPath, timeoutMs: connectTimeoutMs)
+    guard fd >= 0 else {
+        FileHandle.standardError.write(
+            "broker: could not connect to the host session socket (errno \(errno))\n"
+                .data(using: .utf8)!)
+        exit(71)
+    }
+
+    // Verify the listener BEFORE any payload-bearing traffic. `hello` carries the launch token
+    // and the verified identity only after the host's code satisfied the requirement.
+    let host = hostPeerIdentity(fd)
+    guard host.verified else {
+        FileHandle.standardError.write(
+            "broker: host identity verification failed: \(host.reason)\n".data(using: .utf8)!)
+        close(fd)
+        exit(77)
+    }
+
+    let hello: [String: Any] = [
+        "ok": true,
+        "result": [
+            "type": "helper_hello",
+            "transport": "host-connect",
+            "launch_token": launchToken,
+            "helper_identity": helperSelfIdentity.json,
+            "pid": Int(getpid()),
+        ],
+    ]
+    var helloData = brokerSerialize(hello)
+    helloData.append(0x0A)
+    if !writeAll(fd, helloData) {
+        FileHandle.standardError.write("broker: host closed during hello\n".data(using: .utf8)!)
+        exit(72)
+    }
+
+    // The verified host is the only caller on this connection; its identity was checked against
+    // the pinned requirement above, so serve without the per-connection peer gate bind mode uses.
+    serveBrokerRequests(fd, peer: nil)
+    close(fd)
+    exit(0)  // the host session ended; an unattended helper does not linger
+}
+
+/// Connect to a Unix socket with bounded retries. The host binds before launching, so the first
+/// attempt normally succeeds; the retries cover scheduler jitter between `open` and `listen`.
+private func connectBrokerSocket(path: String, timeoutMs: Int) -> Int32 {
+    let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000.0)
+    while true {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return -1 }
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = Array(path.utf8)
+        guard pathBytes.count < MemoryLayout.size(ofValue: address.sun_path) else {
+            close(fd)
+            return -1
+        }
+        withUnsafeMutablePointer(to: &address.sun_path) { pointer in
+            pointer.withMemoryRebound(to: CChar.self, capacity: pathBytes.count + 1) {
+                destination in
+                for (offset, byte) in pathBytes.enumerated() {
+                    destination[offset] = CChar(bitPattern: byte)
+                }
+                destination[pathBytes.count] = 0
+            }
+        }
+        let addressLength = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let connected = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(fd, $0, addressLength)
+            }
+        }
+        if connected == 0 { return fd }
+        close(fd)
+        if Date() >= deadline { return -1 }
+        Thread.sleep(forTimeInterval: 0.05)
+    }
+}
+
+/// Write a full buffer, tolerating partial writes. A vanished reader ends the attempt instead
+/// of aborting the process (SIGPIPE is already ignored).
+private func writeAll(_ fd: Int32, _ data: Data) -> Bool {
+    data.withUnsafeBytes { pointer in
+        var written = 0
+        while written < data.count {
+            let count = write(fd, pointer.baseAddress!.advanced(by: written),
+                              data.count - written)
+            if count <= 0 { return false }
+            written += count
+        }
+        return true
+    }
+}
+
 /// Largest request line accepted. The observe-only methods take a handful of small fields, so this
 /// is generous; its purpose is that a client which never sends a newline cannot grow the helper's
 /// buffer without bound. The node_repl bridge caps its own request at 1 MiB, so the two agree.
 private let maxRequestLineBytes = 1024 * 1024
 
-/// Read newline-delimited requests from one client until it disconnects.
+/// Read newline-delimited requests from one client until it disconnects (bind mode entry:
+/// resolves the caller once per connection, from the kernel, before serving).
 ///
 /// A malformed line produces a `bad_request` response and the connection keeps working: a bad
 /// line must never be able to take the helper down or wedge the client. A line that never ends is
@@ -172,6 +305,14 @@ func serveBrokerClient(_ client: Int32) {
     // from anything the caller said, and is validated as a code signature — the same check
     // applied to the helper itself.
     let peer = peerCodeIdentity(client)
+    serveBrokerRequests(client, peer: peer)
+}
+
+/// The request loop shared by bind mode (`serveBrokerClient`) and host-connect mode
+/// (`runBrokerHostClient`). In host-connect mode `peer` is nil by design: the far end was
+/// already verified against the launcher-pinned requirement before the hello, and this
+/// connection has exactly one possible peer.
+private func serveBrokerRequests(_ client: Int32, peer: CodeIdentityReport?) {
     var buffer = Data()
     var chunk = [UInt8](repeating: 0, count: 64 * 1024)
     while true {

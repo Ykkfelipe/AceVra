@@ -1,4 +1,6 @@
 export declare const BROKER_SOCKET_ENV: string;
+/** CUA-1.5: per-launch capability token for the host-owned transport session. */
+export declare const BROKER_TOKEN_ENV: string;
 export declare const BROKER_UNAVAILABLE_ENV: string;
 export declare const EXPECTED_HELPER_IDS_ENV: string;
 

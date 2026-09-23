@@ -352,6 +352,19 @@ if args.has("serve") {
     runBrokerSocketServer(socketPath: socketPath, idleMs: args.int("idle-ms") ?? 0)
 }
 
+// Host-connect mode (CUA-1.5): the trusted host owns the listening socket; this helper connects
+// out, verifies the listener against the launcher-pinned requirement, and serves only there.
+// `--require-host-requirement` is mandatory here (enforced again inside runBrokerHostClient) —
+// a helper that would serve any listener that reaches it would re-open the same-uid
+// substitution gap this mode exists to close.
+if let connectPath = args.string("connect"), !connectPath.isEmpty {
+    runBrokerHostClient(
+        socketPath: connectPath,
+        launchToken: args.string("launch-token") ?? "",
+        connectTimeoutMs: args.int("connect-timeout-ms") ?? 10_000,
+        idleMs: args.int("idle-ms") ?? 0)
+}
+
 // JSONSerialization rejects a nil value, so optional entries are added rather than
 // written as nil into the literal.
 var permissionReport: [String: Any] = [
