@@ -1,0 +1,1 @@
+{"bounds":{"h":420,"w":640,"x":40,"y":470},"id":4855,"layer":0,"onScreen":true,"owner":"Google Chrome","pid":5436,"title":"CUA-T0-Cnone-M0-N0","zOrder":21}

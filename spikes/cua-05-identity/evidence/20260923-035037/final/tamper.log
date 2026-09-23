@@ -1,0 +1,32 @@
+### tamper probe at 2026-09-23T08:08:23Z
+### bundle: /Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app
+### TEXT_OFF=5072
+TEXT_SIZE=45194
+CSTRING_OFF=53408
+----- A control (untouched)
+  codesign --verify rc=0
+  launch: /usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app" --args --launcher-pid $$ --capture --report $OUT_DIR/A-control.report.json
+  RESULT A-control:  A-control: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0 ax=True srPreflight=True launcherPidArg=72715 parentPid=1 ppid=1 capture={"blank": false, "distinctSampledColors": 48, "height": 956, "ok": true, "width": 1470} 
+----- B __text tamper
+  printf '\xff' | dd of=$BIN bs=1 seek=27669 conv=notrunc
+  codesign --verify rc=1
+  binary sha256: 657629bd89cd4ae37389086ee4786b2014a5821b028dca84ecdea0423bc73a3f
+  launch: /usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app" --args --launcher-pid $$ --capture --report $OUT_DIR/B-text.report.json
+  RESULT B-text:  B-text: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0 ax=True srPreflight=True launcherPidArg=72715 parentPid=1 ppid=1 capture={"blank": false, "distinctSampledColors": 48, "height": 956, "ok": true, "width": 1470} 
+----- C __cstring tamper
+  printf '\xff' | dd of=$BIN bs=1 seek=53408 conv=notrunc
+  codesign --verify rc=1
+  binary sha256: 08e55df3dc28fb8b1bef1d382edbf816c2268995274b3c00e06c408f532104f5
+  launch: /usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app" --args --launcher-pid $$ --capture --report $OUT_DIR/C-cstring.report.json
+  RESULT C-cstring:  C-cstring: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0 ax=True srPreflight=True launcherPidArg=72715 parentPid=1 ppid=1 capture={"blank": false, "distinctSampledColors": 48, "height": 956, "ok": true, "width": 1470} 
+----- D append past the signed code limit
+  printf 'TAMPER' >> $BIN   (was 322768 bytes)
+  now 322774 bytes
+  codesign --verify rc=1
+  launch: /usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app" --args --launcher-pid $$ --capture --report $OUT_DIR/D-appended.report.json
+  RESULT D-appended:  D-appended: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0 ax=True srPreflight=True launcherPidArg=72715 parentPid=1 ppid=1 capture={"blank": false, "distinctSampledColors": 47, "height": 956, "ok": true, "width": 1470} 
+----- E restored
+  codesign --verify rc=0
+  launch: /usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app" --args --launcher-pid $$ --capture --report $OUT_DIR/E-restored.report.json
+  RESULT E-restored:  E-restored: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0 ax=True srPreflight=True launcherPidArg=72715 parentPid=1 ppid=1 capture={"blank": false, "distinctSampledColors": 47, "height": 956, "ok": true, "width": 1470} 
+### tamper probe complete

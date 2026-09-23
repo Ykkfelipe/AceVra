@@ -1,0 +1,9 @@
+probe.bundleId=dev.zcode.cua.probe
+probe.executable=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe
+probe.pid=66044
+probe.parentPid=1
+accessibility.trusted=false
+screenRecording.preflight=false
+accessibility.trustedAfterPromptRequest=false
+screenRecording.afterPromptRequest=false
+note=pending user approval in System Settings; relaunch required after granting screen recording

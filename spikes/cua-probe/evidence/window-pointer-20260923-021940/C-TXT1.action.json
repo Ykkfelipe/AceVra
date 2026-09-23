@@ -1,0 +1,12 @@
+{
+  "delivery": {
+    "delivered_count": 11,
+    "mode": "background"
+  },
+  "effect": "unverifiable",
+  "escalation": {
+    "reason": "effect_unconfirmed",
+    "target": "page"
+  },
+  "route": "synthetic_events"
+}

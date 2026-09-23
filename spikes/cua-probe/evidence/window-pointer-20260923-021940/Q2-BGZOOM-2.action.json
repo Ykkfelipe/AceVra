@@ -1,0 +1,11 @@
+{
+  "code": "minimized_or_hidden_window",
+  "effect": "refused",
+  "escalation": {
+    "reason": "window 5262 is minimized or its application is hidden (or that state could not be proven); the routed pointer is refused in v1. Use an exact element action (click/set_value by element) instead",
+    "recommended": "accessibility"
+  },
+  "pid": 20002,
+  "reason": "window 5262 is minimized or its application is hidden (or that state could not be proven); the routed pointer is refused in v1. Use an exact element action (click/set_value by element) instead",
+  "window_id": 5262
+}

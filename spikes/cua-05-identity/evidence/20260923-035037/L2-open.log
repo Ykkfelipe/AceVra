@@ -1,0 +1,15 @@
+### label=L2-open mode=open at 2026-09-23T07:50:38Z
+### helper bundle: /Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app
+### launch path process tree (this harness):
+      PID  PPID COMMAND
+    59182 59114 bash ./packages/zcode-cua/native/cua-helper/run-permission-probe.sh L2-open open --capture --ax-read-pid 626
+### responsible app for this shell (walk to a bundled app):
+    no app bundle in ancestry above pid=51690
+### open exit=0
+### helper process tree at observation time:
+### helper bundle signature:
+    Identifier=dev.zcode.cua-helper.dev
+    CandidateCDHashFull sha256=06e433ed9efe6a4ec47e7e9c14f66387b694ce18ba8ddf64a708a65f204fc857
+    Authority=ZCode CUA Dev Signing
+    TeamIdentifier=not set
+    designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"

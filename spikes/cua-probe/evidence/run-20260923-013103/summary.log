@@ -1,0 +1,122 @@
+ZCode CUA Probe — zero-inference primitive test suite
+run dir: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-013103
+host: macOS 27.0 (arm64)
+
+### attribution
+    note: this run inherits the parent process TCC grant. See
+          evidence/attribution-own-identity.log for the standalone bundle,
+          which reports accessibility.trusted=false / screenRecording=false.
+
+CALC_PID=58445 CALC_WIN= TE_PID=57563
+
+================ TEST A — OBSERVATION ================
+
+--- A1: application enumeration (no TCC permission required) ---
+    apps: 1 entries, 21.2 ms
+
+--- A2: window enumeration + z-order (no TCC permission required) ---
+    windows: 1 entries, 21.9 ms
+
+--- A3: accessibility tree of a non-frontmost app ---
+    nodes: 1, 21.6 ms
+    FAIL A3 tree contains calculator buttons: '/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory' does not contain 'AXButton'
+
+================ TEST B — SEMANTIC ACTION ================
+
+--- B1: AXPress a known control, verify resulting UI state ---
+    plan: clear, 7, +, 3, = -> display result must be 10
+    B1.clear: identifier=^(AllClear|Clear)$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    B1.seven: identifier=^Seven$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    B1.add: identifier=^Add$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    B1.three: identifier=^Three$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    B1.equals: identifier=^Equals$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    display: 
+    FAIL B1 semantic arithmetic 7+3=10: got '' expected '10'
+
+--- B2: pre/post state proves the return code alone is not evidence ---
+
+================ TEST C — BACKGROUND ================
+
+--- C0: establish background condition (different app frontmost) ---
+
+--- C1: capture the target window while NOT frontmost ---
+
+### C1.capture
+    command: probe shot --window  --out /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-013103/C1.calculator-window.png
+    out: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    exit=127
+    FAIL C1 no png produced
+
+--- C2: semantic AX action on the non-frontmost target ---
+    C2.clear: identifier=^(AllClear|Clear)$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    C2.two: identifier=^Two$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    C2.add: identifier=^Add$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    C2.three: identifier=^Three$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    C2.equals: identifier=^Equals$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    display: 
+    FAIL C2 background arithmetic 2+3=5: got '' expected '5'
+    FAIL C2 stayed in background across the whole sequence: got '' expected 'true'
+
+--- C3: PID-routed keyboard to the non-frontmost target ---
+    C3.clear: identifier=^(AllClear|Clear)$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    key out: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    display after PID-routed '8','1': 
+    FAIL C3 PID-routed keyboard reached the background app: got '' expected '81'
+    FAIL C3 stayed in background: got '' expected 'true'
+
+--- C4: PID-routed coordinate click on the non-frontmost target ---
+    C4.clear: identifier=^(AllClear|Clear)$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    SKIP C4: Nine button not found
+
+================ TEST D — FOREGROUND ================
+
+--- D1: explicit activation, then a global coordinate click ---
+
+### D1.activate
+    command: probe activate --pid 58445
+    out: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    exit=127
+    FAIL D1 activation changed the frontmost app: got '' expected 'True'
+    D1.clear: identifier=^(AllClear|Clear)$ axError=<none> exit=127
+      raw: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+
+--- D2: foreground typing into a real document ---
+    text area before: ''
+
+### D2.type
+    command: probe type-global --text zcode cua probe
+    out: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    exit=127
+    text area after : ''
+    FAIL D2 foreground typing reached the document: '' does not contain 'zcode cua probe'
+
+--- D3: control for C4 — same PID-routed click, but target IS frontmost ---
+    This separates 'PID-routed pointer events never work' from
+    'PID-routed pointer events do not work in the background'.
+
+================ TEST E — USER INTERRUPTION ================
+
+--- E1: does a listen-only global tap see our GLOBAL synthetic events? ---
+    /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    FAIL E1 tap saw our global synthetic events (tap live + self-tagging works): got 'false' expected 'true'
+
+--- E2: does the same tap see PID-ROUTED events? ---
+    /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-tests.sh: line 28: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe: No such file or directory
+    PASS E2 PID-routed input is invisible to the global tap: 0
+
+================ SUITE COMPLETE ================
+assertions passed: 1
+assertions failed: 10
+evidence: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-013103

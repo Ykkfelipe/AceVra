@@ -1,0 +1,25 @@
+--- attempt 1: window=5262 title-bar shot px=(800,28) size_before=800x632
+trial Q2-BGZOOM-1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      route=synthetic_events mode=background ok=True
+      size 800x632 -> 1470x874   physicalEvents=149
+--- attempt 2: window=5262 title-bar shot px=(1470,28) size_before=1470x874
+trial Q2-BGZOOM-2 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      route=minimized_or_hidden_window mode=None ok=False
+      size 1470x874 -> 1470x874   physicalEvents=0
+--- attempt 3: window=5262 title-bar shot px=(1470,28) size_before=1470x874
+trial Q2-BGZOOM-3 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      route=minimized_or_hidden_window mode=None ok=False
+      size 1470x874 -> 1470x874   physicalEvents=0
+--- attempt 4: window=5262 title-bar shot px=(1470,28) size_before=1470x874
+trial Q2-BGZOOM-4 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      route=minimized_or_hidden_window mode=None ok=False
+      size 1470x874 -> 1470x874   physicalEvents=0
+--- attempt 5: window=5262 title-bar shot px=(1470,28) size_before=1470x874
+trial Q2-BGZOOM-5 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      route=minimized_or_hidden_window mode=None ok=False
+      size 1470x874 -> 1470x874   physicalEvents=165
+--- attempt 6: window=5262 title-bar shot px=(1470,28) size_before=1470x874
+trial Q2-BGZOOM-6 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      route=minimized_or_hidden_window mode=None ok=False
+      size 1470x874 -> 1470x874   physicalEvents=54
+--- retry complete

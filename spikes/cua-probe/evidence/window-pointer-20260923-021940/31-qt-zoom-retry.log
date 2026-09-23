@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+    wb = d["window_bounds"]; s = d.get("screenshot_scale", 1.0)
+         ~^^^^^^^^^^^^^^^^^
+KeyError: 'window_bounds'
+  File "<string>", line 1
+    import json,sys; d=json.load(sys.stdin)["size"]; print(f"{d[\"w\"]}x{d[\"h\"]}")
+                                                                 ^
+SyntaxError: unexpected character after line continuation character
+--- attempt 1: window=5262 title-bar shot px=(,) size_before=
+trial Q2-BGZOOM-1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+  File "<string>", line 1
+    import json,sys; d=json.load(sys.stdin)["size"]; print(f"{d[\"w\"]}x{d[\"h\"]}")
+                                                                 ^
+SyntaxError: unexpected character after line continuation character
+      action=error: positional JSON arg to 'cua-driver call' did not parse: expected value at line 1 column 35       received: {"pid":20002,"window_id":5262,"x":,"y":,"delivery_mode":"background"}hint: PowerShell 
+      size  ->    physicalEvents=0
+      CLEAN BRACKET on attempt 1 -> Q2-BGZOOM-1
+--- retry complete

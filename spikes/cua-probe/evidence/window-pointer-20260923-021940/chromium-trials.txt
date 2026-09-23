@@ -1,0 +1,9 @@
+C-AX1|click|{"pid":5436,"element_token":"@AUTO","delivery_mode":"background"}
+C-AX2|click|{"pid":5436,"element_token":"@AUTO","delivery_mode":"background"}
+C-PX1|click|{"pid":5436,"window_id":4855,"x":640,"y":297,"delivery_mode":"background"}
+C-PX2|click|{"pid":5436,"window_id":4855,"x":640,"y":297,"delivery_mode":"background"}
+C-PX3|click|{"pid":5436,"window_id":4855,"x":640,"y":297,"delivery_mode":"background"}
+C-DBL1|double_click|{"pid":5436,"window_id":4855,"x":640,"y":297,"delivery_mode":"background"}
+C-SCR1|scroll|{"pid":5436,"window_id":4855,"x":640,"y":297,"direction":"down","amount":3,"delivery_mode":"background"}
+C-TXT1|type_text|{"pid":5436,"window_id":4855,"x":652,"y":587,"text":"zcua-marker","delivery_mode":"background"}
+C-FG1|click|{"pid":5436,"window_id":4855,"x":640,"y":297,"delivery_mode":"foreground"}

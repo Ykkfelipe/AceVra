@@ -1,0 +1,30 @@
+  launch_app: Prism Launcher
+----- P-AX1 [click] pid=20002 wid=5262
+/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 41: RUN_DIR: RUN_DIR must be set
+./run-qt-matrix.sh: line 75: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/P-AX1.action.json: No such file or directory
+      action : 
+      checkbx: before=
+      checkbx: after =
+      watch  : 
+----- P-PX1 [click] pid=20002 wid=5262
+/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 41: RUN_DIR: RUN_DIR must be set
+./run-qt-matrix.sh: line 75: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/P-PX1.action.json: No such file or directory
+      action : 
+      checkbx: before=
+      checkbx: after =
+      watch  : 
+----- P-DBL1 [double_click] pid=20002 wid=5262
+/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 41: RUN_DIR: RUN_DIR must be set
+./run-qt-matrix.sh: line 75: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/P-DBL1.action.json: No such file or directory
+      action : 
+      checkbx: before=
+      checkbx: after =
+      watch  : 
+----- P-FG1 [click] pid=20002 wid=5262
+/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 41: RUN_DIR: RUN_DIR must be set
+./run-qt-matrix.sh: line 75: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/P-FG1.action.json: No such file or directory
+      action : 
+      checkbx: before=
+      checkbx: after =
+      watch  : 
+----- qt matrix complete

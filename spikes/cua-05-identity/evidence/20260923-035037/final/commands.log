@@ -1,0 +1,5 @@
+### authoritative re-run from frozen source at 2026-09-23T08:06:42Z
+### source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+=========== controlled launcher-pid test on a NEVER-GRANTED control bundle ===========
+/usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode CUA Control3.app" --args --launcher-pid 70381 --report /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-05-identity/evidence/20260923-035037/final/R3-ctl3-with.report.json
+/usr/bin/open -n "/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode CUA Control3.app" --args  --report /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-05-identity/evidence/20260923-035037/final/R3-ctl3-without.report.json

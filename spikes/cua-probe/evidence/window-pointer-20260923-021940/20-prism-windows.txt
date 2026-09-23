@@ -1,0 +1,6 @@
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5220,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":18391,"title":"","zOrder":0}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5218,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":18391,"title":"","zOrder":1}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5217,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":18391,"title":"","zOrder":2}
+{"bounds":{"h":197,"w":437,"x":491,"y":148},"id":5215,"layer":0,"onScreen":true,"owner":"Prism Launcher","pid":18391,"title":"","zOrder":4}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5219,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":18391,"title":"","zOrder":34}
+{"bounds":{"h":632,"w":800,"x":335,"y":136},"id":5214,"layer":0,"onScreen":true,"owner":"Prism Launcher","pid":18391,"title":"Prism Launcher 11.1.0","zOrder":102}

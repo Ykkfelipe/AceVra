@@ -1,0 +1,16 @@
+### verification gates, final tree (2026-09-23T08:09:11Z)
+
+## pnpm typecheck
+> tsc -b packages/rpc packages/provider packages/provider-node packages/shared packages/services packages/client packages/server packages/zcode-server-cli packages/ui packages/web packages/desktop/tsconfig.host.json
+
+## pnpm lint
+Found 72 warnings and 0 errors.
+Finished in 185ms on 2633 files using 8 threads.
+## pnpm architecture:check --changed
+architecture: OK
+violations: 0
+baseline: 0
+new: 0
+## verify-cua05-claims.py
+
+checked=41  PASS=41  FAIL=0

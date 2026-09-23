@@ -1,0 +1,42 @@
+----- Q-AX1 [click] before_title=CUA-B0-K0-P0-S0-Cnone-M0-N0
+./run-matrix.sh: line 37: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/Q-AX1.action.json: No such file or directory
+      Q-AX1 action=
+      Q-AX1 after_title=CUA-B0-K0-P0-S0-Cnone-M10-N0
+      Q-AX1 watch=
+      Q-AX1 no AX element with label prefix CLICK
+----- Q-PXB1 [click] before_title=CUA-B0-K0-P0-S0-Cnone-M10-N0
+trial Q-PXB1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-PXB1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      Q-PXB1 after_title=CUA-B1-K0-P0-S0-C185x251-H-M10-N0
+      Q-PXB1 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":19},"physicalEvents":19,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- Q-PXC1 [click] before_title=CUA-B1-K0-P0-S0-C185x251-H-M10-N0
+trial Q-PXC1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-PXC1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      Q-PXC1 after_title=CUA-B1-K0-P1-S0-C185x335-M10-N0
+      Q-PXC1 watch={"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- Q-PXC2 [click] before_title=CUA-B1-K0-P1-S0-C185x335-M10-N0
+trial Q-PXC2 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-PXC2 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      Q-PXC2 after_title=CUA-B1-K0-P2-S0-C185x335-M10-N0
+      Q-PXC2 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":14},"physicalEvents":14,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- Q-PXD1 [click] before_title=CUA-B1-K0-P2-S0-C185x335-M10-N0
+trial Q-PXD1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-PXD1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      Q-PXD1 after_title=CUA-B1-K0-P3-S0-C185x335-M10-N0
+      Q-PXD1 watch={"axTrusted":true,"ok":true,"physicalByType":{"1":3,"2":2,"5":207,"6":1},"physicalEvents":213,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- Q-WHL1 [scroll] before_title=CUA-B1-K0-P3-S0-C185x335-M10-N0
+trial Q-WHL1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-WHL1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "synthetic_events"}
+      Q-WHL1 after_title=CUA-B1-K0-P3-S240-C185x335-M10-N0
+      Q-WHL1 watch={"axTrusted":true,"ok":true,"physicalByType":{"1":1,"2":1,"5":106,"22":37},"physicalEvents":145,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- Q-TXT1 [type_text] before_title=CUA-B1-K0-P3-S240-C185x335-M10-N0
+trial Q-TXT1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-TXT1 action={  "code": "type_text_incomplete",  "delivered_chars": 0,  "effect": "partial",  "path": "key_events",  "requested_chars": 11,  "retry_from_character": 0,  "retryable": true}
+      Q-TXT1 after_title=CUA-B1-K0-P3-S240-C185x335-M10-N0
+      Q-TXT1 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":27},"physicalEvents":27,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- Q-FG1 [click] before_title=CUA-B1-K0-P3-S240-C185x335-M10-N0
+trial Q-FG1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      Q-FG1 action={  "delivery": {    "mode": "foreground"  },  "effect": "unverifiable",  "route": "global_input"}
+      Q-FG1 after_title=CUA-B1-K1-P4-S240-C370x623-M12-N0
+      Q-FG1 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":18,"22":34},"physicalEvents":52,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- matrix complete

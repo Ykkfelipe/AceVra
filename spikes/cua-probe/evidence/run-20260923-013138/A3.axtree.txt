@@ -1,0 +1,249 @@
+AXApplication title=Calculator
+  AXWindow title=Calculator id=main actions=AXRaise
+    AXGroup
+      AXSplitGroup id=main, SidebarNavigationSplitView
+        AXSplitter value=-1 [disabled]
+        AXGroup
+          AXGroup id=CalculatorKeypadView
+            AXScrollArea id=StandardInputView;value:77 actions=AXScrollLeftByPage,AXScrollRightByPage,AXScrollUpByPage,AXScrollDownByPage,Name:Copy
+Target:0x0
+Selector:(null)
+            AXButton id=Delete actions=AXPress
+            AXButton id=Clear actions=AXPress
+            AXButton id=Percent actions=AXPress
+            AXButton id=Divide actions=AXPress
+            AXButton id=Seven actions=AXPress
+            AXButton id=Eight actions=AXPress
+            AXButton id=Nine actions=AXPress
+            AXButton id=Multiply actions=AXPress
+            AXButton id=Four actions=AXPress
+            AXButton id=Five actions=AXPress
+            AXButton id=Six actions=AXPress
+            AXButton id=Subtract actions=AXPress
+            AXButton id=One actions=AXPress
+            AXButton id=Two actions=AXPress
+            AXButton id=Three actions=AXPress
+            AXButton id=Add actions=AXPress
+            AXButton id=Negate actions=AXPress
+            AXButton id=Zero actions=AXPress
+            AXButton id=Decimal actions=AXPress
+            AXButton id=Equals actions=AXPress
+    AXToolbar actions=AXShowMenu
+      AXButton actions=AXIncrement,AXDecrement,AXDelete,AXShowMenu,AXCancel,AXPress
+      AXButton id=Mode: basic; unitConversion: false actions=AXIncrement,AXDecrement,AXDelete,AXShowMenu,AXCancel,AXPress,Name:Move previous
+Target:0x0
+Selector:(null),Name:Remove from toolbar
+Target:0x0
+Selector:(null)
+    AXButton actions=AXPress
+    AXButton [disabled] actions=AXPress,AXShowMenu
+      AXGroup
+    AXButton actions=AXPress
+  AXMenuBar actions=AXCancel
+    AXMenuBarItem title=Apple actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=About This Mac id=_aboutThisMacRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=System Information id=_systemInformationRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=System Settings…, 1 update id=_systemSettingsRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=App Store…, 4 updates id=_appStoreRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Recent Items id=_recentsRequested: actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Applications [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=AutoClaw id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “AutoClaw” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Calculator id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Calculator” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ChatGPT id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ChatGPT” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Claude id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Claude” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Command Code id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Command Code” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Cursor id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Cursor” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Google Chrome id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Google Chrome” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Grok Bot id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Grok Bot” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=iPhone Mirroring id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “iPhone Mirroring” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Preview id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Preview” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=System Settings id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “System Settings” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Terminal id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Terminal” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=TextEdit id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “TextEdit” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ZCode id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ZCode” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ZCode CUA Probe id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ZCode CUA Probe” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Documents [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260920-140805-314b4618-506-pasted_text_20260920-140805.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260920-140805-314b4618-506-pasted_text_20260920-1408…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260921-155446-c9ad0a7f-167-pasted_text_20260921-155446.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260921-155446-c9ad0a7f-167-pasted_text_20260921-1554…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054001-acc6eab3-1b9-pasted_text_20260922-054001.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054001-acc6eab3-1b9-pasted_text_20260922-0540…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054156-3ea5c1c6-163-pasted_text_20260922-054156.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054156-3ea5c1c6-163-pasted_text_20260922-0541…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054527-d99b9760-781-pasted_text_20260922-054527.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054527-d99b9760-781-pasted_text_20260922-0545…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054845-78d54892-cb7-pasted_text_20260922-054845.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054845-78d54892-cb7-pasted_text_20260922-0548…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=baseline.command id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “baseline.command” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=c2.command id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “c2.command” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Codeex idea 1 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Codeex idea 1” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Codex idea 2 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Codex idea 2” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=final.command id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “final.command” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=java id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “java” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=LifeCraft-Embodiment-Architecture.html id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “LifeCraft-Embodiment-Architecture.html” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=lifecraft-provider.secret id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “lifecraft-provider.secret” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Untitled id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Untitled” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Servers [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Macintosh HD id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Clear Menu id=_clearRecentItemsRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Force Quit… id=_forceQuitPanelRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Force Quit Calculator id=_forceQuitRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Sleep id=_sleepRequested: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Restart… id=_restartRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Restart id=_restartNowRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Shut Down… id=_shutDownRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Shut Down id=_shutDownNowRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Lock Screen id=_lockScreenRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Log Out Felipe More… id=_logOutRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Log Out Felipe More id=_logOutNowRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Calculator actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=About Calculator id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Services actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Ask Claude id=_processRequest: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=New Claude Code Session Here id=_processRequest: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Send to Claude id=_processRequest: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Services Settings… id=_configureServicesMenu: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Hide Calculator id=hide: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Hide Others id=hideOtherApplications: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Show All id=unhideAllApplications: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Quit Calculator id=terminate: actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Edit actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Undo id=undo: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Redo id=redo: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Cut id=cut: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Copy id=copy: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Paste id=paste: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Delete id=delete: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Select All id=selectAll: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=AutoFill id=_NSMenuItemAutoFillIdentifier actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Contact… id=_handleInsertFromContactsCommand: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Passwords… id=_handleInsertFromPasswordsCommand: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Credit Card… id=_handleInsertFromCreditCardsCommand: [disabled] actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=View actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Basic id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Scientific id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Programmer id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Math Notes id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Convert id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=RPN Mode id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Hide Thousands Separator id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Decimal Places id=ID(id: 101) actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=0 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=1 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=2 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=3 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=4 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=5 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=6 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=7 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=8 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=9 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=10 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=11 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=12 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=13 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=14 id=menuAction: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=15 id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Show History id=menuAction: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Enter Full Screen id=toggleFullScreen: [disabled] actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Window actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Close id=performClose: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Close All id=closeAll: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Minimize id=performMiniaturize: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Minimize All id=miniaturizeAll: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Zoom id=performZoom: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Zoom All id=zoomAll: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Fill id=_zoomFill: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Centre id=_zoomCenter: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Move & Resize actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Halves [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Left id=_zoomLeft: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Right id=_zoomRight: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Top id=_zoomTop: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Bottom id=_zoomBottom: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Quarters [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Top Left id=_zoomTopLeft: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Top Right id=_zoomTopRight: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Bottom Left id=_zoomBottomLeft: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Bottom Right id=_zoomBottomRight: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Arrange [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Left & Right id=_zoomLeftAndRight: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Left & Quarters id=_zoomLeftThreeUp: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Right & Left id=_zoomRightAndLeft: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Right & Quarters id=_zoomRightThreeUp: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Top & Bottom id=_zoomTopAndBottom: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Top & Quarters id=_zoomTopThreeUp: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Bottom & Top id=_zoomBottomAndTop: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Bottom & Quarters id=_zoomBottomThreeUp: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Quarters id=_zoomQuarters: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Return to Previous Size id=_zoomUntile: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Full Screen Tile [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Bring All to Front id=arrangeInFront: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Arrange in Front id=alternateArrangeInFront: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Remove Window from Set id=_removeWindowFromStageManagerSet: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Always on Top id=menuAction: actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Help actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Calculator Help id=showHelp: actions=AXCancel,AXPress,AXPick
+# nodes=242

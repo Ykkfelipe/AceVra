@@ -1,0 +1,164 @@
+{"bounds":{"h":20,"w":66,"x":590,"y":550},"id":5516,"layer":0,"onScreen":false,"owner":"ChatGPT Computer Use","pid":96349,"title":"Window","zOrder":0}
+{"bounds":{"h":139,"w":1218,"x":99,"y":58},"id":5502,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":1}
+{"bounds":{"h":866,"w":1470,"x":0,"y":33},"id":5501,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"zcode.z.ai/app/oauth/login?r…52219780ce550681938814b352b","zOrder":2}
+{"bounds":{"h":64,"w":64,"x":0,"y":892},"id":5479,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":3}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5478,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":4}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5470,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":5}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5458,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":6}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5456,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":7}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5443,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":8}
+{"bounds":{"h":20,"w":66,"x":590,"y":550},"id":5415,"layer":0,"onScreen":false,"owner":"ThemeWidgetControlViewService","pid":29504,"title":"","zOrder":9}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5384,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":10}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5314,"layer":0,"onScreen":false,"owner":"ZCode Dev","pid":29265,"title":"","zOrder":11}
+{"bounds":{"h":800,"w":1200,"x":135,"y":33},"id":5312,"layer":0,"onScreen":true,"owner":"ZCode Dev","pid":29265,"title":"Custom Fork Dev","zOrder":12}
+{"bounds":{"h":64,"w":64,"x":0,"y":892},"id":5289,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":13}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5288,"layer":0,"onScreen":false,"owner":"Open and Save Panel Service","pid":21493,"title":"","zOrder":14}
+{"bounds":{"h":237,"w":312,"x":0,"y":719},"id":5280,"layer":0,"onScreen":false,"owner":"AutoFill","pid":20643,"title":"","zOrder":15}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5278,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":20002,"title":"","zOrder":16}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5267,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":20002,"title":"","zOrder":17}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5266,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":20002,"title":"","zOrder":18}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5265,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":20002,"title":"","zOrder":19}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5264,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":20002,"title":"","zOrder":20}
+{"bounds":{"h":874,"w":1470,"x":0,"y":33},"id":5262,"layer":0,"onScreen":false,"owner":"Prism Launcher","pid":20002,"title":"Prism Launcher 11.1.0","zOrder":21}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5211,"layer":0,"onScreen":false,"owner":"Calculator","pid":18327,"title":"","zOrder":22}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5466,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":23}
+{"bounds":{"h":20,"w":114,"x":1154,"y":533},"id":5072,"layer":103,"onScreen":false,"owner":"ZCode","pid":92617,"title":"","zOrder":24}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5457,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":25}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5063,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":26}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":5009,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":27}
+{"bounds":{"h":300,"w":300,"x":734,"y":478},"id":4993,"layer":3000,"onScreen":false,"owner":"AccessibilityVisualsAgent","pid":10972,"title":"","zOrder":28}
+{"bounds":{"h":20,"w":66,"x":590,"y":550},"id":5515,"layer":0,"onScreen":false,"owner":"ThemeWidgetControlViewService","pid":29504,"title":"","zOrder":29}
+{"bounds":{"h":720,"w":960,"x":0,"y":0},"id":4727,"layer":0,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"","zOrder":30}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5316,"layer":0,"onScreen":false,"owner":"ZCode Dev","pid":29265,"title":"","zOrder":31}
+{"bounds":{"h":282,"w":600,"x":0,"y":706},"id":4725,"layer":0,"onScreen":false,"owner":"ChatGPT Computer Use","pid":96349,"title":"Enable ChatGPT with Messages Permissions","zOrder":32}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5315,"layer":0,"onScreen":false,"owner":"ZCode Dev","pid":29265,"title":"","zOrder":33}
+{"bounds":{"h":237,"w":312,"x":130,"y":616},"id":4724,"layer":0,"onScreen":false,"owner":"AutoFill","pid":96367,"title":"","zOrder":34}
+{"bounds":{"h":64,"w":64,"x":0,"y":892},"id":5510,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":35}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5313,"layer":0,"onScreen":false,"owner":"ZCode Dev","pid":29265,"title":"","zOrder":36}
+{"bounds":{"h":64,"w":64,"x":571,"y":347},"id":4722,"layer":3,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"","zOrder":37}
+{"bounds":{"h":28,"w":28,"x":1443,"y":1},"id":5310,"layer":2147483630,"onScreen":true,"owner":"Window Server","pid":399,"title":"StatusIndicator","zOrder":38}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4719,"layer":0,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"","zOrder":39}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4718,"layer":0,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"","zOrder":40}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":5505,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":41}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4717,"layer":0,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"","zOrder":42}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":5504,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":43}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4716,"layer":0,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"","zOrder":44}
+{"bounds":{"h":138,"w":1218,"x":99,"y":58},"id":5503,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":45}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":4715,"layer":0,"onScreen":false,"owner":"WindowManager","pid":599,"title":"App Icon Window","zOrder":46}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":4658,"layer":0,"onScreen":false,"owner":"Open and Save Panel Service","pid":92919,"title":"","zOrder":47}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":4646,"layer":0,"onScreen":false,"owner":"ZCode","pid":92617,"title":"","zOrder":48}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":4645,"layer":0,"onScreen":false,"owner":"WindowManager","pid":599,"title":"App Icon Window","zOrder":49}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4641,"layer":0,"onScreen":false,"owner":"ZCode","pid":92617,"title":"","zOrder":50}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4640,"layer":0,"onScreen":false,"owner":"ZCode","pid":92617,"title":"","zOrder":51}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":4438,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":52}
+{"bounds":{"h":64,"w":64,"x":0,"y":892},"id":4435,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":53}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":4382,"layer":0,"onScreen":false,"owner":"DocumentPopoverViewService","pid":60720,"title":"","zOrder":54}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":4270,"layer":0,"onScreen":false,"owner":"TextEdit","pid":57563,"title":"","zOrder":55}
+{"bounds":{"h":20,"w":66,"x":590,"y":550},"id":5416,"layer":0,"onScreen":false,"owner":"ChatGPT Computer Use","pid":96349,"title":"Window","zOrder":56}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":4234,"layer":0,"onScreen":false,"owner":"Open and Save Panel Service","pid":57567,"title":"","zOrder":57}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":4977,"layer":0,"onScreen":true,"owner":"cua-driver","pid":10399,"title":"","zOrder":58}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":3708,"layer":0,"onScreen":false,"owner":"Universal Control","pid":93810,"title":"","zOrder":59}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4222,"layer":0,"onScreen":false,"owner":"TextEdit","pid":57563,"title":"","zOrder":60}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5455,"layer":0,"onScreen":false,"owner":"Google Chrome","pid":30929,"title":"","zOrder":61}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":3288,"layer":0,"onScreen":false,"owner":"WindowManager","pid":599,"title":"App Icon Window","zOrder":62}
+{"bounds":{"h":14,"w":14,"x":190,"y":42},"id":5528,"layer":0,"onScreen":false,"owner":"ThemeWidgetControlViewService","pid":29471,"title":"","zOrder":63}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":3952,"layer":0,"onScreen":false,"owner":"WebThumbnailExte","pid":32940,"title":"","zOrder":64}
+{"bounds":{"h":28,"w":28,"x":1443,"y":1},"id":5311,"layer":2147483630,"onScreen":true,"owner":"Window Server","pid":399,"title":"StatusIndicator","zOrder":65}
+{"bounds":{"h":820,"w":1280,"x":130,"y":33},"id":4720,"layer":0,"onScreen":true,"owner":"ChatGPT","pid":95865,"title":"ChatGPT","zOrder":66}
+{"bounds":{"h":64,"w":64,"x":0,"y":892},"id":3144,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":67}
+{"bounds":{"h":385,"w":597,"x":754,"y":177},"id":3112,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"ZCode-Fork — -zsh — 80×24","zOrder":68}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2983,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"","zOrder":69}
+{"bounds":{"h":617,"w":844,"x":313,"y":175},"id":2679,"layer":23,"onScreen":false,"owner":"Siri","pid":657,"title":"","zOrder":70}
+{"bounds":{"h":237,"w":312,"x":135,"y":596},"id":4648,"layer":0,"onScreen":false,"owner":"AutoFill","pid":92816,"title":"","zOrder":71}
+{"bounds":{"h":64,"w":64,"x":571,"y":347},"id":5520,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":72}
+{"bounds":{"h":288,"w":360,"x":1092,"y":37},"id":5323,"layer":0,"onScreen":true,"owner":"ChatGPT","pid":95865,"title":"Computer Use Controls","zOrder":73}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2565,"layer":0,"onScreen":false,"owner":"Activity Monitor","pid":82861,"title":"","zOrder":74}
+{"bounds":{"h":385,"w":597,"x":783,"y":206},"id":3819,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"ZCode-Fork — -zsh — 80×24","zOrder":75}
+{"bounds":{"h":21,"w":58,"x":697,"y":216},"id":3416,"layer":103,"onScreen":false,"owner":"Activity Monitor","pid":82861,"title":"","zOrder":76}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1844,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":77}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1843,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":78}
+{"bounds":{"h":90,"w":40,"x":1414,"y":58},"id":4994,"layer":3000,"onScreen":false,"owner":"AccessibilityVisualsAgent","pid":10972,"title":"","zOrder":79}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":1842,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":80}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1726,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":81}
+{"bounds":{"h":237,"w":312,"x":0,"y":662},"id":5468,"layer":0,"onScreen":false,"owner":"AutoFill","pid":31267,"title":"","zOrder":82}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1725,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":83}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1667,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":84}
+{"bounds":{"h":408,"w":230,"x":285,"y":452},"id":5212,"layer":0,"onScreen":false,"owner":"Calculator","pid":18327,"title":"Calculator","zOrder":85}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":1666,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":86}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5210,"layer":0,"onScreen":false,"owner":"Calculator","pid":18327,"title":"","zOrder":87}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4225,"layer":0,"onScreen":false,"owner":"TextEdit","pid":57563,"title":"","zOrder":88}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1664,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":89}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5209,"layer":0,"onScreen":false,"owner":"Calculator","pid":18327,"title":"","zOrder":90}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4224,"layer":0,"onScreen":false,"owner":"TextEdit","pid":57563,"title":"","zOrder":91}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1663,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":92}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":1724,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":93}
+{"bounds":{"h":800,"w":1200,"x":135,"y":33},"id":4644,"layer":0,"onScreen":false,"owner":"ZCode","pid":92617,"title":"ZCode","zOrder":94}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":4447,"layer":0,"onScreen":false,"owner":"WindowManager","pid":599,"title":"App Icon Window","zOrder":95}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1295,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":96}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4643,"layer":0,"onScreen":false,"owner":"ZCode","pid":92617,"title":"","zOrder":97}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1294,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":98}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4642,"layer":0,"onScreen":false,"owner":"ZCode","pid":92617,"title":"","zOrder":99}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":1293,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":100}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1243,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":101}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1242,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":102}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":1241,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":103}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":5208,"layer":0,"onScreen":false,"owner":"Calculator","pid":18327,"title":"","zOrder":104}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":4223,"layer":0,"onScreen":false,"owner":"TextEdit","pid":57563,"title":"","zOrder":105}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":1662,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":106}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":592,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":107}
+{"bounds":{"h":126,"w":126,"x":308,"y":738},"id":5514,"layer":102,"onScreen":true,"owner":"ChatGPT Computer Use","pid":96349,"title":"Software Cursor","zOrder":108}
+{"bounds":{"h":56,"w":155,"x":0,"y":900},"id":4726,"layer":3,"onScreen":false,"owner":"ChatGPT Computer Use","pid":96349,"title":"Record & Replay Recording Controls","zOrder":109}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":589,"layer":0,"onScreen":false,"owner":"loginwindow","pid":403,"title":"","zOrder":110}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":425,"layer":0,"onScreen":false,"owner":"Notes","pid":31237,"title":"","zOrder":111}
+{"bounds":{"h":385,"w":597,"x":725,"y":148},"id":2985,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"felipemore — unity ◂ cursor-agent --use-system-ca ~/.local/share/cursor-agent/versions/2026.09.18-9a7762b/index.js worker start --name Felipe's MacBook Air — 80×24","zOrder":112}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":424,"layer":0,"onScreen":false,"owner":"Notes","pid":31237,"title":"","zOrder":113}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":1668,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":114}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":289,"layer":0,"onScreen":false,"owner":"Siri","pid":657,"title":"","zOrder":115}
+{"bounds":{"h":483,"w":332,"x":569,"y":237},"id":40,"layer":0,"onScreen":false,"owner":"WeatherMenu","pid":746,"title":"WeatherMenu","zOrder":116}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":39,"layer":0,"onScreen":false,"owner":"WindowManager","pid":599,"title":"App Icon Window","zOrder":117}
+{"bounds":{"h":180,"w":180,"x":188,"y":41},"id":38,"layer":-2147483601,"onScreen":true,"owner":"Notification Centre","pid":679,"title":"com.apple.weather::com.apple.weather.widget:com.apple.weather","zOrder":118}
+{"bounds":{"h":64,"w":64,"x":0,"y":892},"id":4371,"layer":0,"onScreen":false,"owner":"CursorUIViewService","pid":715,"title":"","zOrder":119}
+{"bounds":{"h":180,"w":180,"x":8,"y":41},"id":37,"layer":-2147483601,"onScreen":true,"owner":"Notification Centre","pid":679,"title":"Month","zOrder":120}
+{"bounds":{"h":180,"w":360,"x":8,"y":221},"id":36,"layer":-2147483601,"onScreen":true,"owner":"Notification Centre","pid":679,"title":"Featured","zOrder":121}
+{"bounds":{"h":0,"w":0,"x":0,"y":956},"id":35,"layer":25,"onScreen":false,"owner":"WeatherMenu","pid":746,"title":"","zOrder":122}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":33,"layer":21,"onScreen":false,"owner":"Notification Centre","pid":679,"title":"Notification Center","zOrder":123}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":2987,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"","zOrder":124}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":426,"layer":0,"onScreen":false,"owner":"Notes","pid":31237,"title":"","zOrder":125}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2984,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"","zOrder":126}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":423,"layer":0,"onScreen":false,"owner":"Notes","pid":31237,"title":"","zOrder":127}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2982,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"","zOrder":128}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":421,"layer":0,"onScreen":false,"owner":"Notes","pid":31237,"title":"","zOrder":129}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":27,"layer":0,"onScreen":false,"owner":"Finder","pid":626,"title":"","zOrder":130}
+{"bounds":{"h":237,"w":312,"x":135,"y":596},"id":5345,"layer":0,"onScreen":false,"owner":"AutoFill","pid":29535,"title":"","zOrder":131}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2981,"layer":0,"onScreen":false,"owner":"Terminal","pid":22619,"title":"","zOrder":132}
+{"bounds":{"h":848,"w":1470,"x":0,"y":36},"id":420,"layer":0,"onScreen":false,"owner":"Notes","pid":31237,"title":"All iCloud","zOrder":133}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":26,"layer":0,"onScreen":false,"owner":"Finder","pid":626,"title":"","zOrder":134}
+{"bounds":{"h":500,"w":500,"x":0,"y":456},"id":5343,"layer":0,"onScreen":false,"owner":"ZCode Dev","pid":29265,"title":"","zOrder":135}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":24,"layer":0,"onScreen":false,"owner":"Finder","pid":626,"title":"","zOrder":136}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":23,"layer":0,"onScreen":false,"owner":"Finder","pid":626,"title":"","zOrder":137}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":21,"layer":24,"onScreen":false,"owner":"MenuBarAgent","pid":622,"title":"","zOrder":138}
+{"bounds":{"h":20,"w":66,"x":141,"y":39},"id":5533,"layer":0,"onScreen":true,"owner":"ZCode Dev","pid":29265,"title":"Window","zOrder":139}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":3169,"layer":0,"onScreen":false,"owner":"Preview","pid":34994,"title":"","zOrder":140}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":3167,"layer":0,"onScreen":false,"owner":"Preview","pid":34994,"title":"","zOrder":141}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":15,"layer":20,"onScreen":true,"owner":"Dock","pid":616,"title":"Dock","zOrder":142}
+{"bounds":{"h":20,"w":66,"x":141,"y":39},"id":5534,"layer":0,"onScreen":false,"owner":"ThemeWidgetControlViewService","pid":29471,"title":"","zOrder":143}
+{"bounds":{"h":64,"w":64,"x":0,"y":456},"id":3170,"layer":0,"onScreen":false,"owner":"Open and Save Panel Service","pid":35018,"title":"","zOrder":144}
+{"bounds":{"h":0,"w":0,"x":0,"y":0},"id":18,"layer":0,"onScreen":false,"owner":"WindowManager","pid":599,"title":"App Icon Window","zOrder":145}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":3166,"layer":0,"onScreen":false,"owner":"Preview","pid":34994,"title":"","zOrder":146}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":3168,"layer":0,"onScreen":false,"owner":"Preview","pid":34994,"title":"","zOrder":147}
+{"bounds":{"h":126,"w":126,"x":186,"y":392},"id":5330,"layer":0,"onScreen":true,"owner":"ChatGPT Computer Use","pid":96349,"title":"Software Cursor","zOrder":148}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2568,"layer":0,"onScreen":false,"owner":"Activity Monitor","pid":82861,"title":"","zOrder":149}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":598,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":150}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2567,"layer":0,"onScreen":false,"owner":"Activity Monitor","pid":82861,"title":"","zOrder":151}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":597,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":152}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":6,"layer":24,"onScreen":true,"owner":"Window Server","pid":399,"title":"Menubar","zOrder":153}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":2566,"layer":0,"onScreen":false,"owner":"Activity Monitor","pid":82861,"title":"","zOrder":154}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":596,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 1 Shield","zOrder":155}
+{"bounds":{"h":288,"w":360,"x":1092,"y":37},"id":5322,"layer":0,"onScreen":true,"owner":"ChatGPT","pid":95865,"title":"Computer Use","zOrder":156}
+{"bounds":{"h":1815,"w":772,"x":1025,"y":-358},"id":4731,"layer":3,"onScreen":false,"owner":"ChatGPT","pid":95865,"title":"ChatGPT","zOrder":157}
+{"bounds":{"h":838,"w":1450,"x":20,"y":33},"id":2564,"layer":0,"onScreen":false,"owner":"Activity Monitor","pid":82861,"title":"Activity Monitor","zOrder":158}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":594,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 3 Shield","zOrder":159}
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":25,"layer":0,"onScreen":false,"owner":"Finder","pid":626,"title":"","zOrder":160}
+{"bounds":{"h":889,"w":364,"x":866,"y":33},"id":2760,"layer":101,"onScreen":false,"owner":"Control Centre","pid":617,"title":"Control Centre","zOrder":161}
+{"bounds":{"h":1,"w":1,"x":0,"y":0},"id":593,"layer":2147483646,"onScreen":false,"owner":"Window Server","pid":399,"title":"Packages Display 2 Shield","zOrder":162}
+{"bounds":{"h":40,"w":28,"x":334,"y":174},"id":2,"layer":2147483630,"onScreen":false,"owner":"Window Server","pid":399,"title":"Cursor","zOrder":163}

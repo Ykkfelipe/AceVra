@@ -1,0 +1,8 @@
+error: positional JSON arg to 'cua-driver call' did not parse: expected value at line 1 column 25
+       received: {"pid":1259,"window_id":,"screenshot_out_file":"/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/qt-01-window-state.png","max_elements":400}
+
+hint: PowerShell 5.1 strips quotes around JSON field names in
+      multi-field args. Pipe the JSON via stdin instead:
+        '{"pid":1234,"window_id":5678}' | cua-driver call get_window_state
+
+      Or use PowerShell 7+ (pwsh) which preserves the quotes.

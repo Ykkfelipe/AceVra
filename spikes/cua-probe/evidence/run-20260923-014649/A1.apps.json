@@ -1,0 +1,9 @@
+{"active":false,"bundleId":"com.apple.Preview","hidden":false,"name":"Preview","pid":-1,"policy":"regular"}
+{"active":false,"bundleId":"com.apple.finder","hidden":false,"name":"Finder","pid":626,"policy":"regular"}
+{"active":false,"bundleId":"com.apple.Terminal","hidden":false,"name":"Terminal","pid":22619,"policy":"regular"}
+{"active":false,"bundleId":"com.apple.Notes","hidden":false,"name":"Notes","pid":31237,"policy":"regular"}
+{"active":false,"bundleId":"com.zhipuai.autoclaw","hidden":false,"name":"AutoClaw","pid":51942,"policy":"regular"}
+{"active":true,"bundleId":"com.apple.TextEdit","hidden":false,"name":"TextEdit","pid":57563,"policy":"regular"}
+{"active":false,"bundleId":"com.apple.calculator","hidden":false,"name":"Calculator","pid":58445,"policy":"regular"}
+{"active":false,"bundleId":"dev.zcode.app","hidden":false,"name":"ZCode","pid":76484,"policy":"regular"}
+{"active":false,"bundleId":"com.apple.ActivityMonitor","hidden":false,"name":"Activity Monitor","pid":82861,"policy":"regular"}

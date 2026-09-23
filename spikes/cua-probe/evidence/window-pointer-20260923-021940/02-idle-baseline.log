@@ -1,0 +1,11 @@
+=== idle drift sampling (10 samples, ~2s apart, NO actions) ===
+t=2026-09-23T06:20:23Z frontmost=com.openai.codex(pid 95865) cursor=(1271.9,920.1) topWin=ChatGPT(pid 95865) axTrusted=True
+t=2026-09-23T06:20:25Z frontmost=org.prismlauncher.PrismLauncher(pid 97661) cursor=(1271.9,919.8) topWin=Prism Launcher(pid 97661) axTrusted=True
+t=2026-09-23T06:20:27Z frontmost=com.openai.codex(pid 95865) cursor=(1290.7,879.8) topWin=ChatGPT(pid 95865) axTrusted=True
+t=2026-09-23T06:20:29Z frontmost=com.openai.codex(pid 95865) cursor=(398.5,907.0) topWin=ChatGPT(pid 95865) axTrusted=True
+t=2026-09-23T06:20:31Z frontmost=com.openai.codex(pid 95865) cursor=(675.9,945.2) topWin=ChatGPT(pid 95865) axTrusted=True
+t=2026-09-23T06:20:33Z frontmost=com.zhipuai.autoclaw(pid 51942) cursor=(585.2,618.8) topWin=AutoClaw(pid 51942) axTrusted=True
+t=2026-09-23T06:20:35Z frontmost=com.zhipuai.autoclaw(pid 51942) cursor=(585.2,618.8) topWin=AutoClaw(pid 51942) axTrusted=True
+t=2026-09-23T06:20:37Z frontmost=com.zhipuai.autoclaw(pid 51942) cursor=(585.2,618.8) topWin=AutoClaw(pid 51942) axTrusted=True
+t=2026-09-23T06:20:39Z frontmost=com.zhipuai.autoclaw(pid 51942) cursor=(585.2,618.8) topWin=AutoClaw(pid 51942) axTrusted=True
+t=2026-09-23T06:20:41Z frontmost=com.zhipuai.autoclaw(pid 51942) cursor=(585.2,618.8) topWin=AutoClaw(pid 51942) axTrusted=True

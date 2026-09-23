@@ -1,0 +1,1644 @@
+=== windows now ===
+{
+  "current_space_id": 1,
+  "windows": [
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 892.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4762,
+      "z_index": 129
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 720.0,
+        "width": 960.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 95865,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4727,
+      "z_index": 128
+    },
+    {
+      "app_name": "ChatGPT Computer Use",
+      "bounds": {
+        "height": 282.0,
+        "width": 600.0,
+        "x": 0.0,
+        "y": 706.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 96349,
+      "space_ids": null,
+      "title": "Enable ChatGPT with Messages Permissions",
+      "window_id": 4725,
+      "z_index": 127
+    },
+    {
+      "app_name": "AutoFill",
+      "bounds": {
+        "height": 237.0,
+        "width": 312.0,
+        "x": 130.0,
+        "y": 616.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 96367,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4724,
+      "z_index": 126
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 95865,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4722,
+      "z_index": 125
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 4721,
+      "z_index": 124
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 95865,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4719,
+      "z_index": 123
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 95865,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4718,
+      "z_index": 122
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 95865,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4717,
+      "z_index": 121
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 95865,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4716,
+      "z_index": 120
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 4715,
+      "z_index": 119
+    },
+    {
+      "app_name": "cua-driver",
+      "bounds": {
+        "height": 956.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": true,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 95628,
+      "space_ids": [
+        1
+      ],
+      "title": "",
+      "window_id": 4714,
+      "z_index": 118
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 892.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4713,
+      "z_index": 117
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4701,
+      "z_index": 116
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4694,
+      "z_index": 115
+    },
+    {
+      "app_name": "Open and Save Panel Service",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92919,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4658,
+      "z_index": 114
+    },
+    {
+      "app_name": "ZCode",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92617,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4646,
+      "z_index": 113
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 4645,
+      "z_index": 112
+    },
+    {
+      "app_name": "ZCode",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92617,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4641,
+      "z_index": 111
+    },
+    {
+      "app_name": "ZCode",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92617,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4640,
+      "z_index": 110
+    },
+    {
+      "app_name": "Google Chrome",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82958,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4478,
+      "z_index": 109
+    },
+    {
+      "app_name": "Google Chrome",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82958,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4477,
+      "z_index": 108
+    },
+    {
+      "app_name": "Google Chrome",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82958,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4476,
+      "z_index": 107
+    },
+    {
+      "app_name": "Google Chrome",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82958,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4475,
+      "z_index": 106
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4438,
+      "z_index": 105
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 892.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4435,
+      "z_index": 104
+    },
+    {
+      "app_name": "DocumentPopoverViewService",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 60720,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4382,
+      "z_index": 103
+    },
+    {
+      "app_name": "TextEdit",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 57563,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4270,
+      "z_index": 102
+    },
+    {
+      "app_name": "Open and Save Panel Service",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 57567,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4234,
+      "z_index": 101
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 295.0,
+        "y": 627.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4210,
+      "z_index": 99
+    },
+    {
+      "app_name": "Open and Save Panel Service",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 52388,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4209,
+      "z_index": 98
+    },
+    {
+      "app_name": "AutoFill",
+      "bounds": {
+        "height": 237.0,
+        "width": 312.0,
+        "x": 35.0,
+        "y": 666.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 52111,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4189,
+      "z_index": 97
+    },
+    {
+      "app_name": "AutoClaw",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 51942,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4187,
+      "z_index": 96
+    },
+    {
+      "app_name": "AutoClaw",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 51942,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4182,
+      "z_index": 95
+    },
+    {
+      "app_name": "AutoClaw",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 51942,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4181,
+      "z_index": 94
+    },
+    {
+      "app_name": "AutoClaw",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 51942,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4180,
+      "z_index": 93
+    },
+    {
+      "app_name": "AutoClaw",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 51942,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4179,
+      "z_index": 92
+    },
+    {
+      "app_name": "AutoClaw",
+      "bounds": {
+        "height": 869.0,
+        "width": 1400.0,
+        "x": 35.0,
+        "y": 33.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": true,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 51942,
+      "space_ids": [
+        1
+      ],
+      "title": "AutoClaw",
+      "window_id": 4178,
+      "z_index": 91
+    },
+    {
+      "app_name": "Universal Control",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 93810,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3708,
+      "z_index": 90
+    },
+    {
+      "app_name": "TextEdit",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 57563,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4222,
+      "z_index": 89
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 3288,
+      "z_index": 88
+    },
+    {
+      "app_name": "WebThumbnailExte",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 32940,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3952,
+      "z_index": 87
+    },
+    {
+      "app_name": "ChatGPT",
+      "bounds": {
+        "height": 820.0,
+        "width": 1280.0,
+        "x": 130.0,
+        "y": 33.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": true,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 95865,
+      "space_ids": [
+        1
+      ],
+      "title": "ChatGPT",
+      "window_id": 4720,
+      "z_index": 86
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 892.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3144,
+      "z_index": 85
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 385.0,
+        "width": 597.0,
+        "x": 754.0,
+        "y": 177.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 22619,
+      "space_ids": [
+        1
+      ],
+      "title": "ZCode-Fork — -zsh — 80×24",
+      "window_id": 3112,
+      "z_index": 84
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 22619,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2983,
+      "z_index": 83
+    },
+    {
+      "app_name": "AutoFill",
+      "bounds": {
+        "height": 237.0,
+        "width": 312.0,
+        "x": 135.0,
+        "y": 596.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92816,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4648,
+      "z_index": 81
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2678,
+      "z_index": 80
+    },
+    {
+      "app_name": "Activity Monitor",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82861,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2565,
+      "z_index": 79
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 385.0,
+        "width": 597.0,
+        "x": 783.0,
+        "y": 206.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 22619,
+      "space_ids": [
+        1
+      ],
+      "title": "ZCode-Fork — -zsh — 80×24",
+      "window_id": 3819,
+      "z_index": 78
+    },
+    {
+      "app_name": "TextEdit",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 57563,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4225,
+      "z_index": 69
+    },
+    {
+      "app_name": "TextEdit",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 57563,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4224,
+      "z_index": 67
+    },
+    {
+      "app_name": "ZCode",
+      "bounds": {
+        "height": 800.0,
+        "width": 1200.0,
+        "x": 135.0,
+        "y": 33.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": true,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 92617,
+      "space_ids": [
+        1
+      ],
+      "title": "ZCode",
+      "window_id": 4644,
+      "z_index": 64
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 4447,
+      "z_index": 63
+    },
+    {
+      "app_name": "ZCode",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92617,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4643,
+      "z_index": 61
+    },
+    {
+      "app_name": "ZCode",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 92617,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4642,
+      "z_index": 59
+    },
+    {
+      "app_name": "TextEdit",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 57563,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4223,
+      "z_index": 54
+    },
+    {
+      "app_name": "loginwindow",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 403,
+      "space_ids": null,
+      "title": "",
+      "window_id": 589,
+      "z_index": 50
+    },
+    {
+      "app_name": "Notes",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 31237,
+      "space_ids": null,
+      "title": "",
+      "window_id": 425,
+      "z_index": 49
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 385.0,
+        "width": 597.0,
+        "x": 725.0,
+        "y": 148.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 22619,
+      "space_ids": [
+        1
+      ],
+      "title": "felipemore — unity ◂ cursor-agent --use-system-ca ~/.local/share/cursor-agent/versions/2026.09.18-9a7762b/index.js worker start --name Felipe's MacBook Air — 80×24",
+      "window_id": 2985,
+      "z_index": 48
+    },
+    {
+      "app_name": "Notes",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 31237,
+      "space_ids": null,
+      "title": "",
+      "window_id": 424,
+      "z_index": 47
+    },
+    {
+      "app_name": "Siri",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 657,
+      "space_ids": null,
+      "title": "",
+      "window_id": 289,
+      "z_index": 45
+    },
+    {
+      "app_name": "WeatherMenu",
+      "bounds": {
+        "height": 483.0,
+        "width": 332.0,
+        "x": 569.0,
+        "y": 237.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 746,
+      "space_ids": null,
+      "title": "WeatherMenu",
+      "window_id": 40,
+      "z_index": 44
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4373,
+      "z_index": 43
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 39,
+      "z_index": 42
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 892.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4371,
+      "z_index": 40
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 22619,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2987,
+      "z_index": 35
+    },
+    {
+      "app_name": "Notes",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 31237,
+      "space_ids": null,
+      "title": "",
+      "window_id": 426,
+      "z_index": 34
+    },
+    {
+      "app_name": "CursorUIViewService",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 892.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 715,
+      "space_ids": null,
+      "title": "",
+      "window_id": 4560,
+      "z_index": 33
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 22619,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2984,
+      "z_index": 32
+    },
+    {
+      "app_name": "Notes",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 31237,
+      "space_ids": null,
+      "title": "",
+      "window_id": 423,
+      "z_index": 31
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 22619,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2982,
+      "z_index": 30
+    },
+    {
+      "app_name": "Notes",
+      "bounds": {
+        "height": 500.0,
+        "width": 500.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 31237,
+      "space_ids": null,
+      "title": "",
+      "window_id": 421,
+      "z_index": 29
+    },
+    {
+      "app_name": "Finder",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 626,
+      "space_ids": null,
+      "title": "",
+      "window_id": 27,
+      "z_index": 28
+    },
+    {
+      "app_name": "Terminal",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 22619,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2981,
+      "z_index": 27
+    },
+    {
+      "app_name": "Notes",
+      "bounds": {
+        "height": 848.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 36.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 31237,
+      "space_ids": [
+        1
+      ],
+      "title": "All iCloud",
+      "window_id": 420,
+      "z_index": 26
+    },
+    {
+      "app_name": "Finder",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 626,
+      "space_ids": null,
+      "title": "",
+      "window_id": 26,
+      "z_index": 25
+    },
+    {
+      "app_name": "Finder",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 626,
+      "space_ids": null,
+      "title": "",
+      "window_id": 24,
+      "z_index": 24
+    },
+    {
+      "app_name": "Finder",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 626,
+      "space_ids": null,
+      "title": "",
+      "window_id": 23,
+      "z_index": 23
+    },
+    {
+      "app_name": "Preview",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 34994,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3169,
+      "z_index": 21
+    },
+    {
+      "app_name": "Preview",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 34994,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3167,
+      "z_index": 20
+    },
+    {
+      "app_name": "Open and Save Panel Service",
+      "bounds": {
+        "height": 64.0,
+        "width": 64.0,
+        "x": 0.0,
+        "y": 456.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 35018,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3170,
+      "z_index": 18
+    },
+    {
+      "app_name": "WindowManager",
+      "bounds": {
+        "height": 0.0,
+        "width": 0.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 599,
+      "space_ids": null,
+      "title": "App Icon Window",
+      "window_id": 18,
+      "z_index": 17
+    },
+    {
+      "app_name": "Preview",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 34994,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3166,
+      "z_index": 16
+    },
+    {
+      "app_name": "Preview",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 34994,
+      "space_ids": null,
+      "title": "",
+      "window_id": 3168,
+      "z_index": 15
+    },
+    {
+      "app_name": "Activity Monitor",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82861,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2568,
+      "z_index": 14
+    },
+    {
+      "app_name": "Activity Monitor",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82861,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2567,
+      "z_index": 12
+    },
+    {
+      "app_name": "Activity Monitor",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 82861,
+      "space_ids": null,
+      "title": "",
+      "window_id": 2566,
+      "z_index": 9
+    },
+    {
+      "app_name": "Activity Monitor",
+      "bounds": {
+        "height": 838.0,
+        "width": 1450.0,
+        "x": 20.0,
+        "y": 33.0
+      },
+      "current_space_id": 1,
+      "is_on_screen": true,
+      "layer": 0,
+      "on_current_space": true,
+      "pid": 82861,
+      "space_ids": [
+        1
+      ],
+      "title": "Activity Monitor",
+      "window_id": 2564,
+      "z_index": 6
+    },
+    {
+      "app_name": "Finder",
+      "bounds": {
+        "height": 33.0,
+        "width": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "current_space_id": null,
+      "is_on_screen": false,
+      "layer": 0,
+      "on_current_space": null,
+      "pid": 626,
+      "space_ids": null,
+      "title": "",
+      "window_id": 25,
+      "z_index": 4
+    }
+  ]
+}

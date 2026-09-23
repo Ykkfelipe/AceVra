@@ -1,0 +1,6 @@
+probe.bundleId=dev.zcode.cua.probe
+probe.executable=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe
+probe.pid=57517
+probe.parentPid=1
+accessibility.trusted=false
+screenRecording.preflight=false

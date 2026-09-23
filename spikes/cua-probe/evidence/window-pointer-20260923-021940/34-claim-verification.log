@@ -1,0 +1,46 @@
+routes and refusals (driver's own reporting)
+  [PASS] C-AX2 background AX press              expected='accessibility' measured='accessibility'
+  [PASS] C-DBL1 background dbl-click            expected='synthetic_events' measured='synthetic_events'
+  [PASS] Q-DBL2 canvas dbl-click                expected='synthetic_events' measured='synthetic_events'
+  [PASS] Q-PXC1 pixel single click              expected='accessibility' measured='accessibility'
+  [PASS] P-AX1 Qt AX press                      expected='accessibility' measured='accessibility'
+  [PASS] P-PX1 Qt pixel single click            expected='accessibility' measured='accessibility'
+  [PASS] P-DBL1 Qt dbl-click                    expected='synthetic_events' measured='synthetic_events'
+  [PASS] P-DRG1 drag refusal                    expected='background_unavailable' measured='background_unavailable'
+  [PASS] Q2-BGZOOM-1 title-bar dbl              expected='synthetic_events' measured='synthetic_events'
+  [PASS] Q2-BGZOOM-2 refusal                    expected='minimized_or_hidden_window' measured='minimized_or_hidden_window'
+  [PASS] C-FG1 foreground control               expected='global_input' measured='global_input'
+  [PASS] Q-FG1 foreground control               expected='global_input' measured='global_input'
+
+invariants on the tap-clean background trials
+  [PASS] C-AX2 frontmost+cursor held            expected=True measured=True
+  [PASS] C-DBL1 frontmost+cursor held           expected=True measured=True
+  [PASS] Q-DBL2 frontmost+cursor held           expected=True measured=True
+  [PASS] Q-PXC1 frontmost+cursor held           expected=True measured=True
+  [PASS] P-AX1 frontmost+cursor held            expected=True measured=True
+  [PASS] P-DBL1 frontmost+cursor held           expected=True measured=True
+  [PASS] P-PX1 frontmost+cursor held            expected=True measured=True
+  [PASS] Q2-BGZOOM-1 frontmost+cursor held      expected=True measured=True
+  [PASS] Q2-BGZOOM-1 contamination              expected=149 measured=149
+  [PASS] C-DBL1 clean bracket                   expected=0 measured=0
+
+Qt checkbox readback (probe AX, independent of the driver)
+  [PASS] P-AX1 AXValue                          expected='0->1' measured='0->1'
+  [PASS] P-PX1 AXValue                          expected='1->0' measured='1->0'
+  [PASS] P-DBL1 AXValue                         expected='0->0' measured='0->0'
+
+Qt window frames (multi-valued observable on a non-AX surface)
+  [PASS] Q2-FGZOOM control                      expected='800x632->1470x874' measured='800x632->1470x874'
+  [PASS] Q2-BGZOOM-1 background                 expected='800x632->1470x874' measured='800x632->1470x874'
+
+text delivery
+  [PASS] C-TXT1 chars                           expected=11 measured=11
+  [PASS] Q-TXT1 chars                           expected=0 measured=0
+  [PASS] Q-TXT1 effect                          expected='partial' measured='partial'
+
+contaminated / clean tallies
+  [PASS] trials                                 expected=32 measured=32
+  [PASS] contaminated                           expected=20 measured=20
+  [PASS] tap-clean                              expected=12 measured=12
+
+checked=33  PASS=33  FAIL=0

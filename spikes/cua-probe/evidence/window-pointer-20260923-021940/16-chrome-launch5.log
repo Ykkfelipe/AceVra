@@ -1,0 +1,74 @@
+Trying to load the allocator multiple times. This is *not* supported.
+Created TensorFlow Lite XNNPACK delegate for CPU.
+[11026:3924142:0923/023635.220724:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11145:3924919:0923/023651.882223:VERBOSE1:chrome/updater/updater.cc:374] Version: 152.0.7933.0, opt, ARM_64, command line: /Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake-all --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[11145:3924919:0923/023651.882956:VERBOSE1:chrome/updater/updater.cc:377] OS version: 27.0.0, arch: arm64, System uptime (seconds): 87453, parent pid: 11026
+[11145:3924919:0923/023651.884808:VERBOSE1:chrome/updater/updater.cc:382] Available disk space in install directory (/Users/felipemore/Library/Application Support/Google/GoogleUpdater): 35674726400B (33.225GiB) / 245107195904B (228.274GiB)
+[11145:3924919:0923/023651.884829:VERBOSE1:chrome/updater/updater.cc:386] Available disk space in temporary directory (/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/): 35674726400B (33.225GiB) / 245107195904B (228.274GiB)
+[11145:3924919:0923/023651.884929:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS START event to the history log
+[11147:3924923:0923/023651.894251:VERBOSE1:chrome/updater/updater.cc:374] Version: 152.0.7933.0, opt, ARM_64, command line: /Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --crash-handler --database=/Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/Crashpad --url=https://clients2.google.com/cr/report --annotation=prod=Update4 --annotation=ver=152.0.7933.0 --handshake-fd=6 --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[11147:3924923:0923/023651.894744:VERBOSE1:chrome/updater/updater.cc:377] OS version: 27.0.0, arch: arm64, System uptime (seconds): 87453, parent pid: 1
+[11147:3924923:0923/023651.896237:VERBOSE1:chrome/updater/updater.cc:382] Available disk space in install directory (/Users/felipemore/Library/Application Support/Google/GoogleUpdater): 35674718208B (33.225GiB) / 245107195904B (228.274GiB)
+[11147:3924923:0923/023651.896253:VERBOSE1:chrome/updater/updater.cc:386] Available disk space in temporary directory (/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/): 35674718208B (33.225GiB) / 245107195904B (228.274GiB)
+[11147:3924923:0923/023651.896321:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS START event to the history log
+[11145:3924919:0923/023651.896749:VERBOSE1:chrome/updater/crash_reporter.cc:124] Crash handler launched and ready.
+[11145:3924919:0923/023651.897356:VERBOSE1:chrome/updater/crash_client.cc:108] Found 0 completed crash reports
+[11145:3924919:0923/023651.897442:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports
+[11145:3924919:0923/023651.897583:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/felipemore/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)
+[11145:3924919:0923/023651.897602:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/felipemore/Library/Application Support/Google/consentOptions/Crashpad/settings.dat: No such file or directory (2)
+[11145:3924919:0923/023651.897872:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/felipemore/Library/Application Support/Google/AndroidStudio2025.1.1/Crashpad/settings.dat: No such file or directory (2)
+[11145:3924919:0923/023651.899722:VERBOSE1:chrome/updater/updater.cc:105] Crash reporting initialized.
+[11145:3924931:0923/023651.899984:VERBOSE1:chrome/updater/app/app_wakeall.cc:58] Launching `/Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake`
+[11148:3924935:0923/023651.907881:VERBOSE1:chrome/updater/updater.cc:374] Version: 152.0.7933.0, opt, ARM_64, command line: /Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[11148:3924935:0923/023651.908305:VERBOSE1:chrome/updater/updater.cc:377] OS version: 27.0.0, arch: arm64, System uptime (seconds): 87453, parent pid: 11145
+[11148:3924935:0923/023651.909691:VERBOSE1:chrome/updater/updater.cc:382] Available disk space in install directory (/Users/felipemore/Library/Application Support/Google/GoogleUpdater): 35674705920B (33.225GiB) / 245107195904B (228.274GiB)
+[11148:3924935:0923/023651.909704:VERBOSE1:chrome/updater/updater.cc:386] Available disk space in temporary directory (/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/): 35674705920B (33.225GiB) / 245107195904B (228.274GiB)
+[11148:3924935:0923/023651.909764:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS START event to the history log
+[11150:3924939:0923/023651.917938:VERBOSE1:chrome/updater/updater.cc:374] Version: 152.0.7933.0, opt, ARM_64, command line: /Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --crash-handler --database=/Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/Crashpad --url=https://clients2.google.com/cr/report --annotation=prod=Update4 --annotation=ver=152.0.7933.0 --handshake-fd=6 --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[11150:3924939:0923/023651.918351:VERBOSE1:chrome/updater/updater.cc:377] OS version: 27.0.0, arch: arm64, System uptime (seconds): 87453, parent pid: 1
+[11150:3924939:0923/023651.919688:VERBOSE1:chrome/updater/updater.cc:382] Available disk space in install directory (/Users/felipemore/Library/Application Support/Google/GoogleUpdater): 35674705920B (33.225GiB) / 245107195904B (228.274GiB)
+[11150:3924939:0923/023651.919702:VERBOSE1:chrome/updater/updater.cc:386] Available disk space in temporary directory (/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/): 35674705920B (33.225GiB) / 245107195904B (228.274GiB)
+[11150:3924939:0923/023651.919775:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS START event to the history log
+[11148:3924935:0923/023651.920117:VERBOSE1:chrome/updater/crash_reporter.cc:124] Crash handler launched and ready.
+[11148:3924935:0923/023651.920562:VERBOSE1:chrome/updater/crash_client.cc:108] Found 0 completed crash reports
+[11148:3924935:0923/023651.920614:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports
+[11148:3924935:0923/023651.920680:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/felipemore/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)
+[11148:3924935:0923/023651.920691:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/felipemore/Library/Application Support/Google/consentOptions/Crashpad/settings.dat: No such file or directory (2)
+[11148:3924935:0923/023651.920716:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/felipemore/Library/Application Support/Google/AndroidStudio2025.1.1/Crashpad/settings.dat: No such file or directory (2)
+[11148:3924935:0923/023651.920897:VERBOSE1:chrome/updater/updater.cc:105] Crash reporting initialized.
+[11148:3924935:0923/023651.921019:VERBOSE1:chrome/updater/ipc/update_service_internal_proxy_mojo.cc:61] Run
+[11148:3924935:0923/023655.298553:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0
+[11148:3924935:0923/023655.298815:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS END event to the history log
+[11148:3924935:0923/023655.298844:VERBOSE1:chrome/updater/updater.cc:419] UpdaterMain (--wake) returned 0.
+[11150:3924939:0923/023655.300025:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS END event to the history log
+[11150:3924939:0923/023655.300056:VERBOSE1:chrome/updater/updater.cc:419] UpdaterMain (--crash-handler) returned 0.
+[11145:3924931:0923/023655.428136:VERBOSE1:chrome/updater/app/app_wakeall.cc:68] `/Users/felipemore/Library/Application Support/Google/GoogleUpdater/152.0.7933.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake` exited 0
+[11145:3924919:0923/023655.428361:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0
+[11145:3924919:0923/023655.428699:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS END event to the history log
+[11145:3924919:0923/023655.428741:VERBOSE1:chrome/updater/updater.cc:419] UpdaterMain (--wake-all) returned 0.
+[11147:3924923:0923/023655.430550:VERBOSE2:chrome/updater/event_history.cc:265] Emitted a UPDATER_PROCESS END event to the history log
+[11147:3924923:0923/023655.430596:VERBOSE1:chrome/updater/updater.cc:419] UpdaterMain (--crash-handler) returned 0.
+[11026:3924142:0923/023657.734692:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924142:0923/023750.923398:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924142:0923/023943.386518:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924142:0923/024309.366873:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924113:0923/024722.739688:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024722.740204:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024726.054044:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024726.054434:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024732.209400:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024732.211015:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024741.570325:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/024741.570842:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924142:0923/024857.516378:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924113:0923/030055.678824:ERROR:chrome/browser/ui/views/user_education/impl/browser_user_education_interface_impl.cc:186] Attempting to show IPH IPH_ExtensionsZeroStatePromo before browser initialization complete; IPH will not be shown.
+[11026:3924142:0923/030131.187377:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924113:0923/030134.055598:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/030134.056070:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924142:0923/030156.761307:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924142:0923/030221.015197:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924113:0923/030235.744727:ERROR:components/device_event_log/device_event_log_impl.cc:211] [03:02:35.744] FIDO: icloud_keychain.mm:486 iCKC: getAssertion failed, domain: com.apple.AuthenticationServices.AuthorizationError code: 1001 msg: The operation couldn’t be completed. (com.apple.AuthenticationServices.AuthorizationError error 1001.)
+[11026:3924113:0923/030235.744783:ERROR:components/device_event_log/device_event_log_impl.cc:211] [03:02:35.744] FIDO: get_assertion_request_handler.cc:675 Failing assertion request due to status 3 from iCloudKeychain
+[11026:3924142:0923/030255.610845:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[11026:3924113:0923/030258.788649:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.
+[11026:3924113:0923/030258.789000:ERROR:chrome/browser/ui/webui/ntp/new_tab_ui.cc:54] Requested load of chrome://newtab/ for incorrect profile type.

@@ -1,0 +1,25 @@
+----- P-AX1 [click] pid=20002 wid=5262
+trial P-AX1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      action : {  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      checkbx: before=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 79: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      checkbx: after =/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 123: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      watch  : {"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- P-PX1 [click] pid=20002 wid=5262
+trial P-PX1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      action : {  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      checkbx: before=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 79: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      checkbx: after =/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 123: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      watch  : {"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- P-DBL1 [double_click] pid=20002 wid=5262
+trial P-DBL1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      action : {  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "synthetic_events"}
+      checkbx: before=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 79: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      checkbx: after =/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 123: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      watch  : {"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- P-FG1 [click] pid=20002 wid=5262
+trial P-FG1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      action : {  "delivery": {    "mode": "foreground"  },  "effect": "unverifiable",  "route": "global_input"}
+      checkbx: before=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 79: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      checkbx: after =/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/run-pointer-trial.sh: line 123: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode: No such file or directory
+      watch  : {"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- qt matrix complete

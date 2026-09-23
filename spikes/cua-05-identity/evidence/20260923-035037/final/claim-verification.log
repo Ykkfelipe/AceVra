@@ -1,0 +1,52 @@
+persistence matrix (final pass, frozen source)
+  [PASS] baseline: requirement unchanged                      expected='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"' measured='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"'
+  [PASS] baseline: both grants held                           expected=True measured=True
+  [PASS] A-helper-restart: requirement unchanged              expected='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"' measured='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"'
+  [PASS] A-helper-restart: both grants held                   expected=True measured=True
+  [PASS] C-rebuild-same-identity: requirement unchanged       expected='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"' measured='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"'
+  [PASS] C-rebuild-same-identity: both grants held            expected=True measured=True
+  [PASS] D-reinstall-same-path: requirement unchanged         expected='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"' measured='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"'
+  [PASS] D-reinstall-same-path: both grants held              expected=True measured=True
+  [PASS] E-version-change: requirement unchanged              expected='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"' measured='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"'
+  [PASS] E-version-change: both grants held                   expected=True measured=True
+  [PASS] cdhash distinct across baseline/C/D/E (changed while grant held) expected=4 measured=4
+  [PASS] S: requirement changed (different cert root)         expected=True measured=True
+  [PASS] S: both grants lost                                  expected=True measured=True
+  [PASS] S-restored: requirement back to the original         expected='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"' measured='identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"'
+  [PASS] S-restored: both grants usable again                 expected=True measured=True
+  [PASS] one helper source revision across every matrix row   expected=1 measured=1
+  [PASS] matrix case count                                    expected=7 measured=7
+
+tamper probe
+  [PASS] tamper case count                                    expected=5 measured=5
+  [PASS] three cases with a broken signature                  expected=3 measured=3
+  [PASS] A-control: accessibility                             expected=True measured=True
+  [PASS] B-text: accessibility                                expected=True measured=True
+  [PASS] C-cstring: accessibility                             expected=True measured=True
+  [PASS] D-appended: accessibility                            expected=True measured=True
+  [PASS] E-restored: accessibility                            expected=True measured=True
+  [PASS] five distinct pids (each case really re-launched)    expected=5 measured=5
+
+launch paths and the launcher-pid control (final pass)
+  [PASS] R1-exec: not launchd-parented (exec path)            expected=False measured=False
+  [PASS] R1-exec: ancestry names the app identity dev.zcode.app expected=True measured=True
+  [PASS] R2-open: launchd-parented (LaunchServices path)      expected=1 measured=1
+  [PASS] ctl3 with --launcher-pid: accessibility denied       expected=True measured=True
+  [PASS] ctl3 with: screen recording denied                   expected=True measured=True
+  [PASS] ctl3 without --launcher-pid: accessibility denied    expected=True measured=True
+  [PASS] ctl3 without: screen recording denied                expected=True measured=True
+  [PASS] ctl3: same bundle id with and without the flag       expected='dev.zcode.cua-helper.dev.ctl3' measured='dev.zcode.cua-helper.dev.ctl3'
+
+pre-grant contrast (earlier exploratory pass)
+  [PASS] L1-exec (pre-grant): accessibility true by inheritance expected=True measured=True
+  [PASS] L2-open (pre-grant): accessibility false, own identity expected=True measured=True
+  [PASS] L2-open (pre-grant): parentPid 1                     expected=1 measured=1
+
+watch series
+  [PASS] sample count                                         expected=128 measured=128
+  [PASS] all samples from one pid                             expected=1 measured=1
+  [PASS] capture worked while SR preflight still read false (same pid) expected=True measured=True
+  [PASS] the same process later observed AX trust             expected=True measured=True
+  [PASS] a fresh process reads SR preflight true              expected=True measured=True
+
+checked=41  PASS=41  FAIL=0

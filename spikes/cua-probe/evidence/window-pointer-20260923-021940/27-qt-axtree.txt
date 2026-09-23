@@ -1,0 +1,242 @@
+AXApplication title=Prism Launcher
+  AXWindow title=Prism Launcher 11.1.0 actions=AXRaise
+    AXList id=Application.MainWindow.centralWidget.InstanceView
+      AXRow id=Application.MainWindow.centralWidget.InstanceView
+        AXStaticText title=Play 1.21.1 Controlify Instance id=Application.MainWindow.centralWidget.InstanceView actions=AXPress
+      AXColumn id=Application.MainWindow.centralWidget.InstanceView
+    AXStaticText id=Application.MainWindow.statusBar
+      AXGrowArea id=Application.MainWindow.statusBar.QSizeGrip
+      AXStaticText value=Minecraft 1.21.1, last played on 2026-09-18 10:45 p.m. for 0…(95 chars) id=Application.MainWindow.statusBar.QLabel
+      AXStaticText value=Total playtime: 12min 39s id=Application.MainWindow.statusBar.QLabel
+    AXButton title=Add Instance id=Application.MainWindow.mainToolBar.QToolButton actions=AXPress
+    AXMenuButton title=Folders id=Application.MainWindow.mainToolBar.QToolButton
+    AXButton title=Settings id=Application.MainWindow.mainToolBar.QToolButton actions=AXPress
+    AXMenuButton title=Help id=Application.MainWindow.mainToolBar.QToolButton
+    AXButton title=Update id=Application.MainWindow.mainToolBar.QToolButton actions=AXPress
+    AXCheckBox title=Meow value=1 id=Application.MainWindow.mainToolBar.QToolButton actions=AXPress,AXPress
+    AXMenuButton title=Ykkfelipe id=Application.MainWindow.mainToolBar.QToolButton
+    AXButton title=More News id=Application.MainWindow.newsToolBar.QToolButton actions=AXPress
+    AXButton title=Prism Launcher Release 11.1.0 id=Application.MainWindow.newsToolBar.QToolButton actions=AXPress
+    AXMenuButton title=Launch id=Application.MainWindow.instanceToolBar.ActionButton actions=AXShowMenu
+    AXButton title=Kill id=Application.MainWindow.instanceToolBar.ActionButton [disabled]
+    AXButton title=Edit id=Application.MainWindow.instanceToolBar.ActionButton actions=AXPress
+    AXButton title=Change Group id=Application.MainWindow.instanceToolBar.ActionButton actions=AXPress
+    AXButton title=Folder id=Application.MainWindow.instanceToolBar.ActionButton actions=AXPress
+    AXMenuButton title=Export id=Application.MainWindow.instanceToolBar.ActionButton actions=AXShowMenu
+    AXButton title=Copy id=Application.MainWindow.instanceToolBar.ActionButton actions=AXPress
+    AXButton title=Delete id=Application.MainWindow.instanceToolBar.ActionButton actions=AXPress
+    AXButton title=Create Shortcut id=Application.MainWindow.instanceToolBar.ActionButton actions=AXPress
+    AXButton id=Application.MainWindow.instanceToolBar.changeIconButton actions=AXPress,AXRaise
+    AXButton id=Application.MainWindow.instanceToolBar.renameButton actions=AXPress,AXRaise
+    AXButton actions=AXPress
+    AXButton actions=AXPress,AXZoomWindow,AXShowMenu
+      AXGroup
+    AXButton actions=AXPress
+    AXStaticText value=Prism Launcher 11.1.0
+  AXMenuBar actions=AXCancel
+    AXMenuBarItem title=Apple actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=About This Mac id=_aboutThisMacRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=System Information id=_systemInformationRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=System Settings…, 1 update id=_systemSettingsRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=App Store…, 4 updates id=_appStoreRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Recent Items id=_recentsRequested: actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Applications [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=AutoClaw id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “AutoClaw” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Calculator id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Calculator” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ChatGPT id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ChatGPT” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Claude id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Claude” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Command Code id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Command Code” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Google Chrome id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Google Chrome” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Grok Bot id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Grok Bot” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=iPhone Mirroring id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “iPhone Mirroring” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Preview id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Preview” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Prism Launcher id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Prism Launcher” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=System Settings id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “System Settings” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=TextEdit id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “TextEdit” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ZCode id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ZCode” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ZCode CUA Probe id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ZCode CUA Probe” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=ZCode Dev id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “ZCode Dev” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Documents [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260920-140805-314b4618-506-pasted_text_20260920-140805.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260920-140805-314b4618-506-pasted_text_20260920-1408…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054001-acc6eab3-1b9-pasted_text_20260922-054001.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054001-acc6eab3-1b9-pasted_text_20260922-0540…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054156-3ea5c1c6-163-pasted_text_20260922-054156.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054156-3ea5c1c6-163-pasted_text_20260922-0541…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054527-d99b9760-781-pasted_text_20260922-054527.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054527-d99b9760-781-pasted_text_20260922-0545…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=20260922-054845-78d54892-cb7-pasted_text_20260922-054845.txt id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “20260922-054845-78d54892-cb7-pasted_text_20260922-0548…(77 chars) id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Codeex idea 1 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Codeex idea 1” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Codex idea 2 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Codex idea 2” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=java id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “java” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=LifeCraft-Embodiment-Architecture.html id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “LifeCraft-Embodiment-Architecture.html” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=lifecraft-provider.secret id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “lifecraft-provider.secret” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Untitled id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Untitled” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Untitled id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Untitled” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Untitled 2 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Untitled 2” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Untitled 3 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Untitled 3” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Untitled 4 id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Show “Untitled 4” in Finder id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Servers [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Macintosh HD id=_recentItemRequested: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Clear Menu id=_clearRecentItemsRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Force Quit… id=_forceQuitPanelRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Force Quit Prism Launcher id=_forceQuitRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Sleep id=_sleepRequested: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Restart… id=_restartRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Restart id=_restartNowRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Shut Down… id=_shutDownRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Shut Down id=_shutDownNowRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Lock Screen id=_lockScreenRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Log Out Felipe More… id=_logOutRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Log Out Felipe More id=_logOutNowRequested: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Prism Launcher actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=About Prism Launcher id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Preferences... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Update... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Services actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Ask Claude id=_processRequest: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=New Claude Code Session Here id=_processRequest: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Send to Claude id=_processRequest: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Services Settings… id=_configureServicesMenu: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Hide Prism Launcher id=hide: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Hide Others id=hideOtherApplications: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Show All id=unhideAllApplications: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Quit Prism Launcher id=terminate: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Quit and Keep Windows id=NSAlternateQuitMenuItem actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=File actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Add Instance... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Launch actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Launch id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Launch Offline id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Launch Demo id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=No Profiler id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Generic id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=JProfiler id=qt_itemFired: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=VisualVM id=qt_itemFired: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Kill id=qt_itemFired: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Edit... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Change Group... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Folder id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Export... actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Prism Launcher (zip) id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Modrinth (mrpack) id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=CurseForge (zip) id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Copy... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Delete id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Create Shortcut id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Close Window id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Edit actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Undo Last Instance Deletion id=qt_itemFired: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=AutoFill id=_NSMenuItemAutoFillIdentifier actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Contact… id=_handleInsertFromContactsCommand: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Passwords… id=_handleInsertFromPasswordsCommand: [disabled] actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Credit Card… id=_handleInsertFromCreditCardsCommand: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Start Dictation id=startDictation: [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Emoji & Symbols id=orderFrontCharacterPalette: actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=View actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Themes actions=AXCancel,AXPress,AXPick
+          AXMenu actions=AXCancel
+            AXMenuItem title=Fusion id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Windows 9x id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Bright id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=Dark id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=macOS id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+            AXMenuItem title=System id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Meow id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Status Bar id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Lock Toolbars id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Instance Toolbar id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=News Toolbar id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Enter Full Screen id=toggleFullScreen: [disabled] actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Folders actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Launcher Root id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Instances id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Central Mods id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Skins id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Java id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Icon Theme id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Widget Themes id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Cat Packs id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Instance Icons id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Logs id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Accounts actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Ykkfelipe id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=No Default Account id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Manage Accounts... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+    AXMenuBarItem title=Help actions=AXCancel,AXPress,AXPick
+      AXMenu actions=AXCancel
+        AXMenuItem title=Clear Metadata Cache id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Report a Bug or Suggest a Feature id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=View logs id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Install to PATH id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Matrix Space id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Discord Guild id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Subreddit id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem [disabled] actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=More News... id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+        AXMenuItem title=Prism Launcher Wiki id=qt_itemFired: actions=AXCancel,AXPress,AXPick
+# nodes=241

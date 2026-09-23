@@ -1,0 +1,42 @@
+### CUA-0.5 identity facts recorded 2026-09-23T07:59:56Z
+### host: 27.0 26A428 arm64
+
+## signing identities (isolated keychains, login keychain untouched)
+  keychain: /Users/felipemore/.zcode-fork-cua-home/signing/zcode-cua-dev.keychain-db
+      1) F89EF7752A4E905BB19C2530E837809C0F2055F2 "ZCode CUA Dev Signing" (CSSMERR_TP_NOT_TRUSTED)
+  keychain: /Users/felipemore/.zcode-fork-cua-home/signing-alt/zcode-cua-dev.keychain-db
+      1) 4DCF904DCEE2BAF81C5D4B484D826D4815B0C443 "ZCode CUA Dev Signing" (CSSMERR_TP_NOT_TRUSTED)
+
+## certificate fingerprints (these anchor the TCC requirement)
+  /Users/felipemore/.zcode-fork-cua-home/signing:
+    sha1 Fingerprint=F8:9E:F7:75:2A:4E:90:5B:B1:9C:25:30:E8:37:80:9C:0F:20:55:F2
+    subject=CN=ZCode CUA Dev Signing, O=ZCode Custom Fork, C=US
+    notBefore=Sep 23 07:47:31 2026 GMT
+    notAfter=Sep 20 07:47:31 2036 GMT
+  /Users/felipemore/.zcode-fork-cua-home/signing-alt:
+    sha1 Fingerprint=4D:CF:90:4D:CE:E2:BA:F8:1C:5D:4B:48:4D:82:6D:48:15:B0:C4:43
+    subject=CN=ZCode CUA Dev Signing, O=ZCode Custom Fork, C=US
+    notBefore=Sep 23 07:52:28 2026 GMT
+    notAfter=Sep 20 07:52:28 2036 GMT
+
+## helper bundle identity (as measured)
+  bundle id:  dev.zcode.cua-helper.dev
+  version:    0.0.1 (1)
+  minOS:      12.0
+  LSUIElement: 1
+  install:    /Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app
+  Identifier=dev.zcode.cua-helper.dev
+  CodeDirectory v=20500 size=505 flags=0x10000(runtime) hashes=9+3 location=embedded
+  CandidateCDHashFull sha256=91afe3fea2312b98904c59e7a6c49ef10175e1dac8c5c558c92009f3867ea00e
+  Authority=ZCode CUA Dev Signing
+  TeamIdentifier=not set
+  designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+
+## product-adjacent identities NOT used (reference only)
+  product helper on disk: dev.zcode.cua-helper (Team 8A5X4JJ39T) at ~/.zcode/computer-use[/dev]/ZCode Computer Use.app
+  official app bundle id: dev.zcode.app
+  reserved for AceVra (not wired in this branch): dev.acevra.cua-helper / dev.acevra.cua-helper.development
+
+## process/launch facts
+  exec path parentPid = the launching shell (inheritance applies)
+  LaunchServices path parentPid = 1 (helper is its own responsible process; no inheritance)

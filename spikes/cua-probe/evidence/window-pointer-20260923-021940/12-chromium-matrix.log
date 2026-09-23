@@ -1,0 +1,47 @@
+----- C-AX1 [click] before_title=CUA-T0-Cnone-M2-N0
+trial C-AX1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-AX1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      C-AX1 after_title=CUA-T1-C180x309-H-M3-N0
+      C-AX1 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":36,"22":1},"physicalEvents":37,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-AX2 [click] before_title=CUA-T1-C180x309-H-M3-N0
+trial C-AX2 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-AX2 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      C-AX2 after_title=CUA-T2-C180x309-H-M8-N0
+      C-AX2 watch={"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-PX1 [click] before_title=CUA-T2-C180x309-H-M8-N0
+trial C-PX1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-PX1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      C-PX1 after_title=CUA-T3-C180x309-M8-N0
+      C-PX1 watch={"axTrusted":true,"ok":true,"physicalByType":{"22":40},"physicalEvents":40,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-PX2 [click] before_title=CUA-T3-C180x309-M8-N0
+trial C-PX2 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-PX2 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "accessibility"}
+      C-PX2 after_title=CUA-T4-C180x309-M8-N0
+      C-PX2 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":29,"22":1},"physicalEvents":30,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-PX3 [click] before_title=CUA-T4-C180x309-M8-N0
+./run-matrix.sh: line 37: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940/C-PX3.action.json: No such file or directory
+      C-PX3 action=
+      C-PX3 after_title=CUA-T4-C180x309-M8-N0
+      C-PX3 watch=
+      C-PX3 trial C-PX3 ABORTED: no quiet non-frontmost window within 120s
+----- C-DBL1 [double_click] before_title=CUA-T4-C180x309-M8-N0
+trial C-DBL1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-DBL1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "synthetic_events"}
+      C-DBL1 after_title=CUA-T6-C360x618-M8-N0
+      C-DBL1 watch={"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-SCR1 [scroll] before_title=CUA-T6-C360x618-M8-N0
+trial C-SCR1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-SCR1 action={  "delivery": {    "mode": "background"  },  "effect": "unverifiable",  "route": "synthetic_events"}
+      C-SCR1 after_title=CUA-T6-C360x618-M8-N0
+      C-SCR1 watch={"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-TXT1 [type_text] before_title=CUA-T6-C360x618-M8-N0
+trial C-TXT1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-TXT1 action={  "delivery": {    "delivered_count": 11,    "mode": "background"  },  "effect": "unverifiable",  "escalation": {    "reason": "effect_unconfirmed",    "target": "page"  },  "route": "synthetic_events"}
+      C-TXT1 after_title=CUA-T6-C360x618-M8-N11
+      C-TXT1 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":7,"22":66},"physicalEvents":73,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- C-FG1 [click] before_title=CUA-T6-C360x618-M8-N11
+trial C-FG1 complete -> /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/window-pointer-20260923-021940
+      C-FG1 action={  "delivery": {    "mode": "foreground"  },  "effect": "unverifiable",  "route": "global_input"}
+      C-FG1 after_title=CUA-T7-C360x618-H-M9-N11
+      C-FG1 watch={"axTrusted":true,"ok":true,"physicalByType":{"5":35},"physicalEvents":35,"seconds":5,"syntheticEvents":0,"tapDisabledBySystem":0}
+----- matrix complete

@@ -1,0 +1,104 @@
+=== trial C-AX1 ===
+  action route/delivery/effect : accessibility / background / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (726.80859375, 366.50390625)
+  cursor after                 : (726.80859375, 366.50390625)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=37 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : False
+  VERDICT(mechanical)          : CONTAMINATED - discard
+   titles: before=CUA-T0-Cnone-M2-N0 after=CUA-T1-C180x309-H-M2-N0
+   zorder: before=23 after=23
+=== trial C-AX2 ===
+  action route/delivery/effect : accessibility / background / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (845.84765625, 584.2578125)
+  cursor after                 : (845.84765625, 584.2578125)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=0 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : True
+  VERDICT(mechanical)          : attributable
+   titles: before=CUA-T1-C180x309-H-M8-N0 after=CUA-T2-C180x309-H-M8-N0
+   zorder: before=23 after=23
+=== trial C-PX1 ===
+  action route/delivery/effect : accessibility / background / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (845.84765625, 584.2578125)
+  cursor after                 : (845.84765625, 584.2578125)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=40 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : False
+  VERDICT(mechanical)          : CONTAMINATED - discard
+   titles: before=CUA-T2-C180x309-H-M8-N0 after=CUA-T2-C180x309-H-M8-N0
+   zorder: before=22 after=22
+=== trial C-PX2 ===
+  action route/delivery/effect : accessibility / background / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (1127.75, 582.109375)
+  cursor after                 : (1127.75, 582.109375)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=30 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : False
+  VERDICT(mechanical)          : CONTAMINATED - discard
+   titles: before=CUA-T3-C180x309-M8-N0 after=CUA-T3-C180x309-M8-N0
+   zorder: before=22 after=22
+=== trial C-DBL1 ===
+  action route/delivery/effect : synthetic_events / background / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (666.08203125, 759.8046875)
+  cursor after                 : (666.08203125, 759.8046875)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=0 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : True
+  VERDICT(mechanical)          : attributable
+   titles: before=CUA-T4-C180x309-M8-N0 after=CUA-T4-C180x309-M8-N0
+   zorder: before=20 after=20
+=== trial C-SCR1 ===
+  action route/delivery/effect : synthetic_events / background / unverifiable
+  frontmost before             : com.zhipuai.autoclaw (pid 51942)
+  frontmost after              : com.zhipuai.autoclaw (pid 51942)
+  cursor before                : (827.21484375, 54.64453125)
+  cursor after                 : (827.21484375, 54.64453125)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=0 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : True
+  VERDICT(mechanical)          : attributable
+   titles: before=CUA-T6-C360x618-M8-N0 after=CUA-T6-C360x618-M8-N0
+   zorder: before=19 after=19
+=== trial C-TXT1 ===
+  action route/delivery/effect : synthetic_events / background / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (800.9375, 646.03125)
+  cursor after                 : (800.9375, 646.03125)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=73 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : False
+  VERDICT(mechanical)          : CONTAMINATED - discard
+   titles: before=CUA-T6-C360x618-M8-N0 after=CUA-T6-C360x618-M8-N11
+   zorder: before=18 after=18
+=== trial C-FG1 ===
+  action route/delivery/effect : global_input / foreground / unverifiable
+  frontmost before             : com.openai.codex (pid 95865)
+  frontmost after              : com.openai.codex (pid 95865)
+  cursor before                : (618.22265625, 934.3125)
+  cursor after                 : (618.22265625, 934.3125)  delta=(0.0, 0.0)
+  human input during bracket   : physicalEvents=35 syntheticEvents=0
+  'frontmost unchanged'        : True
+  'cursor unchanged'           : True
+  'tap clean (attributable)'   : False
+  VERDICT(mechanical)          : CONTAMINATED - discard
+   titles: before=CUA-T6-C360x618-M8-N11 after=CUA-T7-C360x618-H-M9-N11
+   zorder: before=20 after=21

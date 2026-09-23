@@ -1,0 +1,1 @@
+trial Q-AX2 ABORTED: no quiet non-frontmost window within 120s

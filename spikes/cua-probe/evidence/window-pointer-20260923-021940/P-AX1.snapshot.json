@@ -1,0 +1,2903 @@
+{
+  "_note": "Prefer `elements` — `tree_markdown` will continue to work but new fields will only be added to the structured side. Issue #22865: use `max_elements` / `max_depth` to bound the AX walk on apps with very large trees.",
+  "app_name": "Prism Launcher",
+  "background_input": {
+    "exact_window": {
+      "pid": 20002,
+      "status": "matched",
+      "window_id": 5262
+    },
+    "observation": {
+      "frame_freshness": "unknown",
+      "one_shot_capture": "unavailable"
+    },
+    "routes": [
+      {
+        "route": "accessibility",
+        "status": "available"
+      },
+      {
+        "route": "window_pointer",
+        "status": "available"
+      },
+      {
+        "route": "pid_keyboard",
+        "status": "available"
+      }
+    ]
+  },
+  "element_count": 186,
+  "elements": [
+    {
+      "actions": [
+        "AXRaise"
+      ],
+      "depth": 0,
+      "element_index": 0,
+      "element_token": "s00000006:0",
+      "frame": {
+        "h": 632.0,
+        "w": 800.0,
+        "x": 335.0,
+        "y": 136.0
+      },
+      "label": "Prism Launcher 11.1.0",
+      "role": "AXWindow"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 3,
+      "element_index": 1,
+      "element_token": "s00000006:1",
+      "enabled": true,
+      "frame": {
+        "h": 95.0,
+        "w": 100.0,
+        "x": 340.0,
+        "y": 250.0
+      },
+      "label": "Play 1.21.1 Controlify Instance",
+      "parent_index": 0,
+      "role": "AXStaticText"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 2,
+      "element_token": "s00000006:2",
+      "enabled": true,
+      "frame": {
+        "h": 42.0,
+        "w": 117.0,
+        "x": 347.0,
+        "y": 169.0
+      },
+      "label": "Add Instance",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 3,
+      "element_token": "s00000006:3",
+      "enabled": true,
+      "frame": {
+        "h": 42.0,
+        "w": 93.0,
+        "x": 571.0,
+        "y": 169.0
+      },
+      "label": "Settings",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 4,
+      "element_token": "s00000006:4",
+      "enabled": true,
+      "frame": {
+        "h": 42.0,
+        "w": 88.0,
+        "x": 747.0,
+        "y": 169.0
+      },
+      "label": "Update",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress",
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 5,
+      "element_token": "s00000006:5",
+      "enabled": true,
+      "frame": {
+        "h": 42.0,
+        "w": 42.0,
+        "x": 849.0,
+        "y": 169.0
+      },
+      "label": "Meow",
+      "parent_index": 0,
+      "role": "AXCheckBox",
+      "selected": false,
+      "value": "0"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 6,
+      "element_token": "s00000006:6",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 91.0,
+        "x": 1043.0,
+        "y": 714.0
+      },
+      "label": "More News",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 7,
+      "element_token": "s00000006:7",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 692.0,
+        "x": 347.0,
+        "y": 714.0
+      },
+      "label": "Prism Launcher Release 11.1.0",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXShowMenu"
+      ],
+      "depth": 1,
+      "element_index": 8,
+      "element_token": "s00000006:8",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 358.0
+      },
+      "label": "Launch",
+      "parent_index": 0,
+      "role": "AXMenuButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 9,
+      "element_token": "s00000006:9",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 428.0
+      },
+      "label": "Edit",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 10,
+      "element_token": "s00000006:10",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 458.0
+      },
+      "label": "Change Group",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 11,
+      "element_token": "s00000006:11",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 488.0
+      },
+      "label": "Folder",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXShowMenu"
+      ],
+      "depth": 1,
+      "element_index": 12,
+      "element_token": "s00000006:12",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 518.0
+      },
+      "label": "Export",
+      "parent_index": 0,
+      "role": "AXMenuButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 13,
+      "element_token": "s00000006:13",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 548.0
+      },
+      "label": "Copy",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 14,
+      "element_token": "s00000006:14",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 578.0
+      },
+      "label": "Delete",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 15,
+      "element_token": "s00000006:15",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 608.0
+      },
+      "label": "Create Shortcut",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress",
+        "AXRaise"
+      ],
+      "depth": 1,
+      "element_index": 16,
+      "element_token": "s00000006:16",
+      "enabled": true,
+      "frame": {
+        "h": 90.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 224.0
+      },
+      "label": "Change the selected instance's icon.",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress",
+        "AXRaise"
+      ],
+      "depth": 1,
+      "element_index": 17,
+      "element_token": "s00000006:17",
+      "enabled": true,
+      "frame": {
+        "h": 26.0,
+        "w": 132.0,
+        "x": 1002.0,
+        "y": 318.0
+      },
+      "label": "Rename the selected instance.",
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 18,
+      "element_token": "s00000006:18",
+      "enabled": true,
+      "frame": {
+        "h": 16.0,
+        "w": 16.0,
+        "x": 343.0,
+        "y": 144.0
+      },
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress",
+        "AXZoomWindow",
+        "AXShowMenu"
+      ],
+      "depth": 1,
+      "element_index": 19,
+      "element_token": "s00000006:19",
+      "enabled": true,
+      "frame": {
+        "h": 16.0,
+        "w": 16.0,
+        "x": 389.0,
+        "y": 144.0
+      },
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXPress"
+      ],
+      "depth": 1,
+      "element_index": 20,
+      "element_token": "s00000006:20",
+      "enabled": true,
+      "frame": {
+        "h": 16.0,
+        "w": 16.0,
+        "x": 366.0,
+        "y": 144.0
+      },
+      "parent_index": 0,
+      "role": "AXButton"
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 0,
+      "element_index": 21,
+      "element_token": "s00000006:21",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 1470.0,
+        "x": 0.0,
+        "y": 0.0
+      },
+      "role": "AXMenuBar",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 22,
+      "element_token": "s00000006:22",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 34.0,
+        "x": 10.0,
+        "y": 0.0
+      },
+      "label": "Apple",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 23,
+      "element_token": "s00000006:23",
+      "enabled": true,
+      "parent_index": 22,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 24,
+      "element_token": "s00000006:24",
+      "enabled": true,
+      "label": "About This Mac",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 25,
+      "element_token": "s00000006:25",
+      "enabled": true,
+      "label": "System Information",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 26,
+      "element_token": "s00000006:26",
+      "enabled": true,
+      "label": "System Settings…, 1 update",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 27,
+      "element_token": "s00000006:27",
+      "enabled": true,
+      "label": "App Store…, 4 updates",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 28,
+      "element_token": "s00000006:28",
+      "enabled": true,
+      "label": "Recent Items",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 4,
+      "element_index": 29,
+      "element_token": "s00000006:29",
+      "enabled": true,
+      "parent_index": 28,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 30,
+      "element_token": "s00000006:30",
+      "enabled": true,
+      "label": "AutoClaw",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 31,
+      "element_token": "s00000006:31",
+      "enabled": true,
+      "label": "Show “AutoClaw” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 32,
+      "element_token": "s00000006:32",
+      "enabled": true,
+      "label": "Calculator",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 33,
+      "element_token": "s00000006:33",
+      "enabled": true,
+      "label": "Show “Calculator” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 34,
+      "element_token": "s00000006:34",
+      "enabled": true,
+      "label": "ChatGPT",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 35,
+      "element_token": "s00000006:35",
+      "enabled": true,
+      "label": "Show “ChatGPT” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 36,
+      "element_token": "s00000006:36",
+      "enabled": true,
+      "label": "Claude",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 37,
+      "element_token": "s00000006:37",
+      "enabled": true,
+      "label": "Show “Claude” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 38,
+      "element_token": "s00000006:38",
+      "enabled": true,
+      "label": "Command Code",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 39,
+      "element_token": "s00000006:39",
+      "enabled": true,
+      "label": "Show “Command Code” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 40,
+      "element_token": "s00000006:40",
+      "enabled": true,
+      "label": "Google Chrome",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 41,
+      "element_token": "s00000006:41",
+      "enabled": true,
+      "label": "Show “Google Chrome” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 42,
+      "element_token": "s00000006:42",
+      "enabled": true,
+      "label": "Grok Bot",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 43,
+      "element_token": "s00000006:43",
+      "enabled": true,
+      "label": "Show “Grok Bot” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 44,
+      "element_token": "s00000006:44",
+      "enabled": true,
+      "label": "iPhone Mirroring",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 45,
+      "element_token": "s00000006:45",
+      "enabled": true,
+      "label": "Show “iPhone Mirroring” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 46,
+      "element_token": "s00000006:46",
+      "enabled": true,
+      "label": "Preview",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 47,
+      "element_token": "s00000006:47",
+      "enabled": true,
+      "label": "Show “Preview” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 48,
+      "element_token": "s00000006:48",
+      "enabled": true,
+      "label": "Prism Launcher",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 49,
+      "element_token": "s00000006:49",
+      "enabled": true,
+      "label": "Show “Prism Launcher” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 50,
+      "element_token": "s00000006:50",
+      "enabled": true,
+      "label": "System Settings",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 51,
+      "element_token": "s00000006:51",
+      "enabled": true,
+      "label": "Show “System Settings” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 52,
+      "element_token": "s00000006:52",
+      "enabled": true,
+      "label": "TextEdit",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 53,
+      "element_token": "s00000006:53",
+      "enabled": true,
+      "label": "Show “TextEdit” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 54,
+      "element_token": "s00000006:54",
+      "enabled": true,
+      "label": "ZCode",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 55,
+      "element_token": "s00000006:55",
+      "enabled": true,
+      "label": "Show “ZCode” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 56,
+      "element_token": "s00000006:56",
+      "enabled": true,
+      "label": "ZCode CUA Probe",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 57,
+      "element_token": "s00000006:57",
+      "enabled": true,
+      "label": "Show “ZCode CUA Probe” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 58,
+      "element_token": "s00000006:58",
+      "enabled": true,
+      "label": "ZCode Dev",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 59,
+      "element_token": "s00000006:59",
+      "enabled": true,
+      "label": "Show “ZCode Dev” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 60,
+      "element_token": "s00000006:60",
+      "enabled": true,
+      "label": "20260920-140805-314b4618-506-pasted_text_20260920-140805.txt",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 61,
+      "element_token": "s00000006:61",
+      "enabled": true,
+      "label": "Show “20260920-140805-314b4618-506-pasted_text_20260920-140805.txt” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 62,
+      "element_token": "s00000006:62",
+      "enabled": true,
+      "label": "20260922-054001-acc6eab3-1b9-pasted_text_20260922-054001.txt",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 63,
+      "element_token": "s00000006:63",
+      "enabled": true,
+      "label": "Show “20260922-054001-acc6eab3-1b9-pasted_text_20260922-054001.txt” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 64,
+      "element_token": "s00000006:64",
+      "enabled": true,
+      "label": "20260922-054156-3ea5c1c6-163-pasted_text_20260922-054156.txt",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 65,
+      "element_token": "s00000006:65",
+      "enabled": true,
+      "label": "Show “20260922-054156-3ea5c1c6-163-pasted_text_20260922-054156.txt” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 66,
+      "element_token": "s00000006:66",
+      "enabled": true,
+      "label": "20260922-054527-d99b9760-781-pasted_text_20260922-054527.txt",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 67,
+      "element_token": "s00000006:67",
+      "enabled": true,
+      "label": "Show “20260922-054527-d99b9760-781-pasted_text_20260922-054527.txt” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 68,
+      "element_token": "s00000006:68",
+      "enabled": true,
+      "label": "20260922-054845-78d54892-cb7-pasted_text_20260922-054845.txt",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 69,
+      "element_token": "s00000006:69",
+      "enabled": true,
+      "label": "Show “20260922-054845-78d54892-cb7-pasted_text_20260922-054845.txt” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 70,
+      "element_token": "s00000006:70",
+      "enabled": true,
+      "label": "Codeex idea 1",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 71,
+      "element_token": "s00000006:71",
+      "enabled": true,
+      "label": "Show “Codeex idea 1” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 72,
+      "element_token": "s00000006:72",
+      "enabled": true,
+      "label": "Codex idea 2",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 73,
+      "element_token": "s00000006:73",
+      "enabled": true,
+      "label": "Show “Codex idea 2” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 74,
+      "element_token": "s00000006:74",
+      "enabled": true,
+      "label": "java",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 75,
+      "element_token": "s00000006:75",
+      "enabled": true,
+      "label": "Show “java” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 76,
+      "element_token": "s00000006:76",
+      "enabled": true,
+      "label": "LifeCraft-Embodiment-Architecture.html",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 77,
+      "element_token": "s00000006:77",
+      "enabled": true,
+      "label": "Show “LifeCraft-Embodiment-Architecture.html” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 78,
+      "element_token": "s00000006:78",
+      "enabled": true,
+      "label": "lifecraft-provider.secret",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 79,
+      "element_token": "s00000006:79",
+      "enabled": true,
+      "label": "Show “lifecraft-provider.secret” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 80,
+      "element_token": "s00000006:80",
+      "enabled": true,
+      "label": "Untitled",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 81,
+      "element_token": "s00000006:81",
+      "enabled": true,
+      "label": "Show “Untitled” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 82,
+      "element_token": "s00000006:82",
+      "enabled": true,
+      "label": "Untitled",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 83,
+      "element_token": "s00000006:83",
+      "enabled": true,
+      "label": "Show “Untitled” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 84,
+      "element_token": "s00000006:84",
+      "enabled": true,
+      "label": "Untitled 2",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 85,
+      "element_token": "s00000006:85",
+      "enabled": true,
+      "label": "Show “Untitled 2” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 86,
+      "element_token": "s00000006:86",
+      "enabled": true,
+      "label": "Untitled 3",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 87,
+      "element_token": "s00000006:87",
+      "enabled": true,
+      "label": "Show “Untitled 3” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 88,
+      "element_token": "s00000006:88",
+      "enabled": true,
+      "label": "Untitled 4",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 89,
+      "element_token": "s00000006:89",
+      "enabled": true,
+      "label": "Show “Untitled 4” in Finder",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 90,
+      "element_token": "s00000006:90",
+      "enabled": true,
+      "label": "Macintosh HD",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 91,
+      "element_token": "s00000006:91",
+      "enabled": true,
+      "label": "Clear Menu",
+      "parent_index": 29,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 92,
+      "element_token": "s00000006:92",
+      "enabled": true,
+      "label": "Force Quit…",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 93,
+      "element_token": "s00000006:93",
+      "enabled": true,
+      "label": "Force Quit Prism Launcher",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 94,
+      "element_token": "s00000006:94",
+      "enabled": true,
+      "label": "Restart…",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 95,
+      "element_token": "s00000006:95",
+      "enabled": true,
+      "label": "Restart",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 96,
+      "element_token": "s00000006:96",
+      "enabled": true,
+      "label": "Shut Down…",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 97,
+      "element_token": "s00000006:97",
+      "enabled": true,
+      "label": "Shut Down",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 98,
+      "element_token": "s00000006:98",
+      "enabled": true,
+      "label": "Lock Screen",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 99,
+      "element_token": "s00000006:99",
+      "enabled": true,
+      "label": "Log Out Felipe More…",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 100,
+      "element_token": "s00000006:100",
+      "enabled": true,
+      "label": "Log Out Felipe More",
+      "parent_index": 23,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 101,
+      "element_token": "s00000006:101",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 122.0,
+        "x": 43.0,
+        "y": 0.0
+      },
+      "label": "Prism Launcher",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 102,
+      "element_token": "s00000006:102",
+      "enabled": true,
+      "parent_index": 101,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 103,
+      "element_token": "s00000006:103",
+      "enabled": true,
+      "label": "About Prism Launcher",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 104,
+      "element_token": "s00000006:104",
+      "enabled": true,
+      "label": "Preferences...",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 105,
+      "element_token": "s00000006:105",
+      "enabled": true,
+      "label": "Update...",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 106,
+      "element_token": "s00000006:106",
+      "enabled": true,
+      "label": "Services",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 4,
+      "element_index": 107,
+      "element_token": "s00000006:107",
+      "enabled": true,
+      "parent_index": 106,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 108,
+      "element_token": "s00000006:108",
+      "enabled": true,
+      "label": "Ask Claude",
+      "parent_index": 107,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 109,
+      "element_token": "s00000006:109",
+      "enabled": true,
+      "label": "New Claude Code Session Here",
+      "parent_index": 107,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 110,
+      "element_token": "s00000006:110",
+      "enabled": true,
+      "label": "Send to Claude",
+      "parent_index": 107,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 111,
+      "element_token": "s00000006:111",
+      "enabled": true,
+      "label": "Services Settings…",
+      "parent_index": 107,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 112,
+      "element_token": "s00000006:112",
+      "enabled": true,
+      "label": "Hide Prism Launcher",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 113,
+      "element_token": "s00000006:113",
+      "enabled": true,
+      "label": "Hide Others",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 114,
+      "element_token": "s00000006:114",
+      "enabled": true,
+      "label": "Quit Prism Launcher",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 115,
+      "element_token": "s00000006:115",
+      "enabled": true,
+      "label": "Quit and Keep Windows",
+      "parent_index": 102,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 116,
+      "element_token": "s00000006:116",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 42.0,
+        "x": 164.0,
+        "y": 0.0
+      },
+      "label": "File",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 117,
+      "element_token": "s00000006:117",
+      "enabled": true,
+      "parent_index": 116,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 118,
+      "element_token": "s00000006:118",
+      "enabled": true,
+      "label": "Add Instance...",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 119,
+      "element_token": "s00000006:119",
+      "enabled": true,
+      "label": "Launch",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 4,
+      "element_index": 120,
+      "element_token": "s00000006:120",
+      "enabled": true,
+      "parent_index": 119,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 121,
+      "element_token": "s00000006:121",
+      "enabled": true,
+      "label": "Launch",
+      "parent_index": 120,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 122,
+      "element_token": "s00000006:122",
+      "enabled": true,
+      "label": "Launch Offline",
+      "parent_index": 120,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 123,
+      "element_token": "s00000006:123",
+      "enabled": true,
+      "label": "Launch Demo",
+      "parent_index": 120,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 124,
+      "element_token": "s00000006:124",
+      "enabled": true,
+      "label": "No Profiler",
+      "parent_index": 120,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 125,
+      "element_token": "s00000006:125",
+      "enabled": true,
+      "label": "Generic",
+      "parent_index": 120,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 126,
+      "element_token": "s00000006:126",
+      "enabled": true,
+      "label": "Edit...",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 127,
+      "element_token": "s00000006:127",
+      "enabled": true,
+      "label": "Change Group...",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 128,
+      "element_token": "s00000006:128",
+      "enabled": true,
+      "label": "Folder",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 129,
+      "element_token": "s00000006:129",
+      "enabled": true,
+      "label": "Export...",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 4,
+      "element_index": 130,
+      "element_token": "s00000006:130",
+      "enabled": true,
+      "parent_index": 129,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 131,
+      "element_token": "s00000006:131",
+      "enabled": true,
+      "label": "Prism Launcher (zip)",
+      "parent_index": 130,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 132,
+      "element_token": "s00000006:132",
+      "enabled": true,
+      "label": "Modrinth (mrpack)",
+      "parent_index": 130,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 133,
+      "element_token": "s00000006:133",
+      "enabled": true,
+      "label": "CurseForge (zip)",
+      "parent_index": 130,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 134,
+      "element_token": "s00000006:134",
+      "enabled": true,
+      "label": "Copy...",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 135,
+      "element_token": "s00000006:135",
+      "enabled": true,
+      "label": "Delete",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 136,
+      "element_token": "s00000006:136",
+      "enabled": true,
+      "label": "Create Shortcut",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 137,
+      "element_token": "s00000006:137",
+      "enabled": true,
+      "label": "Close Window",
+      "parent_index": 117,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 138,
+      "element_token": "s00000006:138",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 44.0,
+        "x": 205.0,
+        "y": 0.0
+      },
+      "label": "Edit",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 139,
+      "element_token": "s00000006:139",
+      "enabled": true,
+      "parent_index": 138,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 140,
+      "element_token": "s00000006:140",
+      "enabled": true,
+      "label": "AutoFill",
+      "parent_index": 139,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 4,
+      "element_index": 141,
+      "element_token": "s00000006:141",
+      "enabled": true,
+      "parent_index": 140,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 142,
+      "element_token": "s00000006:142",
+      "enabled": true,
+      "label": "Emoji & Symbols",
+      "parent_index": 139,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 143,
+      "element_token": "s00000006:143",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 50.0,
+        "x": 248.0,
+        "y": 0.0
+      },
+      "label": "View",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 144,
+      "element_token": "s00000006:144",
+      "enabled": true,
+      "parent_index": 143,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 145,
+      "element_token": "s00000006:145",
+      "enabled": true,
+      "label": "Themes",
+      "parent_index": 144,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 4,
+      "element_index": 146,
+      "element_token": "s00000006:146",
+      "enabled": true,
+      "parent_index": 145,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 147,
+      "element_token": "s00000006:147",
+      "enabled": true,
+      "label": "Fusion",
+      "parent_index": 146,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 148,
+      "element_token": "s00000006:148",
+      "enabled": true,
+      "label": "Windows 9x",
+      "parent_index": 146,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 149,
+      "element_token": "s00000006:149",
+      "enabled": true,
+      "label": "Bright",
+      "parent_index": 146,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 150,
+      "element_token": "s00000006:150",
+      "enabled": true,
+      "label": "Dark",
+      "parent_index": 146,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 151,
+      "element_token": "s00000006:151",
+      "enabled": true,
+      "label": "macOS",
+      "parent_index": 146,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 5,
+      "element_index": 152,
+      "element_token": "s00000006:152",
+      "enabled": true,
+      "label": "System",
+      "parent_index": 146,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 153,
+      "element_token": "s00000006:153",
+      "enabled": true,
+      "label": "Meow",
+      "parent_index": 144,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 154,
+      "element_token": "s00000006:154",
+      "enabled": true,
+      "label": "Status Bar",
+      "parent_index": 144,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 155,
+      "element_token": "s00000006:155",
+      "enabled": true,
+      "label": "Lock Toolbars",
+      "parent_index": 144,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 156,
+      "element_token": "s00000006:156",
+      "enabled": true,
+      "label": "Instance Toolbar",
+      "parent_index": 144,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 157,
+      "element_token": "s00000006:157",
+      "enabled": true,
+      "label": "News Toolbar",
+      "parent_index": 144,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 158,
+      "element_token": "s00000006:158",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 66.0,
+        "x": 297.0,
+        "y": 0.0
+      },
+      "label": "Folders",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 159,
+      "element_token": "s00000006:159",
+      "enabled": true,
+      "parent_index": 158,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 160,
+      "element_token": "s00000006:160",
+      "enabled": true,
+      "label": "Launcher Root",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 161,
+      "element_token": "s00000006:161",
+      "enabled": true,
+      "label": "Instances",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 162,
+      "element_token": "s00000006:162",
+      "enabled": true,
+      "label": "Central Mods",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 163,
+      "element_token": "s00000006:163",
+      "enabled": true,
+      "label": "Skins",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 164,
+      "element_token": "s00000006:164",
+      "enabled": true,
+      "label": "Java",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 165,
+      "element_token": "s00000006:165",
+      "enabled": true,
+      "label": "Icon Theme",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 166,
+      "element_token": "s00000006:166",
+      "enabled": true,
+      "label": "Widget Themes",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 167,
+      "element_token": "s00000006:167",
+      "enabled": true,
+      "label": "Cat Packs",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 168,
+      "element_token": "s00000006:168",
+      "enabled": true,
+      "label": "Instance Icons",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 169,
+      "element_token": "s00000006:169",
+      "enabled": true,
+      "label": "Logs",
+      "parent_index": 159,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 170,
+      "element_token": "s00000006:170",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 78.0,
+        "x": 362.0,
+        "y": 0.0
+      },
+      "label": "Accounts",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 171,
+      "element_token": "s00000006:171",
+      "enabled": true,
+      "parent_index": 170,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 172,
+      "element_token": "s00000006:172",
+      "enabled": true,
+      "label": "Ykkfelipe",
+      "parent_index": 171,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 173,
+      "element_token": "s00000006:173",
+      "enabled": true,
+      "label": "No Default Account",
+      "parent_index": 171,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 174,
+      "element_token": "s00000006:174",
+      "enabled": true,
+      "label": "Manage Accounts...",
+      "parent_index": 171,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 1,
+      "element_index": 175,
+      "element_token": "s00000006:175",
+      "enabled": true,
+      "frame": {
+        "h": 33.0,
+        "w": 49.0,
+        "x": 439.0,
+        "y": 0.0
+      },
+      "label": "Help",
+      "parent_index": 21,
+      "role": "AXMenuBarItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel"
+      ],
+      "depth": 2,
+      "element_index": 176,
+      "element_token": "s00000006:176",
+      "enabled": true,
+      "parent_index": 175,
+      "role": "AXMenu",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 177,
+      "element_token": "s00000006:177",
+      "enabled": true,
+      "label": "Clear Metadata Cache",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 178,
+      "element_token": "s00000006:178",
+      "enabled": true,
+      "label": "Report a Bug or Suggest a Feature",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 179,
+      "element_token": "s00000006:179",
+      "enabled": true,
+      "label": "View logs",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 180,
+      "element_token": "s00000006:180",
+      "enabled": true,
+      "label": "Install to PATH",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 181,
+      "element_token": "s00000006:181",
+      "enabled": true,
+      "label": "Matrix Space",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 182,
+      "element_token": "s00000006:182",
+      "enabled": true,
+      "label": "Discord Guild",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 183,
+      "element_token": "s00000006:183",
+      "enabled": true,
+      "label": "Subreddit",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 184,
+      "element_token": "s00000006:184",
+      "enabled": true,
+      "label": "More News...",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    },
+    {
+      "actions": [
+        "AXCancel",
+        "AXPress",
+        "AXPick"
+      ],
+      "depth": 3,
+      "element_index": 185,
+      "element_token": "s00000006:185",
+      "enabled": true,
+      "label": "Prism Launcher Wiki",
+      "parent_index": 176,
+      "role": "AXMenuItem",
+      "selected": false
+    }
+  ],
+  "elements_complete": false,
+  "pid": 20002,
+  "returned_element_count": 186,
+  "snapshot_id": "s00000006",
+  "total_element_count": 186,
+  "tree_markdown": "- [0] AXWindow \"Prism Launcher 11.1.0\" [actions=[raise]]\n      - [1] AXStaticText \"Play 1.21.1 Controlify Instance\" [id=Application.MainWindow.centralWidget.InstanceView actions=[press]]\n    - AXStaticText = \"Minecraft 1.21.1, last played on 2026-09-18 10:45 p.m. for 0min 37s, total played for 12min 39s\"\n    - AXStaticText = \"Total playtime: 12min 39s\"\n  - [2] AXButton \"Add Instance\" (Add a new instance.) [id=Application.MainWindow.mainToolBar.QToolButton actions=[press]]\n  - AXMenuButton \"Folders\" (Open one of the folders shared between instances.)\n  - [3] AXButton \"Settings\" (Change settings.) [id=Application.MainWindow.mainToolBar.QToolButton actions=[press]]\n  - AXMenuButton \"Help\" (Get help with Prism Launcher or Minecraft.)\n  - [4] AXButton \"Update\" (Check for new updates for Prism Launcher.) [id=Application.MainWindow.mainToolBar.QToolButton actions=[press]]\n  - [5] AXCheckBox \"Meow\" (It's a fluffy kitty :3) [id=Application.MainWindow.mainToolBar.QToolButton actions=[press,press]]\n  - AXMenuButton \"Ykkfelipe\" (Ykkfelipe)\n  - [6] AXButton \"More News\" (Open the development blog to read more news about Prism Launcher.) [id=Application.MainWindow.newsToolBar.QToolButton actions=[press]]\n  - [7] AXButton \"Prism Launcher Release 11.1.0\" [id=Application.MainWindow.newsToolBar.QToolButton actions=[press]]\n  - [8] AXMenuButton \"Launch\" (Launch the selected instance.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[showmenu]]\n  - AXButton \"Kill\" (Kill the running instance.)\n  - [9] AXButton \"Edit\" (Change the instance settings, mods and versions.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[press]]\n  - [10] AXButton \"Change Group\" (Change the selected instance's group.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[press]]\n  - [11] AXButton \"Folder\" (Open the selected instance's root folder in a file browser.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[press]]\n  - [12] AXMenuButton \"Export\" (Export the selected instance to supported formats.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[showmenu]]\n  - [13] AXButton \"Copy\" (Copy the selected instance.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[press]]\n  - [14] AXButton \"Delete\" (Delete the selected instance.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[press]]\n  - [15] AXButton \"Create Shortcut\" (Creates a shortcut on a selected folder to launch the selected instance.) [id=Application.MainWindow.instanceToolBar.ActionButton actions=[press]]\n  - [16] AXButton (Change the selected instance's icon.) [id=Application.MainWindow.instanceToolBar.changeIconButton actions=[press,raise]]\n  - [17] AXButton (Rename the selected instance.) [id=Application.MainWindow.instanceToolBar.renameButton actions=[press,raise]]\n  - [18] AXButton [actions=[press]]\n  - [19] AXButton [help=\"this button also has an action to zoom the window\" actions=[press,zoomwindow,showmenu]]\n  - [20] AXButton [actions=[press]]\n  - AXStaticText = \"Prism Launcher 11.1.0\"\n- [21] AXMenuBar [actions=[cancel]]\n  - [22] AXMenuBarItem \"Apple\" [actions=[cancel,press,pick]]\n    - [23] AXMenu [actions=[cancel]]\n      - [24] AXMenuItem \"About This Mac\" [id=_aboutThisMacRequested: actions=[cancel,press,pick]]\n      - [25] AXMenuItem \"System Information\" [id=_systemInformationRequested: actions=[cancel,press,pick]]\n      - [26] AXMenuItem \"System Settings…, 1 update\" [id=_systemSettingsRequested: actions=[cancel,press,pick]]\n      - [27] AXMenuItem \"App Store…, 4 updates\" [id=_appStoreRequested: actions=[cancel,press,pick]]\n      - [28] AXMenuItem \"Recent Items\" [id=_recentsRequested: actions=[cancel,press,pick]]\n        - [29] AXMenu [actions=[cancel]]\n          - AXMenuItem \"Applications\"\n          - [30] AXMenuItem \"AutoClaw\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [31] AXMenuItem \"Show “AutoClaw” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [32] AXMenuItem \"Calculator\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [33] AXMenuItem \"Show “Calculator” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [34] AXMenuItem \"ChatGPT\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [35] AXMenuItem \"Show “ChatGPT” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [36] AXMenuItem \"Claude\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [37] AXMenuItem \"Show “Claude” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [38] AXMenuItem \"Command Code\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [39] AXMenuItem \"Show “Command Code” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [40] AXMenuItem \"Google Chrome\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [41] AXMenuItem \"Show “Google Chrome” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [42] AXMenuItem \"Grok Bot\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [43] AXMenuItem \"Show “Grok Bot” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [44] AXMenuItem \"iPhone Mirroring\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [45] AXMenuItem \"Show “iPhone Mirroring” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [46] AXMenuItem \"Preview\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [47] AXMenuItem \"Show “Preview” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [48] AXMenuItem \"Prism Launcher\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [49] AXMenuItem \"Show “Prism Launcher” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [50] AXMenuItem \"System Settings\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [51] AXMenuItem \"Show “System Settings” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [52] AXMenuItem \"TextEdit\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [53] AXMenuItem \"Show “TextEdit” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [54] AXMenuItem \"ZCode\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [55] AXMenuItem \"Show “ZCode” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [56] AXMenuItem \"ZCode CUA Probe\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [57] AXMenuItem \"Show “ZCode CUA Probe” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [58] AXMenuItem \"ZCode Dev\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [59] AXMenuItem \"Show “ZCode Dev” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - AXMenuItem \"Documents\"\n          - [60] AXMenuItem \"20260920-140805-314b4618-506-pasted_text_20260920-140805.txt\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [61] AXMenuItem \"Show “20260920-140805-314b4618-506-pasted_text_20260920-140805.txt” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [62] AXMenuItem \"20260922-054001-acc6eab3-1b9-pasted_text_20260922-054001.txt\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [63] AXMenuItem \"Show “20260922-054001-acc6eab3-1b9-pasted_text_20260922-054001.txt” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [64] AXMenuItem \"20260922-054156-3ea5c1c6-163-pasted_text_20260922-054156.txt\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [65] AXMenuItem \"Show “20260922-054156-3ea5c1c6-163-pasted_text_20260922-054156.txt” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [66] AXMenuItem \"20260922-054527-d99b9760-781-pasted_text_20260922-054527.txt\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [67] AXMenuItem \"Show “20260922-054527-d99b9760-781-pasted_text_20260922-054527.txt” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [68] AXMenuItem \"20260922-054845-78d54892-cb7-pasted_text_20260922-054845.txt\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [69] AXMenuItem \"Show “20260922-054845-78d54892-cb7-pasted_text_20260922-054845.txt” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [70] AXMenuItem \"Codeex idea 1\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [71] AXMenuItem \"Show “Codeex idea 1” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [72] AXMenuItem \"Codex idea 2\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [73] AXMenuItem \"Show “Codex idea 2” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [74] AXMenuItem \"java\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [75] AXMenuItem \"Show “java” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [76] AXMenuItem \"LifeCraft-Embodiment-Architecture.html\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [77] AXMenuItem \"Show “LifeCraft-Embodiment-Architecture.html” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [78] AXMenuItem \"lifecraft-provider.secret\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [79] AXMenuItem \"Show “lifecraft-provider.secret” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [80] AXMenuItem \"Untitled\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [81] AXMenuItem \"Show “Untitled” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [82] AXMenuItem \"Untitled\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [83] AXMenuItem \"Show “Untitled” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [84] AXMenuItem \"Untitled 2\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [85] AXMenuItem \"Show “Untitled 2” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [86] AXMenuItem \"Untitled 3\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [87] AXMenuItem \"Show “Untitled 3” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [88] AXMenuItem \"Untitled 4\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [89] AXMenuItem \"Show “Untitled 4” in Finder\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - AXMenuItem \"Servers\"\n          - [90] AXMenuItem \"Macintosh HD\" [id=_recentItemRequested: actions=[cancel,press,pick]]\n          - [91] AXMenuItem \"Clear Menu\" [id=_clearRecentItemsRequested: actions=[cancel,press,pick]]\n      - [92] AXMenuItem \"Force Quit…\" [id=_forceQuitPanelRequested: actions=[cancel,press,pick]]\n      - [93] AXMenuItem \"Force Quit Prism Launcher\" [id=_forceQuitRequested: actions=[cancel,press,pick]]\n      - AXMenuItem \"Sleep\"\n      - [94] AXMenuItem \"Restart…\" [id=_restartRequested: actions=[cancel,press,pick]]\n      - [95] AXMenuItem \"Restart\" [id=_restartNowRequested: actions=[cancel,press,pick]]\n      - [96] AXMenuItem \"Shut Down…\" [id=_shutDownRequested: actions=[cancel,press,pick]]\n      - [97] AXMenuItem \"Shut Down\" [id=_shutDownNowRequested: actions=[cancel,press,pick]]\n      - [98] AXMenuItem \"Lock Screen\" [id=_lockScreenRequested: actions=[cancel,press,pick]]\n      - [99] AXMenuItem \"Log Out Felipe More…\" [id=_logOutRequested: actions=[cancel,press,pick]]\n      - [100] AXMenuItem \"Log Out Felipe More\" [id=_logOutNowRequested: actions=[cancel,press,pick]]\n  - [101] AXMenuBarItem \"Prism Launcher\" [actions=[cancel,press,pick]]\n    - [102] AXMenu [actions=[cancel]]\n      - [103] AXMenuItem \"About Prism Launcher\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [104] AXMenuItem \"Preferences...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [105] AXMenuItem \"Update...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [106] AXMenuItem \"Services\" [actions=[cancel,press,pick]]\n        - [107] AXMenu [actions=[cancel]]\n          - [108] AXMenuItem \"Ask Claude\" [id=_processRequest: actions=[cancel,press,pick]]\n          - [109] AXMenuItem \"New Claude Code Session Here\" [id=_processRequest: actions=[cancel,press,pick]]\n          - [110] AXMenuItem \"Send to Claude\" [id=_processRequest: actions=[cancel,press,pick]]\n          - [111] AXMenuItem \"Services Settings…\" [id=_configureServicesMenu: actions=[cancel,press,pick]]\n      - [112] AXMenuItem \"Hide Prism Launcher\" [id=hide: actions=[cancel,press,pick]]\n      - [113] AXMenuItem \"Hide Others\" [id=hideOtherApplications: actions=[cancel,press,pick]]\n      - AXMenuItem \"Show All\"\n      - [114] AXMenuItem \"Quit Prism Launcher\" [id=terminate: actions=[cancel,press,pick]]\n      - [115] AXMenuItem \"Quit and Keep Windows\" [id=NSAlternateQuitMenuItem actions=[cancel,press,pick]]\n  - [116] AXMenuBarItem \"File\" [actions=[cancel,press,pick]]\n    - [117] AXMenu [actions=[cancel]]\n      - [118] AXMenuItem \"Add Instance...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [119] AXMenuItem \"Launch\" [actions=[cancel,press,pick]]\n        - [120] AXMenu [actions=[cancel]]\n          - [121] AXMenuItem \"Launch\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [122] AXMenuItem \"Launch Offline\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [123] AXMenuItem \"Launch Demo\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [124] AXMenuItem \"No Profiler\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [125] AXMenuItem \"Generic\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - AXMenuItem \"JProfiler\"\n          - AXMenuItem \"VisualVM\"\n      - AXMenuItem \"Kill\"\n      - [126] AXMenuItem \"Edit...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [127] AXMenuItem \"Change Group...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [128] AXMenuItem \"Folder\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [129] AXMenuItem \"Export...\" [actions=[cancel,press,pick]]\n        - [130] AXMenu [actions=[cancel]]\n          - [131] AXMenuItem \"Prism Launcher (zip)\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [132] AXMenuItem \"Modrinth (mrpack)\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [133] AXMenuItem \"CurseForge (zip)\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [134] AXMenuItem \"Copy...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [135] AXMenuItem \"Delete\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [136] AXMenuItem \"Create Shortcut\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [137] AXMenuItem \"Close Window\" [id=qt_itemFired: actions=[cancel,press,pick]]\n  - [138] AXMenuBarItem \"Edit\" [actions=[cancel,press,pick]]\n    - [139] AXMenu [actions=[cancel]]\n      - AXMenuItem \"Undo Last Instance Deletion\"\n      - [140] AXMenuItem \"AutoFill\" [id=_NSMenuItemAutoFillIdentifier actions=[cancel,press,pick]]\n        - [141] AXMenu [actions=[cancel]]\n          - AXMenuItem \"Contact…\"\n          - AXMenuItem \"Passwords…\"\n          - AXMenuItem \"Credit Card…\"\n      - AXMenuItem \"Start Dictation\"\n      - [142] AXMenuItem \"Emoji & Symbols\" [id=orderFrontCharacterPalette: actions=[cancel,press,pick]]\n  - [143] AXMenuBarItem \"View\" [actions=[cancel,press,pick]]\n    - [144] AXMenu [actions=[cancel]]\n      - [145] AXMenuItem \"Themes\" [actions=[cancel,press,pick]]\n        - [146] AXMenu [actions=[cancel]]\n          - [147] AXMenuItem \"Fusion\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [148] AXMenuItem \"Windows 9x\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [149] AXMenuItem \"Bright\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [150] AXMenuItem \"Dark\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [151] AXMenuItem \"macOS\" [id=qt_itemFired: actions=[cancel,press,pick]]\n          - [152] AXMenuItem \"System\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [153] AXMenuItem \"Meow\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [154] AXMenuItem \"Status Bar\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [155] AXMenuItem \"Lock Toolbars\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [156] AXMenuItem \"Instance Toolbar\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [157] AXMenuItem \"News Toolbar\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - AXMenuItem \"Enter Full Screen\"\n  - [158] AXMenuBarItem \"Folders\" [actions=[cancel,press,pick]]\n    - [159] AXMenu [actions=[cancel]]\n      - [160] AXMenuItem \"Launcher Root\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [161] AXMenuItem \"Instances\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [162] AXMenuItem \"Central Mods\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [163] AXMenuItem \"Skins\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [164] AXMenuItem \"Java\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [165] AXMenuItem \"Icon Theme\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [166] AXMenuItem \"Widget Themes\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [167] AXMenuItem \"Cat Packs\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [168] AXMenuItem \"Instance Icons\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [169] AXMenuItem \"Logs\" [id=qt_itemFired: actions=[cancel,press,pick]]\n  - [170] AXMenuBarItem \"Accounts\" [actions=[cancel,press,pick]]\n    - [171] AXMenu [actions=[cancel]]\n      - [172] AXMenuItem \"Ykkfelipe\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [173] AXMenuItem \"No Default Account\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [174] AXMenuItem \"Manage Accounts...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n  - [175] AXMenuBarItem \"Help\" [actions=[cancel,press,pick]]\n    - [176] AXMenu [actions=[cancel]]\n      - [177] AXMenuItem \"Clear Metadata Cache\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [178] AXMenuItem \"Report a Bug or Suggest a Feature\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [179] AXMenuItem \"View logs\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [180] AXMenuItem \"Install to PATH\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [181] AXMenuItem \"Matrix Space\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [182] AXMenuItem \"Discord Guild\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [183] AXMenuItem \"Subreddit\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [184] AXMenuItem \"More News...\" [id=qt_itemFired: actions=[cancel,press,pick]]\n      - [185] AXMenuItem \"Prism Launcher Wiki\" [id=qt_itemFired: actions=[cancel,press,pick]]\n",
+  "window_id": 5262,
+  "window_title": "Prism Launcher 11.1.0"
+}

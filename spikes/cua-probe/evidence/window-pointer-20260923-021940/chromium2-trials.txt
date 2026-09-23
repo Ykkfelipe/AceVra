@@ -1,0 +1,8 @@
+Q-AX1|click|{"pid":11026,"element_token":"@AUTO","delivery_mode":"background"}
+Q-PXB1|click|{"pid":11026,"window_id":4995,"x":660,"y":196,"delivery_mode":"background"}
+Q-PXC1|click|{"pid":11026,"window_id":4995,"x":660,"y":438,"delivery_mode":"background"}
+Q-PXC2|click|{"pid":11026,"window_id":4995,"x":660,"y":438,"delivery_mode":"background"}
+Q-PXD1|click|{"pid":11026,"window_id":4995,"x":660,"y":948,"delivery_mode":"background"}
+Q-WHL1|scroll|{"pid":11026,"window_id":4995,"x":660,"y":672,"direction":"down","amount":3,"delivery_mode":"background"}
+Q-TXT1|type_text|{"pid":11026,"window_id":4995,"x":670,"y":854,"text":"zcua-marker","delivery_mode":"background"}
+Q-FG1|click|{"pid":11026,"window_id":4995,"x":660,"y":438,"delivery_mode":"foreground"}

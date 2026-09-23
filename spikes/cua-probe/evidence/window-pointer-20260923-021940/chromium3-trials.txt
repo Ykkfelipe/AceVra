@@ -1,0 +1,5 @@
+Q-AX2|click|{"pid":11026,"element_token":"@AUTO","delivery_mode":"background"}
+Q-WHL2|scroll|{"pid":11026,"window_id":4995,"x":660,"y":672,"direction":"down","amount":3,"delivery_mode":"background"}
+Q-WHL3|scroll|{"pid":11026,"window_id":4995,"x":660,"y":672,"direction":"down","amount":3,"delivery_mode":"background"}
+Q-DBL2|double_click|{"pid":11026,"window_id":4995,"x":660,"y":438,"delivery_mode":"background"}
+Q-PXC3|click|{"pid":11026,"window_id":4995,"x":660,"y":438,"delivery_mode":"background"}

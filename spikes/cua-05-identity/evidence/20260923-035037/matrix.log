@@ -1,0 +1,50 @@
+### persistence matrix at 2026-09-23T07:52:32Z
+### helper: /Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app
+### finder pid (harmless AX read target): 626
+----- baseline
+  baseline: bundle=dev.zcode.cua-helper.dev cdhash=b284522c91e5
+    ax=True srPreflight=True launcherPidArg=60362 parentPid=1 ppid=1
+    axRead={"ok": false, "targetPid": 626, "windowCount": 1, "windowTitle": "", "windowsStatus": 0}
+    capture={"blank": false, "distinctSampledColors": 42, "height": 956, "ok": true, "width": 1470}
+      signature: CandidateCDHashFullsha256=b284522c91e51ec4833f4c258e9742ac3497966e742b2a4aa8acb95cd8d37ae1
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+----- A-helper-restart
+  A-helper-restart: bundle=dev.zcode.cua-helper.dev cdhash=b284522c91e5
+    ax=True srPreflight=True launcherPidArg=60362 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=b284522c91e51ec4833f4c258e9742ac3497966e742b2a4aa8acb95cd8d37ae1
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- C-rebuild-same-identity
+  C-rebuild-same-identity: bundle=dev.zcode.cua-helper.dev cdhash=e62b809cb4be
+    ax=True srPreflight=True launcherPidArg=60362 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=e62b809cb4beba9c99d2133df60243c28779b65476e15626c2d9e614c5d974d5
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- D-reinstall-same-path
+  D-reinstall-same-path: bundle=dev.zcode.cua-helper.dev cdhash=24aff175aa86
+    ax=True srPreflight=True launcherPidArg=60362 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=24aff175aa86e2b54cc1b1382c82eba34f696aa26343e6dee87addaee63801f3
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- E-version-change
+  E-version-change: bundle=dev.zcode.cua-helper.dev cdhash=895bbf4f9e02
+    ax=True srPreflight=True launcherPidArg=60362 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=895bbf4f9e02358e7851267322dec5ca46e5aa03bc7a5f6f8f43870e4db6ae27
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+### building a second identity to model a requirement mismatch
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+      (now signed by the alternate identity, same bundle id and path)
+      designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"4dcf904dcee2baf81c5d4b484d826d4815b0c443"
+----- S-requirement-mismatch
+  S-requirement-mismatch: bundle=dev.zcode.cua-helper.dev cdhash=5ef4ddafc880
+    ax=False srPreflight=False launcherPidArg=60362 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=5ef4ddafc8801741b9828811f681db17af791d4cd61988ac9dedf3058390051d
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"4dcf904dcee2baf81c5d4b484d826d4815b0c443"
+### restoring the primary identity
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- S-restored
+  S-restored: bundle=dev.zcode.cua-helper.dev cdhash=895bbf4f9e02
+    ax=True srPreflight=True launcherPidArg=60362 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=895bbf4f9e02358e7851267322dec5ca46e5aa03bc7a5f6f8f43870e4db6ae27
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+### matrix complete

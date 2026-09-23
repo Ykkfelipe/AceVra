@@ -1,0 +1,1 @@
+{"actions":["AXPress","AXPress"],"attributeValue":"1","description":"It's a fluffy kitty :3","enabled":true,"identifier":"Application.MainWindow.mainToolBar.QToolButton","position":{"x":849,"y":169},"role":"AXCheckBox","size":{"h":42,"w":42},"title":"Meow","value":"1"}

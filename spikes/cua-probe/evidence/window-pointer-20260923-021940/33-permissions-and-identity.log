@@ -1,0 +1,75 @@
+### archived 2026-09-23T07:22:44Z
+### cua-driver --version
+cua-driver 0.28.2
+
+### check_permissions (read-only)
+{
+  "accessibility": true,
+  "direct_capture_error": null,
+  "direct_capture_status": "not_checked",
+  "screen_recording": true,
+  "screen_recording_capturable": null,
+  "source": {
+    "attribution": "caller",
+    "bundle_id": null,
+    "disclaim_env": true,
+    "executable": "/Users/felipemore/.zcode-fork-cua-home/tools/cua-driver-rs-0.28.2-darwin-arm64/cua-driver",
+    "note": "These booleans reflect the TCC identity of the app that launched this process (e.g. your terminal/IDE), NOT an installed CuaDriver app bundle. A standalone check can read `true` here while the driver's bundle has no grant. To grant for the driver, run `cua-driver permissions grant`.",
+    "pid": 10399,
+    "responsible_ppid": 10397
+  }
+}
+
+### permissions status --json
+{
+  "daemon_running": false,
+  "reason": "no CuaDriver daemon is running under the driver's own identity (com.trycua.driver), so its real TCC status can't be read from this process. Run `cua-driver permissions grant` to grant + verify.",
+  "status": "unknown"
+}
+
+### telemetry status
+Telemetry: disabled (source: persisted)
+Installation ID: 9046d282…
+Registration recorded: true
+Current release recorded: true
+
+### codesign of CuaDriver.app
+Identifier=com.trycua.driver
+CodeDirectory v=20500 size=62557 flags=0x10000(runtime) hashes=1944+7 location=embedded
+Authority=Developer ID Application: Cua AI, Inc. (YCK386LBJ7)
+Authority=Developer ID Certification Authority
+Authority=Apple Root CA
+Timestamp=Sep 15, 2026 at 5:51:45 PM
+Notarization Ticket=stapled
+TeamIdentifier=YCK386LBJ7
+
+### spctl assessment
+/Users/felipemore/.zcode-fork-cua-home/tools/cua-driver-rs-0.28.2-darwin-arm64/CuaDriver.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Cua AI, Inc. (YCK386LBJ7)
+
+### daemon process tree (launched by this session's shell)
+10397     1 ./cua-driver serve --no-permissions-gate
+10399 10397 ./cua-driver serve --no-permissions-gate
+
+### earlier daemon.log (from a PRIOR start attempt, kept for contrast)
+Cua Driver daemon listening on /Users/felipemore/.zcode-fork-cua-home/tools/driver.sock
+
+──────────────────────────────────────────────────────────────
+ cua-driver needs your permission before desktop tools can run
+──────────────────────────────────────────────────────────────
+
+ Missing TCC grant(s) for the Cua Driver app identity:
+   • Accessibility
+       lets cua-driver read the accessibility tree of running apps and send clicks / keystrokes via AX RPC.
+   • Screen Recording
+       lets cua-driver capture per-window screenshots so agents can see the current UI state alongside the tree.
+
+ Opening System Settings → Privacy & Security now.
+ Grant each item, then this prompt will auto-continue.
+
+ Skip this gate (CI / headless): re-run with
+   cua-driver serve --no-permissions-gate
+ or set CUA_DRIVER_RS_PERMISSIONS_GATE to 0/false/no/off
+ (case-insensitive) in the environment.
+

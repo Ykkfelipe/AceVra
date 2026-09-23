@@ -1,0 +1,120 @@
+ZCode CUA Probe — zero-inference primitive test suite
+run dir: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-012828
+host: 27.0 (arm64)
+probe: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe
+
+### attribution
+    probe.bundleId=dev.zcode.cua.probe
+    probe.executable=/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/build/ZCode CUA Probe.app/Contents/MacOS/ZCodeCuaProbe
+    probe.pid=59238
+    probe.parentPid=59236
+    accessibility.trusted=true
+    screenRecording.preflight=true
+    note: this run inherits the parent process TCC grant; see
+          evidence/attribution-own-identity.log for the standalone bundle.
+
+CALC_PID=58445 CALC_WIN=4256 TE_PID=57563
+
+================ TEST A — OBSERVATION ================
+
+--- A1: application enumeration (no TCC permission required) ---
+    apps enumerated: 11
+    latency: 36.0 ms
+
+--- A2: window enumeration + z-order (no TCC permission required) ---
+    windows enumerated: 12
+    latency: 48.8 ms
+
+--- A3: accessibility tree of a non-frontmost app ---
+    nodes: 249
+    latency: 136.7 ms
+
+================ TEST B — SEMANTIC ACTION ================
+
+--- B1: AXPress a known control, verify the resulting UI state ---
+    plan: AllClear, Seven, Add, Three, Equals -> display must read 7+3=10
+    B1.AllClear (AllClear): exit=1 error: no accessibility element matched the criteria
+    B1.Seven (Seven): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"7","enabled":true,"help":"","identifier":"Seven","position":{"x":295,"y":639},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"7","enabled":true,"help":"","identifier":"Seven","position":{"x":295,"y":639},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":3.2060146331787109}
+    B1.Add (Add): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"Add","enabled":true,"help":"","identifier":"Add","position":{"x":457,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"Add","enabled":true,"help":"","identifier":"Add","position":{"x":457,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":3.3590793609619141}
+    B1.Three (Three): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"3","enabled":true,"help":"","identifier":"Three","position":{"x":403,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"3","enabled":true,"help":"","identifier":"Three","position":{"x":403,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":2.3039579391479492}
+    B1.Equals (Equals): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"Equals","enabled":true,"help":"","identifier":"Equals","position":{"x":457,"y":801},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"Equals","enabled":true,"help":"","identifier":"Equals","position":{"x":457,"y":801},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":32.595038414001465}
+    display after 7+3= : '77 + 3|80'
+    display re-read      : '77 + 3|80'
+
+================ TEST C — BACKGROUND ================
+
+--- C0: bring a different app to the front (establish background condition) ---
+    frontmost is now: TextEdit (pid 57563)
+    top window owner: TextEdit
+
+--- C1: capture the target window while it is NOT frontmost ---
+
+### C1.capture
+    command: probe shot --window 4256 --out /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-012828/C1.calculator-window.png
+    out: {"height":816,"isOnScreen":true,"latencyMs":93.350052833557129,"ok":true,"out":"/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-012828/C1.calculator-window.png","owningApp":"Calculator","scale":2,"target":"window:4256","width":460,"windowFrame":{"h":408,"w":230,"x":285,"y":452}}
+    exit=0
+    env: {"frontmostBefore": [57563, "TextEdit"], "frontmostAfter": [57563, "TextEdit"], "frontmostChanged": false, "cursorBefore": [855.5, 7.5], "cursorAfter": [855.5, 7.5], "cursorChanged": false, "topWindowBefore": "TextEdit", "topWindowAfter": "TextEdit", "topWindowChanged": false}
+    png: {"height":816,"looksBlank":false,"meanB":47.185909526854218,"meanG":47.186447676896847,"meanR":47.186298486786022,"path":"/Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-012828/C1.calculator-window.png","stdB":34.273692563045159,"stdG":34.273948869803945,"stdR":34.273718667155968,"uniqueColorsSampled":279,"width":460}
+
+--- C2: semantic AX action on the non-frontmost target ---
+    C2.AllClear (AllClear): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"All Clear","enabled":true,"help":"","identifier":"AllClear","position":{"x":349,"y":585},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"All Clear","enabled":true,"help":"","identifier":"AllClear","position":{"x":349,"y":585},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":7.468104362487793}
+    C2.Two (Two): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"2","enabled":true,"help":"","identifier":"Two","position":{"x":349,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"2","enabled":true,"help":"","identifier":"Two","position":{"x":349,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":11.612892150878906}
+    C2.Add (Add): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"Add","enabled":true,"help":"","identifier":"Add","position":{"x":457,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"Add","enabled":true,"help":"","identifier":"Add","position":{"x":457,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":2.7240514755249023}
+    C2.Three (Three): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"3","enabled":true,"help":"","identifier":"Three","position":{"x":403,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"3","enabled":true,"help":"","identifier":"Three","position":{"x":403,"y":747},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":3.6320686340332031}
+    C2.Equals (Equals): exit=0 {"action":"AXPress","after":{"actions":["AXPress"],"description":"Equals","enabled":true,"help":"","identifier":"Equals","position":{"x":457,"y":801},"role":"AXButton","size":{"h":48,"w":48}},"axError":0,"axErrorName":"success","axSuccessIsNotProof":true,"before":{"actions":["AXPress"],"description":"Equals","enabled":true,"help":"","identifier":"Equals","position":{"x":457,"y":801},"role":"AXButton","size":{"h":48,"w":48}},"elementChanged":false,"latencyMs":15.384912490844727}
+    display after 2+3= : '2 + 3|5'
+    EXPECTED: 5
+
+--- C3: PID-routed keyboard to the non-frontmost target ---
+    key out: {"kind":"text","latencyMs":26.201009750366211,"ok":true,"pid":58445,"route":"CGEventPostToPid","text":"8"}
+    display after typing 81 via CGEventPostToPid: '81'
+    env: {"frontmostBefore": [57563, "TextEdit"], "frontmostAfter": [57563, "TextEdit"], "frontmostChanged": false, "cursorBefore": [855.5, 7.5], "cursorAfter": [855.5, 7.5], "cursorChanged": false, "topWindowBefore": "TextEdit", "topWindowAfter": "TextEdit", "topWindowChanged": false}
+
+--- C4: PID-routed coordinate click on the non-frontmost target ---
+    AllClear button centre: <not found>
+
+================ TEST D — FOREGROUND ================
+
+--- D1: explicit activation, then a global coordinate click ---
+
+### D1.activate
+    command: probe activate --pid 58445
+    out: {"latencyMs":23.500919342041016,"name":"Calculator","ok":true,"pid":58445}
+    exit=0
+    env: {"frontmostBefore": [57563, "TextEdit"], "frontmostAfter": [58445, "Calculator"], "frontmostChanged": true, "cursorBefore": [855.5, 7.5], "cursorAfter": [855.5, 7.5], "cursorChanged": false, "topWindowBefore": "TextEdit", "topWindowAfter": "Calculator", "topWindowChanged": true}
+    Seven button centre: 319,663
+
+### D1.globalclick
+    command: probe global-click --x 319 --y 663
+    out: {"button":"left","kind":"global-click","ok":true,"route":"CGEventPost(cghidEventTap)","x":319,"y":663}
+    exit=0
+    env: {"frontmostBefore": [58445, "Calculator"], "frontmostAfter": [58445, "Calculator"], "frontmostChanged": false, "cursorBefore": [855.5, 7.5], "cursorAfter": [319, 663], "cursorChanged": true, "topWindowBefore": "Calculator", "topWindowAfter": "Calculator", "topWindowChanged": false}
+    display after global click: '817'
+
+--- D2: foreground hotkey (Cmd+1 selects Calculator's basic mode menu) ---
+
+### D2.hotkey
+    command: probe hotkey --keycode 18 --modifiers cmd
+    out: {"keycode":18,"kind":"hotkey","ok":true,"route":"CGEventPost(cghidEventTap)"}
+    exit=0
+    env: {"frontmostBefore": [58445, "Calculator"], "frontmostAfter": [58445, "Calculator"], "frontmostChanged": false, "cursorBefore": [319, 663], "cursorAfter": [319, 663], "cursorChanged": false, "topWindowBefore": "Calculator", "topWindowAfter": "Calculator", "topWindowChanged": false}
+    (keycode 18 = '1' with Command; verifies global key posting does not error)
+
+--- D3: foreground typing into TextEdit ---
+
+### D3.type
+    command: probe type-global --text zcode cua probe 42
+    out: {"kind":"global-text","ok":true,"route":"CGEventPost(cghidEventTap)","text":"zcode cua probe 42"}
+    exit=0
+    env: {"frontmostBefore": [58445, "Calculator"], "frontmostAfter": [58445, "Calculator"], "frontmostChanged": false, "cursorBefore": [319, 663], "cursorAfter": [319, 663], "cursorChanged": false, "topWindowBefore": "Calculator", "topWindowAfter": "Calculator", "topWindowChanged": false}
+    TextEdit text areas:
+
+================ TEST E — USER INTERRUPTION ================
+
+--- E1: listen-only event tap sees our own synthetic events ---
+    Watching 3s while injecting PID-routed keys; synthetic count proves
+    self-identification works, physical count proves the tap is live.
+    watch: {"axTrusted":true,"ok":true,"physicalByType":{},"physicalEvents":0,"seconds":3,"syntheticEvents":0}
+
+================ SUITE COMPLETE ================
+evidence: /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-probe/evidence/run-20260923-012828

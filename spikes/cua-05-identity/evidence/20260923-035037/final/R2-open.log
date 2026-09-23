@@ -1,0 +1,19 @@
+### label=R2-open mode=open at 2026-09-23T08:06:43Z
+### helper bundle: /Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app
+### helper source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+### helper binary sha256: 4398e3e4dca35bbf74e3d93e195c9982d0ca1bc34b584b06ad865be6417e8fc5
+### launch command: /usr/bin/open -n <bundle> --args --launcher-pid <this shell> --report /Users/felipemore/Projects/ZCode-Fork-cua/spikes/cua-05-identity/evidence/20260923-035037/final/R2-open.report.json
+### ancestry of this harness, with the identity each pid resolves to:
+    pid=70482 comm=bash bundleId=<none>
+    pid=70381 comm=/bin/zsh bundleId=<none>
+    pid=51877 comm=zcode-cli bundleId=dev.zcode.app.helper
+    pid=51866 comm=zcode-host-local-1 bundleId=dev.zcode.app.helper
+    pid=51690 comm=ZCode bundleId=dev.zcode.app
+### open exit=0
+### helper process tree at observation time:
+### helper bundle signature:
+    Identifier=dev.zcode.cua-helper.dev
+    CandidateCDHashFull sha256=95bd8c2ad7c08847edd8652b97708d1fa27f0fe853267776071932eb3d03d52c
+    Authority=ZCode CUA Dev Signing
+    TeamIdentifier=not set
+    designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"

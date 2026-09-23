@@ -1,0 +1,8 @@
+{"bounds":{"h":33,"w":1470,"x":0,"y":0},"id":6,"layer":24,"onScreen":true,"owner":"Window Server","pid":399,"title":"Menubar","zOrder":0}
+{"bounds":{"h":956,"w":1470,"x":0,"y":0},"id":15,"layer":20,"onScreen":true,"owner":"Dock","pid":616,"title":"Dock","zOrder":1}
+{"bounds":{"h":505,"w":603,"x":146,"y":71},"id":4405,"layer":0,"onScreen":true,"owner":"TextEdit","pid":57563,"title":"Untitled","zOrder":2}
+{"bounds":{"h":408,"w":230,"x":285,"y":452},"id":4256,"layer":0,"onScreen":true,"owner":"Calculator","pid":58445,"title":"Calculator","zOrder":3}
+{"bounds":{"h":800,"w":1200,"x":135,"y":33},"id":3631,"layer":0,"onScreen":true,"owner":"ZCode","pid":76484,"title":"ZCode","zOrder":4}
+{"bounds":{"h":180,"w":180,"x":188,"y":41},"id":38,"layer":-2147483601,"onScreen":true,"owner":"Notification Centre","pid":679,"title":"com.apple.weather::com.apple.weather.widget:com.apple.weather","zOrder":5}
+{"bounds":{"h":180,"w":180,"x":8,"y":41},"id":37,"layer":-2147483601,"onScreen":true,"owner":"Notification Centre","pid":679,"title":"Month","zOrder":6}
+{"bounds":{"h":180,"w":360,"x":8,"y":221},"id":36,"layer":-2147483601,"onScreen":true,"owner":"Notification Centre","pid":679,"title":"Featured","zOrder":7}

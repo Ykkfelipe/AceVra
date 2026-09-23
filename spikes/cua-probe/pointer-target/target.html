@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CUA-B0-K0-P0-S0-Cnone-M0-N0</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #ffffff;
+               overflow: hidden; }
+  #btn     { position: absolute; left: 5%;  top: 4%;  width: 90%; height: 20%;
+             background: #ff00aa; border: 0; color: #fff;
+             font: 700 24px -apple-system, sans-serif; }
+  #cv      { position: absolute; left: 5%;  top: 28%; width: 90%; height: 24%;
+             background: #101018; }
+  #scroll  { position: absolute; left: 5%;  top: 56%; width: 90%; height: 18%;
+             overflow-y: scroll; border: 3px solid #000; font: 500 18px -apple-system, sans-serif; }
+  #field   { position: absolute; left: 5%;  top: 78%; width: 90%; height: 11%;
+             font: 500 20px -apple-system, sans-serif; border: 3px solid #000;
+             background: #ffff00; }
+  .tall    { height: 700px; padding: 6px; }
+</style>
+</head>
+<body>
+<!--
+  Deterministic background-input target, split into surfaces that force the
+  driver's different routes on ONE window:
+
+    #btn    HTML button                  -> AXButton with AXPress      (AX route)
+    #cv     <canvas aria-hidden="true">  -> removed from the AX tree:
+                                            AX hit-testing at this point can
+                                            only resolve the non-actionable
+                                            AXWebArea, so a click here must be
+                                            delivered by the pointer route.
+    #scroll overflow:auto div            -> nested scroller, never keyboard
+                                            focusable                    (wheel route)
+    #field  <input type=text>            -> text entry                 (keyboard route)
+    dead zone (white gap at the bottom)  -> document-level click handler, no AX
+                                            child at all                 (pointer route)
+
+  Everything observable is republished in document.title so an external observer
+  reads the true state through CGWindowList with no automation API involved:
+
+    CUA-B<button>-K<canvas>-P<page>-S<scrollTop>-C<x>x<y>[-H]-M<moves>-N<chars>
+
+  -H marks a click preceded by a pointer journey over the clicked element: how a
+  human click presents itself. Its absence marks a click that materialised on the
+  element with no journey — how an injected background click presents itself.
+-->
+<button id="btn" type="button">BUTTON</button>
+<canvas id="cv" width="740" height="240" aria-hidden="true"></canvas>
+<div id="scroll"><div class="tall">
+  <p>scroll line 1</p><p>scroll line 2</p><p>scroll line 3</p><p>scroll line 4</p>
+  <p>scroll line 5</p><p>scroll line 6</p><p>scroll line 7</p><p>scroll line 8</p>
+  <p>scroll line 9</p><p>scroll line 10</p><p>scroll line 11</p><p>scroll line 12</p>
+</div></div>
+<input id="field" type="text" value="">
+<script>
+  var bClicks = 0, kClicks = 0, pClicks = 0, scrollTop = 0, chars = 0;
+  var moves = 0, last = 'none', lastHadMove = false, movedSinceLast = false;
+
+  var btn = document.getElementById('btn');
+  var cv = document.getElementById('cv');
+  var cx = cv.getContext('2d');
+  var scroller = document.getElementById('scroll');
+  var field = document.getElementById('field');
+
+  function drawCanvas() {
+    cx.fillStyle = kClicks === 0 ? '#101018' : '#00aa44';
+    cx.fillRect(0, 0, cv.width, cv.height);
+    cx.fillStyle = '#ffffff';
+    cx.font = '700 40px -apple-system, sans-serif';
+    cx.fillText('CANVAS ' + kClicks, 24, 70);
+    cx.font = '500 22px -apple-system, sans-serif';
+    cx.fillText('page clicks ' + pClicks, 24, 120);
+    cx.fillText('last ' + last, 24, 160);
+  }
+
+  function render() {
+    document.title = 'CUA-B' + bClicks + '-K' + kClicks + '-P' + pClicks + '-S' +
+                     Math.round(scrollTop) + '-C' + last + (lastHadMove ? '-H' : '') +
+                     '-M' + moves + '-N' + chars;
+    btn.style.background = bClicks === 0 ? '#ff00aa' : '#0066cc';
+    drawCanvas();
+  }
+
+  function note(e) {
+    last = Math.round(e.screenX) + 'x' + Math.round(e.screenY);
+    lastHadMove = movedSinceLast;
+    movedSinceLast = false;
+  }
+
+  ['pointermove', 'mousemove'].forEach(function (t) {
+    cv.addEventListener(t, function () { moves++; movedSinceLast = true; render(); });
+  });
+
+  btn.addEventListener('click', function (e) { bClicks++; note(e); render(); });
+  cv.addEventListener('click',  function (e) { kClicks++; note(e); render(); });
+  // Any click that no specific handler claimed (canvas, dead zone, padding)
+  // lands here, so the pointer route has an observable postcondition.
+  document.addEventListener('click', function (e) {
+    if (e.target === btn) return;
+    if (e.target === field) return;
+    if (scroller.contains(e.target)) return;
+    pClicks++; note(e); render();
+  });
+  scroller.addEventListener('scroll', function () { scrollTop = scroller.scrollTop; render(); });
+  field.addEventListener('input', function (e) { chars = e.target.value.length; render(); });
+
+  render();
+</script>
+</body>
+</html>

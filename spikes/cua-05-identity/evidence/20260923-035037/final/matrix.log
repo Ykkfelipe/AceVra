@@ -1,0 +1,71 @@
+### persistence matrix at 2026-09-23T08:06:53Z
+### helper: /Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app
+### finder pid (harmless AX read target): 626
+----- baseline
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789 --capture --ax-read-pid 626 --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: 4398e3e4dca35bbf74e3d93e195c9982d0ca1bc34b584b06ad865be6417e8fc5
+  baseline: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0
+    ax=True srPreflight=True launcherPidArg=70789 parentPid=1 ppid=1
+    axRead={"ok": true, "targetPid": 626, "titleOk": false, "windowCount": 1, "windowTitle": "", "windowsStatus": 0}
+    capture={"blank": false, "distinctSampledColors": 43, "height": 956, "ok": true, "width": 1470}
+      signature: CandidateCDHashFullsha256=95bd8c2ad7c08847edd8652b97708d1fa27f0fe853267776071932eb3d03d52c
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+----- A-helper-restart
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789  --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: 4398e3e4dca35bbf74e3d93e195c9982d0ca1bc34b584b06ad865be6417e8fc5
+  A-helper-restart: bundle=dev.zcode.cua-helper.dev cdhash=95bd8c2ad7c0
+    ax=True srPreflight=True launcherPidArg=70789 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=95bd8c2ad7c08847edd8652b97708d1fa27f0fe853267776071932eb3d03d52c
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- C-rebuild-same-identity
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789  --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: e4fb8335f8085f874f7f29fdc12752dce2cb66dc98c96656b7c02b189ecdb8e0
+  C-rebuild-same-identity: bundle=dev.zcode.cua-helper.dev cdhash=78216b222a94
+    ax=True srPreflight=True launcherPidArg=70789 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=78216b222a94a4753f90ec38f87a05926dde8aa2a06ea75c377a8be3338c8bf5
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- D-reinstall-same-path
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789  --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: 0f86fe7904af6c56069b3f925e7c0b31f1772defb27a2927fb261c07fe90185a
+  D-reinstall-same-path: bundle=dev.zcode.cua-helper.dev cdhash=f01581311e61
+    ax=True srPreflight=True launcherPidArg=70789 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=f01581311e616c065091908828481e2e6a117bbd88143075ccc6ca2e460431a1
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- E-version-change
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789  --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: 9a4421e9a2cc374ce1f975b8a3af1719aec034f54ed6878ed84e069aade6ea7f
+  E-version-change: bundle=dev.zcode.cua-helper.dev cdhash=8acace10995d
+    ax=True srPreflight=True launcherPidArg=70789 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=8acace10995d4024b824ad11c8c450a9128515bf801febfe03f8c1af43b155ca
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+### building a second identity to model a requirement mismatch
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+      (now signed by the alternate identity, same bundle id and path)
+      designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"4dcf904dcee2baf81c5d4b484d826d4815b0c443"
+----- S-requirement-mismatch
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789  --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: 80f27d33968796bbe9de02140a4fb66b393e1cc52e683299a6c2e7fd61fd2dcd
+  S-requirement-mismatch: bundle=dev.zcode.cua-helper.dev cdhash=636ec56cdadf
+    ax=False srPreflight=False launcherPidArg=70789 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=636ec56cdadfdd6b54f6732ecfb078ce7e87b8d2e7eb2ecaee2dcbe30ed94819
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"4dcf904dcee2baf81c5d4b484d826d4815b0c443"
+### restoring the primary identity
+/Users/felipemore/.zcode-fork-cua-home/.zcode/computer-use/dev/ZCode Computer Use Dev.app: replacing existing signature
+----- S-restored
+      launch: /usr/bin/open -n <bundle> --args --launcher-pid 70789  --report <report>
+      source sha256: f816681e87eb08f310d3c6e6366836a79b8058441ca1a6341938b7024a66fd6d
+      binary sha256: df3bf703cca662737b4f3149ef543e10b03565ed39a40afe486b1a26f966d984
+  S-restored: bundle=dev.zcode.cua-helper.dev cdhash=8acace10995d
+    ax=True srPreflight=True launcherPidArg=70789 parentPid=1 ppid=1
+      signature: CandidateCDHashFullsha256=8acace10995d4024b824ad11c8c450a9128515bf801febfe03f8c1af43b155ca
+      requirement: designated => identifier "dev.zcode.cua-helper.dev" and certificate root = H"f89ef7752a4e905bb19c2530e837809c0f2055f2"
+### matrix complete

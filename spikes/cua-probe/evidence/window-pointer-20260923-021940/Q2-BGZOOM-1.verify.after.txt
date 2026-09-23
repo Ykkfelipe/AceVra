@@ -1,0 +1,2 @@
+{"actions":["AXRaise"],"position":{"x":0,"y":33},"role":"AXWindow","size":{"h":874,"w":1470},"subrole":"AXStandardWindow","title":"Prism Launcher 11.1.0"}
+{"actions":["AXRaise"],"position":{"x":0,"y":33},"role":"AXWindow","size":{"h":874,"w":1470},"subrole":"AXStandardWindow","title":"Prism Launcher 11.1.0"}

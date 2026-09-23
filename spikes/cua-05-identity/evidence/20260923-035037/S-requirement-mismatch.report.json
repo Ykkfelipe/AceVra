@@ -1,0 +1,98 @@
+{
+  "apps" : [
+    {
+      "active" : false,
+      "bundleId" : "com.apple.finder",
+      "name" : "Finder",
+      "pid" : 626
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.Preview",
+      "name" : "Preview",
+      "pid" : -1
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.Notes",
+      "name" : "Notes",
+      "pid" : 31237
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.ActivityMonitor",
+      "name" : "Activity Monitor",
+      "pid" : 82861
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.Terminal",
+      "name" : "Terminal",
+      "pid" : 22619
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.TextEdit",
+      "name" : "TextEdit",
+      "pid" : 57563
+    },
+    {
+      "active" : true,
+      "bundleId" : "com.openai.codex",
+      "name" : "ChatGPT",
+      "pid" : 95865
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.calculator",
+      "name" : "Calculator",
+      "pid" : 18327
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.google.Chrome",
+      "name" : "Google Chrome",
+      "pid" : 30929
+    },
+    {
+      "active" : false,
+      "bundleId" : "dev.zcode.app",
+      "name" : "ZCode",
+      "pid" : 51690
+    },
+    {
+      "active" : false,
+      "bundleId" : "com.apple.systempreferences",
+      "name" : "System Settings",
+      "pid" : 59228
+    }
+  ],
+  "identity" : {
+    "bundleId" : "dev.zcode.cua-helper.dev",
+    "bundlePath" : "\/Users\/felipemore\/.zcode-fork-cua-home\/.zcode\/computer-use\/dev\/ZCode Computer Use Dev.app",
+    "cdHash" : "5ef4ddafc8801741b9828811f681db17af791d4c",
+    "designatedRequirement" : "identifier \"dev.zcode.cua-helper.dev\" and certificate root = H\"4dcf904dcee2baf81c5d4b484d826d4815b0c443\"",
+    "executablePath" : "\/Users\/felipemore\/.zcode-fork-cua-home\/.zcode\/computer-use\/dev\/ZCode Computer Use Dev.app\/Contents\/MacOS\/ZCodeComputerUseDev",
+    "pid" : 60787,
+    "ppid" : 1
+  },
+  "launch" : {
+    "argv" : [
+      "\/Users\/felipemore\/.zcode-fork-cua-home\/.zcode\/computer-use\/dev\/ZCode Computer Use Dev.app\/Contents\/MacOS\/ZCodeComputerUseDev",
+      "--launcher-pid",
+      "60362",
+      "--report",
+      "\/Users\/felipemore\/Projects\/ZCode-Fork-cua\/spikes\/cua-05-identity\/evidence\/20260923-035037\/S-requirement-mismatch.report.json"
+    ],
+    "launcherPidArg" : 60362,
+    "parentPid" : 1
+  },
+  "permissions" : {
+    "accessibility" : false,
+    "osMajor" : 27,
+    "platform" : "Version 27.0 (Build 26A428)",
+    "screenCapturePreflight" : false
+  },
+  "probe" : "cua-helper-dev",
+  "schemaVersion" : 1
+}

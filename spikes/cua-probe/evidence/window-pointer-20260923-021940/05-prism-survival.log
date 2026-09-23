@@ -1,0 +1,15 @@
+### relaunch Prism via cua-driver launch_app at 2026-09-23T06:22:06Z
+{
+  "bundle_id": "org.prismlauncher.PrismLauncher",
+  "launch_state": {
+    "process_running": true,
+    "requested": true,
+    "window_ready": false
+  },
+  "name": "Prism Launcher",
+  "pid": 3675,
+  "self_activation_suppressed": true,
+  "windows": []
+}
+t=2026-09-23T06:22:13Z frontmost=com.zhipuai.autoclaw(pid 51942) cursor=(1221.1,810.3) topWin=AutoClaw(pid 51942) axTrusted=True
+PRISM GONE at 2026-09-23T06:22:13Z
