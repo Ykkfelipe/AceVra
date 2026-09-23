@@ -25,7 +25,6 @@ import {
   buildStreamingTextRow,
   CodexRowLog,
   isToolItemKind,
-  rowBase,
 } from "./codexRowLog.js";
 import { buildCodexArtifactRow, CodexTurnDeliveryTracker } from "./codexDelivery.js";
 import { buildReplayedHistoryRow } from "./codexRowLog.js";
@@ -359,7 +358,6 @@ export class CodexThreadProjection {
     const turnId = "codex-history";
     const existingRowId = entityId ? this.#log.rowIdOfEntity(entityId) : undefined;
     const existing = existingRowId !== undefined ? this.#log.rowAt(existingRowId) : undefined;
-    const failed = item.status != null && /fail|error/i.test(item.status);
     const row = buildReplayedHistoryRow({
       item,
       existing,

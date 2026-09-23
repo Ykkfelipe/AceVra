@@ -34,20 +34,14 @@ import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { CODEX_METHODS, scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
 import { codexUnroutableApprovalResponse } from "#src/codex/domain/codexApprovals.js";
 import type { ITaskArtifactRegistry } from "#src/task-artifacts/contract.js";
-import {
-  deliverUserNamedCodexArtifacts,
-  reanchorRegisteredArtifactsAfterRebuild,
-} from "./codexDeliveryIntegration.js";
+import { deliverUserNamedCodexArtifacts } from "./codexDeliveryIntegration.js";
 import { toCodexTaskBinding } from "#src/codex/domain/codexBinding.js";
 import type { CodexExecutionPolicy } from "#src/codex/domain/codexPolicy.js";
-import { CodexThreadProjection } from "#src/codex/domain/codexProjection.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
 import {
   CodexTaskRuntime,
   ensureRuntimeForTask,
   extractCodexTurnId,
-  rebuildProjectionFromCodex,
-  resumeCodexThread,
   routeCodexNotification,
   selectRuntimeForNotification,
   startCodexThread,

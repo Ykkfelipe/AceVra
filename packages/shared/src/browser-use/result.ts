@@ -98,7 +98,27 @@ export const browserCommandResultSchema = z
     state: browserPageStateSchema.optional(),
     snapshot: browserSnapshotSchema.optional(),
     image: z
-      .object({ base64: z.string(), mimeType: z.literal("image/png") })
+      .object({
+        // Electron currently returns base64. A host executor that materializes a
+        // screenshot may instead expose hostPath; it is host-only input to the
+        // task-artifact registry and must never be sent through artifact APIs.
+        base64: z.string().min(1).optional(),
+        hostPath: z.string().min(1).optional(),
+        fileName: z.string().min(1).optional(),
+        mimeType: z.literal("image/png"),
+      })
+      .refine((image) => image.base64 !== undefined || image.hostPath !== undefined, {
+        message: "screenshot image requires base64 or hostPath",
+      })
+      .strict()
+      .optional(),
+    /**
+     * Host-authored delivery outcome for a screenshot whose bytes were stored
+     * as a task artifact. It is deliberately opaque: no artifact id or host
+     * path crosses the browser control result boundary.
+     */
+    artifactDelivery: z
+      .object({ status: z.enum(["delivered", "registration_failed"]) })
       .strict()
       .optional(),
     /** list 命令返回：只包含当前 window/workspace/session/generation scope 可见的 tabs。 */

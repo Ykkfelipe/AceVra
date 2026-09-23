@@ -117,8 +117,8 @@ function buildInjectedGlobals(
           // backend 可能无法及时响应 abort。reset 后的迟到结果不能污染新 cell 的 response meta，
           // 也不能让旧 JS continuation 获得新 generation 仍在使用的 tab 结果。
           assertCurrentRuntime();
-          if (result.ok && command.method === "screenshot" && result.image) {
-            onBrowserScreenshot(result.image);
+          if (result.ok && command.method === "screenshot" && result.image?.base64) {
+            onBrowserScreenshot({ base64: result.image.base64, mimeType: result.image.mimeType });
           }
           if (result.meta) {
             const meta = result.meta;

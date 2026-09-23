@@ -499,7 +499,15 @@ export interface BrowserCommandResult {
   ok: boolean;
   state?: BrowserPageState;
   snapshot?: BrowserSnapshot;
-  image?: { base64: string; mimeType: "image/png" };
+  /** Base64 is Electron's current result; hostPath is consumed and stripped by the host artifact hook. */
+  image?: {
+    base64?: string;
+    hostPath?: string;
+    fileName?: string;
+    mimeType: "image/png";
+  };
+  /** Opaque host-authored screenshot delivery outcome; never contains a filesystem path or artifact id. */
+  artifactDelivery?: { status: "delivered" | "registration_failed" };
   /** list 命令返回：当前会话窗口下所有受控 tab 的摘要。 */
   tabs?: BrowserTabSummary[];
   userTabs?: BrowserUserTabInfo[];

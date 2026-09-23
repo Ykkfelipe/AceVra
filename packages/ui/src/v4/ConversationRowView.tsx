@@ -183,6 +183,7 @@ const ArtifactRowView = memo(function ArtifactRowView({
         <TaskArtifactCard
           artifact={descriptor}
           workspacePath={context.workspacePath}
+          {...(context.workspaceIdentity ? { workspaceIdentity: context.workspaceIdentity } : {})}
           layout="row"
         />
       </div>
