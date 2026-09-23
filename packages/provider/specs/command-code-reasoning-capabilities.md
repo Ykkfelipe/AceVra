@@ -12,9 +12,10 @@ provider-managed configuration and therefore remain hidden by `isProviderManaged
 ## Ownership and boundary
 
 `packages/provider/src/command-code-reasoning-capabilities.ts` owns the reviewed catalogue and
-the shared request map. The synchronizer is the sole writer for this metadata in the user-scoped
-`provider_config.json`; it updates only exact `command-code` model rules already present in that
-configuration. It does not create models, alter provider credentials, or touch another provider.
+the shared request map. The synchronizer is the sole writer for this metadata in the active
+data-root `provider_config.json`; it updates only exact `command-code` model rules already present
+in that configuration. It does not create models, alter provider credentials, or touch another
+provider.
 
 ```
 reviewed manifest -> synchronizer -> personal provider model rules -> resolver -> composer

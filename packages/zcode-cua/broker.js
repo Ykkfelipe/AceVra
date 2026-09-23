@@ -32,11 +32,6 @@ export const DEFAULT_EXPECTED_HELPER_IDENTIFIERS = Object.freeze([
   // Imported rather than retyped: a rename in the producer must not silently orphan this list.
   HELPER_BUNDLE_ID,
   DEV_CUA_HELPER_BUNDLE_ID,
-  // Reserved AceVra identities (see specs/computer-use.md "Development and production identities").
-  // Those live in `build-dev-helper.mjs`, a build script that is not importable from here, so they
-  // are declared once more with that file named as their source.
-  "dev.acevra.cua-helper",
-  "dev.acevra.cua-helper.development",
 ]);
 
 /**

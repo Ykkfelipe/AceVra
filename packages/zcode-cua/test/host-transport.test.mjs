@@ -31,7 +31,7 @@ import {
   verifyPeerProbe,
 } from "../host-transport.js";
 
-const HELPER_ID = "dev.zcode.cua-helper.dev";
+const HELPER_ID = "dev.acevra.cua-helper.development";
 const HOST_REQUIREMENT = 'identifier "test.host" and certificate root = H"host"';
 const HELPER_REQUIREMENT = 'identifier "test.helper" and certificate root = H"helper"';
 const OBSERVATION_DIR = "/x/observations";

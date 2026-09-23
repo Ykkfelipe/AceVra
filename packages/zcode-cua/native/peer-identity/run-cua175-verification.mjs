@@ -54,8 +54,8 @@ const argValue = (name, fallback) =>
 
 const CUA_HOME = process.env.ZCODE_CUA_HOME?.trim() || join(homedir(), ".zcode-fork-cua-home");
 const ZCODE_HOME = process.env.ZCODE_HOME?.trim() || join(CUA_HOME, ".zcode");
-const APP = join(ZCODE_HOME, "computer-use/dev/ZCode Computer Use Dev.app");
-const EXE = join(APP, "Contents/MacOS/ZCodeComputerUseDev");
+const APP = join(ZCODE_HOME, "computer-use/dev/AceVra Computer Use Dev.app");
+const EXE = join(APP, "Contents/MacOS/AceVraComputerUseDev");
 const PROBE = join(ZCODE_HOME, "computer-use/dev/peer-identity-probe");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = resolve(
@@ -174,7 +174,7 @@ const launchSpec = (host, hostRequirement = selfRequirement) => ({
 function createSessionHost() {
   return createCuaBrokerHost({
     env: { ZCODE_HOME },
-    expectedHelperIdentifiers: ["dev.zcode.cua-helper.dev"],
+    expectedHelperIdentifiers: ["dev.acevra.cua-helper.development"],
     launchContract: {
       hostRequirement: selfRequirement,
       helperRequirement,
@@ -221,7 +221,7 @@ const admittedFirst = await launchViaLaunchServices(host);
 check(admittedFirst, "case 1: genuine helper admitted through the native peer binding");
 evidence("case1-admitted.json", { admitted: host.admittedHelper });
 check(
-  host.admittedHelper?.identifier === "dev.zcode.cua-helper.dev",
+  host.admittedHelper?.identifier === "dev.acevra.cua-helper.development",
   "case 1: admitted identity is the approved helper identifier",
 );
 
@@ -423,7 +423,7 @@ check(host.helperConnected === false, "cases 2-5: session has no admitted helper
 
 // MARK: - Case 2: re-signed (wrong-signer) helper bundle is not admitted
 
-const resignedApp = join(outDir, "resigned", "ZCode Computer Use Dev.app");
+const resignedApp = join(outDir, "resigned", "AceVra Computer Use Dev.app");
 {
   mkdirSync(dirname(resignedApp), { recursive: true });
   spawnSync("/usr/bin/ditto", [APP, resignedApp]);
@@ -450,7 +450,7 @@ const resignedApp = join(outDir, "resigned", "ZCode Computer Use Dev.app");
     "-",
     "--timestamp=none",
     "--identifier",
-    "dev.zcode.cua-peer-identity.dev",
+    "dev.acevra.cua-peer-identity.development",
     adhocProbe,
   ]);
   check(adhocSign.status === 0, "case 2: ad-hoc probe copy signed successfully");
@@ -461,7 +461,7 @@ const resignedApp = join(outDir, "resigned", "ZCode Computer Use Dev.app");
   );
   rmSync(adhocProbe, { force: true });
   const outcome = await launchDirect([
-    join(resignedApp, "Contents/MacOS/ZCodeComputerUseDev"),
+    join(resignedApp, "Contents/MacOS/AceVraComputerUseDev"),
     ...hostConnectHelperArgv(launchSpec(host)),
   ]);
   evidence("case2-resigned-launch.json", outcome);
@@ -508,7 +508,7 @@ const resignedApp = join(outDir, "resigned", "ZCode Computer Use Dev.app");
     launch_token: host.token,
     helper_identity: {
       verified: true,
-      identifier: "dev.zcode.cua-helper.dev",
+      identifier: "dev.acevra.cua-helper.development",
       cd_hash: "f".repeat(64),
       ad_hoc: false,
       pid: process.pid,
@@ -532,7 +532,7 @@ const resignedApp = join(outDir, "resigned", "ZCode Computer Use Dev.app");
     launch_token: host.token,
     helper_identity: {
       verified: true,
-      identifier: "dev.zcode.cua-helper.dev",
+      identifier: "dev.acevra.cua-helper.development",
       ad_hoc: false,
       pid: genuinePid,
     },

@@ -187,6 +187,8 @@ interface CreateZCodeTaskServiceAdapterOptions {
   taskIndexSyncer: ZCodeTaskIndexSyncer;
   settingService?: Pick<ISettingService, "get">;
   cuaProductMcpServerResolver?: CuaProductMcpServerResolver;
+  /** App Server 初始化返回的 Codex home；历史扫描不得自行猜测或写回进程环境。 */
+  resolveCodexHome?: () => Promise<string | undefined>;
 }
 
 interface TaskTarget {
@@ -2677,17 +2679,37 @@ export function createZCodeTaskServiceAdapter(
       modifiedSince?: number;
       limit?: number;
     }): Promise<ZCodeImportableSessionCandidate[]> {
-      void params.workspaceIdentity;
-      const candidates = await scanCodexImportableSessions(params);
+      const workspaceKey = params.workspaceIdentity?.trim() || params.workspacePath;
+      const candidates = await scanCodexImportableSessions({
+        ...params,
+        codexHome: await options.resolveCodexHome?.(),
+      });
       return Promise.all(
-        candidates.map(async (candidate) => ({
-          ...candidate,
-          alreadyImported: Boolean(
-            await taskIndexRepo.getTaskMeta({
-              taskId: buildImportedCodexTaskId(candidate.workspacePath, candidate.sessionId),
-            }),
-          ),
-        })),
+        candidates.map(async (candidate) => {
+          const identityTask = await taskIndexRepo.getTaskMeta({
+            taskId: buildImportedCodexTaskId(
+              workspaceKey ?? candidate.workspacePath,
+              candidate.sessionId,
+            ),
+          });
+          if (identityTask) return { ...candidate, alreadyImported: true };
+          if (!workspaceKey || workspaceKey === candidate.workspacePath) {
+            return { ...candidate, alreadyImported: false };
+          }
+          const legacyTask = await taskIndexRepo.getTaskMeta({
+            taskId: buildImportedCodexTaskId(candidate.workspacePath, candidate.sessionId),
+          });
+          return {
+            ...candidate,
+            alreadyImported: Boolean(
+              legacyTask &&
+              !legacyTask.workspaceIdentity &&
+              legacyTask.migrationSource === "codex" &&
+              (!legacyTask.migrationSourceSessionId ||
+                legacyTask.migrationSourceSessionId === candidate.sessionId),
+            ),
+          };
+        }),
       );
     },
 
@@ -2696,16 +2718,21 @@ export function createZCodeTaskServiceAdapter(
       workspaceIdentity?: string;
       sessionIds: string[];
     }): Promise<ZCodeImportSessionsResult> {
+      const workspaceKey = params.workspaceIdentity?.trim() || params.workspacePath;
       return importCodexNativeSessions({
         taskIndexRepo,
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
+        codexHome: await options.resolveCodexHome?.(),
         sessionIds: params.sessionIds,
         createImportedSession: async (source) => {
           const targetWorkspaceIdentity = params.workspacePath
             ? params.workspaceIdentity
             : undefined;
-          const taskId = buildImportedCodexTaskId(source.workspacePath, source.sessionId);
+          const taskId = buildImportedCodexTaskId(
+            workspaceKey ?? source.workspacePath,
+            source.sessionId,
+          );
           const snapshot = await options.zcodeAgentService.createSession({
             workspacePath: source.workspacePath,
             workspaceIdentity: targetWorkspaceIdentity,

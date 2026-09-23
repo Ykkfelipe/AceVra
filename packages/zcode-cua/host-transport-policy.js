@@ -25,7 +25,7 @@ export const HELLO_TYPE = "helper_hello";
  * is the probe's own code-signature validation. Kept in lockstep with
  * native/peer-identity/build-peer-identity-probe.mjs by that script's drift guard.
  */
-export const PEER_PROBE_IDENTIFIER = "dev.zcode.cua-peer-identity.dev";
+export const PEER_PROBE_IDENTIFIER = "dev.acevra.cua-peer-identity.development";
 
 /**
  * Constant-time byte comparison keyed on SHA-256 digests, so the comparison does not leak the

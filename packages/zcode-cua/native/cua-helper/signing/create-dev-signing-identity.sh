@@ -11,13 +11,13 @@
 # (the anchor is the self-signed certificate itself, so it is `root`, not `leaf`).
 #
 # WHAT THIS CREATES (exactly, and nothing else):
-#   * a new RSA-2048 key + self-signed X.509 certificate, CN "ZCode CUA Dev Signing",
+#   * a new RSA-2048 key + self-signed X.509 certificate, CN "AceVra CUA Dev Signing",
 #     extendedKeyUsage = codeSigning, 10 year validity
-#   * a DEDICATED keychain file at $CUA_SIGNING_DIR/zcode-cua-dev.keychain-db
+#   * a DEDICATED keychain file at $CUA_SIGNING_DIR/acevra-cua-dev.keychain-db
 #   * the keychain password in $CUA_SIGNING_DIR/keychain-password (mode 0600)
 # It does NOT touch the login keychain, does NOT add any system/user trust setting, and
 # does NOT modify any other signing identity. Everything lives inside the isolated
-# custom-fork CUA namespace and is removed by deleting that directory.
+# AceVra integration CUA namespace and is removed by deleting that directory.
 #
 # Re-running is idempotent: an existing keychain with the identity is reused.
 #
@@ -25,10 +25,10 @@
 
 set -euo pipefail
 
-SIGNING_DIR="${CUA_SIGNING_DIR:-$HOME/.zcode-fork-cua-home/signing}"
-KEYCHAIN="$SIGNING_DIR/zcode-cua-dev.keychain-db"
+SIGNING_DIR="${CUA_SIGNING_DIR:-$HOME/.acevra-integration-cua-home/signing}"
+KEYCHAIN="$SIGNING_DIR/acevra-cua-dev.keychain-db"
 PASSWORD_FILE="$SIGNING_DIR/keychain-password"
-IDENTITY_CN="ZCode CUA Dev Signing"
+IDENTITY_CN="AceVra CUA Dev Signing"
 FORCE=0
 [[ "${1:-}" == "--force" ]] && FORCE=1
 
@@ -58,7 +58,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 openssl req -x509 -newkey rsa:2048 -nodes \
   -keyout "$TMP/key.pem" -out "$TMP/cert.pem" -days 3650 \
-  -subj "/CN=$IDENTITY_CN/O=ZCode Custom Fork/C=US" \
+  -subj "/CN=$IDENTITY_CN/O=AceVra Integration/C=US" \
   -addext "basicConstraints=critical,CA:false" \
   -addext "keyUsage=critical,digitalSignature" \
   -addext "extendedKeyUsage=critical,codeSigning" >/dev/null 2>&1

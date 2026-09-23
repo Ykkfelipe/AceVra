@@ -60,6 +60,10 @@ export function parseCommandCodeStatusJson(raw: string): {
   };
 }
 
+export function isCommandCodeMissingExecutableError(error: unknown): boolean {
+  return (error as { code?: unknown } | null)?.code === "ENOENT";
+}
+
 export async function readCommandCodeStatus(
   executable = "commandcode",
 ): Promise<CommandCodeStatus> {
@@ -80,7 +84,15 @@ export async function readCommandCodeStatus(
     if (typeof fallback === "string" && fallback.trim()) {
       stdout = fallback;
     } else {
-      return { installed: false, authenticated: false, ...unavailable };
+      if (isCommandCodeMissingExecutableError(error)) {
+        return { installed: false, authenticated: false, ...unavailable };
+      }
+      return {
+        installed: true,
+        authenticated: false,
+        error: error instanceof Error ? error.message : String(error),
+        ...unavailable,
+      };
     }
   }
   try {

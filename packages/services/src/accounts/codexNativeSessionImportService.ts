@@ -7,9 +7,9 @@ import type { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
 
 const logger = createServiceLogger("codex-native-import");
 
-export function buildImportedCodexTaskId(workspacePath: string, sessionId: string): string {
+export function buildImportedCodexTaskId(workspaceKey: string, sessionId: string): string {
   const digest = createHash("sha256")
-    .update(`codex:${workspacePath}:${sessionId}`)
+    .update(`codex:${workspaceKey}:${sessionId}`)
     .digest("hex")
     .slice(0, 24);
   return `codex-import-${digest}`;
@@ -19,6 +19,7 @@ export async function importCodexNativeSessions(params: {
   taskIndexRepo: TaskIndexRepo;
   workspacePath?: string;
   workspaceIdentity?: string;
+  codexHome?: string;
   sessionIds: string[];
   createImportedSession: (
     source: NonNullable<Awaited<ReturnType<typeof parseCodexRollout>>>,
@@ -27,7 +28,11 @@ export async function importCodexNativeSessions(params: {
 }): Promise<ZCodeImportSessionsResult> {
   const result: ZCodeImportSessionsResult = { imported: [], skipped: [], failed: [] };
   const sessionIds = [...new Set(params.sessionIds.map((id) => id.trim()).filter(Boolean))];
-  const candidates = await scanCodexImportableSessions({ workspacePath: params.workspacePath });
+  const workspaceKey = params.workspaceIdentity?.trim() || params.workspacePath;
+  const candidates = await scanCodexImportableSessions({
+    workspacePath: params.workspacePath,
+    codexHome: params.codexHome,
+  });
 
   for (const sessionId of sessionIds) {
     const candidate = candidates.find((item) => item.sessionId === sessionId);
@@ -39,9 +44,23 @@ export async function importCodexNativeSessions(params: {
       });
       continue;
     }
-    const taskId = buildImportedCodexTaskId(candidate.workspacePath, sessionId);
+    const taskId = buildImportedCodexTaskId(workspaceKey ?? candidate.workspacePath, sessionId);
     try {
-      const existing = await params.taskIndexRepo.getTaskMeta({ taskId });
+      const identityTask = await params.taskIndexRepo.getTaskMeta({ taskId });
+      const legacyTask =
+        !identityTask && workspaceKey && workspaceKey !== candidate.workspacePath
+          ? await params.taskIndexRepo.getTaskMeta({
+              taskId: buildImportedCodexTaskId(candidate.workspacePath, sessionId),
+            })
+          : null;
+      const existing =
+        identityTask ||
+        (legacyTask &&
+        !legacyTask.workspaceIdentity &&
+        legacyTask.migrationSource === "codex" &&
+        (!legacyTask.migrationSourceSessionId || legacyTask.migrationSourceSessionId === sessionId)
+          ? legacyTask
+          : null);
       if (existing) {
         // 原因：早期 Codex 导入只保存了 migrationSource，未落原始 session ID；显式重试时
         // 通过稳定 taskId 确认来源后补齐元数据，task index 仍是唯一写入者且不会创建副本。

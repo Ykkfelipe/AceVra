@@ -233,10 +233,22 @@ onboarding (`OnboardingDialog.tsx:61`) and Settings (`MigrationSection.tsx:61`, 
 `useClaudeSessionMigration` hook, so it is already re-runnable after onboarding. Per
 "do not duplicate it", this stays as is; only its presentation moved with the section.
 
-Codex history import reads local rollout JSONL files under `~/.codex/sessions/{year}/…`.
-`thread_history_1.sqlite` is not part of the import contract. The live scanner reuses
-`ZCodeImportSessionsResult` with `provider: "codex"` alongside the existing
-`provider: "claude"`.
+Codex history import reads local rollout JSONL files under the effective Codex home. The App Server
+bridge's initialized `codexHome` is the source of truth when present; history scanning never
+mutates `CODEX_HOME` or reads credentials.
+
+The Codex migration key is `workspaceIdentity?.trim() || workspacePath`. The same key is used for
+scan deduplication and deterministic task IDs, so two remote identities sharing a filesystem path
+cannot import into each other's task scope. A legacy path-keyed task is accepted as an
+already-imported match only when it has Codex migration provenance and no conflicting workspace
+identity; new remote identities never reuse another identity's task.
+
+## Command Code execution status
+
+Command Code's `status --json` execution distinguishes a missing executable from a present but
+failed executable. `ENOENT` is the only failure mapped to `installed: false`; timeout, non-zero
+exit, permission, and protocol failures map to `installed: true`, `authenticated: false`, and a
+bounded error so the UI does not claim a broken CLI is not installed.
 
 ## Proposed shape
 
@@ -251,7 +263,13 @@ Codex history import reads local rollout JSONL files under `~/.codex/sessions/{y
 - Relay boundary: the RPC surface exposed to the browser carries only the sanitized status
   object above. `authUrl` is opened **host-side**; it is a one-time OAuth initiation URL, and
   the decision on whether it may cross to the browser is called out as an open question below.
+  The host opener is platform-specific: `open` on macOS, `explorer.exe` on Windows, and
+  `xdg-open` on Linux. Windows URLs are passed as an argument rather than through `cmd.exe`, so
+  query metacharacters cannot split the OAuth URL. A missing platform opener is a bounded
+  connection error, not a successful connection.
 - Settings section "Accounts & Imports": Import from Claude Code, Import from Codex,
+  connection/import status, re-import / reconnect, disconnect from this harness. Connect and
+  import both require an explicit click; nothing runs automatically.
   connection/import status, re-import / reconnect, disconnect from this harness. Connect and
   import both require an explicit click; nothing runs automatically.
 
@@ -329,16 +347,20 @@ Codex history import reads rollout JSONL session files only. The observed format
 records include `response_item` messages and tool-call/result payloads plus `event_msg` and
 `turn_context`. The scanner must use Codex's configured home when supplied by the existing
 App Server initialization, otherwise the standard per-user Codex home; it must never inspect
-`auth.json` or import credentials. It filters by workspace, activity range, and limit, and
-marks an already imported `codex` source session by stable source identity.
+`auth.json` or import credentials. The adapter passes the initialized `codexHome` through the
+same import request rather than reading or mutating global process environment. It filters by
+workspace, activity range, and limit, and marks an already imported `codex` source session by
+stable source identity.
 
 A source adapter parses Codex records into the existing import-history/task creation contract.
 Migration UI remains one shared `MigrationSection` with source-specific scan/import adapters;
 Claude's existing parser and Codex's rollout parser stay source-specific. Imported tasks carry
 `migrationSource = codex` and `migrationSourceSessionId` in task `meta_json`; task-index reads and
 snapshot syncs preserve both provenance fields. The task index is the idempotency owner: derive
-the deterministic task id from `(source, workspace, original session id)`, check it before
-creation, and use it so a retry cannot create a second task. Only user-visible user/assistant text
+the deterministic task id from `(source, workspace key, original session id)`, where the
+workspace key is `workspaceIdentity?.trim() || workspacePath`, check it before creation, and use
+it so a retry cannot create a second task. Two remote identities that share one path therefore
+remain distinct import scopes. Only user-visible user/assistant text
 is converted; tool calls/results, reasoning, metadata, unknown record types and credentials are
 ignored.
 

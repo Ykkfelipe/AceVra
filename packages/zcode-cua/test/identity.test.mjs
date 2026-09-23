@@ -30,7 +30,7 @@ import {
 } from "../broker.js";
 import { DEV_CUA_HELPER_BUNDLE_ID, HELPER_BUNDLE_ID } from "../broker-helper-constants.js";
 
-const DEV_HELPER = "dev.zcode.cua-helper.dev";
+const DEV_HELPER = "dev.acevra.cua-helper.development";
 
 function identity(overrides = {}) {
   return {
@@ -52,8 +52,10 @@ describe("expected helper identities", () => {
   it("defaults to the identities this repository builds, never a wildcard", () => {
     const expected = resolveExpectedHelperIdentifiers({ env: {} });
     assert.deepEqual(expected, [...DEFAULT_EXPECTED_HELPER_IDENTIFIERS]);
-    assert.equal(expected.includes("dev.zcode.cua-helper"), true);
-    assert.equal(expected.includes("dev.zcode.cua-helper.dev"), true);
+    assert.equal(expected.includes("dev.acevra.cua-helper"), true);
+    assert.equal(expected.includes("dev.acevra.cua-helper.development"), true);
+    assert.equal(expected.includes("dev.zcode.cua-helper"), false);
+    assert.equal(expected.includes("dev.zcode.cua-helper.dev"), false);
     assert.equal(expected.includes(""), false);
   });
 

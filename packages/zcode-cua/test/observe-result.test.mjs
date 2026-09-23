@@ -45,7 +45,7 @@ function observePayload(overrides = {}) {
     delivery: { mode: "background" },
     effect: "confirmed",
     evidence: [{ kind: "pixel_stats", width: 800, height: 600, blank: false }],
-    helper_identity: { verified: true, identifier: "dev.zcode.cua-helper.dev", pid: 99 },
+    helper_identity: { verified: true, identifier: "dev.acevra.cua-helper.development", pid: 99 },
     ...overrides,
   };
 }

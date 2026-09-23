@@ -30,9 +30,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../../.." && pwd)"
 export ZCODE_CUA_HOME="${ZCODE_CUA_HOME:-$HOME/.zcode-fork-cua-home}"
 export ZCODE_HOME="${ZCODE_HOME:-$ZCODE_CUA_HOME/.zcode}"
-APP="$ZCODE_HOME/computer-use/dev/ZCode Computer Use Dev.app"
-BIN="$APP/Contents/MacOS/ZCodeComputerUseDev"
-EXPECTED_ID="dev.zcode.cua-helper.dev"
+APP="$ZCODE_HOME/computer-use/dev/AceVra Computer Use Dev.app"
+BIN="$APP/Contents/MacOS/AceVraComputerUseDev"
+EXPECTED_ID="dev.acevra.cua-helper.development"
 LOG="$OUT_DIR/identity.log"
 
 : > "$LOG"
@@ -113,7 +113,7 @@ probe A-control
 # B — a different expected identity must be refused.
 rebuild
 say "----- B wrong expected identity"
-probe B-wrong-identity --expected-identifier dev.zcode.cua-helper.other
+probe B-wrong-identity --expected-identifier dev.acevra.cua-helper.other
 
 # C — one byte inside executable code.
 rebuild

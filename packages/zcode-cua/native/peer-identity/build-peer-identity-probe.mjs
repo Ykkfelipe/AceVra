@@ -29,7 +29,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 // asserted against this identifier so drift is caught at build time. Kept in lockstep with
 // PEER_PROBE_IDENTIFIER in packages/zcode-cua/host-transport-policy.js by that same assertion
 // reading the policy constant's literal from disk.
-const PEER_PROBE_IDENTIFIER = "dev.zcode.cua-peer-identity.dev";
+const PEER_PROBE_IDENTIFIER = "dev.acevra.cua-peer-identity.development";
 const EXECUTABLE_NAME = "peer-identity-probe";
 const ARM64_TARGET = "arm64-apple-macos12.0";
 const X86_TARGET = "x86_64-apple-macos12.0";
@@ -46,8 +46,8 @@ const ALLOW_UNSIGNED = has("--allow-unsigned");
 const SIGNING_DIR = resolve(
   argValue("--signing-dir", process.env.CUA_SIGNING_DIR?.trim() || join(CUA_HOME, "signing")),
 );
-const KEYCHAIN = join(SIGNING_DIR, "zcode-cua-dev.keychain-db");
-const IDENTITY = argValue("--identity", "ZCode CUA Dev Signing");
+const KEYCHAIN = join(SIGNING_DIR, "acevra-cua-dev.keychain-db");
+const IDENTITY = argValue("--identity", "AceVra CUA Dev Signing");
 
 if (process.platform !== "darwin") {
   console.log("[peer-identity] skipped: the probe is macOS-only");

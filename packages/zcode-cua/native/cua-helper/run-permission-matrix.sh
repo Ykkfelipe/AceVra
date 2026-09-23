@@ -27,8 +27,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../../.." && pwd)"
 export ZCODE_CUA_HOME="${ZCODE_CUA_HOME:-$HOME/.zcode-fork-cua-home}"
 export ZCODE_HOME="${ZCODE_HOME:-$ZCODE_CUA_HOME/.zcode}"
-APP="$ZCODE_HOME/computer-use/dev/ZCode Computer Use Dev.app"
-BIN="$APP/Contents/MacOS/ZCodeComputerUseDev"
+APP="$ZCODE_HOME/computer-use/dev/AceVra Computer Use Dev.app"
+BIN="$APP/Contents/MacOS/AceVraComputerUseDev"
 FINDER="$(pgrep -x Finder | head -1)"
 
 build() { (cd "$REPO_ROOT" && node packages/zcode-cua/native/cua-helper/build-dev-helper.mjs "$@"); }
@@ -39,7 +39,7 @@ observe() {
   local label="$1"
   local report="$OUT_DIR/$label.report.json"
   rm -f "$report"
-  pkill -f "ZCodeComputerUseDev" >/dev/null 2>&1
+  pkill -f "AceVraComputerUseDev" >/dev/null 2>&1
   sleep 0.5
   /usr/bin/open -n "$APP" --args --launcher-pid "$$" $EXTRA_ARGS --report "$report" >/dev/null 2>&1
   for _ in $(seq 1 80); do [[ -s "$report" ]] && break; sleep 0.25; done
@@ -47,7 +47,7 @@ observe() {
   # Provenance first: a report is only meaningful if you know which revision produced it.
   echo "      launch: /usr/bin/open -n <bundle> --args --launcher-pid $$ $EXTRA_ARGS --report <report>"
   echo "      source sha256: $(shasum -a 256 "$HERE/main.swift" | awk '{print $1}')"
-  echo "      binary sha256: $(shasum -a 256 "$APP/Contents/MacOS/ZCodeComputerUseDev" | awk '{print $1}')"
+  echo "      binary sha256: $(shasum -a 256 "$APP/Contents/MacOS/AceVraComputerUseDev" | awk '{print $1}')"
   python3 "$HERE/show-report.py" "$report" "$label"
   echo "      signature: $(codesign -dv --verbose=3 "$APP" 2>&1 | grep -E 'CandidateCDHashFull|CDHash=' | head -1 | tr -d ' ')"
   echo "      requirement: $(codesign -d -r- "$APP" 2>&1 | grep '=>' | head -1)"

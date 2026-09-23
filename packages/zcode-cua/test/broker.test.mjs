@@ -36,10 +36,10 @@ import { createComputerUseRuntime } from "../index.js";
  */
 const VERIFIED_IDENTITY = Object.freeze({
   verified: true,
-  identifier: "dev.zcode.cua-helper.dev",
+  identifier: "dev.acevra.cua-helper.development",
   team_id: "",
   cd_hash: "d2da364aa8e974b717f4acd1e16948867c0d7931",
-  requirement: 'identifier "dev.zcode.cua-helper.dev"',
+  requirement: 'identifier "dev.acevra.cua-helper.development"',
   ad_hoc: false,
   pid: 4242,
   expected_identifier: "",
@@ -185,7 +185,7 @@ describe("client transport", () => {
     socketPath = join(dir, "helper.sock");
     const backend = {
       permission_status: async () => ({
-        grant_owner: "dev.zcode.cua-helper.dev",
+        grant_owner: "dev.acevra.cua-helper.development",
         helper_identity: VERIFIED_IDENTITY,
         identity: { pid: 4242 },
         accessibility: "granted",
@@ -225,7 +225,7 @@ describe("client transport", () => {
     const result = await callBrokerMethod({ socketPath, method: "list_apps" });
     assert.equal(result.count, 2);
     assert.equal(result.route, "workspace");
-    assert.equal(result.helper_identity.identifier, "dev.zcode.cua-helper.dev");
+    assert.equal(result.helper_identity.identifier, "dev.acevra.cua-helper.development");
   });
 
   it("refuses a response whose claimed grant_owner disagrees with its signature", async () => {
@@ -239,7 +239,7 @@ describe("client transport", () => {
           serializeResponse({
             ok: true,
             result: {
-              grant_owner: "dev.zcode.cua-helper.dev",
+              grant_owner: "dev.acevra.cua-helper.development",
               helper_identity: { ...VERIFIED_IDENTITY, identifier: "com.example.not-our-helper" },
             },
           }),
@@ -288,7 +288,7 @@ describe("client transport", () => {
 
   it("derives health from the identity the helper verified for itself", async () => {
     const health = await probeHelperHealth(socketPath, { timeoutMs: 2000 });
-    assert.equal(health.bundleId, "dev.zcode.cua-helper.dev");
+    assert.equal(health.bundleId, "dev.acevra.cua-helper.development");
     assert.equal(health.pid, 4242);
     assert.equal(health.verified, true);
   });

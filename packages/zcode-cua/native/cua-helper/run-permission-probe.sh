@@ -28,8 +28,8 @@ shift 2
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CUA_HOME="${ZCODE_CUA_HOME:-$HOME/.zcode-fork-cua-home}"
 ZCODE_HOME="${ZCODE_HOME:-$CUA_HOME/.zcode}"
-APP="$ZCODE_HOME/computer-use/dev/ZCode Computer Use Dev.app"
-BIN="$APP/Contents/MacOS/ZCodeComputerUseDev"
+APP="$ZCODE_HOME/computer-use/dev/AceVra Computer Use Dev.app"
+BIN="$APP/Contents/MacOS/AceVraComputerUseDev"
 OUT_DIR="${OUT_DIR:?OUT_DIR must be set}"
 
 mkdir -p "$OUT_DIR"
@@ -80,7 +80,7 @@ fi
 
 {
   echo "### helper process tree at observation time:"
-  ps -eo pid,ppid,command | grep -F "ZCodeComputerUseDev" | grep -v grep | sed 's/^/    /' || true
+  ps -eo pid,ppid,command | grep -F "AceVraComputerUseDev" | grep -v grep | sed 's/^/    /' || true
   echo "### helper bundle signature:"
   codesign -dv --verbose=3 "$APP" 2>&1 | grep -E "Identifier|CandidateCDHashFull|TeamIdentifier|Authority" | sed 's/^/    /'
   codesign -d -r- "$APP" 2>&1 | grep "=>" | sed 's/^/    /'

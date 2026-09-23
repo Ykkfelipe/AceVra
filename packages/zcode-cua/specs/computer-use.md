@@ -55,7 +55,7 @@ designated => identifier "<bundle-id>" and certificate root = H"<certificate sha
 An ad-hoc signature has no stable requirement (its cdhash is the requirement), so every
 rebuild produces a new cdhash and the grant is lost. Therefore:
 
-- **Development** uses a dedicated self-signed certificate (`ZCode CUA Dev Signing`) created
+- **Development** uses a dedicated self-signed certificate (`AceVra CUA Dev Signing`) created
   by `signing/create-dev-signing-identity.sh` in a dedicated keychain under the isolated CUA
   namespace. The certificate is deliberately **not** trusted system-wide (no user trust
   settings are written) — `codesign` signs with it regardless, and TCC honours the resulting
@@ -70,11 +70,11 @@ rebuild produces a new cdhash and the grant is lost. Therefore:
 
 Resolved by the existing contract, unchanged by this work:
 
-| Variant     | Path                                                       |
-| ----------- | ---------------------------------------------------------- |
-| production  | `<ZCODE_HOME>/computer-use/ZCode Computer Use.app`         |
-| preview     | `<ZCODE_HOME>/computer-use/preview/ZCode Computer Use.app` |
-| development | `<ZCODE_HOME>/computer-use/dev/ZCode Computer Use Dev.app` |
+| Variant     | Path                                                        |
+| ----------- | ----------------------------------------------------------- |
+| production  | `<ZCODE_HOME>/computer-use/AceVra Computer Use.app`         |
+| preview     | `<ZCODE_HOME>/computer-use/preview/AceVra Computer Use.app` |
+| development | `<ZCODE_HOME>/computer-use/dev/AceVra Computer Use Dev.app` |
 
 Development and preview use separate sub-roots because their build ids differ and a shared
 root would let one install overwrite the other. `ZCODE_HOME` resolves below the runtime's
@@ -92,7 +92,7 @@ own data root, so the custom-fork runtime never writes the product's `~/.zcode`.
   `identity.designatedRequirement` instead. Populating `grant_owner` from the Helper's own
   verified identity is a CUA-1 task, not something this phase measured.
 - **Signature is the identity.** The Helper must never be built with the product's Helper
-  bundle id (`dev.zcode.cua-helper`): an installed product Helper already holds a grant under
+  bundle id (`dev.acevra.cua-helper`): an installed product Helper already holds a grant under
   that id, so reusing it both collides with the product install and makes any permission
   measurement meaningless. `build-dev-helper.mjs` refuses to build with it.
 - **The launch relationship is not an identity.** Because LaunchServices detaches the Helper
@@ -197,16 +197,18 @@ exists, and the two conditions above are what the label actually means.
 
 ## Development and production identities
 
-The fork and the product are being renamed **AceVra**. Identity reconciliation happens during
-integration; this branch records the reserved targets rather than wiring them in, and
-introduces **no new permanent ZCode-branded production identity**.
+The integrated fork and the product are named **AceVra**. The active development Helper is
+`dev.acevra.cua-helper.development`; the production Helper remains `dev.acevra.cua-helper`.
+These are the only active Helper identities accepted by the integrated build. The historical
+`dev.zcode.cua-helper*` identifiers below are retained only to describe frozen CUA-0.5 evidence;
+they are not compatibility allowances in the active launcher or broker policy.
 
-| Purpose              | Reserved identity                   |
-| -------------------- | ----------------------------------- |
-| App (production)     | `AceVra`                            |
-| App (development)    | `AceVra Dev`                        |
-| Helper (production)  | `dev.acevra.cua-helper`             |
-| Helper (development) | `dev.acevra.cua-helper.development` |
+| Purpose              | Active identity                                 |
+| -------------------- | ----------------------------------------------- |
+| App (production)     | `com.acevra.desktop` (`AceVra`)                 |
+| App (development)    | `com.acevra.desktop.development` (`AceVra Dev`) |
+| Helper (production)  | `dev.acevra.cua-helper`                         |
+| Helper (development) | `dev.acevra.cua-helper.development`             |
 
 `zcode://` stays untouched regardless of the rename, because it remains an OAuth
 compatibility requirement.
@@ -847,11 +849,12 @@ leaf[subject.OU] = "<team id>"` — team-anchored;
 - ad-hoc dev builds: `cdhash H"…"` — exact for this install; every rebuild changes it, which is
   why ad-hoc stays a recorded-local-dev mode, never the default.
 
-The reserved AceVra identities (`com.acevra.desktop.development`, `dev.acevra.cua-helper`,
-`dev.acevra.cua-helper.development`) are supported **requirement vocabulary**, not migrations:
-this branch performs no global identity change and keeps building the measured `dev.zcode.*`
-dev identity. The certificate-anchored DR is what makes "don't trust bundle id alone" real — an
-identifier is chosen by whoever signs; a certificate root is not.
+The active AceVra identities (`com.acevra.desktop.development`, `dev.acevra.cua-helper`,
+`dev.acevra.cua-helper.development`) are the only identities accepted by the integrated
+development build. The historical `dev.zcode.*` values remain in archived CUA-0.5 evidence
+only; they are not accepted by the active launcher or broker policy. The certificate-anchored
+DR is what makes "don't trust bundle id alone" real — an identifier is chosen by whoever signs;
+a certificate root is not.
 
 **The Helper's self-check becomes requirement-anchored.** `--expected-requirement` replaces the
 identifier-only expectation with a full requirement enforced in both `SecCodeCheckValidity`
@@ -1096,9 +1099,11 @@ connected socket → kernel-derived peer identity → native code-signing verifi
 
 One owner each, unchanged from CUA-1.5: the host module owns the session and the admission
 decision; the probe owns only kernel/Security queries and answers one JSON report; services
-owns launch and requirement discovery. Nothing in the chain ever falls back to a weaker mode:
-a session without the probe (or without a kernel binding) refuses helper admission and the
-caller falls back to the CUA-1 standalone flow, exactly as CUA-1.5's failures do.
+owns launch and requirement discovery. A CUA-1.75 session never falls back to a weaker mode:
+if the probe, kernel binding, pinned requirement, or admission is unavailable, the integrated
+runtime reports Computer Use unavailable and waits for a fresh hardened launch. The historical
+CUA-1 standalone flow remains available only to archived diagnostic harnesses; it is not a
+product fallback.
 
 ## Measured platform facts (macOS 27.0, 2026-09-23 — this fork's verification host)
 
@@ -1233,8 +1238,9 @@ admitted Helper identity" of the required property.
 - Host-owned socket, fresh 0700 session directory, 0600 socket, random per-launch capability
   token, token stripping before forwarding, constant-time compares: all unchanged.
 - `--serve` bind mode and token-less `callBrokerMethod` for standalone/diagnostic use:
-  unchanged. The CUA-1 standalone flow remains the caller-decided fallback when the hardened
-  session cannot start (now including "probe binary missing").
+  unchanged. The CUA-1 standalone flow is retained only for archived diagnostic harnesses;
+  the integrated product runtime does not use it as a fallback when the hardened session cannot
+  start (including when the probe binary is missing).
 - The product-host stubs in `broker-server.js` stay fail-closed.
 
 ## Remaining limitations (named, not implied)
@@ -1300,7 +1306,11 @@ admitted Helper identity" of the required property.
 7. All CUA-1 observe methods and their result-envelope invariants still pass through the
    final transport.
 8. All actuator names remain unavailable.
+9. If the integrated hardened session cannot start, is torn down, or is not yet admitted, the
+   permission/status path reports Computer Use unavailable and permits a later retry; it does not
+   probe the stable CUA-1 socket, call the legacy broker, or inject a legacy socket into a spawned
+   agent. The legacy standalone path remains isolated to archived diagnostic harnesses.
 
-Deterministic tests cover the policy half (codes above, contract equality, pid consistency);
-`native/peer-identity/run-cua175-verification.mjs` drives the live matrix on macOS with the
-real probe and real Helper.
+Deterministic tests cover the policy half (codes above, contract equality, pid consistency) and
+the no-legacy-fallback boundary; `native/peer-identity/run-cua175-verification.mjs` drives the
+live matrix on macOS with the real probe and real Helper.

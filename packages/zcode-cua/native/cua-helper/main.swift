@@ -1,4 +1,4 @@
-// ZCode Computer Use — development helper (CUA-0.5 permission/identity proof).
+// AceVra Computer Use — development helper (CUA-0.5 permission/identity proof).
 //
 // Scope: this binary exists ONLY to prove the macOS permission and code-identity
 // foundation for the first-party CUA helper. It deliberately implements NO input:

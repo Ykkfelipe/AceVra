@@ -22,7 +22,9 @@ test("Codex rollout scan parses visible messages and import retries are idempote
   const temp = await mkdtemp(join(tmpdir(), "zcode-codex-history-"));
   const previousHome = process.env.CODEX_HOME;
   const sessionId = "00000000-0000-4000-8000-000000000001";
+  const workspaceIdentity = "remote:workspace-a";
   const workspacePath = join(temp, "workspace");
+
   const filePath = join(temp, "sessions", "2026", "09", "23", `${sessionId}.jsonl`);
   const duplicateFilePath = join(temp, "sessions", "2026", "09", "22", `${sessionId}.jsonl`);
   await mkdir(join(temp, "sessions", "2026", "09", "23"), { recursive: true });
@@ -129,12 +131,13 @@ test("Codex rollout scan parses visible messages and import retries are idempote
       },
     } as never;
     let created = 0;
+    let importWorkspaceIdentity = workspaceIdentity;
     const createImportedSession = async (source: NonNullable<typeof parsed>) => {
       created += 1;
       assert.equal(source.sessionId, sessionId);
       assert.equal(source.createdAt, Date.parse("2026-09-23T12:00:00.000Z"));
       assert.equal(source.messages.length, 2);
-      const taskId = buildImportedCodexTaskId(source.workspacePath, source.sessionId);
+      const taskId = buildImportedCodexTaskId(importWorkspaceIdentity, source.sessionId);
       const meta = {
         taskId,
         workspacePath: source.workspacePath,
@@ -145,6 +148,9 @@ test("Codex rollout scan parses visible messages and import retries are idempote
     };
     const first = await importCodexNativeSessions({
       taskIndexRepo,
+      workspacePath,
+      workspaceIdentity,
+      codexHome: temp,
       sessionIds: [sessionId],
       createImportedSession,
       onTaskImported() {},
@@ -159,6 +165,9 @@ test("Codex rollout scan parses visible messages and import retries are idempote
     });
     const second = await importCodexNativeSessions({
       taskIndexRepo,
+      workspacePath,
+      workspaceIdentity,
+      codexHome: temp,
       sessionIds: [sessionId],
       createImportedSession,
       onTaskImported() {},
@@ -167,6 +176,39 @@ test("Codex rollout scan parses visible messages and import retries are idempote
     assert.equal(second.skipped[0]?.reason, "already_imported");
     assert.equal(created, 1);
     assert.equal(records.get(importedTaskId)?.migrationSourceSessionId, sessionId);
+
+    importWorkspaceIdentity = "remote:workspace-b";
+    const otherIdentity = await importCodexNativeSessions({
+      taskIndexRepo,
+      workspacePath,
+      workspaceIdentity: importWorkspaceIdentity,
+      codexHome: temp,
+      sessionIds: [sessionId],
+      createImportedSession,
+      onTaskImported() {},
+    });
+    assert.equal(otherIdentity.imported.length, 1);
+    assert.notEqual(otherIdentity.imported[0]?.taskId, importedTaskId);
+    assert.equal(created, 2);
+
+    const legacyTaskId = buildImportedCodexTaskId(workspacePath, sessionId);
+    records.set(legacyTaskId, {
+      taskId: legacyTaskId,
+      workspacePath,
+      migrationSource: "codex",
+    });
+    importWorkspaceIdentity = "remote:workspace-c";
+    const legacyRetry = await importCodexNativeSessions({
+      taskIndexRepo,
+      workspacePath,
+      workspaceIdentity: importWorkspaceIdentity,
+      codexHome: temp,
+      sessionIds: [sessionId],
+      createImportedSession,
+      onTaskImported() {},
+    });
+    assert.equal(legacyRetry.skipped[0]?.reason, "already_imported");
+    assert.equal(created, 2);
   } finally {
     if (previousHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = previousHome;

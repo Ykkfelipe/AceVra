@@ -47,7 +47,7 @@ const argValue = (name, fallback) =>
 
 const CUA_HOME = process.env.ZCODE_CUA_HOME?.trim() || join(homedir(), ".zcode-fork-cua-home");
 const ZCODE_HOME = process.env.ZCODE_HOME?.trim() || join(CUA_HOME, ".zcode");
-const APP = join(ZCODE_HOME, "computer-use/dev/ZCode Computer Use Dev.app");
+const APP = join(ZCODE_HOME, "computer-use/dev/AceVra Computer Use Dev.app");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const outDir = resolve(
   argValue("--out", join(CUA_HOME, "evidence", `cua15-verification-${stamp}`)),
@@ -209,7 +209,7 @@ const impostor = await rawRequest(
       launch_token: "wrong-token",
       helper_identity: {
         verified: true,
-        identifier: "dev.zcode.cua-helper.dev",
+        identifier: "dev.acevra.cua-helper.development",
         ad_hoc: false,
       },
       pid: helperPid,

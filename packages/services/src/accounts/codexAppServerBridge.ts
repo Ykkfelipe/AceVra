@@ -164,7 +164,7 @@ export class CodexAppServerBridge {
       {
         clientInfo: {
           name: this.#clientName,
-          title: "ZCode Fork",
+          title: "AceVra",
           version: this.#clientVersion,
         },
       },

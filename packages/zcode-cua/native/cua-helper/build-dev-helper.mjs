@@ -32,20 +32,16 @@ const here = dirname(fileURLToPath(import.meta.url));
 // Contract constants, mirrored by hand on purpose: this script must not import
 // TypeScript sources, and a drift here is caught by the identity assertion below
 // (the built bundle id is printed and asserted against the expected value).
-const STABLE_HELPER_BUNDLE_ID = "dev.zcode.cua-helper";
-const DEV_HELPER_BUNDLE_ID = "dev.zcode.cua-helper.dev";
-const DEV_HELPER_APP_NAME = "ZCode Computer Use Dev.app";
+const STABLE_HELPER_BUNDLE_ID = "dev.acevra.cua-helper";
+const DEV_HELPER_BUNDLE_ID = "dev.acevra.cua-helper.development";
+const DEV_HELPER_APP_NAME = "AceVra Computer Use Dev.app";
 
-// Reserved production/development identities for the AceVra-branded product. The fork and
-// the product are being renamed to AceVra; identity reconciliation is deferred to
-// integration, so these are declared here (and in the spec) as the targets rather than
-// being wired in now. The dev helper above keeps the id the CUA-0.5 grant was actually
-// measured against, because renaming a bundle id creates a NEW TCC identity and would
-// silently invalidate the archived persistence proof. `zcode://` stays untouched for OAuth
-// compatibility regardless of the rename.
+// The canonical AceVra Helper identities. The development bundle ID is a new TCC identity;
+// users must authorize it once after this integration migration. `zcode://` stays untouched for
+// OAuth compatibility regardless of the rename.
 export const RESERVED_ACEVRA_HELPER_BUNDLE_ID = "dev.acevra.cua-helper";
 export const RESERVED_ACEVRA_DEV_HELPER_BUNDLE_ID = "dev.acevra.cua-helper.development";
-const EXECUTABLE_NAME = "ZCodeComputerUseDev";
+const EXECUTABLE_NAME = "AceVraComputerUseDev";
 const MINIMUM_MACOS_TARGET = "arm64-apple-macos12.0";
 const X86_TARGET = "x86_64-apple-macos12.0";
 
@@ -65,8 +61,8 @@ const ALLOW_UNSIGNED = has("--allow-unsigned");
 const SIGNING_DIR = resolve(
   argValue("--signing-dir", process.env.CUA_SIGNING_DIR?.trim() || join(CUA_HOME, "signing")),
 );
-const KEYCHAIN = join(SIGNING_DIR, "zcode-cua-dev.keychain-db");
-const IDENTITY = argValue("--identity", "ZCode CUA Dev Signing");
+const KEYCHAIN = join(SIGNING_DIR, "acevra-cua-dev.keychain-db");
+const IDENTITY = argValue("--identity", "AceVra CUA Dev Signing");
 
 if (process.platform !== "darwin") {
   console.log("[cua-helper] skipped: the helper is macOS-only");
@@ -79,6 +75,7 @@ const PRODUCT_HELPER_BUNDLE_IDS = [
   RESERVED_ACEVRA_HELPER_BUNDLE_ID,
   RESERVED_ACEVRA_DEV_HELPER_BUNDLE_ID,
 ];
+const LEGACY_HELPER_BUNDLE_IDS = ["dev.zcode.cua-helper", "dev.zcode.cua-helper.dev"];
 if (BUNDLE_ID === STABLE_HELPER_BUNDLE_ID || BUNDLE_ID === RESERVED_ACEVRA_HELPER_BUNDLE_ID) {
   console.error(`[cua-helper] refusing to build with the product helper bundle id ${BUNDLE_ID}.`);
   console.error(
@@ -87,9 +84,16 @@ if (BUNDLE_ID === STABLE_HELPER_BUNDLE_ID || BUNDLE_ID === RESERVED_ACEVRA_HELPE
   );
   process.exit(1);
 }
+if (LEGACY_HELPER_BUNDLE_IDS.includes(BUNDLE_ID)) {
+  console.error(`[cua-helper] refusing legacy helper bundle id ${BUNDLE_ID}.`);
+  console.error(
+    "[cua-helper] The integrated build accepts only canonical AceVra Helper identities.",
+  );
+  process.exit(1);
+}
 if (PRODUCT_HELPER_BUNDLE_IDS.includes(BUNDLE_ID) && BUNDLE_ID !== DEV_HELPER_BUNDLE_ID) {
   console.error(`[cua-helper] refusing reserved product helper bundle id ${BUNDLE_ID}.`);
-  console.error("[cua-helper] Reserved ids are declared, not built against, on this branch.");
+  console.error("[cua-helper] The development build must use the canonical AceVra development id.");
   process.exit(1);
 }
 

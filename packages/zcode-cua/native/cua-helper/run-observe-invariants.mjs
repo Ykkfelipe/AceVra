@@ -43,8 +43,8 @@ const has = (name) => process.argv.includes(name);
 
 const CUA_HOME = process.env.ZCODE_CUA_HOME?.trim() || join(homedir(), ".zcode-fork-cua-home");
 const ZCODE_HOME = process.env.ZCODE_HOME?.trim() || join(CUA_HOME, ".zcode");
-const APP = join(ZCODE_HOME, "computer-use/dev/ZCode Computer Use Dev.app");
-const BIN = join(APP, "Contents/MacOS/ZCodeComputerUseDev");
+const APP = join(ZCODE_HOME, "computer-use/dev/AceVra Computer Use Dev.app");
+const BIN = join(APP, "Contents/MacOS/AceVraComputerUseDev");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 // Evidence lands beside the other archived helper runs, never inside the repository: it is a
 // measurement, not a source file.
@@ -239,7 +239,7 @@ try {
   log(`helper_identity=${JSON.stringify(identity)}`);
   check(identity.verified === true, "helper identity verified through its own signature check");
   check(
-    identity.identifier === "dev.zcode.cua-helper.dev",
+    identity.identifier === "dev.acevra.cua-helper.development",
     "grant_owner comes from the verified signing identifier",
     `grant_owner=${status.grant_owner}`,
   );
