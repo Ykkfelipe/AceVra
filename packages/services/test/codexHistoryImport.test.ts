@@ -96,9 +96,30 @@ test("Codex rollout scan parses visible messages and import retries are idempote
       }),
     );
 
-    const records = new Map<string, { taskId: string; workspacePath: string }>();
+    const records = new Map<
+      string,
+      {
+        taskId: string;
+        workspacePath: string;
+        migrationSource?: "codex";
+        migrationSourceSessionId?: string;
+      }
+    >();
     const taskIndexRepo = {
       getTaskMeta: async ({ taskId }: { taskId: string }) => records.get(taskId) ?? null,
+      syncTaskMeta: async ({
+        meta,
+      }: {
+        meta: {
+          taskId: string;
+          workspacePath: string;
+          migrationSource?: "codex";
+          migrationSourceSessionId?: string;
+        };
+      }) => {
+        records.set(meta.taskId, meta);
+        return meta;
+      },
     } as never;
     let created = 0;
     const createImportedSession = async (source: NonNullable<typeof parsed>) => {
@@ -107,7 +128,11 @@ test("Codex rollout scan parses visible messages and import retries are idempote
       assert.equal(source.createdAt, Date.parse("2026-09-23T12:00:00.000Z"));
       assert.equal(source.messages.length, 2);
       const taskId = buildImportedCodexTaskId(source.workspacePath, source.sessionId);
-      const meta = { taskId, workspacePath: source.workspacePath } as never;
+      const meta = {
+        taskId,
+        workspacePath: source.workspacePath,
+        migrationSource: "codex",
+      } as never;
       records.set(taskId, meta);
       return meta;
     };
@@ -116,6 +141,14 @@ test("Codex rollout scan parses visible messages and import retries are idempote
       sessionIds: [sessionId],
       createImportedSession,
       onTaskImported() {},
+    });
+    const importedTaskId = first.imported[0]?.taskId;
+    assert.ok(importedTaskId);
+    // 模拟已有的旧任务只保存 migrationSource；重试补全来源 session ID，不新建任务。
+    records.set(importedTaskId, {
+      taskId: importedTaskId,
+      workspacePath,
+      migrationSource: "codex",
     });
     const second = await importCodexNativeSessions({
       taskIndexRepo,
@@ -126,6 +159,7 @@ test("Codex rollout scan parses visible messages and import retries are idempote
     assert.equal(first.imported.length, 1);
     assert.equal(second.skipped[0]?.reason, "already_imported");
     assert.equal(created, 1);
+    assert.equal(records.get(importedTaskId)?.migrationSourceSessionId, sessionId);
   } finally {
     if (previousHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = previousHome;

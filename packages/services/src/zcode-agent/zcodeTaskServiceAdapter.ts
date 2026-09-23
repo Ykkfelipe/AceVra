@@ -2723,7 +2723,11 @@ export function createZCodeTaskServiceAdapter(
             },
           });
           const meta = await syncTaskIndexSnapshot(snapshot);
-          return syncTaskIndexMeta({ ...meta, migrationSource: "codex" });
+          return syncTaskIndexMeta({
+            ...meta,
+            migrationSource: "codex",
+            migrationSourceSessionId: source.sessionId,
+          });
         },
         onTaskImported: (meta) => {
           rememberIndexedTaskMeta(meta);

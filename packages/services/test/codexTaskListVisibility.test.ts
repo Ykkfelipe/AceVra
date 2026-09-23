@@ -50,9 +50,20 @@ test("codex backend tasks stay visible in the workspace task list; imported hist
       title: "Imported Claude session",
       migrationSource: "claudeCode" as const,
     });
+    const importedCodex = baseMeta({
+      taskId: "codex-import-1",
+      title: "Imported Codex session",
+      migrationSource: "codex" as const,
+      migrationSourceSessionId: "synthetic-codex-session",
+    });
     await repo.syncTaskMeta({ meta: glm });
     await repo.syncTaskMeta({ meta: codex });
     await repo.syncTaskMeta({ meta: imported });
+    await repo.syncTaskMeta({ meta: importedCodex });
+    // Runtime snapshots omit source provenance; the task-index owner must retain it.
+    await repo.syncTaskMeta({
+      meta: { ...importedCodex, migrationSource: undefined, migrationSourceSessionId: undefined },
+    });
 
     // zcode 任务服务（provider='glm' 过滤）必须看到 glm + codex，看不到历史导入。
     const listed = await repo.listTaskMetas({
@@ -76,6 +87,9 @@ test("codex backend tasks stay visible in the workspace task list; imported hist
     const byIdOnly = await repo.getTaskMeta({ taskId: "codex-1" });
     assert.equal(byIdOnly?.executionBackend, "codex");
     assert.equal(byIdOnly?.workspacePath, "/example/workspace");
+    const importedById = await repo.getTaskMeta({ taskId: "codex-import-1" });
+    assert.equal(importedById?.migrationSource, "codex");
+    assert.equal(importedById?.migrationSourceSessionId, "synthetic-codex-session");
     assert.equal(await repo.getTaskMeta({ taskId: "missing-id" }), null);
   } finally {
     await rm(dir, { recursive: true, force: true });

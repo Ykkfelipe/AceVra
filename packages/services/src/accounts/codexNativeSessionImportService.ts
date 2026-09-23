@@ -43,6 +43,17 @@ export async function importCodexNativeSessions(params: {
     try {
       const existing = await params.taskIndexRepo.getTaskMeta({ taskId });
       if (existing) {
+        // 原因：早期 Codex 导入只保存了 migrationSource，未落原始 session ID；显式重试时
+        // 通过稳定 taskId 确认来源后补齐元数据，task index 仍是唯一写入者且不会创建副本。
+        if (!existing.migrationSourceSessionId) {
+          await params.taskIndexRepo.syncTaskMeta({
+            meta: {
+              ...existing,
+              migrationSource: "codex",
+              migrationSourceSessionId: sessionId,
+            },
+          });
+        }
         result.skipped.push({
           provider: "codex",
           sessionId,

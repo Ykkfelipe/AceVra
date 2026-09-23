@@ -335,11 +335,12 @@ marks an already imported `codex` source session by stable source identity.
 A source adapter parses Codex records into the existing import-history/task creation contract.
 Migration UI remains one shared `MigrationSection` with source-specific scan/import adapters;
 Claude's existing parser and Codex's rollout parser stay source-specific. Imported tasks carry
-`migrationSource = codex` and original source session id in task metadata. The task index is the
-idempotency owner: check the stable `(source, original session id)` before creation, and use a
-deterministic task id so a retry cannot create a second task. Only user-visible user/assistant
-text is converted; tool calls/results, reasoning, metadata, unknown record types and credentials
-are ignored.
+`migrationSource = codex` and `migrationSourceSessionId` in task `meta_json`; task-index reads and
+snapshot syncs preserve both provenance fields. The task index is the idempotency owner: derive
+the deterministic task id from `(source, workspace, original session id)`, check it before
+creation, and use it so a retry cannot create a second task. Only user-visible user/assistant text
+is converted; tool calls/results, reasoning, metadata, unknown record types and credentials are
+ignored.
 
 Codex rollout sessions are local Codex history only. Account/App Server APIs do not establish
 availability of general chatgpt.com conversations; no browser scraping, cookie copying, or

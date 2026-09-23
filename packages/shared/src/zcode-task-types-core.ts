@@ -310,6 +310,8 @@ export interface ZCodeTaskMeta {
   provider?: ZCodeProvider;
   /** 迁移来源；普通新建任务为空，用于识别 Claude Code 原生历史导入。 */
   migrationSource?: ZCodeTaskMigrationSource;
+  /** Codex 原生历史来源 session ID；保存在 task 元数据用于溯源与稳定去重。 */
+  migrationSourceSessionId?: string;
   /**
    * cron 身份标记：该 session 属于哪条 automation。
    *
