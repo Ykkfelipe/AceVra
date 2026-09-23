@@ -47,7 +47,7 @@ Codex: turn/completed + user-named          ConversationTimeline
 
 | State | Owner | Persisted |
 | ----- | ----- | --------- |
-| artifact metadata + bytes | host task-artifact store (`<dbDir>/task-artifacts/<taskId>/<artifactId>.bin` + `index.json`) | yes |
+| artifact metadata + bytes | host task-artifact store (`~/.zcode/v2/task-artifacts/<taskId>/<artifactId>.bin` + `index.json`) | yes |
 | artifact rows (codex tasks) | `CodexThreadProjection` (in-memory, host-owned) | no |
 | artifact list (zcode tasks) | renderer fetch, id-keyed | no |
 

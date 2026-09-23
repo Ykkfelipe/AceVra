@@ -536,6 +536,40 @@ policy" + "Observed approval round-trip" sections carry the full protocol record
   "Worked" expander — row-counting E2Es must expand it and scroll, or they only see the
   final answer row.
 
+## Task artifacts — phase 11 (2026-09-22)
+
+Commit `faf00e9` (+ store-root fix). Spec: `packages/services/specs/task-artifacts.md`.
+
+- **Survey first, reuse second**: the frozen v4 contract already had `artifactRowSchema`
+  (kind:"artifact") and a renderer file card; `conversationAttachmentReadV4` provided the
+  chunked authorized-read pattern; browser screenshot bytes already arrive at the host in
+  the `interaction/browserExecute` result (`result.image.base64`). The new work is only the
+  registry + channel + wiring, not new conversation concepts.
+- **Authz boundary** (reviewed): the `task-artifacts` channel exposes only list/read; the
+  registration API is host-internal (browser-use hook, Codex delivery). Retrieval is
+  UUID-shape-checked `(taskId, artifactId)` inside the store — no path parameters, no
+  traversal. workspaceKey must match registration. Deleted backing file →
+  `state:"missing"` / `artifact_backing_missing`, never a path.
+- **Store**: `~/.zcode/v2/task-artifacts/<taskId>/<artifactId>.bin` + `index.json`
+  (getAppConfigDir). Bytes are COPIED at registration; the original host path is dropped.
+- **Codex delivery**: after turn/completed, only files whose basename/relative path the
+  user explicitly named in the turn input are registered (deterministic, no inference,
+  never unnamed source edits). Registered artifacts become real artifact rows in the
+  host-owned projection; after a restart they re-anchor as trailing rows.
+- **browser-use**: `instrumentBrowserExecutorForArtifacts` wraps the desktop executor;
+  successful screenshot results (base64 PNG) register as artifacts; failures are swallowed
+  (no artifact → no delivery claim). The model-visible tool result is untouched.
+- **Renderer**: `useTaskArtifacts` + `TaskArtifactCard` (inline `img` with max-w-full for
+  png/jpeg/webp, download card otherwise); codex artifact rows reuse the card via
+  ArtifactRowView; the trailing task section dedupes against inline rows by parsing
+  `zcode-artifact://task/<taskId>/<artifactId>` refs.
+- E2E proven through /fork: fixture artifact registered into the live store renders inline
+  (image loaded via object URL), 0 host-path strings in the DOM, reconnect keeps exactly
+  one card, 375px viewport has no horizontal overflow.
+- Deferred: the live "Open Nike.com and send me a screenshot" loop (desktop Electron host
+  + agent inference). The registration hook it would exercise is unit-tested with the same
+  result schema; the delivery path is fully E2E-proven above.
+
 ## Environment note
 
 The dev stack is started from the two commands in "Running the dev loop". When those are
