@@ -191,7 +191,10 @@ function withStickyProbes(
     return {
       ...result,
       accessibilityProbeOk: slot.stickyReady.accessibilityProbeOk,
+      // state 与结果一起搬：只搬布尔值会发布「screenCaptureProbeOk: true + state: not_run」这种
+      // 自相矛盾的对，而 state 字段存在的意义正是让两者不可能互相矛盾。
       screenCaptureProbeOk: slot.stickyReady.screenCaptureProbeOk,
+      screenCaptureProbeState: slot.stickyReady.screenCaptureProbeState,
     };
   }
   slot.stickyReady = null;

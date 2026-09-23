@@ -34,6 +34,10 @@
       "types": "./broker.d.ts",
       "import": "./broker.js"
     },
+    "./broker/hostTransport": {
+      "types": "./host-transport.d.ts",
+      "import": "./host-transport.js"
+    },
     "./broker/server": {
       "types": "./broker-server.d.ts",
       "import": "./broker-server.js"
