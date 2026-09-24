@@ -210,12 +210,11 @@ candidate acceptance.
 
 For the local engineering profile, the isolated self-signed `AceVra CUA Dev Signing` identity is
 not added to user or system trust settings. Electron Builder may discover the identity as
-unavailable because the certificate is self-signed; after Builder emits the arm64 app, the bundle
-runner signs the outer app directly with the already resolved identity, isolated keychain, and
-main-app entitlements, without deep-resigning the pre-signed Helper/probe. The runner then
-strictly verifies the outer signature, expected identity, hardened runtime, and certificate-root
-designated requirement before packaging continues. This is a local-alpha signing configuration, not
-Developer ID signing or notarization.
+unavailable because the certificate is self-signed; its `afterSign` hook signs the outer app
+before DMG/ZIP creation, and the post-build bundle check verifies the final app. The candidate
+validator must verify the outer app inside both the ZIP and the mounted DMG as well as the raw
+unpacked app. An archive containing the pre-sign ad-hoc app is a release failure. This is a
+local-alpha signing configuration, not Developer ID signing or notarization.
 
 ## Smallest release-safety UX
 

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Electron Builder config keeps related packaging hooks together so build order stays explicit. */
+import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -464,6 +465,43 @@ function assertPackagedNodePtyPrebuild(context) {
     throw new Error(`node-pty 预编译产物缺失: ${targetBinaryPath}`);
 }
 
+function signLocalAlphaOuterAppAfterSign(context) {
+  if (
+    context.electronPlatformName !== "darwin" ||
+    !shouldEnableMacSigning ||
+    !isLocalEngineeringAlphaProfile(process.env)
+  ) {
+    return;
+  }
+  const appPath = resolve(context.appOutDir, `${desktopProductIdentity.productName}.app`);
+  const keychain = process.env.CSC_KEYCHAIN?.trim();
+  if (!keychain || !macSigningIdentity) {
+    throw new Error("[afterSign] local alpha outer signing identity or keychain is missing");
+  }
+  const result = spawnSync(
+    "/usr/bin/codesign",
+    [
+      "--force",
+      "--options",
+      "runtime",
+      "--sign",
+      macSigningIdentity,
+      "--keychain",
+      keychain,
+      "--entitlements",
+      resolve(desktopPackageRoot, "build", "entitlements.mac.plist"),
+      appPath,
+    ],
+    { encoding: "utf8", env: process.env },
+  );
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      `[afterSign] local alpha outer app signing failed: ${result.stderr || result.stdout || result.error?.message || result.status}`,
+    );
+  }
+  console.log(`[afterSign] local alpha outer app signed with ${macSigningIdentity}`);
+}
+
 /** @type {import("electron-builder").Configuration} */
 export default {
   appId: desktopProductIdentity.appId,
@@ -580,6 +618,11 @@ export default {
         writeWindowsInstallManifest(context),
       );
     }
+  },
+  afterSign: async (context) => {
+    runTimedSync("afterSign:signLocalAlphaOuterApp", () =>
+      signLocalAlphaOuterAppAfterSign(context),
+    );
   },
   extraResources: [
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },

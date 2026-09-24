@@ -16,11 +16,14 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const workspaceRoot = resolve(import.meta.dirname, "..", "..");
@@ -63,6 +66,66 @@ function sha256(filePath) {
 
 export function extractCertificateRoot(signingText) {
   return /certificate root = H"([0-9a-f]+)"/i.exec(signingText)?.[1]?.toLowerCase() ?? null;
+}
+
+function verifyArchivedApp(archivePath, label, errors, expectedRoot) {
+  const tempRoot = mkdtempSync(join(tmpdir(), "acevra-archive-"));
+  const mountPath = join(tempRoot, "dmg");
+  let mounted = false;
+  try {
+    let appPath;
+    if (label === "zip") {
+      const extractPath = join(tempRoot, "zip");
+      mkdirSync(extractPath);
+      const extract = run("/usr/bin/unzip", ["-q", archivePath, "-d", extractPath]);
+      if (!extract.ok) {
+        errors.push(`${label} extraction failed: ${extract.output.trim()}`);
+        return null;
+      }
+      appPath = join(extractPath, "AceVra.app");
+    } else {
+      mkdirSync(mountPath);
+      const attach = run("/usr/bin/hdiutil", [
+        "attach",
+        "-nobrowse",
+        "-readonly",
+        "-mountpoint",
+        mountPath,
+        archivePath,
+      ]);
+      if (!attach.ok) {
+        errors.push(`${label} mount failed: ${attach.output.trim()}`);
+        return null;
+      }
+      mounted = true;
+      appPath = join(mountPath, "AceVra.app");
+    }
+    const bundleId = plistValue(join(appPath, "Contents", "Info.plist"), "CFBundleIdentifier");
+    const version = plistValue(join(appPath, "Contents", "Info.plist"), "CFBundleShortVersionString");
+    if (bundleId !== "com.acevra.desktop") errors.push(`${label} app bundle id is ${bundleId}`);
+    if (version !== rootVersion) errors.push(`${label} app version is ${version}`);
+    const verify = run("/usr/bin/codesign", ["--verify", "--strict", "--deep", appPath]);
+    if (!verify.ok) errors.push(`${label} app strict signature verification failed: ${verify.output.trim()}`);
+    const details = run("/usr/bin/codesign", ["-dv", "--verbose=4", appPath]);
+    const requirement = run("/usr/bin/codesign", ["-d", "-r-", appPath]);
+    const detailsText = `${details.output}${details.stderr ?? ""}`;
+    const requirementText = `${requirement.output}${requirement.stderr ?? ""}`;
+    const root = extractCertificateRoot(requirementText);
+    if (/Signature=adhoc/i.test(detailsText)) errors.push(`${label} app is ad-hoc signed`);
+    if (!requirementText.includes('identifier "com.acevra.desktop"') || !root) {
+      errors.push(`${label} app designated requirement is not certificate-root anchored`);
+    }
+    if (root && expectedRoot && root !== expectedRoot) {
+      errors.push(`${label} app certificate root does not match the validated build root`);
+    }
+    for (const finding of scanCandidateContents(appPath).slice(0, 50)) {
+      errors.push(`${label} content scan: ${finding.kind} at ${finding.path}`);
+    }
+    return root;
+  } finally {
+    if (mounted) run("/usr/bin/hdiutil", ["detach", mountPath, "-quiet"]);
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 }
 
 function rawBuildInventory(dist) {
@@ -315,6 +378,15 @@ export function verifyLocalAlphaCandidate(distDir) {
   }
   if (appCertificateRoot && probeCertificateRoot && appCertificateRoot !== probeCertificateRoot) {
     errors.push("app and peer probe certificate roots do not match");
+  }
+
+  for (const archive of archiveEntries) {
+    verifyArchivedApp(
+      join(dist, archive),
+      archive.toLowerCase().endsWith(".zip") ? "zip" : "dmg",
+      errors,
+      appCertificateRoot,
+    );
   }
 
   const nested = scanCandidateContents(appPath);
