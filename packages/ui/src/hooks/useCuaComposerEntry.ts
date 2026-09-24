@@ -12,6 +12,7 @@ import { useSettings } from "@/hooks/useSettingService.js";
 import { useCuaPermissionStatus } from "@/hooks/useCuaPermissionStatus.js";
 import {
   resolveCuaComposerEntryView,
+  isCuaComposerPluginError,
   type CuaComposerEntryView,
 } from "@/lib/cuaComposerEntryState.js";
 import {
@@ -138,8 +139,11 @@ export function useCuaComposerEntry({
         permissionServiceAvailable: Boolean(services.cuaPermissionService),
         pluginEnabled,
         pluginToggling: togglingPluginId === ZCODE_CUA_OFFICIAL_PLUGIN_ID,
-        pluginError:
-          Boolean(pluginStoreError) && lastFailedPluginId === ZCODE_CUA_OFFICIAL_PLUGIN_ID,
+        pluginError: isCuaComposerPluginError(
+          Boolean(pluginStoreError),
+          lastFailedPluginId,
+          ZCODE_CUA_OFFICIAL_PLUGIN_ID,
+        ),
         permissionStatus: permissionStatus ?? null,
         sessionBusy,
       }),

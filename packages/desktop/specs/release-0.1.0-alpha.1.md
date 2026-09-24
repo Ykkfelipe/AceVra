@@ -254,7 +254,10 @@ The alpha notice is an opt-in reminder, not a permanent status card. It remains 
 canonical Computer Use plugin is disabled, loading, toggling, or failed, and disappears only after
 the plugin reports confirmed enabled state. The composer Computer Use error copy describes a
 plugin-enablement failure and points to Settings; it must not claim a Helper failure or prescribe a
-ZCode restart.
+ZCode restart. When the canonical plugin is confirmed enabled, that authoritative state suppresses
+any stale prior enablement error in the composer; an enablement error is shown only while the
+plugin is not confirmed enabled. This keeps the Settings switch, composer state, and error copy
+from displaying contradictory states.
 
 Reuse the existing permission rows and return-recovery flow. Add one software **Stop computer
 control** action, visible and enabled only while the authoritative service lease is active; repeated

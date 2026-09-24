@@ -23,6 +23,14 @@ export type CuaComposerEntryUiState =
   | "ready"
   | "error";
 
+export function isCuaComposerPluginError(
+  hasPluginError: boolean,
+  lastFailedPluginId: string | null,
+  officialPluginId: string,
+): boolean {
+  return hasPluginError && lastFailedPluginId === officialPluginId;
+}
+
 interface CuaComposerEntryInputs {
   /** macOS 本地桌面且具备 CUA onboarding 能力（UA + preload capability 双判）。 */
   macLocalDesktop: boolean;
@@ -101,7 +109,9 @@ function resolveUiState(inputs: CuaComposerEntryInputs): CuaComposerEntryUiState
   // toggling 优先级最高：切换过程中的中间态不应被旧的 enabled/权限值覆盖。
   // 它同时兜住了「未启用 + 切换中」这唯一能过插件门的未启用组合。
   if (inputs.pluginToggling) return "starting";
-  if (inputs.pluginError) return "error";
+  // 已确认启用是更强的当前事实。插件 store 的共享 error 可能来自较早失败、并发刷新或
+  // 过期响应；不能让残留错误覆盖已启用的聊天入口，重新显示“无法启用”提示。
+  if (inputs.pluginError && !inputs.pluginEnabled) return "error";
 
   // Windows 无 TCC：插件启用即就绪，不参与权限判定。
   if (!inputs.macLocalDesktop) return "ready";
