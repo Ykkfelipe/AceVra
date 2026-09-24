@@ -36,7 +36,7 @@ export function verifyPackagedComputerUsePluginFromBuilderContext(context) {
     context.electronPlatformName === "darwin"
       ? resolve(
           context.appOutDir,
-          context.packager.info.framework.distMacOsAppName,
+          `${context.packager.appInfo.productFilename}.app`,
           "Contents",
           "Resources",
         )
