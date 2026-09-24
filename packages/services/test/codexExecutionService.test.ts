@@ -699,3 +699,62 @@ test("thread/started notification updates runtime model/effort from Codex's Thre
     effort: "low",
   });
 });
+
+test("turn/completed parses the nested turn.status shape from Codex 0.155.0-alpha.16.x", async () => {
+  const { parseCodexNotification } = await import("../src/codex/domain/codexWire.js");
+  const success = parseCodexNotification("turn/completed", {
+    threadId: "t1",
+    turn: { id: "turn-1", status: "completed", error: null },
+  });
+  assert.deepEqual(success, {
+    type: "turnCompleted",
+    threadId: "t1",
+    turnId: "turn-1",
+    outcome: "success",
+    errorMessage: null,
+  });
+  const failed = parseCodexNotification("turn/completed", {
+    threadId: "t1",
+    turn: { id: "turn-1", status: "failed", error: { code: "x", message: "boom" } },
+  });
+  assert.equal(failed.type === "turnCompleted" && failed.outcome, "failed");
+  assert.equal(failed.type === "turnCompleted" && failed.errorMessage, "boom");
+  // 旧形状兼容（顶层 status/outcome）。
+  const legacy = parseCodexNotification("turn/completed", {
+    threadId: "t1",
+    turnId: "turn-legacy",
+    status: "interrupted",
+  });
+  assert.equal(legacy.type === "turnCompleted" && legacy.outcome, "interrupted");
+});
+
+test("notifications arriving before runtime registration are replayed on attach", async () => {
+  const { createCodexNotificationRouter } = await import(
+    "../src/codex/app/codexNotificationRouter.js"
+  );
+  const { CodexTaskRuntime } = await import("../src/codex/app/codexTaskRuntime.js");
+  const runtimes = new Map<string, InstanceType<typeof CodexTaskRuntime>>();
+  const commits: Array<{ taskId: string; seq: number }> = [];
+  const denied: number[] = [];
+  const router = createCodexNotificationRouter({
+    runtimes: runtimes as never,
+    emitCommit: (taskId, commit) => commits.push({ taskId, seq: commit.seq }),
+    onUnroutableServerRequest: (raw) => denied.push(raw.rawId),
+  });
+  // runtime 尚未注册：通知进入缓冲（server request 仍即时 fail closed）。
+  assert.equal(router.handle("turn/completed", { threadId: "t9", turn: { id: "x", status: "completed" } }), null);
+  router.handle("item/commandExecution/requestApproval", { threadId: "t9" }, { method: "item/commandExecution/requestApproval", params: { threadId: "t9" }, rawId: 7 });
+  assert.deepEqual(denied, [7]);
+  assert.equal(commits.length, 0);
+
+  const runtime = new CodexTaskRuntime(
+    { taskId: "task-1", workspacePath: "/tmp/ws", codexThreadId: "t9", bridgeGeneration: 1 },
+    () => 0,
+  );
+  runtimes.set("task-1", runtime);
+  // 注册后回放：turn/completed 必须把 running 收口为 completedSuccess。
+  router.attachRuntime(runtime);
+  assert.equal(runtime.projection.phase, "completedSuccess");
+  assert.ok(commits.length > 0);
+  assert.equal(commits.every((c) => c.taskId === "task-1"), true);
+});

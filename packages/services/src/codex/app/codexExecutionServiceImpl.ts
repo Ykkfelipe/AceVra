@@ -43,15 +43,11 @@ import {
   CodexTaskRuntime,
   ensureRuntimeForTask,
   extractCodexTurnId,
-  routeCodexNotification,
-  selectRuntimeForNotification,
   startCodexThread,
 } from "./codexTaskRuntime.js";
 import type { CodexAppServerPort, CodexTaskIndexPort } from "./codexPorts.js";
-import {
-  persistCodexStatus,
-  persistCodexTurnOverride,
-} from "./codexTaskPersistence.js";
+import { createCodexNotificationRouter } from "./codexNotificationRouter.js";
+import { persistCodexStatus, persistCodexTurnOverride } from "./codexTaskPersistence.js";
 import type { ICodexExecutionService } from "./codexExecutionService.js";
 import { handleConversationCommand } from "./codexConversationCommands.js";
 
@@ -126,36 +122,37 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
 
 
   // ── bridge 通知扇入：按 threadId 路由到 runtime 并归约成帧 ──
+  // 无主通知按 threadId 暂存、runtime 注册时回放：否则 thread/start 窗口期到达的
+  // turn/completed 会被丢弃，投影永久停在 running（composer 永远“agent 正在工作”）。
+  const notificationRouter = createCodexNotificationRouter({
+    runtimes,
+    emitCommit,
+    onUnroutableServerRequest: (rawRequest) => {
+      if (!rawRequest.method.includes("requestApproval")) return;
+      // fail closed：无法定位 thread 的审批按 schema 真形回拒（权限类回空授权）。
+      deps.bridge.respond(rawRequest.rawId, codexUnroutableApprovalResponse(rawRequest.method));
+      logger.warn(undefined, `codex approval routed to no runtime; denied rawId=${rawRequest.rawId}`);
+    },
+  });
   const offNotification = deps.bridge.onNotification((method, params, rawRequest) => {
     try {
-      const record = typeof params === "object" && params !== null ? (params as Record<string, unknown>) : null;
-      const threadId = typeof record?.threadId === "string" ? record.threadId : typeof record?.thread_id === "string" ? record.thread_id : null;
-      const runtime = selectRuntimeForNotification([...runtimes.values()], threadId);
-      const routed = runtime ? routeCodexNotification(runtime, method, params, rawRequest) : null;
-      if (!routed) {
-        // 审批类服务器请求必须可路由：无法定位 thread 的审批回 denied 并告警，
-        // 绝不静默丢弃（那会让 turn 无 UI 可审批地挂死）。
-        if (rawRequest && rawRequest.method.includes("requestApproval")) {
-          // fail closed：无法定位 thread 的审批按 schema 真形回拒（权限类回空授权）。
-          deps.bridge.respond(rawRequest.rawId, codexUnroutableApprovalResponse(rawRequest.method));
-          logger.warn(undefined, `codex approval routed to no runtime; denied rawId=${rawRequest.rawId}`);
-        }
-        return;
-      }
-      emitCommit(runtime!.taskId, routed.commit);
+      const routed = notificationRouter.handle(method, params, rawRequest);
+      if (!routed) return;
       if (method === "turn/completed") {
-        persistStatus(runtime!.taskId, runtime!.projection.phase === "error" ? "error" : "completed");
+        const runtime = runtimes.get(routed.taskId);
+        if (!runtime) return;
+        persistStatus(routed.taskId, runtime.projection.phase === "error" ? "error" : "completed");
         // 用户点名交付：turn 完成后旁路注册（不改 turn 语义，不阻塞通知扇入）。
-        const delivery = runtime!.projection.takeCompletedTurnDelivery();
+        const delivery = runtime.projection.takeCompletedTurnDelivery();
         if (delivery && deps.taskArtifacts) {
           void deliverUserNamedCodexArtifacts({
             registry: deps.taskArtifacts,
-            taskId: runtime!.taskId,
-            workspacePath: runtime!.workspacePath,
-            ...(runtime!.workspaceIdentity
-              ? { workspaceIdentity: runtime!.workspaceIdentity }
+            taskId: runtime.taskId,
+            workspacePath: runtime.workspacePath,
+            ...(runtime.workspaceIdentity
+              ? { workspaceIdentity: runtime.workspaceIdentity }
               : {}),
-            projection: runtime!.projection,
+            projection: runtime.projection,
             delivery,
             emitCommit,
           }).catch((error) => {
@@ -169,10 +166,15 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   });
 
   /** 确保 runtime 可用；失败路径绝不污染缓存，错误一律脱敏后再出通道。 */
-  const ensureRuntime = (taskId: string): Promise<CodexTaskRuntime> => ensureRuntimeForTask({
-    bridge: deps.bridge, taskIndex: deps.taskIndex, policy: deps.policy,
-    taskArtifacts: deps.taskArtifacts, runtimes, taskId, now,
-  });
+  const ensureRuntime = async (taskId: string): Promise<CodexTaskRuntime> => {
+    const runtime = await ensureRuntimeForTask({
+      bridge: deps.bridge, taskIndex: deps.taskIndex, policy: deps.policy,
+      taskArtifacts: deps.taskArtifacts, runtimes, taskId, now,
+    });
+    // 冷恢复/bridge 换代后回放该 thread 暂存的通知。
+    notificationRouter.attachRuntime(runtime);
+    return runtime;
+  };
 
   const service: ICodexExecutionService = {
     async createTask(params: CodexExecutionCreateTaskParams): Promise<CodexExecutionCreateTaskResult> {
@@ -223,6 +225,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       );
       runtime.projection.setTitle(title);
       runtimes.set(taskId, runtime);
+      notificationRouter.attachRuntime(runtime); // 回放 thread/start 窗口期先到的通知
       await deps.taskIndex.syncTaskMeta({ meta });
       if (params.firstInput?.trim()) await service.sendTurn({ taskId, content: params.firstInput, ...(override.effort ? { effort: override.effort } : {}) });
       return { task: toCodexTaskBinding(meta) };

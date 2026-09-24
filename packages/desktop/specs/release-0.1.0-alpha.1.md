@@ -271,6 +271,12 @@ reports the adopted `model` / `reasoningEffort` — so the UI displays Codex's r
 (snapshot config) rather than guessing, and mid-session switching is supported via
 `codexTurnOverride` on the v4 sendText payload. The host fails loud on non-allow-list values. There
 is no Claude model surface (Claude has no execution backend) and no Agent plan-catalog change.
+Codex turn completion must be recognized in the installed binary's current notification shape
+(`turn/completed` carries `status` / `error` / `id` nested under `turn`; the legacy top-level shape
+stays supported), and notifications that arrive before their runtime is registered are buffered per
+thread and replayed on attach. Dropping a `turn/completed` in that window leaves the projection
+permanently `running` (composer stuck on "agent is working" after the turn actually finished) and
+is a defect.
 
 Reuse the existing permission rows and return-recovery flow. Add one software **Stop computer
 control** action, visible and enabled only while the authoritative service lease is active; repeated

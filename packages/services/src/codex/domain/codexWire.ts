@@ -236,17 +236,30 @@ export function parseCodexNotification(method: string, params: unknown): CodexSe
         : { type: "unknown", method };
     }
     case "turn/started":
-      return { type: "turnStarted", threadId, turnId };
-    case "turn/completed":
+      return { type: "turnStarted", threadId, turnId: turnId ?? asOptionalString(asRecord(record.turn)?.id) };
+    case "turn/completed": {
+      // 0.155.0-alpha.16.4 的真形：status/error/turnId 嵌套在 params.turn
+      // （顶层 status/outcome 是旧形状，保留兼容）。漏读嵌套 status 会把 failed
+      // turn 误判为 success，并让投影停在错误终态。
+      const turn = asRecord(record.turn);
+      const nestedError = turn ? turn.error : undefined;
       return {
         type: "turnCompleted",
         threadId,
-        turnId,
-        outcome: parseOutcome(record.status ?? record.outcome, Boolean(record.error)),
+        turnId: turnId ?? asOptionalString(asRecord(turn)?.id),
+        outcome: parseOutcome(
+          turn?.status ?? record.status ?? record.outcome,
+          Boolean(nestedError ?? record.error),
+        ),
         errorMessage: asOptionalString(
-          asRecord(record.error)?.message ?? record.error ?? record.lastErrorMessage,
+          asRecord(nestedError)?.message ??
+            asRecord(record.error)?.message ??
+            (typeof nestedError === "string" ? nestedError : undefined) ??
+            (typeof record.error === "string" ? record.error : undefined) ??
+            record.lastErrorMessage,
         ),
       };
+    }
     case "item/started":
     case "item/completed": {
       const item = parseItem(record.item ?? record);
