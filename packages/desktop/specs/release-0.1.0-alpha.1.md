@@ -24,10 +24,13 @@ release safety state but owns no Helper or lease state.
 The release gates run through the repository-pinned Node toolchain (`mise.toml` Node 24.14.0).
 Root build and bundle scripts must preserve that toolchain for nested workspace processes; an
 unsupported system Node is an execution error, not a reason to weaken the release artifact. The
-candidate and installed-acceptance scripts remain fail-closed when their required directories,
-arguments, signatures, or human checkpoints are absent. Architecture checks also require every
-managed module to expose its declared `module.ts` artifact; this release does not change the
-behavior of those modules.
+release `bundle:desktop` entrypoint is alpha-scoped: it sets `local-engineering-alpha`, resolves
+`release/0.1.0-alpha.1/build` as an absolute output directory, and rejects x64/universal targets
+before Electron Builder runs. It still requires the isolated local signing identity and must
+fail closed when that identity is unavailable. The candidate and installed-acceptance scripts
+remain fail-closed when their required directories, arguments, signatures, or human checkpoints
+are absent. Architecture checks also require every managed module to expose its declared
+`module.ts` artifact; this release does not change the behavior of those modules.
 
 ## Profile and data isolation
 

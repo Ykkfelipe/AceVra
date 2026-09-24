@@ -326,25 +326,28 @@ implementation is not a candidate until the remaining gates below pass.
 
 Executed during this gate-fix revision:
 
-- `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 4 / behind 0, no upstream
-- `mise exec -- node scripts/mise-run.mjs pnpm architecture:check` — exit 0;
-  `architecture: OK`, violations 0, baseline 0, new 0
+- `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 6 / behind 0, no upstream
+- `mise exec -- node scripts/mise-run.mjs pnpm architecture:check` — exit 0; violations 0, baseline 0, new 0
 - `mise exec -- node scripts/mise-run.mjs pnpm typecheck` — exit 0
 - `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0; 75 warnings, 0 errors
 - `mise exec -- node scripts/mise-run.mjs pnpm verify:pre-push` — exit 0
 - `mise exec -- node scripts/mise-run.mjs pnpm build` — exit 0 under pinned Node 24.14.0
+- `pnpm build` — exit 0 under the current environment's Node 26.9.0; this is not the pinned release
+  toolchain and is supporting evidence only
 - `mise exec -- node scripts/mise-run.mjs pnpm fmt:check` — exit 1; 42 pre-existing unrelated files
   remain unformatted; no unrelated files were changed
 - `mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs
 packages/desktop/scripts/macos-window-bounds-targets.test.mjs` — exit 0; 132 tests passed
-- `mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate` — not run to completion:
-  no current `release/0.1.0-alpha.1/build/` candidate exists
+- `mise exec -- node scripts/mise-run.mjs node --test scripts/release/alpha-bundle-env.test.mjs` —
+  exit 0; 1 test passed
+- `pnpm bundle:desktop -- --os mac --arch arm64` — exit 1; the release profile was applied, but
+  the isolated signing keychain is unavailable
+- `mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate` — exit 1; no current
+  `release/0.1.0-alpha.1/build/` candidate exists
 - `mise exec -- node scripts/mise-run.mjs pnpm release:assemble:candidate` — not run to completion:
   no validation fixture exists
 - `mise exec -- node scripts/mise-run.mjs pnpm release:accept:installed` — not run: no handoff and no
   installed-app acceptance arguments/checkpoints exist
-- `mise exec -- node scripts/mise-run.mjs pnpm bundle:desktop -- --os mac --arch arm64` — not run to
-  completion: the isolated local signing keychain is unavailable
 - `git diff --check` — exit 0
 
 The release scripts remain fail-closed when their required artifact, argument, signature, or human
