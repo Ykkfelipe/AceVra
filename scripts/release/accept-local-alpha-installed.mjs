@@ -34,7 +34,7 @@ function assertDirectory(path, label) {
 
 function walkTree(rootPath) {
   const hash = createHash("sha256");
-  const resolvedRoot = resolve(rootPath);
+  const resolvedRoot = realpathSync(resolve(rootPath));
   const visit = (current, relativePath) => {
     const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) =>
       left.name.localeCompare(right.name),
