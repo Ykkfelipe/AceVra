@@ -1615,3 +1615,26 @@ Only the `42a26cd` build, validation, and handoff remain. The human check is now
 expands normally without overlap, the Agent naming is visible, the CUA failure tooltip remains gone,
 and the alpha reminder disappears after confirmed enablement. No TCC permissions were changed and
 broader acceptance remains paused.
+
+## 2026-09-24 Codex curated model selection
+
+Commit `7cb9b1c` adds a working model selector for the Codex backend, per the approved plan
+(Codex-only; Claude stays out because no Claude execution backend exists):
+
+- Shared contract `CODEX_MODEL_OPTIONS` (exact allow-list): `gpt-6-astra`, `gpt-6-sol`,
+  `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`; `null`/absent = Default sentinel
+  (Codex app setting, no `model` field sent).
+- Host: `thread/start` carries the curated `model`; non-curated ids fail loud
+  (`codex_model_not_allowed`); selection persists in `ZCodeTaskMeta.codexModelId`, survives
+  bridge-generation rebuilds, and is reflected in snapshot `config.model`.
+- UI: new `V4ComposerCodexModelSelect` dropdown (Default + six models, with slug sublabels);
+  draft persistence via `codexModelId`; SessionPane passes it to `createTask`.
+- Focused tests: 27 Codex service/projection + 14 composer/cache/CUA state, all passing;
+  typecheck, lint (0 errors), and architecture checks passed. Formatting churn that pushed two
+  managed codex files over the 400-line cap was reverted to HEAD and logic re-applied compactly.
+
+Installed candidate: `handoff-final-7cb9b1c` (embedded `7cb9b1c3`, built
+`2026-09-24T17:37:42.132Z`), installed after graceful shutdown via the backup/rollback runner
+(backup `.AceVra.app.backup-7d49b4df-84ad-477d-aad0-aba68cd24b0d`), app relaunched. Raw app,
+ZIP app, and mounted DMG passed the archive-aware validator. No TCC changes; broader acceptance
+remains paused.
