@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 4,
+  "product": "AceVra",
+  "version": "0.1.0-alpha.1",
+  "buildCommitId": "d70197b8",
+  "buildTime": "2026-09-24T05:53:05.407Z",
+  "releaseProfile": "local-engineering-alpha",
+  "distribution": "local engineering alpha",
+  "branch": "release/0.1.0-alpha",
+  "toolchain": {
+    "node": "24.14.0",
+    "pnpm": "10.33.2",
+    "electronBuilder": "26.8.1"
+  },
+  "target": {
+    "platform": "macOS",
+    "architecture": "arm64",
+    "bundleId": "com.acevra.desktop",
+    "productName": "AceVra",
+    "executable": "AceVra"
+  },
+  "signing": {
+    "kind": "self-signed-local",
+    "identity": "AceVra CUA Dev Signing",
+    "outerApp": "certificate-signed",
+    "outerAppDesignatedRequirement": "identifier \"com.acevra.desktop\" and certificate root = H\"bf8f0f5130e10950f5a723ee77b8cad93951b56a\"",
+    "helperDesignatedRequirement": "identifier \"dev.acevra.cua-helper\" and certificate root = H\"bf8f0f5130e10950f5a723ee77b8cad93951b56a\"",
+    "peerProbeDesignatedRequirement": "identifier \"dev.acevra.cua-peer-identity.development\" and certificate root = H\"bf8f0f5130e10950f5a723ee77b8cad93951b56a\"",
+    "developerId": false,
+    "notarized": false,
+    "stapled": false
+  },
+  "native": {
+    "helperResourcePath": "AceVra Computer Use.app",
+    "helperBundleId": "dev.acevra.cua-helper",
+    "helperExecutable": "AceVraComputerUse",
+    "peerProbeId": "dev.acevra.cua-peer-identity.development",
+    "architecture": "arm64"
+  },
+  "artifacts": [
+    "AceVra-0.1.0-alpha.1-arm64.dmg",
+    "AceVra-0.1.0-alpha.1-arm64.zip"
+  ],
+  "installedAcceptance": "not-run; human checkpoint pending"
+}

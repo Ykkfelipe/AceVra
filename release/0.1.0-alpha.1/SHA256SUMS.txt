@@ -1,0 +1,2 @@
+5a8b18a77148dda426e94cd882184bdbe52f02f768816181abd206ba28575b44  AceVra-0.1.0-alpha.1-arm64.dmg
+badcb722f03ffbb1676b8f210b7e9de62649ddcf289a8e6e72c3dcf42abc0c90  AceVra-0.1.0-alpha.1-arm64.zip
