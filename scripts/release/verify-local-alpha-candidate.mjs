@@ -474,7 +474,9 @@ if (isEntrypoint) {
     if (existsSync(validationDir))
       throw new Error(`validation directory already exists: ${validationDir}`);
     mkdirSync(validationDir);
-    cpSync(result.appPath, join(validationDir, "AceVra.app"), { recursive: true });
+    const validationAppPath = join(validationDir, "AceVra.app");
+    const appCopy = run("/usr/bin/ditto", [result.appPath, validationAppPath]);
+    if (!appCopy.ok) throw new Error(`validation app copy failed: ${appCopy.output.trim()}`);
     for (const archive of result.archives)
       cpSync(join(buildDir, archive), join(validationDir, archive));
     writeCandidateProvenance(validationDir, {

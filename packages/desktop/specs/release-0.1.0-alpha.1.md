@@ -254,7 +254,8 @@ Replacement is a no-clobber transaction:
 2. refuse ambiguous provenance; require the app to be fully quit, including Helper/Agent children,
    and never terminate or overwrite a running app automatically
 3. create a uniquely named sibling backup and a uniquely named sibling staging copy from the
-   validated app fixture; both use runner-owned markers and never `rm -rf` the target
+   validated app fixture; use a signature-preserving app-bundle copy, both use runner-owned markers,
+   and never `rm -rf` the target
 4. verify the backup and staging tree hashes, identities, architectures, permissions, and strict
    signatures before touching the target
 5. rename the existing target to a unique rollback sibling, then atomically rename staging into

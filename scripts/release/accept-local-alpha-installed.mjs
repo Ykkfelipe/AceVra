@@ -2,7 +2,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
-  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -168,7 +167,7 @@ export function installCandidate({
   }
 
   const stagingPath = uniqueSiblingPath(target, "staging");
-  cpSync(source, stagingPath, { recursive: true, errorOnExist: true });
+  execFileSync("/usr/bin/ditto", [source, stagingPath]);
   try {
     const stagingInfo = verifyApp(stagingPath, expectedVersion);
     if (stagingInfo.treeHash !== sourceInfo.treeHash) {
