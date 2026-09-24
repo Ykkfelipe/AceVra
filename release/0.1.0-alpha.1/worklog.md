@@ -1408,3 +1408,28 @@ Final candidate paths:
 
 Formal broader installed acceptance remains intentionally pending Gatekeeper/TCC/Input Monitoring,
 Helper/CUA, physical interruption, browser, artifact, account/provider, remote, and restart checkpoints.
+
+## 2026-09-24 Computer Use settings repair
+
+The repaired `ab7c5b26` candidate now includes the official `computer-use@zcode-plugins-official`
+package, its packaged manifest/skill/docs/client assets, a real admitted-Helper permission-status
+relay, `available: true` service projection, a distinct Helper-unavailable UI state, permission
+recheck UI, and typed macOS Privacy & Security fallback. The current installed app is this candidate;
+the prior app is preserved at
+`/Applications/.AceVra.app.backup-f9da983d-9bc1-41a5-9ccd-38bf6e8d0c5a`.
+
+The non-E2E release handoff is `release/0.1.0-alpha.1/handoff-cua-ab7c5b2/`, with SHA256:
+
+- DMG: `e6be095395fe2b9b9e370102bb435b6345841609901c360e3ad0e15e83d36b9d`
+- ZIP: `42d071e1929f2feebb4f48f2b767ded770a173f04d7524f6bd95f77d539f8783`
+
+Archive-aware validation passed for the raw app, ZIP-contained app, and mounted DMG app. The
+package-aware E2E passed against a separate E2E-flagged build from the same source revision:
+Computer Use navigation, real plugin enablement without `Plugin not found`, composer setting
+consistency, Accessibility/Screen Recording packaged IPC boundaries, active Stop, and released
+projection. OS launch was mocked only at the final E2E boundary.
+
+The repaired candidate is installed but not formally accepted. Human action is now limited to:
+open Settings → Computer Use, enable Computer Use, confirm no missing-plugin toast, click Open
+Accessibility Settings, return, click Open Screen Recording, and report whether System Settings opens.
+Do not change TCC permissions or run broader CUA acceptance yet.
