@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { getUserHomeDir } from "#src/paths.js";
 
 const HOME_PREFIX = "~/";
 
@@ -12,8 +12,7 @@ export function resolveUserHomeDir(options?: SubagentStorageOptions): string {
   if (options?.homeDir && options.homeDir.trim().length > 0) {
     return options.homeDir;
   }
-  const envHome = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
-  return envHome && envHome.length > 0 ? envHome : homedir();
+  return getUserHomeDir();
 }
 
 export async function resolveUserSubagentRoot(options?: SubagentStorageOptions): Promise<string> {

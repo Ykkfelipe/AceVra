@@ -9,7 +9,7 @@ import {
   NodeModelSelectionConfigRepository,
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
-import { getAppConfigDir as resolveAppConfigDir } from "./paths.js";
+import { getAppConfigDir as resolveAppConfigDir, getUserHomeDir } from "./paths.js";
 import { IAccountsService } from "./accounts/accounts.js";
 import { createAccountsService } from "./accounts/accountsServiceImpl.js";
 import { CodexAppServerBridge } from "./accounts/codexAppServerBridge.js";
@@ -72,6 +72,8 @@ export type {
 export {
   setDataBaseDir,
   getDataBaseDir,
+  getUserHomeDir,
+  getUserZCodeDir,
   getZCodeDataRootDir,
   getConversationWorkspaceDir,
   getAppConfigDir,
@@ -1107,8 +1109,8 @@ export function resolveBundledCuaHelperAppPath(
 export { isOfficialCuaPluginEnabledForWorkspace };
 
 export function hasGlobalCliZCodeCuaServer(env: NodeJS.ProcessEnv = process.env): boolean {
-  const home = env.HOME?.trim() || homedir();
-  const configPath = join(home, ".zcode", "cli", "config.json");
+  // ZCODE_HOME is authoritative when the local alpha profile is active; HOME is the fallback.
+  const configPath = join(getUserHomeDir(env), ".zcode", "cli", "config.json");
   let parsed: unknown;
   try {
     parsed = JSON.parse(readFileSync(configPath, "utf8"));

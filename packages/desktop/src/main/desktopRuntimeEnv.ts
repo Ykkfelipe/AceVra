@@ -11,6 +11,8 @@ import {
   ZCODE_DYNAMIC_WORKFLOW_MODE_ENV,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
+  ZCODE_RELEASE_PROFILE,
+  LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE,
   ZCODE_RUNTIME_ENV_KEY,
   ZCODE_VERSION,
   buildZCodeToolEnvPassthroughEnv,
@@ -26,6 +28,10 @@ import {
   type ZCodeRuntimeEnv,
 } from "@zcode/shared";
 import { resolvePlatformKeyForPackagedApp } from "../../scripts/target-platform.mjs";
+import {
+  isLocalEngineeringAlphaProfile,
+  resolveLocalEngineeringAlphaPaths,
+} from "../../scripts/desktop-release-profile.mjs";
 import {
   getAppConfigDir,
   getDataBaseDir,
@@ -45,6 +51,15 @@ export const desktopRuntimeEnv: ZCodeRuntimeEnv = isLocalDevelopmentRuntime
 // 身份看编译期 flavor 而不是 ZCODE_ENV：ZCODE_PREVIEW_IDENTITY=1 的生产后端构建同样是 Preview，
 // 需要独立的应用名、Electron 数据目录和 Helper 安装子目录才能与正式版并排运行。
 const isPreviewPackagedRuntime = !isLocalDevelopmentRuntime && ZCODE_PRODUCT_FLAVOR === "preview";
+// Local engineering alpha is a profile, not a flavor: it keeps production identity and only
+// changes the release channel, updater, Electron user-data and data roots. The runtime env
+// override keeps local acceptance runs self-contained; the compiled define covers packaged use.
+export const isLocalEngineeringAlphaRuntime =
+  isLocalEngineeringAlphaProfile(process.env) ||
+  ZCODE_RELEASE_PROFILE === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE;
+const localAlphaPaths = isLocalEngineeringAlphaRuntime
+  ? resolveLocalEngineeringAlphaPaths({ env: process.env })
+  : null;
 
 function readRuntimeEnvOverride(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
@@ -60,16 +75,19 @@ function isTruthyRuntimeEnvOverride(name: string): boolean {
 // 这里允许测试显式隔离运行时身份，正常桌面/远控路径保持原来的默认值。
 export const runtimeApplicationName =
   readRuntimeEnvOverride("ZCODE_DESKTOP_APPLICATION_NAME") ??
-  (isLocalDevelopmentRuntime
-    ? "AceVra Dev"
-    : isPreviewPackagedRuntime
-      ? "AceVra Preview"
-      : "AceVra");
+  (isLocalEngineeringAlphaRuntime
+    ? "AceVra Local Engineering Alpha"
+    : isLocalDevelopmentRuntime
+      ? "AceVra Dev"
+      : isPreviewPackagedRuntime
+        ? "AceVra Preview"
+        : "AceVra");
 export const runtimeProtocolScheme =
   readRuntimeEnvOverride("ZCODE_DESKTOP_PROTOCOL_SCHEME") ?? "zcode";
 // Electron 的 app.getPath("home") 不一定跟随测试进程里的 HOME 覆盖。
 // e2e 默认工作区依赖 home 路径，因此提供显式覆盖，避免测试写到开发者真实 ~/ZCodeProject。
-export const runtimeHomePath = readRuntimeEnvOverride("ZCODE_DESKTOP_HOME_DIR");
+export const runtimeHomePath =
+  readRuntimeEnvOverride("ZCODE_DESKTOP_HOME_DIR") ?? localAlphaPaths?.profileHome;
 // Chromedriver 管理 Electron 时会注入临时 userData；e2e 默认路径模式下导入期不能提前读取 appData。
 export const shouldUseElectronDefaultUserDataPath = isTruthyRuntimeEnvOverride(
   "ZCODE_DESKTOP_USE_ELECTRON_DEFAULT_USER_DATA",
@@ -78,7 +96,7 @@ export const runtimeUserDataPath =
   readRuntimeEnvOverride("ZCODE_DESKTOP_USER_DATA_DIR") ??
   (shouldUseElectronDefaultUserDataPath
     ? undefined
-    : join(getElectronAppPath("appData"), runtimeApplicationName));
+    : (localAlphaPaths?.userData ?? join(getElectronAppPath("appData"), runtimeApplicationName)));
 export const runtimeSessionDataPath =
   readRuntimeEnvOverride("ZCODE_DESKTOP_SESSION_DATA_DIR") ??
   (runtimeUserDataPath ? join(runtimeUserDataPath, "session") : undefined);

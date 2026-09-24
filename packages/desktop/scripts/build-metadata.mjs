@@ -3,6 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  LOCAL_ENGINEERING_ALPHA_PROFILE,
+  isLocalEngineeringAlphaProfile,
+} from "./desktop-release-profile.mjs";
 
 const require = createRequire(import.meta.url);
 const moduleDir = import.meta.dirname;
@@ -79,12 +83,37 @@ function resolveCommitId() {
   }
 }
 
+/**
+ * The product Helper ships with the app's own version string and one deterministic numeric
+ * build number. A timestamp or an implicit default would make an installed Helper look newer
+ * or older than the app it belongs to, so both fields come from this one release decision.
+ */
+export function resolveCuaHelperBuildMetadata(env = process.env, appVersion = "unknown") {
+  const alpha = isLocalEngineeringAlphaProfile(env);
+  const explicitBuildNumber = env.ZCODE_CUA_HELPER_BUILD_NUMBER?.trim();
+  if (explicitBuildNumber && !/^[0-9]+$/.test(explicitBuildNumber)) {
+    throw new Error(
+      `[build-meta] ZCODE_CUA_HELPER_BUILD_NUMBER must be numeric, got ${explicitBuildNumber}`,
+    );
+  }
+  return {
+    helperVersion: appVersion,
+    helperBuildNumber: explicitBuildNumber || "1",
+    cuaSigningIdentityName: alpha ? "AceVra CUA Dev Signing" : null,
+  };
+}
+
 export function collectBuildMetadata() {
   const rootPackageJson = readJson(resolve(workspaceDir, "package.json"));
   const desktopPackageJson = readJson(resolve(desktopDir, "package.json"));
+  const appVersion = normalizeVersion(rootPackageJson.version);
 
   return {
-    appVersion: normalizeVersion(rootPackageJson.version),
+    appVersion,
+    releaseProfile: isLocalEngineeringAlphaProfile(process.env)
+      ? LOCAL_ENGINEERING_ALPHA_PROFILE
+      : "production",
+    ...resolveCuaHelperBuildMetadata(process.env, appVersion),
     buildCommitId: resolveCommitId(),
     buildTime: new Date().toISOString(),
     electronBuilderVersion: resolveInstalledPackageVersion(

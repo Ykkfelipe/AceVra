@@ -12,7 +12,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type {
   PluginSyncCandidate,
@@ -28,6 +28,7 @@ import {
   type PluginSyncArchiveMetadata,
 } from "./pluginSyncArchive.js";
 import { normalizePluginSyncRelativePath, resolvePluginSyncPathWithin } from "./pluginSyncPath.js";
+import { getUserHomeDir as resolveUserHomeDir } from "../paths.js";
 import { checkRemoteSyncDirectoriesWriteAccess } from "../remote-sync/remoteSyncWriteAccess.js";
 
 interface PluginManifestInfo {
@@ -210,10 +211,6 @@ export function createPluginSyncService(options?: {
       return await importMarketplaceSourceArchiveInternal(params.archive, maxArchiveBytes);
     },
   };
-}
-
-function resolveUserHomeDir(): string {
-  return process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir();
 }
 
 function getUserZcodeConfigPath(): string {

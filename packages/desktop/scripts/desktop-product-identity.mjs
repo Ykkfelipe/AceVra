@@ -3,6 +3,8 @@
  * 典型用法是 `ZCODE_ENV=production ZCODE_PREVIEW_IDENTITY=1`，得到一个连接生产后端、
  * 可与原版并排安装的 `AceVra Preview`。
  */
+import { assertLocalAlphaProfileIsIdentitySafe } from "./desktop-release-profile.mjs";
+
 export const ZCODE_PREVIEW_IDENTITY_ENV = "ZCODE_PREVIEW_IDENTITY";
 
 const PRODUCTION_IDENTITY = Object.freeze({
@@ -57,6 +59,8 @@ export function isPreviewIdentityRequested(env = process.env) {
  * 未知 `ZCODE_ENV` 继续按 test 处理，和共享层 normalizeZCodeEnv 的 fail-safe 默认值一致。
  */
 export function resolveDesktopProductFlavor(env = process.env) {
+  // The local alpha keeps production identity; Preview's flag would otherwise win outright.
+  assertLocalAlphaProfileIsIdentitySafe(env);
   if (isPreviewIdentityRequested(env)) {
     return "preview";
   }

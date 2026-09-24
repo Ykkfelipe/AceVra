@@ -1,7 +1,20 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE, ZCODE_RELEASE_PROFILE } from "@zcode/shared";
 import { setDataBaseDir } from "@zcode/services/node";
+import {
+  assertLocalAlphaProfileIsIdentitySafe,
+  isLocalEngineeringAlphaProfile,
+  resolveLocalEngineeringAlphaPaths,
+} from "../../scripts/desktop-release-profile.mjs";
+
+function isLocalAlphaBootstrapProfile(): boolean {
+  return (
+    isLocalEngineeringAlphaProfile(process.env) ||
+    ZCODE_RELEASE_PROFILE === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE
+  );
+}
 
 function resolveBootstrapSettingsFile(homePath: string = homedir()): string {
   const configuredHome = process.env.ZCODE_DESKTOP_HOME_DIR?.trim() || homePath;
@@ -37,7 +50,29 @@ function readBootstrapDataBaseDirFromDisk(
   }
 }
 
+/**
+ * Local engineering alpha is resolved before any settings file is consulted. The profile's
+ * explicit-root conflict rule is enforced here, the canonical roots are published to the
+ * process environment (so every direct-HOME reader and child host agrees), and the production
+ * sentinel file path can never be reached because the profile home is already swapped.
+ */
+function applyLocalEngineeringAlphaBootstrap(): string {
+  assertLocalAlphaProfileIsIdentitySafe(process.env);
+  const paths = resolveLocalEngineeringAlphaPaths({ env: process.env });
+  process.env.ZCODE_DESKTOP_RELEASE_PROFILE = LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE;
+  process.env.ZCODE_DESKTOP_HOME_DIR = paths.profileHome;
+  process.env.ZCODE_DATA_BASE_DIR = paths.dataBaseDir;
+  process.env.ZCODE_HOME = paths.zcodeHome;
+  // 启动早期就把 dataBaseDir 注入进来，避免 logger / crashReporter 先按默认 HOME 建目录。
+  setDataBaseDir(paths.dataBaseDir);
+  return paths.dataBaseDir;
+}
+
 export function applyEarlyDataBaseDirBootstrap(): string | null {
+  if (isLocalAlphaBootstrapProfile()) {
+    return applyLocalEngineeringAlphaBootstrap();
+  }
+
   const dataBaseDir = readBootstrapDataBaseDirFromDisk();
   if (dataBaseDir) {
     // 启动早期就把 dataBaseDir 注入进来，避免 logger / crashReporter 先按默认 HOME 建目录，

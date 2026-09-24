@@ -70,6 +70,8 @@ import {
   PlatformChannels,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
+  ZCODE_RELEASE_PROFILE,
+  LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   DEFAULT_LOCALE,
   ZCODE_VERSION,
@@ -156,6 +158,7 @@ import {
   resolveRemoteAssetDirs,
   resolveZCodeEndpointEnvBaseOrigin,
   desktopRuntimeEnv,
+  isLocalEngineeringAlphaRuntime,
   runtimeApplicationName,
   runtimeHomePath,
   runtimeProtocolScheme,
@@ -1877,8 +1880,17 @@ app.whenReady().then(async () => {
   let bootstrapSettings: AppSettings | undefined;
   try {
     bootstrapSettings = await mainSettingService.get();
-    if (bootstrapSettings.dataBaseDir) {
+    // 本地工程 alpha 的数据根已由 profile 在启动最早期固定；设置文件不能把它改回
+    // 其它目录，否则 alpha 会重新读到生产数据。冲突时保持 profile 结果并记录。
+    if (bootstrapSettings.dataBaseDir && !isLocalEngineeringAlphaRuntime) {
       setDataBaseDir(bootstrapSettings.dataBaseDir);
+    } else if (
+      bootstrapSettings.dataBaseDir &&
+      resolve(bootstrapSettings.dataBaseDir) !== resolve(getDataBaseDir())
+    ) {
+      logger.warn(
+        "[bootstrap] local-engineering-alpha 忽略设置文件中的 dataBaseDir，保持 profile 数据根",
+      );
     }
     if (bootstrapSettings.locale) {
       loadedBootstrapLocale = true;
@@ -1952,7 +1964,10 @@ app.whenReady().then(async () => {
   // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
   // 不向 Preview 渠道提供更新。
   void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production",
+    // The local alpha never publishes or consumes the public update feed.
+    enabled:
+      ZCODE_PRODUCT_FLAVOR === "production" &&
+      ZCODE_RELEASE_PROFILE !== LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE,
     onBeforeQuitAndInstall: async () => {
       notifyStabilityLifecycle("update_install");
       await prepareAppQuit("auto-update quitAndInstall", "update-install");
@@ -2194,8 +2209,12 @@ app.whenReady().then(async () => {
   // 是面向打包发布客户端的安全门，对未打包 dev 运行时无意义。打包版 app.isPackaged === true，
   // gate 照常生效，对真实用户零影响。
   const skipForceUpdateForLocalDevRuntime = !app.isPackaged;
+  const skipForceUpdateForLocalAlpha =
+    ZCODE_RELEASE_PROFILE === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE;
   const forceUpdateGuardResult =
-    ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
+    ZCODE_PRODUCT_FLAVOR === "production" &&
+    !skipForceUpdateForLocalDevRuntime &&
+    !skipForceUpdateForLocalAlpha
       ? await maybeBlockStartupForForceUpdate({
           locale: currentApplicationLocale,
           logger,
@@ -2209,6 +2228,8 @@ app.whenReady().then(async () => {
     logger.info("[force-update] Preview 跳过远端强制升级检查");
   } else if (skipForceUpdateForLocalDevRuntime) {
     logger.info("[force-update] 本地 dev 构建（未打包）跳过远端强制升级检查");
+  } else if (skipForceUpdateForLocalAlpha) {
+    logger.info("[force-update] local-engineering-alpha 跳过远端强制升级检查");
   }
   if (forceUpdateGuardResult.blocked) {
     return;

@@ -8,6 +8,21 @@ export type ArmsRumEnv = "local" | "prod";
 // 非构建环境（如 e2e 测试的 mocha）下 define 不存在，用 typeof 检查 + fallback 避免 ReferenceError
 declare const __ZCODE_ENV__: string;
 declare const __ZCODE_PRODUCT_FLAVOR__: string;
+declare const __ZCODE_RELEASE_PROFILE__: string;
+
+/** Release profile is orthogonal to product flavor: alpha keeps production identity. */
+export type ZCodeReleaseProfile = "production" | "local-engineering-alpha";
+export const LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE = "local-engineering-alpha" as const;
+
+export function normalizeZCodeReleaseProfile(value: string | undefined): ZCodeReleaseProfile {
+  return value?.trim().toLowerCase() === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE
+    ? LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE
+    : "production";
+}
+
+export const ZCODE_RELEASE_PROFILE = normalizeZCodeReleaseProfile(
+  typeof __ZCODE_RELEASE_PROFILE__ !== "undefined" ? __ZCODE_RELEASE_PROFILE__ : undefined,
+);
 
 export function normalizeZCodeEnv(value: string | undefined): ZCodeEnv {
   return value?.trim().toLowerCase() === "production" ? "production" : "test";

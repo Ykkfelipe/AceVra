@@ -1,6 +1,6 @@
 {
   "name": "zcode",
-  "version": "3.14.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -34,6 +34,7 @@
     "count-lines": "bash scripts/count-lines.sh",
     "prepare:remote-assets": "pnpm --filter @zcode/desktop prepare:remote-assets",
     "doctor:macos-release": "bash scripts/doctor-macos-release-app.sh",
+    "release:verify:candidate": "node scripts/release/verify-local-alpha-candidate.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix --fix-suggestions",
     "bootstrap": "node scripts/bootstrap.mjs",

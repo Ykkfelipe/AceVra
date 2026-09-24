@@ -62,6 +62,28 @@ export function getDataBaseDir(): string {
   return defaultDataBaseDir;
 }
 
+/**
+ * The user-level home directory every `.zcode`/`.agents`/`.claude` reader must agree on.
+ *
+ * Explicit `ZCODE_HOME` (the profile's `<profileHome>/.zcode`) is the single override the local
+ * engineering alpha sets; without it the process HOME is used. Reading `ZCODE_HOME` here keeps
+ * commands, skills, sync, subagents, hooks, plugins, CLI config and CUA on one canonical root
+ * instead of each reader inventing its own `~/.zcode` path.
+ */
+export function getUserHomeDir(env: NodeJS.ProcessEnv = process.env): string {
+  const explicitZcodeHome = env.ZCODE_HOME?.trim();
+  if (explicitZcodeHome && basename(explicitZcodeHome) === ".zcode") {
+    return join(explicitZcodeHome, "..");
+  }
+  const envHome = env.HOME?.trim() || env.USERPROFILE?.trim();
+  return envHome && envHome.length > 0 ? envHome : homedir();
+}
+
+/** {userHome}/.zcode — user-level config/state root shared by every direct reader. */
+export function getUserZCodeDir(env: NodeJS.ProcessEnv = process.env): string {
+  return join(getUserHomeDir(env), ".zcode");
+}
+
 /** {dataBaseDir}/.zcode */
 export function getZCodeDataRootDir(): string {
   return join(getDataBaseDir(), ".zcode");

@@ -2,7 +2,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
@@ -13,6 +12,7 @@ import type {
   SkillSyncRemoteStatusResult,
 } from "@zcode/shared";
 import type { ISkillSyncService } from "./skillSync.js";
+import { getUserHomeDir as resolveUserHomeDir } from "../paths.js";
 import { createSkillSyncArchive, extractSkillSyncArchive } from "./skillSyncArchive.js";
 import { normalizeSkillSyncRelativePath, resolveSkillSyncPathWithin } from "./skillSyncPath.js";
 import { createSkillSyncSizeLimitError } from "./skillSyncErrors.js";
@@ -124,10 +124,6 @@ export function createSkillSyncService(options?: { maxArchiveBytes?: number }): 
       return await importArchive(params.archive, maxArchiveBytes);
     },
   };
-}
-
-function resolveUserHomeDir(): string {
-  return process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || homedir();
 }
 
 function getUserZcodeSkillRoot(): string {

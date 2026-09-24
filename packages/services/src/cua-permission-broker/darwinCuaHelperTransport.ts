@@ -18,8 +18,9 @@
 // and for ad-hoc dev builds (cdhash anchored) alike.
 
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+
+import { getUserHomeDir } from "../paths.js";
 
 import {
   BROKER_TOKEN_ENV,
@@ -62,7 +63,8 @@ export interface HardenedCuaHelperSessionOptions {
 
 /** Install candidates, same layout the CUA-1 settings flow enumerates (spec "Install path"). */
 function dataRootOf(env: NodeJS.ProcessEnv) {
-  const home = env?.ZCODE_HOME?.trim() || join(homedir(), ".zcode");
+  // ZCODE_HOME wins, then the profile home; never silently fall back to production ~/.zcode.
+  const home = env?.ZCODE_HOME?.trim() || join(getUserHomeDir(env), ".zcode");
   return {
     home,
     baseRoot: join(home, "computer-use"),

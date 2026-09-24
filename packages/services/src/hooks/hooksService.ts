@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type {
   Hook,
@@ -20,6 +19,7 @@ import {
 } from "@zcode/shared/workspace-hook-discovery";
 import { parseWorkspaceHookTrustStoreContent } from "@zcode/shared/workspace-hook-trust-store-file";
 import { createServiceLogger, type ServiceLogger } from "#src/logger/serviceLogger.js";
+import { getUserHomeDir as resolveUserHomeDir } from "#src/paths.js";
 import type { IHooksService } from "./hooks.js";
 import { atomicWriteWorkspaceHookConfig } from "./workspaceHookConfigMutation.js";
 import {
@@ -46,11 +46,6 @@ const HOOK_EVENTS: readonly HookEvent[] = [
 interface ZCodeConfigFile {
   hooks?: WorkspaceHooksConfig;
   [key: string]: unknown;
-}
-
-function resolveUserHomeDir(): string {
-  const envHome = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
-  return envHome && envHome.length > 0 ? envHome : homedir();
 }
 
 function getRootDir(source: SettingsDirectorySource, workspacePath?: string): string {
