@@ -208,6 +208,15 @@ const desktopArtifactEnvSuffix = resolveDesktopArtifactSuffix(process.env);
 
 // Preview 是内部签名测试包。CI 明确打开 macOS 签名时若没有身份，必须在生成未签名包前失败，
 // 避免“产物存在”被误认为已经走完和生产版相同的签名链路。
+// The local engineering alpha must never produce an unsigned macOS candidate: its native CUA
+// components and the app itself use the isolated self-signed identity, and shipping without it
+// would silently drop the nested signature guarantee the validator later checks.
+if (buildMetadata.releaseProfile === "local-engineering-alpha" && !shouldEnableMacSigning) {
+  throw new Error(
+    "local-engineering-alpha macOS packaging requires ZCODE_ENABLE_MAC_SIGN=1 and a signing identity",
+  );
+}
+
 if (
   desktopProductIdentity.flavor === "preview" &&
   process.env.ZCODE_ENABLE_MAC_SIGN === "1" &&
@@ -595,6 +604,17 @@ export default {
       from: "build/icon.png",
       to: "icon.png",
     },
+    ...(targetPlatform.os === "darwin"
+      ? [
+          {
+            // 产品 Computer Use Helper 与 peer-identity probe 已在 bundle 阶段用隔离身份签名。
+            // 这里只搬运，最终签名由 electron-builder 的 signIgnore 跳过，保证嵌套签名不被改写。
+            from: "resources/cua-helper",
+            to: "cua-helper",
+            filter: ["**/*"],
+          },
+        ]
+      : []),
     ...(targetPlatform.os === "linux"
       ? [
           {
@@ -685,6 +705,9 @@ export default {
     signIgnore: [
       "[/\\\\]Contents[/\\\\]Resources[/\\\\]glm([/\\\\]|$)",
       "[/\\\\]Contents[/\\\\]Resources[/\\\\]tools([/\\\\]|$)",
+      // The CUA Helper and probe are signed in the bundle phase; re-signing would change the
+      // CDHash and break the strict nested requirements the candidate verifies.
+      "[/\\\\]Contents[/\\\\]Resources[/\\\\]cua-helper([/\\\\]|$)",
     ],
   },
   win: {

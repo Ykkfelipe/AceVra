@@ -4,8 +4,8 @@
 // 该脚本聚合了打包入口、重试策略、计时与产物校验逻辑，短期内拆文件会影响 CI 稳定性。
 // 先保留集中实现，后续再按“参数解析/构建执行/产物校验”拆分模块。
 
-import { spawn } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import process from "node:process";
@@ -13,6 +13,10 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { collectRuntimeModuleClosureEntries } from "./runtime-dependency-closure.mjs";
 import { resolveDesktopProductIdentity } from "./desktop-product-identity.mjs";
+import {
+  LOCAL_ENGINEERING_ALPHA_PROFILE,
+  isLocalEngineeringAlphaProfile,
+} from "./desktop-release-profile.mjs";
 import {
   findDesktopNativePackageViolations,
   parseAsarListWithPackState,
@@ -375,6 +379,145 @@ function run(command, args, envPatch = {}) {
   });
 }
 
+const cuaSigningIdentityDefault = "AceVra CUA Dev Signing";
+
+/**
+ * One resolved signing directory for the whole candidate. Native components are signed here
+ * before Electron Builder sees them, and the same keychain is handed to Electron Builder for the
+ * main app via CSC_KEYCHAIN. The password never leaves this process except as a child env value
+ * and is never printed.
+ */
+export function resolveCuaSigningEnv(env = process.env, options = {}) {
+  const os = options.os ?? DEFAULT_TARGET_OS;
+  const alpha = isLocalEngineeringAlphaProfile(env);
+  if (os !== "mac" || (!alpha && !env.CUA_SIGNING_DIR?.trim())) {
+    return {};
+  }
+  const signingDir = resolve(env.CUA_SIGNING_DIR?.trim() || join(desktopRoot, ".cua-signing"));
+  const keychain = join(signingDir, "acevra-cua-dev.keychain-db");
+  const passwordFile = join(signingDir, "keychain-password");
+  if (!existsSync(keychain) || !existsSync(passwordFile)) {
+    throw new Error(
+      `[bundle] CUA signing keychain is missing under ${signingDir}; run ` +
+        "packages/zcode-cua/native/cua-helper/signing/create-dev-signing-identity.sh first",
+    );
+  }
+  const password = readFileSync(passwordFile, "utf8").trim();
+  if (!password) {
+    throw new Error(`[bundle] CUA signing password file is empty: ${passwordFile}`);
+  }
+  const unlock = spawnSync("security", ["unlock-keychain", "-p", password, keychain], {
+    encoding: "utf8",
+  });
+  if (unlock.status !== 0) {
+    throw new Error(`[bundle] unable to unlock the isolated CUA keychain: ${keychain}`);
+  }
+  return {
+    CUA_SIGNING_DIR: signingDir,
+    CUA_SIGNING_IDENTITY: env.CUA_SIGNING_IDENTITY?.trim() || cuaSigningIdentityDefault,
+    CSC_KEYCHAIN: keychain,
+    CSC_KEY_PASSWORD: password,
+    APPLE_SIGNING_IDENTITY: env.APPLE_SIGNING_IDENTITY?.trim() || cuaSigningIdentityDefault,
+  };
+}
+
+function resolveProductVersion() {
+  const rootPackageJson = JSON.parse(readFileSync(join(workspaceRoot, "package.json"), "utf8"));
+  return String(rootPackageJson.version ?? "").trim();
+}
+
+function runNodeScript(scriptPath, args, envPatch) {
+  console.log(`[bundle] > ${process.execPath} ${scriptPath} ${args.join(" ")}`);
+  const result = runCommandAndReadStdout(process.execPath, [scriptPath, ...args], {
+    cwd: desktopRoot,
+    env: { ...process.env, ...envPatch },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  return result;
+}
+
+/**
+ * Build and pre-sign the product Helper and peer-identity probe into
+ * `packages/desktop/resources/cua-helper`, which Electron Builder ships verbatim at
+ * `Contents/Resources/cua-helper`. Electron Builder must not re-sign these (signIgnore in
+ * electron-builder.config.js), so the strict nested signature is the one produced here.
+ */
+function prepareCuaNativeForMac(envPatch) {
+  const resourcesDir = resolve(desktopRoot, "resources", "cua-helper");
+  rmSync(resourcesDir, { recursive: true, force: true });
+  mkdirSync(resourcesDir, { recursive: true });
+
+  const version = resolveProductVersion();
+  const buildNumber = process.env.ZCODE_CUA_HELPER_BUILD_NUMBER?.trim() || "1";
+  const helperBuilder = resolve(
+    workspaceRoot,
+    "packages",
+    "zcode-cua",
+    "native",
+    "cua-helper",
+    "build-product-helper.mjs",
+  );
+  const probeBuilder = resolve(
+    workspaceRoot,
+    "packages",
+    "zcode-cua",
+    "native",
+    "peer-identity",
+    "build-peer-identity-probe.mjs",
+  );
+  const signingArgs = [
+    "--signing-dir",
+    envPatch.CUA_SIGNING_DIR,
+    "--identity",
+    envPatch.CUA_SIGNING_IDENTITY,
+  ];
+
+  const helperReportOutput = runNodeScript(
+    helperBuilder,
+    [
+      "--install-root",
+      resourcesDir,
+      "--version",
+      version,
+      "--build",
+      buildNumber,
+      "--arch",
+      "arm64",
+      ...signingArgs,
+    ],
+    envPatch,
+  );
+  const lastLine = helperReportOutput.trim().split("\n").at(-1) ?? "{}";
+  let helperReport;
+  try {
+    helperReport = JSON.parse(lastLine);
+  } catch {
+    throw new Error(`[bundle] product Helper builder did not report JSON: ${lastLine}`);
+  }
+  writeFileSync(
+    join(resourcesDir, "helper-build-info.json"),
+    `${JSON.stringify(helperReport, null, 2)}\n`,
+    "utf8",
+  );
+
+  runNodeScript(
+    probeBuilder,
+    ["--install-root", resourcesDir, "--out", join(resourcesDir, ".probe-build"), ...signingArgs],
+    envPatch,
+  );
+  rmSync(join(resourcesDir, ".probe-build"), { recursive: true, force: true });
+
+  for (const required of ["AceVra Computer Use.app", "peer-identity-probe"]) {
+    if (!existsSync(join(resourcesDir, required))) {
+      throw new Error(`[bundle] packaged CUA resource is missing after build: ${required}`);
+    }
+  }
+  console.log(
+    `[bundle] CUA native components signed identity=${envPatch.CUA_SIGNING_IDENTITY} ` +
+      `helper=${helperReport.bundleId}@${helperReport.version}(${helperReport.buildNumber})`,
+  );
+}
+
 function findBuiltArtifact(os, arch) {
   const distRoot = desktopDistRoot;
   const extensions = artifactExtensionsByOs[os] ?? [];
@@ -712,15 +855,23 @@ async function main() {
   console.log(`[bundle] target=${os}/${arch}`);
   console.log(`[bundle] skipPrepare=${skipPrepare} skipBuild=${skipBuild}`);
 
+  // A dry run never needs signing material, so it stays a pure command/parser check.
+  const cuaSigningEnv = dryRun ? {} : resolveCuaSigningEnv(process.env, { os });
   const buildEnv = {
     ZCODE_TARGET_OS: os,
     ZCODE_TARGET_ARCH: arch,
+    ...cuaSigningEnv,
     ...createElectronRuntimeMirrorEnv(resolveElectronMirror()),
     ...createElectronBuilderBinariesMirrorEnv(resolveElectronBuilderBinariesMirror()),
   };
 
   if (dryRun) {
     console.log(`[bundle] dry-run: ${pnpmCommand} ${buildArgs.join(" ")}`);
+    console.log(
+      `[bundle] dry-run: profile=${
+        isLocalEngineeringAlphaProfile(process.env) ? LOCAL_ENGINEERING_ALPHA_PROFILE : "production"
+      } cuaSigning=${cuaSigningEnv.CUA_SIGNING_DIR ?? "none"}`,
+    );
     process.exit(0);
   }
 
@@ -730,6 +881,10 @@ async function main() {
 
   if (!skipBuild) {
     run(pnpmCommand, ["build"], buildEnv);
+  }
+
+  if (os === "mac" && cuaSigningEnv.CUA_SIGNING_DIR) {
+    runTimedSync("bundle:prepare-cua-native", () => prepareCuaNativeForMac(cuaSigningEnv));
   }
 
   await runTimedAsync("bundle:electron-builder", () =>

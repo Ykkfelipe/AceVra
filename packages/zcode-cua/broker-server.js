@@ -46,12 +46,14 @@ export function loadRealNativeAddon(_options) {
   throw new CuaHelperError(UNAVAILABLE);
 }
 
+// Retained fail-closed: these placeholder exports have no product consumer, and a silent
+// `undefined` would read as "no addon here" instead of "this build has no Computer Use".
 export function resolvePackagedNativeAddonPath(_options) {
-  return undefined;
+  throw new CuaHelperError(UNAVAILABLE);
 }
 
 export function resolveInTreeAddonPath(_options) {
-  return undefined;
+  throw new CuaHelperError(UNAVAILABLE);
 }
 
 export function createAxReadOnlyMethods(_source, _registry, _options) {
@@ -61,7 +63,7 @@ export function createAxReadOnlyMethods(_source, _registry, _options) {
 export const ROLE_TO_KIND = {};
 
 export function roleToKind(_role) {
-  return undefined;
+  throw new CuaHelperError(UNAVAILABLE);
 }
 
 export class CuaHelperLifecycleManager {

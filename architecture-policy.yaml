@@ -71,6 +71,16 @@ modules:
   - id: zcode-cli
     roots: [apps/zcode-cli]
     managed: false
+  - id: zcode-cua
+    roots: [packages/zcode-cua]
+    managed: false
+    owner: computer-use
+    publicEntrypoints:
+      - packages/zcode-cua/index.js
+      - packages/zcode-cua/broker.js
+      - packages/zcode-cua/broker-server.js
+      - packages/zcode-cua/host-transport.js
+      - packages/zcode-cua/capability-contract.js
 
 global:
   maxFileLines: 400
