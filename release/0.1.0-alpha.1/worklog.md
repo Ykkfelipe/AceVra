@@ -1590,3 +1590,28 @@ relaunched. The immediate prior app is preserved at
 Superseded release directories were removed after installation. Only the `48bea3c` build, validation,
 and handoff remain. `RELEASE_STATUS_REPORT.md` now records the cross-workstream state. No TCC
 permissions were changed; broader acceptance remains paused.
+
+## 2026-09-24 composer overlap repair
+
+Installed `48bea3c` exposed a layout defect: the shared toolbar trigger class included `size-7`,
+which locked text-bearing controls to a 28 px square. “Ask before changes”, “Computer Use”, and
+“Agent” therefore overlapped in the wide composer. Commit `42a26cd` replaces that square contract
+with a fixed 28 px height, a 28 px icon-only floor, `max-w-full`, and content-driven width when a
+label is visible. The presentation spec and tests now explicitly prohibit a square width for
+text-bearing toolbar controls.
+
+The same candidate generalizes remaining composer entry copy: new-task and mobile placeholders plus
+idle-time instructions now say “agent” / “智能体” rather than the internal product name. Stable
+runtime values and identities remain unchanged.
+
+Focused composer/cache/Computer Use tests passed 10/10. Typecheck, lint, and changed-file
+architecture checks passed. The `42a26cd` build passed archive-aware validation for the raw app,
+ZIP app, and mounted DMG app. AceVra was closed gracefully, the exact handoff was installed
+atomically, and the app was relaunched. Installed metadata reports `42a26cdd`; strict signature
+verification passed. The immediate prior app is preserved at
+`/Applications/.AceVra.app.backup-d7520775-2db3-46c9-a747-978fe13317c4`.
+
+Only the `42a26cd` build, validation, and handoff remain. The human check is now that composer text
+expands normally without overlap, the Agent naming is visible, the CUA failure tooltip remains gone,
+and the alpha reminder disappears after confirmed enablement. No TCC permissions were changed and
+broader acceptance remains paused.

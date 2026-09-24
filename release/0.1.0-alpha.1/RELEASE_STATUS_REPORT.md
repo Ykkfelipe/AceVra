@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-24  
 **Branch:** `release/0.1.0-alpha`  
-**Installed revision:** `48bea3c` (`48bea3cb`)  
+**Installed revision:** `42a26cd` (`42a26cdd`)
+
 **Status:** Installed local engineering alpha, ready for the limited human UI check. Broader
 acceptance remains intentionally paused.
 
@@ -78,6 +79,11 @@ The outer app is not the TCC subject. Input Monitoring was not added.
   - `text-ui-*` typography.
 - Leading and task-option controls are grouped as localized semantic toolbars.
 - Computer Use remains a Settings entry, not a direct runtime toggle; its state owner is unchanged.
+- `42a26cd`: fixed the overlapping composer controls by changing the shared trigger contract from a
+  square `size-7` box to a fixed 28 px height with a 28 px icon-only floor and content-driven width
+  when text is visible.
+- `42a26cd`: new-task and idle-time composer copy now uses generalized agent wording instead of the
+  internal product name.
 
 ### Release packaging and installation
 
@@ -92,9 +98,9 @@ The outer app is not the TCC subject. Input Monitoring was not added.
 
 - Superseded release build/validation/handoff directories were removed.
 - Only the current candidate remains:
-  - `build-cua-48bea3c/`
-  - `validation-cua-48bea3c/`
-  - `handoff-final-48bea3c/`
+  - `build-cua-42a26cd/`
+  - `validation-cua-42a26cd/`
+  - `handoff-final-42a26cd/`
 - The stale `mock-cdn/releases/3.14.0` Node runtime cache was removed (~571 MB).
 - `mock-cdn/releases/0.1.0-alpha.1` remains because packaging uses it.
 - No build/runtime Node processes remained after build/install. Other `node` binaries under
@@ -103,17 +109,17 @@ The outer app is not the TCC subject. Input Monitoring was not added.
 
 ## 3. Verification completed
 
-Current candidate `48bea3c`:
+Current candidate `42a26cd`:
 
 - Archive-aware validator: passed for raw app, ZIP app, and mounted DMG app.
-- Installed embedded metadata: `buildCommitId=48bea3cb`, profile `local-engineering-alpha`.
+- Installed embedded metadata: `buildCommitId=42a26cdd`, profile `local-engineering-alpha`.
 - Strict installed codesign verification: passed.
 - Certificate-root designated requirement: passed.
 - Exact five-file handoff checksums: passed.
 
 Source gates on the repair stream:
 
-- Focused composer/cache/Computer Use tests: 9 passed in the latest run.
+- Focused composer/cache/Computer Use tests: 10 passed in the latest run.
 - Earlier focused CUA/plugin/permission tests: 13 passed.
 - `pnpm typecheck`: passed.
 - `pnpm lint`: passed with zero errors; existing warnings remain.
@@ -127,19 +133,19 @@ files were reformatted in this work.
 ## 4. Current installed state
 
 - Path: `/Applications/AceVra.app`
-- Revision: `48bea3c` / `48bea3cb`
+- Revision: `42a26cd` / `42a26cdd`
 - Version: `0.1.0-alpha.1`
 - Profile: `local-engineering-alpha`
 - App is installed and relaunched.
 - Immediate prior backup:
-  `/Applications/.AceVra.app.backup-4d81e807-a6a5-4fd6-9c32-e90ea297664d`
+  `/Applications/.AceVra.app.backup-d7520775-2db3-46c9-a747-978fe13317c4`
 - Earlier backup:
-  `/Applications/.AceVra.app.backup-9ea360ba-17d4-498f-83f5-2243a8768453`
+  `/Applications/.AceVra.app.backup-4d81e807-a6a5-4fd6-9c32-e90ea297664d`
 
 Current handoff:
 
 ```text
-release/0.1.0-alpha.1/handoff-final-48bea3c
+release/0.1.0-alpha.1/handoff-final-42a26cd
 ```
 
 Checksums are recorded in that handoff’s `SHA256SUMS.txt`.
@@ -148,8 +154,8 @@ Checksums are recorded in that handoff’s `SHA256SUMS.txt`.
 
 Only these local UI checks are requested now:
 
-1. In the newly opened AceVra, confirm the built-in backend control says **Agent** and the composer
-   controls have the new outline look and visible keyboard focus.
+1. In the newly opened AceVra, confirm the built-in backend control says **Agent**, the new-task
+   placeholder says **agent**, and the mode/Computer Use/Agent controls no longer overlap.
 2. Confirm the Computer Use composer control no longer shows the enablement-failure tooltip while
    Computer Use is enabled.
 3. Open **Settings → Computer Use**, enable Computer Use if needed, and confirm the local-alpha
