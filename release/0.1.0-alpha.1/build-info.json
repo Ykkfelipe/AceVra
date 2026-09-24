@@ -2,8 +2,8 @@
   "schemaVersion": 4,
   "product": "AceVra",
   "version": "0.1.0-alpha.1",
-  "buildCommitId": "1479bf4c",
-  "buildTime": "2026-09-24T13:49:30.083Z",
+  "buildCommitId": "48bea3cb",
+  "buildTime": "2026-09-24T15:59:47.638Z",
   "releaseProfile": "local-engineering-alpha",
   "distribution": "local engineering alpha",
   "branch": "release/0.1.0-alpha",
@@ -37,6 +37,14 @@
     "peerProbeId": "dev.acevra.cua-peer-identity.development",
     "architecture": "arm64"
   },
-  "artifacts": ["AceVra-0.1.0-alpha.1-arm64.dmg", "AceVra-0.1.0-alpha.1-arm64.zip"],
-  "installedAcceptance": "repaired Computer Use settings candidate installed; human enablement and settings-link clicks pending"
+  "artifacts": [
+    "AceVra-0.1.0-alpha.1-arm64.dmg",
+    "AceVra-0.1.0-alpha.1-arm64.zip"
+  ],
+  "handoff": "release/0.1.0-alpha.1/handoff-final-48bea3c",
+  "installedPath": "/Applications/AceVra.app",
+  "installedRevision": "48bea3cb",
+  "installedBackup": "/Applications/.AceVra.app.backup-4d81e807-a6a5-4fd6-9c32-e90ea297664d",
+  "installedAcceptance": "48bea3c composer presentation candidate installed; human composer/notice check pending",
+  "broaderAcceptance": "paused; no TCC changes or broader CUA/browser/provider/artifact/remote/restart acceptance"
 }

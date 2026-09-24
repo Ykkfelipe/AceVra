@@ -1,8 +1,51 @@
-# AceVra 0.1.0-alpha.1 — isolated alpha permission repair handoff
+# AceVra 0.1.0-alpha.1 — UI repair candidate handoff
 
-**Status: REPAIRED CANDIDATE INSTALLED; READY FOR HUMAN SETTINGS/ENABLEMENT VERIFICATION**
+**Status: 48bea3c COMPOSER PRESENTATION CANDIDATE INSTALLED; READY FOR THE HUMAN COMPOSER/NOTICE CHECK**
 
-The prior installed candidate was `ab7c5b26`. It was preserved and replaced with the new `1479bf4c` candidate through the tested backup/staging/rollback runner.
+The installed app is now `48bea3c`. It includes the permission-cache repair plus generalized Agent naming and an accessible composer toolbar presentation. See `RELEASE_STATUS_REPORT.md` for the cross-workstream status.
+
+## Actual final candidate
+
+- Source commit: `48bea3c` (`48bea3cb`)
+- Embedded build time: `2026-09-24T15:59:47.638Z`
+- Build: `release/0.1.0-alpha.1/build-cua-48bea3c/`
+- Validation: `release/0.1.0-alpha.1/validation-cua-48bea3c/`
+- Handoff: `release/0.1.0-alpha.1/handoff-final-48bea3c/`
+- DMG and ZIP: exact five-file handoff; checksums are recorded in `handoff-final-48bea3c/SHA256SUMS.txt`
+
+The raw app, ZIP-contained app, and mounted DMG app passed the archive-aware validator. Focused composer, cache, and Computer Use tests, typecheck, lint, and architecture checks passed.
+
+## Installed state
+
+- Installed path: `/Applications/AceVra.app`
+- Installed revision: `48bea3c` (`48bea3cb`)
+- Bundle ID/version: `com.acevra.desktop`, `0.1.0-alpha.1`
+- Release profile: `local-engineering-alpha`
+- Installed signature: `AceVra CUA Dev Signing`, certificate-root designated requirement
+- Preserved prior backup: `/Applications/.AceVra.app.backup-4d81e807-a6a5-4fd6-9c32-e90ea297664d`
+- Earlier preserved backup: `/Applications/.AceVra.app.backup-9ea360ba-17d4-498f-83f5-2243a8768453`
+
+AceVra was closed before installation, the candidate was installed atomically, and the updated app was relaunched. Embedded metadata and strict signature verification passed. No TCC permissions were changed.
+
+## Duplicate cleanup
+
+Superseded release candidate directories were removed. The current candidate directories are:
+
+- `build-cua-48bea3c/`
+- `validation-cua-48bea3c/`
+- `handoff-final-48bea3c/`
+
+The stale `mock-cdn/releases/3.14.0` runtime cache was also removed (~571 MB). The remaining `mock-cdn/releases/0.1.0-alpha.1` copy is the actual asset source used by packaging and must be retained.
+
+## Human checkpoint after installation
+
+1. Hover the composer controls and confirm the built-in backend is labeled **Agent** and the controls show the shared outline/focus treatment.
+2. Confirm the composer no longer shows the enablement-failure tooltip while Computer Use is enabled.
+3. Enable Computer Use in **Settings → Computer Use** and confirm the alpha reminder disappears.
+
+Do not change TCC permissions. Gatekeeper, Accessibility, Screen Recording, Input Monitoring, physical interruption, browser, provider, artifact, remote, and restart acceptance remain paused. No publish, tag, merge, CUA-4, or CUA-5 action is authorized.
+
+The historical repair details below describe earlier candidates and remain retained in this report for provenance.
 
 ## 1. Missing-plugin root cause
 

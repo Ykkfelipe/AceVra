@@ -1450,3 +1450,143 @@ Final hashes:
 
 The candidate is installed but not formally accepted. Human action is limited to the two Settings
 clicks and enablement check; no TCC changes or broader CUA acceptance is authorized yet.
+
+## 2026-09-24 composer contradiction repair and duplicate cleanup
+
+The installed `16af5e1` app showed the Computer Use composer failure tooltip even after the
+canonical plugin was confirmed enabled. The source cause was state precedence in
+`cuaComposerEntryState`: a shared stale plugin error was evaluated before the authoritative enabled
+state. Commit `633de95` changes the projection so confirmed enablement suppresses stale prior
+enablement errors, while the official-plugin error ownership helper remains unchanged.
+
+Focused Computer Use UI state tests passed 4/4, including the stale-error-after-enable regression.
+Typecheck, lint, and changed-file architecture checks passed. The full `633de95` local-alpha arm64
+build completed after freeing generated build outputs; the first DMG attempt failed only because
+`hdiutil` reported `No space left on device`. The retry completed successfully.
+
+Final candidate:
+
+- Build: `release/0.1.0-alpha.1/build-cua-633de95/`
+- Validation: `release/0.1.0-alpha.1/validation-cua-633de95/`
+- Handoff: `release/0.1.0-alpha.1/handoff-final-633de95/`
+- Embedded revision: `633de95e`
+- Embedded build time: `2026-09-24T14:49:09.812Z`
+
+The raw app, ZIP-contained app, and mounted DMG app passed the archive-aware validator. The
+current installed app remains `16af5e1` because AceVra was running when the new candidate became
+ready; it was not force-killed. The new handoff is ready for installation after a normal app
+shutdown.
+
+After comparing embedded revisions, validation state, and installed provenance, superseded release
+`build`, `validation`, and `handoff` directories were deleted. Only the `633de95` build, validation,
+and handoff remain under `release/0.1.0-alpha.1/`; reports, logs, and `/Applications` backups remain.
+No TCC permissions were changed and no broader acceptance was started.
+
+## 2026-09-24 final Computer Use UI repair candidate
+
+The source repair commit `16af5e1` (`16af5e11` embedded revision) contains the two requested UI
+changes: the local-alpha reminder is gated by confirmed canonical plugin enablement and remains
+visible while off/toggling/failed; the composer error tooltip now points to Settings → Computer
+Use and no longer prescribes a blanket ZCode restart. The existing Helper/TCC ownership, lease
+authority, CUA-3 powers, and CUA-4/CUA-5 boundaries were not changed.
+
+Added deterministic UI state tests covering successful enablement, official-plugin failure,
+unrelated-plugin failure, alpha-notice visibility, and the precise tooltip copy. Focused tests
+passed 4/4; typecheck, lint, and changed-file architecture checks passed. Repository-wide
+format checking remains blocked by unrelated existing formatting debt, while task-changed files
+are formatted and `git diff --check` passes.
+
+The package-aware E2E from the same source passed for packaged plugin assets, isolated
+HOME/ZCODE_HOME config persistence, enablement without `Plugin not found`, notice disappearance,
+composer setting, permission bridge calls, active Stop, and released projection. The final OS launch
+was mocked only at the E2E boundary; no real TCC or System Settings behavior was claimed.
+
+Final candidate:
+
+- Build: `release/0.1.0-alpha.1/build-cua-16af5e1/`
+- E2E build: `release/0.1.0-alpha.1/build-e2e-cua-16af5e1/`
+- Validation: `release/0.1.0-alpha.1/validation-cua-16af5e1/`
+- Handoff: `release/0.1.0-alpha.1/handoff-final-16af5e1/`
+- DMG SHA256: `dec2634dcfd3044ccee3759f1f53bee1a935014fa8ae08ded40c2758c2fd7d6e`
+- ZIP SHA256: `c8f0848f08abf014646f3ee1286ceed0c149e75406ed02480859e5b55521987f`
+
+The raw app, ZIP-contained app, and mounted DMG app passed the archive-aware validator. The exact
+five-file handoff passed checksum verification and was installed through the tested signature-
+preserving backup/staging/rollback runner at `/Applications/AceVra.app`. The previous app is
+preserved at `/Applications/.AceVra.app.backup-36bbc5f2-a228-4aa6-b619-1665611db0e2`; the earlier
+`1479bf4c` backup remains at `/Applications/.AceVra.app.backup-cfac4eea-f717-4872-b329-fc791a69c6ce`.
+
+Human verification is intentionally limited to the two requested UI behaviors: verify the alpha
+notice disappears after enabling Computer Use, and verify the failure tooltip points to Settings
+without restart wording. Do not change TCC permissions. Gatekeeper, Accessibility, Screen Recording,
+Input Monitoring, physical interruption, browser, provider, artifact, remote, and restart acceptance
+remain paused. No publish, tag, merge, CUA-4, or CUA-5 action is authorized.
+
+## 2026-09-24 633de95 installed after duplicate cleanup
+
+After AceVra was closed, the exact validated `handoff-final-633de95` was installed through the
+signature-preserving backup/staging/rollback runner. The installed app metadata reports
+`buildCommitId=633de95e`, `buildTime=2026-09-24T14:49:09.812Z`, and profile
+`local-engineering-alpha`. The previous installed app is preserved at
+`/Applications/.AceVra.app.backup-b3b3090a-3708-4530-b71a-6ff4ce0de198`.
+
+Post-install checks passed: strict codesign verification, certificate-root designated requirement,
+bundle ID/version verification, and embedded build metadata verification. No Node, Electron Builder,
+Vite, or other build processes remained after installation. No TCC permissions were changed.
+
+## 2026-09-24 permission cache contract repair
+
+The installed `633de95` app still showed the composer enablement-failure tooltip after restart.
+Runtime/source comparison identified the actual cause: the first-screen permission cache restored a
+valid available Helper report without restoring `available: true`. The composer treated that display
+cache as `unavailable`, then rendered the Helper failure as “Computer Use could not be enabled”.
+Commit `6b5c721` restores the availability discriminator during cache validation and adds tests for
+both the preserved available contract and rejection of unavailable/malformed payloads.
+
+Focused cache and composer tests passed 6/6. Typecheck, lint, and changed-file architecture checks
+passed. The full `6b5c721` local-alpha arm64 build passed archive-aware validation for the raw app,
+ZIP-contained app, and mounted DMG app.
+
+Final prepared candidate:
+
+- Build: `release/0.1.0-alpha.1/build-cua-6b5c721/`
+- Validation: `release/0.1.0-alpha.1/validation-cua-6b5c721/`
+- Handoff: `release/0.1.0-alpha.1/handoff-final-6b5c721/`
+- Embedded revision: `6b5c7210`
+- Embedded build time: `2026-09-24T15:13:25.108Z`
+
+The installed app remains `633de95e` because AceVra was still running when `6b5c721` became ready;
+it was not force-quit. The stale `mock-cdn/releases/3.14.0` Node runtime cache (~571 MB) was removed.
+The current `mock-cdn/releases/0.1.0-alpha.1` runtime remains because packaging uses it. No TCC
+permissions were changed and no broader acceptance was started.
+
+AceVra was subsequently closed gracefully, and `handoff-final-6b5c721` was installed atomically.
+The prior installed app is preserved at
+`/Applications/.AceVra.app.backup-9ea360ba-17d4-498f-83f5-2243a8768453`. Installed metadata reports
+`buildCommitId=6b5c7210`; strict signature verification passed, and the updated app was relaunched.
+The remaining human check is that the composer no longer shows the enablement-failure tooltip after
+restart while Computer Use is enabled, and that the alpha reminder disappears after enablement.
+
+## 2026-09-24 composer Agent presentation
+
+Commit `48bea3c` generalizes the built-in composer backend’s visible name to **Agent** /
+**智能体** while preserving its stable `zcode` runtime value, protocol fields, package identities,
+test IDs, logs, and AceVra release identity. The Computer Use ready copy and backend description no
+longer use ZCode as the user-facing actor.
+
+The mode, backend, plan, and Computer Use controls now share a composer toolbar presentation
+contract: 28 px hit target, compact outline affordance, semantic surface/border/hover tokens,
+expanded-state surface, and a visible input-border-focused keyboard ring. Leading and task-option
+clusters are semantic toolbars with localized accessible names. A new UI spec records the naming
+boundary and accessibility invariants.
+
+Focused composer/cache/Computer Use tests passed 9/9. Typecheck, lint, and changed-file architecture
+checks passed. The full local-alpha arm64 build passed archive-aware validation for the raw app,
+ZIP app, and mounted DMG app. AceVra was closed before the exact five-file handoff was installed
+atomically; strict installed signature and embedded metadata checks passed, and the app was
+relaunched. The immediate prior app is preserved at
+`/Applications/.AceVra.app.backup-4d81e807-a6a5-4fd6-9c32-e90ea297664d`.
+
+Superseded release directories were removed after installation. Only the `48bea3c` build, validation,
+and handoff remain. `RELEASE_STATUS_REPORT.md` now records the cross-workstream state. No TCC
+permissions were changed; broader acceptance remains paused.
