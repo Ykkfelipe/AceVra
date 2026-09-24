@@ -497,6 +497,8 @@ import {
   type CuaPermissionState,
   type CuaPermissionStatusQueryOptions,
   type CuaPermissionStatusResult,
+  type CuaComputerControlStatus,
+  type CuaComputerControlStopResult,
 } from "#src/cua-permission-broker/index.js";
 import {
   resolveWindowsCuaRuntime,
@@ -505,6 +507,7 @@ import {
 } from "#src/cua-permission-broker/windowsCuaDevRuntime.js";
 import { createCanonicalCuaHelperInstaller } from "./cua-permission-broker/cuaHelperInstaller.js";
 import { startLeaseAuthorityServer } from "./cua-permission-broker/lease-authority/server.js";
+import type { LeaseAuthority } from "./cua-permission-broker/lease-authority/contract.js";
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
 import { HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import {
@@ -656,7 +659,12 @@ interface ManagedCuaHelperHostDispose {
 // 已授权主体常驻、甚至在 services 重建时再起一个 → 多实例/孤儿/权限主体泄漏。用与 ServiceCollection 绑定
 // 的 WeakMap 侧表登记，dispose 时统一终止（best-effort，不阻断其它资源回收）。
 const managedCuaHelperHosts = new WeakMap<ServiceCollection, ManagedCuaHelperHostDispose>();
-const leaseAuthorityServers = new WeakMap<ServiceCollection, { close(): Promise<void> }>();
+const leaseAuthorityServers = new WeakMap<
+  ServiceCollection,
+  { authority: LeaseAuthority; close(): Promise<void> }
+>();
+let e2eComputerControlState: "inactive" | "active" | "released" = "inactive";
+let e2eComputerControlInitialized = false;
 const providerRuntimes = new WeakMap<ServiceCollection, ProviderRuntime>();
 const providerProvisioningSources = new WeakMap<ServiceCollection, ProviderProvisioningSource>();
 const providerProvisioningTriggerDisposers = new WeakMap<
@@ -2046,6 +2054,74 @@ export function createLocalServices(options: {
         };
       }
     },
+    async getControlStatus(): Promise<CuaComputerControlStatus> {
+      if (
+        process.env.ZCODE_DESKTOP_E2E === "1" &&
+        process.env.ZCODE_DESKTOP_E2E_RUN_ID?.trim() &&
+        process.env.ZCODE_DESKTOP_E2E_CUA_ACTIVE === "1"
+      ) {
+        if (!e2eComputerControlInitialized) {
+          e2eComputerControlState = "active";
+          e2eComputerControlInitialized = true;
+        }
+        return {
+          state: e2eComputerControlState,
+          generation: e2eComputerControlState === "inactive" ? null : 1,
+          ...(e2eComputerControlState === "active" ? { leaseId: "e2e-helper-lease" } : {}),
+        };
+      }
+      const record = leaseAuthorityServers.get(services)?.authority.getStatus();
+      if (!record) return { state: "inactive", generation: null };
+      return {
+        state:
+          record.state === "active"
+            ? "active"
+            : record.state === "released" || record.state === "stopped"
+              ? record.state
+              : "inactive",
+        generation: record.generation,
+        leaseId: record.leaseId,
+      };
+    },
+    async stopComputerControl(): Promise<CuaComputerControlStopResult> {
+      if (
+        process.env.ZCODE_DESKTOP_E2E === "1" &&
+        process.env.ZCODE_DESKTOP_E2E_RUN_ID?.trim() &&
+        process.env.ZCODE_DESKTOP_E2E_CUA_ACTIVE === "1"
+      ) {
+        if (!e2eComputerControlInitialized) {
+          e2eComputerControlState = "active";
+          e2eComputerControlInitialized = true;
+        }
+        const status: "released" | "already_stopped" =
+          e2eComputerControlState === "active" ? "released" : "already_stopped";
+        if (status === "released") e2eComputerControlState = "released";
+        return {
+          status,
+          record: { state: "released", generation: 1, leaseId: "e2e-helper-lease" },
+        };
+      }
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      if (!authority) return { status: "already_stopped" };
+      const result = await authority.stop();
+      return {
+        status: result.status,
+        ...(result.record
+          ? {
+              record: {
+                state:
+                  result.record.state === "active"
+                    ? "active"
+                    : result.record.state === "released" || result.record.state === "stopped"
+                      ? result.record.state
+                      : "inactive",
+                generation: result.record.generation,
+                leaseId: result.record.leaseId,
+              },
+            }
+          : {}),
+      };
+    },
     async restartHelper(
       workspacePath: string,
       workspaceIdentity?: string,
@@ -2687,7 +2763,23 @@ export function createLocalServices(options: {
   // 即使初始配置关闭也必须登记 lifecycle disposer：terminal fence 需要早于任意延迟 setting/acquire
   // 恢复，不能把"当前还没有 Helper"误当成"不需要生命周期所有者"。dispose 时串行 stop host。
   if (options?.serviceAuthorityMode === "desktop-local") {
-    void startLeaseAuthorityServer(join(getDataBaseDir(), ".zcode")).then((server) => {
+    void startLeaseAuthorityServer(join(getDataBaseDir(), ".zcode"), {
+      releaseHelper: async (record) => {
+        const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
+        const host = helper?.macPermissionHost;
+        if (!host?.running || !record.helperLeaseId) {
+          throw new Error("CUA Helper is not connected; software Stop cannot confirm release");
+        }
+        const result = await host.releaseControl({
+          lease_id: record.helperLeaseId,
+          owner_session: record.ownerSession,
+          owner_task: record.ownerTask,
+        });
+        if (result.lease_state !== "released") {
+          throw new Error("CUA Helper did not confirm terminal lease release");
+        }
+      },
+    }).then((server) => {
       leaseAuthorityServers.set(services, server);
       process.env.ZCODE_CUA_LEASE_AUTHORITY_SOCKET = server.socketPath;
       process.env.ZCODE_CUA_LEASE_AUTHORITY_TOKEN = server.token;

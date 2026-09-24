@@ -215,12 +215,27 @@ export interface CuaPermissionRestartOptions {
   [key: string]: unknown;
 }
 
+export type CuaComputerControlState = "inactive" | "active" | "released" | "stopped";
+
+export interface CuaComputerControlStatus {
+  state: CuaComputerControlState;
+  generation: number | null;
+  leaseId?: string;
+}
+
+export interface CuaComputerControlStopResult {
+  status: "released" | "already_stopped";
+  record?: CuaComputerControlStatus;
+}
+
 export interface ICuaPermissionService {
   getStatus(
     workspacePath: string,
     workspaceIdentity?: string,
     options?: CuaPermissionStatusQueryOptions,
   ): Promise<CuaPermissionStatusResult>;
+  getControlStatus(): Promise<CuaComputerControlStatus>;
+  stopComputerControl(): Promise<CuaComputerControlStopResult>;
   restartHelper(
     workspacePath?: string,
     workspaceIdentity?: string,

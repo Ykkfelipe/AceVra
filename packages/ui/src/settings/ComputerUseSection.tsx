@@ -12,9 +12,15 @@ import type { CuaOsSupport, CuaPermissionKind, RemoteTarget } from "@zcode/share
 import {
   DesktopCommandIds,
   isRemoteWorkspaceIdentity,
+  LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE,
   ZCODE_CUA_OFFICIAL_PLUGIN_ID,
+  ZCODE_RELEASE_PROFILE,
 } from "@zcode/shared";
-import { isCuaPermissionStatusAvailable, type CuaPermissionRestartOptions } from "@zcode/services";
+import {
+  isCuaPermissionStatusAvailable,
+  type CuaComputerControlStatus,
+  type CuaPermissionRestartOptions,
+} from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { toast } from "@/components/ui/toast.js";
 import { Switch } from "@/components/ui/switch.js";
@@ -130,6 +136,56 @@ export function ComputerUseSection({
   const cuaPlugin = plugins.find((plugin) => plugin.id === ZCODE_CUA_OFFICIAL_PLUGIN_ID);
   const cuaEnabled = cuaPlugin?.enabled ?? false;
   const cuaToggling = togglingPluginId === ZCODE_CUA_OFFICIAL_PLUGIN_ID;
+  const [controlStatus, setControlStatus] = useState<CuaComputerControlStatus>({
+    state: "inactive",
+    generation: null,
+  });
+  const [stoppingComputerControl, setStoppingComputerControl] = useState(false);
+  const refreshControlStatus = useCallback(async () => {
+    if (!cuaPermissionService || !supportsLocalMacWorkspace) {
+      setControlStatus({ state: "inactive", generation: null });
+      return;
+    }
+    try {
+      setControlStatus(await cuaPermissionService.getControlStatus());
+    } catch {
+      setControlStatus({ state: "inactive", generation: null });
+    }
+  }, [cuaPermissionService, supportsLocalMacWorkspace]);
+  useEffect(() => {
+    void refreshControlStatus();
+  }, [refreshControlStatus, cuaEnabled, workspacePath, workspaceIdentity]);
+  const stopComputerControl = useCallback(async () => {
+    if (!cuaPermissionService || stoppingComputerControl || controlStatus.state !== "active")
+      return;
+    setStoppingComputerControl(true);
+    try {
+      const result = await cuaPermissionService.stopComputerControl();
+      setControlStatus({
+        state: "released",
+        generation: result.record?.generation ?? controlStatus.generation,
+        leaseId: result.record?.leaseId,
+      });
+      await refreshControlStatus();
+    } catch (error) {
+      toast(
+        intl.formatMessage(
+          { id: "settings.computerUse.stopControlFailed" },
+          { error: error instanceof Error ? error.message : String(error) },
+        ),
+        { variant: "warning" },
+      );
+    } finally {
+      setStoppingComputerControl(false);
+    }
+  }, [
+    controlStatus.generation,
+    controlStatus.state,
+    cuaPermissionService,
+    intl,
+    refreshControlStatus,
+    stoppingComputerControl,
+  ]);
 
   const initRef = useRef(false);
   useEffect(() => {
@@ -703,15 +759,17 @@ export function ComputerUseSection({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-ui-sm text-foreground-subtle">
-        <p className="font-medium text-ui-base text-foreground">AceVra local engineering alpha</p>
-        <p className="mt-1">
-          This self-signed, non-notarized build uses an isolated data root and has updates disabled.
-          Computer Use is off until you enable it and grant AceVra Computer Use.app Accessibility
-          and Screen Recording access. Installation verification does not perform provider
-          inference, model requests, credential prompts, or account authentication.
-        </p>
-      </div>
+      {ZCODE_RELEASE_PROFILE === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE ? (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-ui-sm text-foreground-subtle">
+          <p className="font-medium text-ui-base text-foreground">AceVra local engineering alpha</p>
+          <p className="mt-1">
+            This self-signed, non-notarized build uses an isolated data root and has updates
+            disabled. Computer Use is off until you enable it and grant AceVra Computer Use.app
+            Accessibility and Screen Recording access. Installation verification does not perform
+            provider inference, model requests, credential prompts, or account authentication.
+          </p>
+        </div>
+      ) : null}
       {/* 总开关：开/关 zcode-cua 插件（同步其 MCP + skill） */}
       <SettingsGroupCard>
         <SettingsRow
@@ -730,6 +788,25 @@ export function ComputerUseSection({
             />
           }
         />
+        {controlStatus.state === "active" ? (
+          <SettingsRow
+            label={intl.formatMessage({ id: "settings.computerUse.stopControl.label" })}
+            description={intl.formatMessage({
+              id: "settings.computerUse.stopControl.description",
+            })}
+            control={
+              <Button
+                type="button"
+                variant="destructive"
+                data-testid="cua-stop-computer-control"
+                disabled={stoppingComputerControl}
+                onClick={() => void stopComputerControl()}
+              >
+                {intl.formatMessage({ id: "settings.computerUse.stopControl.action" })}
+              </Button>
+            }
+          />
+        ) : null}
         {/* 输入框常驻入口的显隐开关：关闭是持久化 hidden 标记，
             重启与版本更新都不会自愈。只管按钮渲不渲染，不影响插件启用态与进行中任务。
             电脑控制关闭时按钮无论如何都不渲染（cuaComposerEntryState 的插件门），

@@ -43,8 +43,8 @@ export function createLeaseAuthorityClient(env = process.env) {
     beginAcquire(owner) {
       return this.request("begin_acquire", owner);
     },
-    commitAcquire(leaseId, helperRequirement) {
-      return this.request("commit_acquire", { leaseId, helperRequirement });
+    commitAcquire(leaseId, helperLeaseId, helperRequirement) {
+      return this.request("commit_acquire", { leaseId, helperLeaseId, helperRequirement });
     },
     release(leaseId, reason) {
       return this.request("release", { leaseId, reason });

@@ -47,21 +47,40 @@ export function createComputerUseRuntime(options = {}) {
     return broker.resolveBrokerSocketPath({ env });
   }
 
+  async function releaseAuthorityLease(sessionId, reason) {
+    const current = activeLeases.get(sessionId);
+    if (!current) return;
+    try {
+      if (leaseAuthority && current.authorityLeaseId) {
+        await leaseAuthority.release(current.authorityLeaseId, reason);
+      }
+    } catch {
+      // The service authority fences independently; the runtime projection is still disposable.
+    } finally {
+      activeLeases.delete(sessionId);
+    }
+  }
+
   async function releaseKnownLease(sessionId) {
     const current = activeLeases.get(sessionId);
     if (!current) return;
-    activeLeases.delete(sessionId);
     try {
       const broker = await import("./broker.js");
       await broker.callBrokerMethod({
         socketPath: await resolveSocketPath(),
         method: "release_control",
-        params: { lease_id: current.id, owner_session: sessionId, owner_task: current.task },
+        params: {
+          lease_id: current.helperLeaseId,
+          owner_session: sessionId,
+          owner_task: current.task,
+        },
         timeoutMs: 2000,
         expectedHelperIdentifiers: options.expectedHelperIdentifiers,
       });
     } catch {
       // The Helper also releases on disconnect and at its bounded deadline.
+    } finally {
+      await releaseAuthorityLease(sessionId, "runtime_cleanup");
     }
   }
 
@@ -130,16 +149,6 @@ export function createComputerUseRuntime(options = {}) {
               owner_task: input.context.turnId || input.context.sessionId,
             }
           : (input?.arguments ?? {});
-        if (
-          method === "acquire_control" &&
-          leaseAuthority &&
-          typeof input?.context?.sessionId === "string"
-        ) {
-          pendingAuthorityLease = await leaseAuthority.beginAcquire({
-            session: input.context.sessionId,
-            task: input.context.turnId || input.context.sessionId,
-          });
-        }
         let result;
         if (
           method === "acquire_control" &&
@@ -188,7 +197,11 @@ export function createComputerUseRuntime(options = {}) {
                 code: "lease_authority_unavailable",
               });
             }
-            const committed = await leaseAuthority.commitAcquire(reservation.leaseId, requirement);
+            const committed = await leaseAuthority.commitAcquire(
+              reservation.leaseId,
+              result.lease_id,
+              requirement,
+            );
             result = { ...result, lease_authority_generation: committed.generation };
           } else if (reservation) {
             await leaseAuthority.stop().catch(() => undefined);
@@ -246,12 +259,16 @@ export function createComputerUseRuntime(options = {}) {
           typeof normalized.lease_id === "string"
         ) {
           activeLeases.set(input.context.sessionId, {
-            id: normalized.lease_id,
+            authorityLeaseId: reservation.leaseId,
+            helperLeaseId: normalized.lease_id,
             task: params.owner_task,
           });
         }
-        if (foreground && (method === "release_control" || normalized.code === "interrupted")) {
-          activeLeases.delete(input.context.sessionId);
+        if (foreground && method === "release_control") {
+          await releaseAuthorityLease(input.context.sessionId, "model_release");
+        }
+        if (foreground && normalized.code === "interrupted") {
+          await releaseKnownLease(input.context.sessionId);
         }
         return {
           content: [{ type: "text", text: JSON.stringify(normalized) }],

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const runId = process.env.ZCODE_DESKTOP_E2E_RUN_ID?.trim();
 if (!runId || process.env.ZCODE_DESKTOP_E2E !== "1") {
@@ -8,21 +10,61 @@ if (!runId || process.env.ZCODE_DESKTOP_E2E !== "1") {
 }
 
 const { _electron: electron } = await import("playwright-core");
-const app = await electron.launch({
-  executablePath: resolve("../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"),
-  args: ["--no-sandbox", "--disable-gpu", resolve(".")],
-  cwd: process.cwd(),
-  env: { ...process.env, ZCODE_DESKTOP_E2E: "1", ZCODE_DESKTOP_E2E_RUN_ID: runId },
-});
-try {
-  const page = await app.firstWindow();
-  await page.waitForLoadState("domcontentloaded");
-  const title = await page.title();
-  assert.match(title, /^(AceVra|Electron)$/);
-  const body = await page.locator("body").innerText();
-  assert.match(body, /local engineering alpha/i);
-  assert.doesNotMatch(body, /Stop computer control/i);
-  console.log(`[e2e:cua-alpha] ${runId}: safety copy and default-off assertion passed`);
-} finally {
-  await app.close();
+const executablePath = resolve(
+  "../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+);
+
+async function runScenario({ active }) {
+  console.log(`[e2e:cua-alpha] ${runId}: starting ${active ? "active" : "default-off"} scenario`);
+  const dataRoot = mkdtempSync(join(tmpdir(), "acevra-cua-alpha-scenario-"));
+  const app = await electron.launch({
+    executablePath,
+    args: ["--no-sandbox", "--disable-gpu", resolve(".")],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      HOME: dataRoot,
+      ZCODE_DESKTOP_HOME_DIR: dataRoot,
+      ZCODE_DATA_BASE_DIR: dataRoot,
+      ZCODE_DESKTOP_E2E: "1",
+      ZCODE_DESKTOP_E2E_RUN_ID: runId,
+      ZCODE_E2E_RUN_ID: runId,
+      ...(active ? { ZCODE_DESKTOP_E2E_CUA_ACTIVE: "1" } : {}),
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.locator('html[data-desktop-business-ready="true"]').waitFor({ state: "attached" });
+    const title = await page.title();
+    assert.match(title, /^(AceVra|Electron)$/);
+    await page.evaluate((workspacePath) => {
+      const store = window.__zcodeTabStoreE2E;
+      if (!store) throw new Error("guarded E2E tab store bridge is unavailable");
+      store.getState().addTab(workspacePath);
+      store.getState().openSettingsTab();
+    }, resolve("."));
+    const section = page.getByTestId("settings-section-nav-computerUse");
+    await section.waitFor({ state: "visible" });
+    await section.click();
+    const safetyCopy = page.getByText("AceVra local engineering alpha", { exact: true });
+    await safetyCopy.waitFor({ state: "visible" });
+    const stop = page.getByTestId("cua-stop-computer-control");
+    if (!active) {
+      assert.equal(await stop.count(), 0);
+      return;
+    }
+    await stop.waitFor({ state: "visible" });
+    await stop.click();
+    await page.getByTestId("cua-stop-computer-control").waitFor({ state: "detached" });
+    console.log(`[e2e:cua-alpha] ${runId}: ${active ? "active" : "default-off"} scenario passed`);
+  } finally {
+    await app.close();
+    rmSync(dataRoot, { recursive: true, force: true });
+  }
 }
+
+await runScenario({ active: true });
+await runScenario({ active: false });
+console.log(
+  `[e2e:cua-alpha] ${runId}: business-ready navigation, default-off, active Stop, and released projection passed`,
+);

@@ -256,6 +256,9 @@ export {
   type CuaPermissionStatusQueryOptions,
   type CuaPermissionStatusResult,
   type CuaPermissionStatusUnavailable,
+  type CuaComputerControlState,
+  type CuaComputerControlStatus,
+  type CuaComputerControlStopResult,
   isCuaPermissionStatusAvailable,
 } from "./cua-permission-broker/cuaPermissionService.js";
 export {

@@ -45,6 +45,9 @@ export type {
   CuaPermissionStatusQueryOptions,
   CuaPermissionRestartResult,
   CuaPermissionRestartOptions,
+  CuaComputerControlState,
+  CuaComputerControlStatus,
+  CuaComputerControlStopResult,
 } from "./cuaPermissionService.js";
 
 // Protocol-layer symbols services actually consumes (node.ts) that the 51

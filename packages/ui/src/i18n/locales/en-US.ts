@@ -6535,6 +6535,11 @@ const enUS: Record<string, string> = {
   "settings.computerUse.composerEntry.requiresEnabled":
     "Turn on Computer Use first to show this button in the composer.",
   "settings.computerUse.composerEntry.saveFailed": "Failed to save: {error}",
+  "settings.computerUse.stopControl.label": "Exclusive foreground control is active",
+  "settings.computerUse.stopControl.description":
+    "Stop foreground input and release the Helper lease. This action is safe to repeat.",
+  "settings.computerUse.stopControl.action": "Stop computer control",
+  "settings.computerUse.stopControlFailed": "Could not stop computer control: {error}",
   "settings.computerUse.pluginDisabledHint":
     "The Computer Use plugin is not enabled. Enable it in Plugins to use Computer Use.",
   "settings.computerUse.unsupported.title": "Computer Use is unavailable here",

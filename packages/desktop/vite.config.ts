@@ -155,6 +155,12 @@ export default defineConfig(({ mode }) => {
     env.ZCODE_E2E_COVERAGE === "1" || process.env.ZCODE_E2E_COVERAGE === "1";
   const e2eStoreBridgeEnabled =
     env.VITE_ZCODE_E2E_STORE_BRIDGE === "1" || process.env.VITE_ZCODE_E2E_STORE_BRIDGE === "1";
+  const e2eSkipProviderLoginEnabled =
+    env.VITE_ZCODE_E2E_SKIP_PROVIDER_LOGIN === "1" ||
+    process.env.VITE_ZCODE_E2E_SKIP_PROVIDER_LOGIN === "1";
+  const e2eSkipOccupationOnboardingEnabled =
+    env.VITE_ZCODE_E2E_SKIP_OCCUPATION_ONBOARDING === "1" ||
+    process.env.VITE_ZCODE_E2E_SKIP_OCCUPATION_ONBOARDING === "1";
   const zcodeEndpointOrigin = resolveZCodeEndpointOrigin({
     env: zcodeEnv,
     envBaseOrigin: env.ZCODE_BASE_URL ?? env.ZCODE_ENDPOINT_ORIGIN,
@@ -209,6 +215,12 @@ export default defineConfig(({ mode }) => {
       // E2E store bridge 只能由 WDIO 专用变量打开，避免把 ZCODE_ENV=test 产品环境误当成测试运行态。
       "import.meta.env.VITE_ZCODE_E2E_STORE_BRIDGE": JSON.stringify(
         e2eStoreBridgeEnabled ? "1" : "",
+      ),
+      "import.meta.env.VITE_ZCODE_E2E_SKIP_PROVIDER_LOGIN": JSON.stringify(
+        e2eSkipProviderLoginEnabled ? "1" : "",
+      ),
+      "import.meta.env.VITE_ZCODE_E2E_SKIP_OCCUPATION_ONBOARDING": JSON.stringify(
+        e2eSkipOccupationOnboardingEnabled ? "1" : "",
       ),
     },
     // Electron 用 file:// 协议加载页面，资源路径必须是相对路径，否则会 ERR_FILE_NOT_FOUND

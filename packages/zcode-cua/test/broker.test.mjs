@@ -482,9 +482,34 @@ describe("Computer Use runtime", () => {
   });
 
   it("projects leased foreground effects without claiming click application success", async () => {
+    let beginAcquireCalls = 0;
+    let commitAcquireCalls = 0;
+    let releaseCalls = 0;
+    const leaseAuthority = {
+      async beginAcquire() {
+        beginAcquireCalls += 1;
+        return { leaseId: "authority-lease-1", state: "reserving" };
+      },
+      async commitAcquire(leaseId, helperLeaseId, helperRequirement) {
+        commitAcquireCalls += 1;
+        assert.equal(leaseId, "authority-lease-1");
+        assert.equal(helperLeaseId, "00000000-0000-0000-0000-000000000001");
+        assert.equal(helperRequirement, VERIFIED_IDENTITY.requirement);
+        return { generation: 1, state: "active" };
+      },
+      async release(leaseId, reason) {
+        releaseCalls += 1;
+        assert.equal(leaseId, "authority-lease-1");
+        assert.equal(reason, "model_release");
+      },
+      async stop() {
+        return { status: "already_stopped" };
+      },
+    };
     const runtime = createComputerUseRuntime({
       brokerSocketPath: socketPath,
       allowForegroundControl: () => true,
+      leaseAuthority,
     });
     const context = {
       sessionId: "session",
@@ -518,6 +543,9 @@ describe("Computer Use runtime", () => {
       context,
     });
     assert.equal(released.structuredContent.effect, "confirmed");
+    assert.equal(beginAcquireCalls, 1);
+    assert.equal(commitAcquireCalls, 1);
+    assert.equal(releaseCalls, 1);
   });
 
   it("rejects remote, fork, and malformed foreground requests before broker dispatch", async () => {

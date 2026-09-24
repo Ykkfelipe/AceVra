@@ -262,6 +262,18 @@ function StartupReadyNotifier() {
   return null;
 }
 
+function BusinessReadyNotifier() {
+  useEffect(() => {
+    document.documentElement.dataset.desktopBusinessReady = "true";
+    window.dispatchEvent(new Event("zcode-desktop-business-ready"));
+    return () => {
+      delete document.documentElement.dataset.desktopBusinessReady;
+    };
+  }, []);
+
+  return null;
+}
+
 function handleServicePortMessage(event: MessageEvent): void {
   if (event.source === window && event.data?.type === InternalChannels.DatabaseStartupState) {
     const result = databaseStartupStateSchema.safeParse(event.data.state);
@@ -335,6 +347,7 @@ function initializeBusinessRoot(port: MessagePort): void {
         resolveSystemLocale={desktopPlatform.getSystemLocale}
       >
         <StartupReadyNotifier />
+        <BusinessReadyNotifier />
         <Root
           services={services}
           platform={desktopPlatform}

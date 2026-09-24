@@ -197,6 +197,10 @@ export function createProductCuaHelperHost(options = {}) {
       pid: transport?.admittedHelper?.pid ?? null,
       verified: true,
     }),
+    releaseControl: async (params) => {
+      if (!transport) throw new CuaHelperError(UNAVAILABLE);
+      return await transport.callMethod("release_control", params, { timeoutMs: 2_000 });
+    },
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
     queryPermissionStatus: async () => ({}),
@@ -222,6 +226,7 @@ function createUnavailableCuaHelperHost() {
     restartAfterCurrentStart: unavailableReject,
     waitForTransport: unavailableReject,
     checkHealth: unavailableReject,
+    releaseControl: unavailableReject,
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
     queryPermissionStatus: async () => ({}),

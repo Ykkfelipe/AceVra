@@ -3,7 +3,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { createLeaseAuthority } from "./authority.js";
+import { createLeaseAuthority, type LeaseAuthorityOptions } from "./authority.js";
 import type { LeaseAuthority } from "./contract.js";
 
 export interface LeaseAuthorityServer {
@@ -13,14 +13,17 @@ export interface LeaseAuthorityServer {
   close(): Promise<void>;
 }
 
-export async function startLeaseAuthorityServer(dataRoot: string): Promise<LeaseAuthorityServer> {
+export async function startLeaseAuthorityServer(
+  dataRoot: string,
+  options: LeaseAuthorityOptions = {},
+): Promise<LeaseAuthorityServer> {
   const directory = join(dataRoot, "computer-use", "lease-authority");
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   chmodSync(directory, 0o700);
   const socketPath = join(directory, "authority.sock");
   rmSync(socketPath, { force: true });
   const token = randomBytes(32).toString("hex");
-  const authority = createLeaseAuthority();
+  const authority = createLeaseAuthority(options);
   const server = createServer((socket) => {
     let buffer = "";
     socket.setEncoding("utf8");
@@ -54,6 +57,7 @@ export async function startLeaseAuthorityServer(dataRoot: string): Promise<Lease
         case "commit_acquire":
           result = await authority.commitAcquire(
             String(params.leaseId),
+            String(params.helperLeaseId),
             String(params.helperRequirement),
           );
           break;

@@ -6233,6 +6233,11 @@ const zhCN: Record<string, string> = {
   "settings.computerUse.composerEntry.requiresEnabled":
     "需先开启电脑控制，才能在输入框显示该按钮。",
   "settings.computerUse.composerEntry.saveFailed": "保存失败：{error}",
+  "settings.computerUse.stopControl.label": "前台独占控制正在运行",
+  "settings.computerUse.stopControl.description":
+    "停止前台输入并释放 Helper 租约，重复操作也是安全的。",
+  "settings.computerUse.stopControl.action": "停止电脑控制",
+  "settings.computerUse.stopControlFailed": "无法停止电脑控制：{error}",
   "settings.computerUse.pluginDisabledHint": "电脑控制插件未启用。前往插件开启后即可使用电脑控制。",
   "settings.computerUse.unsupported.title": "当前环境暂不支持电脑控制",
   "settings.computerUse.unsupported.remoteDescription":

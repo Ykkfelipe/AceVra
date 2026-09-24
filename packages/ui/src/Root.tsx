@@ -58,6 +58,10 @@ import { registerBaseWorkspaceServices } from "@/store/remoteWorkspaceSessionSto
 import type { RootProps } from "@/root/types.js";
 import { DiffsWorkerPoolProvider } from "@/root/DiffsWorkerPoolProvider.js";
 import { useGlobalTaskList } from "@/hooks/useGlobalTaskList.js";
+
+const skipProviderLoginForE2E =
+  (import.meta as ImportMeta & { env?: { VITE_ZCODE_E2E_SKIP_PROVIDER_LOGIN?: string } }).env
+    ?.VITE_ZCODE_E2E_SKIP_PROVIDER_LOGIN === "1";
 import { ScopedErrorBoundary } from "@/ErrorBoundary.js";
 import { useRemoteConnectionLogs } from "@/hooks/useRemoteConnectionLogs.js";
 import {
@@ -411,7 +415,7 @@ function RootInner({
       rootProviderAvailability.hydrated || rootModelSelectionRead.state.status === "error",
   });
   const providerAvailabilityLoginEntryGuardEnabled =
-    shouldEnableProviderAvailabilityLoginEntryGuard();
+    shouldEnableProviderAvailabilityLoginEntryGuard({ skipForE2E: skipProviderLoginForE2E });
   const { startupCheckCompleted: providerAvailabilityStartupCheckCompleted } =
     useProviderAvailabilityLoginEntryGuard({
       enabled: providerAvailabilityLoginEntryGuardEnabled,

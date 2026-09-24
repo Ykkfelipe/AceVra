@@ -20,6 +20,10 @@ import { logger } from "@/logger.js";
 import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import type { OnboardingRecordEntry } from "@zcode/shared";
 
+const skipOccupationOnboardingForE2E =
+  (import.meta as ImportMeta & { env?: { VITE_ZCODE_E2E_SKIP_OCCUPATION_ONBOARDING?: string } }).env
+    ?.VITE_ZCODE_E2E_SKIP_OCCUPATION_ONBOARDING === "1";
+
 /** 追加本地引导记录（userId 由 host 补全）；channel 缺失挂起时 5 秒超时按写失败处理。 */
 async function appendOnboardingRecord(
   service: NonNullable<ReturnType<typeof useOnboardingRecordService>>,
@@ -79,7 +83,8 @@ export function OccupationOnboarding({
     hasStoredOccupation: Boolean(settings?.onboardingOccupation),
     update,
   });
-  const onboardingVisible = requested || (needsOnboarding === true && !dismissed);
+  const onboardingVisible =
+    !skipOccupationOnboardingForE2E && (requested || (needsOnboarding === true && !dismissed));
   const captureEnd = useOnboardingTelemetry({
     platform,
     visible:

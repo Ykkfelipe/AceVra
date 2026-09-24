@@ -150,6 +150,11 @@ export type ManagedCuaProductHelperHost = CuaProductHelperHost;
 export interface CuaHelperHost extends CuaProductHelperHost {
   readonly reservedTransport: CuaHelperTransportHandle | undefined;
   waitForTransport(timeoutMs?: number): Promise<CuaHelperTransportHandle>;
+  releaseControl(params: {
+    lease_id: string;
+    owner_session: string;
+    owner_task: string;
+  }): Promise<{ lease_state?: string; [key: string]: unknown }>;
   queryScreenCaptureProbe(): Promise<{ ok: boolean; reason?: string }>;
   queryScreenRecordingPreflight(): Promise<"granted" | "denied" | "unknown" | undefined>;
   queryPermissionStatus(): Promise<CuaPermissionStatusQueryReport>;
