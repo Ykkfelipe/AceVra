@@ -4580,6 +4580,7 @@ const enUS: Record<string, string> = {
   "chat.toolbar.backend.codex.modelManaged": "Codex default",
   "chat.toolbar.backend.codex.modelPickerLabel": "Codex model",
   "chat.toolbar.backend.codex.modelDefault": "Default (Codex app setting)",
+  "chat.toolbar.backend.codex.modelLocked": "Model is fixed for this task (chosen when it started)",
   "chat.toolbar.backend.codex.unsupportedInput":
     "Slash commands, attachments and shared context are not supported for Codex tasks yet",
   // CUA composer entry button

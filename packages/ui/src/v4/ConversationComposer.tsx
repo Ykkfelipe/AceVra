@@ -52,6 +52,7 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   ArrowUpIcon,
+  BotIcon,
   ClipboardPenLineIcon,
   InfoIcon,
   RotateCcwIcon,
@@ -160,6 +161,8 @@ import {
 } from "@/v4/composer/V4ComposerToolbar.js";
 import { V4ComposerBackendSwitch } from "@/v4/composer/V4ComposerBackendControls.js";
 import { V4ComposerCodexModelSelect } from "@/v4/composer/V4ComposerCodexModelSelect.js";
+import { resolveCodexModelControlKind } from "@/v4/composer/composerToolbarPresentation.js";
+import { codexModelOptionLabel } from "@zcode/shared";
 import {
   resolveV4ComposerConfigPickerState,
   type V4ComposerConfigPicker,
@@ -2076,8 +2079,11 @@ function ConversationComposerImpl({
               onSwitchBackend={onSwitchBackend}
             />
           ) : null}
-          {draftMode && (draftBackend ?? "zcode") === "codex" ? (
-            // Codex 后端使用 shared 契约的策划模型 allow-list（thread 级，建任务时生效）；
+          {resolveCodexModelControlKind({
+            draftMode,
+            backend: draftBackend ?? "zcode",
+          }) === "dropdown" ? (
+            // draft + Codex：策划 allow-list 下拉，选择在建任务（thread/start）时生效。
             // 不能展示 Agent 后端的计划模型选择器，否则会把 GLM/Claude 等计划模型
             // 误认为 Codex 正在使用的模型。
             <V4ComposerCodexModelSelect
@@ -2087,6 +2093,23 @@ function ConversationComposerImpl({
               onConfigPickerOpenChange={handleConfigPickerOpenChange}
               onSelectModel={onSelectCodexModel ?? (() => {})}
             />
+          ) : resolveCodexModelControlKind({
+              draftMode,
+              backend: draftBackend ?? "zcode",
+            }) === "static" ? (
+            // 非 draft 的 Codex 会话：thread 模型在创建时已锁定。这里必须渲染静态指示器，
+            // 不能渲染点击后被静默吞掉的假下拉（“选不上/不生效”缺陷的来源）。
+            <span
+              className="flex h-7 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface px-2 text-ui-base text-foreground-subtle"
+              data-testid="v4-composer-codex-model-indicator"
+              title={intl.formatMessage({ id: "chat.toolbar.backend.codex.modelLocked" })}
+            >
+              <BotIcon className="size-4 shrink-0" aria-hidden />
+              <span className="hidden whitespace-nowrap @xl/composer:inline">
+                {codexModelOptionLabel(snapshot?.config.model ?? "") ||
+                  intl.formatMessage({ id: "chat.toolbar.backend.codex.modelManaged" })}
+              </span>
+            </span>
           ) : (
             <V4ComposerModelControls
               workspacePath={workspacePath}

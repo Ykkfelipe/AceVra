@@ -28,3 +28,19 @@ export const COMPOSER_TOOLBAR_TRIGGER_CLASS = [
 
 /** 动作簇布局：紧凑、可收缩，语义 role/label 由调用方补充。 */
 export const COMPOSER_TOOLBAR_GROUP_CLASS = "flex min-w-0 items-center gap-1";
+
+/**
+ * Codex 模型控件的形态裁决（纯函数，便于确定性测试）。
+ *
+ * - draft + codex：可交互下拉（thread 级选择在建任务时生效）。
+ * - 非 draft + codex：静态指示器——thread 模型在创建时已锁定，这里绝不能渲染
+ *   一个点击后被静默吞掉的假下拉（那正是“选不上/不生效”缺陷的来源）。
+ * - 其余（Agent 后端 / 非本后端）：返回 null，由 Agent 的模型选择器接管。
+ */
+export function resolveCodexModelControlKind(params: {
+  draftMode: boolean;
+  backend: "zcode" | "codex";
+}): "dropdown" | "static" | null {
+  if (params.backend !== "codex") return null;
+  return params.draftMode ? "dropdown" : "static";
+}

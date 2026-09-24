@@ -60,6 +60,10 @@ the Agent picker:
 - Selection is draft-scoped (same `V4ComposerDraft` store as `executionBackend`) and applies at
   **task creation** (`thread/start` model param). It is thread-level: mid-session switching is not
   supported, and `thread/resume` keeps the thread's existing model.
+- Because of that thread-level lock, the interactive dropdown may only render in draft mode. A
+  created Codex session renders a **static** indicator showing the thread's model (or “Codex
+  default”). Rendering an inert dropdown that swallows clicks there is the “selection doesn't
+  stick” defect class and is forbidden.
 - The host must fail loud if the installed Codex binary rejects the `model` param; silently falling
   back to default while displaying a chosen model is a defect.
 - Claude is not a backend; no Claude model surface exists or may be implied by this UI.

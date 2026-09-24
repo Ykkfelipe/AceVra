@@ -5,6 +5,7 @@ import zhCN from "../src/i18n/locales/zh-CN.js";
 import {
   COMPOSER_TOOLBAR_GROUP_CLASS,
   COMPOSER_TOOLBAR_TRIGGER_CLASS,
+  resolveCodexModelControlKind,
 } from "../src/v4/composer/composerToolbarPresentation.js";
 
 test("the built-in composer backend is presented as a generalized agent", () => {
@@ -51,4 +52,11 @@ test("composer toolbar controls expand with labels and preserve an icon-only flo
   }
   assert.equal(COMPOSER_TOOLBAR_TRIGGER_CLASS.includes("size-7"), false);
   assert.equal(COMPOSER_TOOLBAR_GROUP_CLASS, "flex min-w-0 items-center gap-1");
+});
+
+test("codex model control is interactive only in draft and static in created sessions", () => {
+  assert.equal(resolveCodexModelControlKind({ draftMode: true, backend: "codex" }), "dropdown");
+  assert.equal(resolveCodexModelControlKind({ draftMode: false, backend: "codex" }), "static");
+  assert.equal(resolveCodexModelControlKind({ draftMode: true, backend: "zcode" }), null);
+  assert.equal(resolveCodexModelControlKind({ draftMode: false, backend: "zcode" }), null);
 });
