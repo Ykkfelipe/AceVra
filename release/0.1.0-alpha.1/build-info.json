@@ -2,8 +2,8 @@
   "schemaVersion": 4,
   "product": "AceVra",
   "version": "0.1.0-alpha.1",
-  "buildCommitId": "42a26cdd",
-  "buildTime": "2026-09-24T16:10:01.992Z",
+  "buildCommitId": "56931873",
+  "buildTime": "2026-09-24T16:41:47.543Z",
   "releaseProfile": "local-engineering-alpha",
   "distribution": "local engineering alpha",
   "branch": "release/0.1.0-alpha",
@@ -37,11 +37,14 @@
     "peerProbeId": "dev.acevra.cua-peer-identity.development",
     "architecture": "arm64"
   },
-  "artifacts": ["AceVra-0.1.0-alpha.1-arm64.dmg", "AceVra-0.1.0-alpha.1-arm64.zip"],
-  "handoff": "release/0.1.0-alpha.1/handoff-final-42a26cd",
+  "artifacts": [
+    "AceVra-0.1.0-alpha.1-arm64.dmg",
+    "AceVra-0.1.0-alpha.1-arm64.zip"
+  ],
+  "handoff": "release/0.1.0-alpha.1/handoff-final-5693187",
   "installedPath": "/Applications/AceVra.app",
-  "installedRevision": "42a26cdd",
-  "installedBackup": "/Applications/.AceVra.app.backup-d7520775-2db3-46c9-a747-978fe13317c4",
-  "installedAcceptance": "42a26cd toolbar layout and agent copy candidate installed; human visual check pending",
+  "installedRevision": "56931873",
+  "installedBackup": "/Applications/.AceVra.app.backup-e730b271-dfc9-44bd-91c5-4fd9ec6fc33a",
+  "installedAcceptance": "5693187 codex clarity candidate installed; human composer check pending",
   "broaderAcceptance": "paused; no TCC changes or broader CUA/browser/provider/artifact/remote/restart acceptance"
 }
