@@ -2,8 +2,8 @@
   "schemaVersion": 4,
   "product": "AceVra",
   "version": "0.1.0-alpha.1",
-  "buildCommitId": "49d5fd6d",
-  "buildTime": "2026-09-24T11:42:58.816Z",
+  "buildCommitId": "ab7c5b26",
+  "buildTime": "2026-09-24T12:53:29.354Z",
   "releaseProfile": "local-engineering-alpha",
   "distribution": "local engineering alpha",
   "branch": "release/0.1.0-alpha",
@@ -38,5 +38,5 @@
     "architecture": "arm64"
   },
   "artifacts": ["AceVra-0.1.0-alpha.1-arm64.dmg", "AceVra-0.1.0-alpha.1-arm64.zip"],
-  "installedAcceptance": "Computer Use menu and Codex preview verified on installed app; broader human acceptance pending"
+  "installedAcceptance": "repaired Computer Use settings candidate installed; human enablement and settings-link clicks pending"
 }
