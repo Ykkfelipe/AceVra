@@ -244,11 +244,17 @@ surface, provide one compact release-safety block that states:
 
 - this is the local engineering alpha;
 - the app and Helper are self-signed and non-notarized;
-- CUA is off until explicitly enabled and Accessibility/Screen Recording are granted to
+- CUA is off until explicitly enabled and Accessibility / Screen Recording are granted to
   `AceVra Computer Use.app`;
 - the alpha data root and that updates are disabled;
 - no model/provider inference, provider request, credential prompt, or account authentication is
   part of install/verification.
+
+The alpha notice is an opt-in reminder, not a permanent status card. It remains visible while the
+canonical Computer Use plugin is disabled, loading, toggling, or failed, and disappears only after
+the plugin reports confirmed enabled state. The composer Computer Use error copy describes a
+plugin-enablement failure and points to Settings; it must not claim a Helper failure or prescribe a
+ZCode restart.
 
 Reuse the existing permission rows and return-recovery flow. Add one software **Stop computer
 control** action, visible and enabled only while the authoritative service lease is active; repeated

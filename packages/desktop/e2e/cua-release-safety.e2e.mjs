@@ -93,6 +93,11 @@ async function runScenario({ active }) {
         true,
         "isolated alpha plugin config should be written under ZCODE_HOME",
       );
+      assert.equal(
+        await page.getByText("AceVra local engineering alpha", { exact: true }).count(),
+        0,
+        "alpha notice should disappear after confirmed plugin enablement",
+      );
       const composerToggle = page.getByLabel("Show Computer Use button in the composer");
       await composerToggle.click();
       for (let attempt = 0; attempt < 30 && !(await composerToggle.isChecked()); attempt += 1) {

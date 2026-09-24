@@ -4305,7 +4305,7 @@ const zhCN: Record<string, string> = {
   "chat.toolbar.computerUse.tooltip.ready": "电脑操作已就绪 · 直接描述你想让 ZCode 做的事",
   "chat.toolbar.computerUse.tooltip.permissionRequired": "缺少 macOS 权限，点击完成授权",
   "chat.toolbar.computerUse.tooltip.error":
-    "电脑操作启用失败 · 重启 ZCode 应用后重试，或让 ZCode 排查日志",
+    "无法启用电脑操作。请前往“设置 → 电脑控制”重试；若仍失败，请检查插件错误。",
   "chat.toolbar.computerUse.tooltip.sessionBusy":
     "会话进行中，暂不能切换电脑操作；任务结束后可再试",
   "chat.toolbar.mode.description": "切换当前任务的权限/执行模式，例如默认、计划或接受编辑。",

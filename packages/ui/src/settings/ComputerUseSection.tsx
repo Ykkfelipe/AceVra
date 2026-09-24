@@ -726,7 +726,8 @@ export function ComputerUseSection({
 
   return (
     <div className="space-y-4">
-      {ZCODE_RELEASE_PROFILE === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE ? (
+      {ZCODE_RELEASE_PROFILE === LOCAL_ENGINEERING_ALPHA_RELEASE_PROFILE &&
+      (!cuaEnabled || cuaToggling) ? (
         <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-ui-sm text-foreground-subtle">
           <p className="font-medium text-ui-base text-foreground">AceVra local engineering alpha</p>
           <p className="mt-1">
