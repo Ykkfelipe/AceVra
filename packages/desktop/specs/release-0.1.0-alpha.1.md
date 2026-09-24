@@ -262,6 +262,13 @@ display value, not a Helper failure: after cache validation it must preserve the
 `available: true` contract as a live available Helper report so consumers cannot misclassify it as
 unavailable. The authoritative live permission read remains the Settings query.
 
+Codex backend model selection is thread-level and curated: the composer offers **Default (Codex app
+setting)** plus the exact `CODEX_MODEL_OPTIONS` allow-list from the shared codex-execution contract,
+persists the choice in the composer draft, and sends it as the `thread/start` `model` param at task
+creation. The host fails loud if the installed Codex binary rejects the param. There is no
+mid-session switch, no Claude model surface (Claude has no execution backend), and no Agent
+plan-catalog change.
+
 Reuse the existing permission rows and return-recovery flow. Add one software **Stop computer
 control** action, visible and enabled only while the authoritative service lease is active; repeated
 activation is safe. Replace visible stale `ZCode` branding only on touched AceVra release-safety and

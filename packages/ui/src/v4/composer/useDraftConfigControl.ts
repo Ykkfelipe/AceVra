@@ -103,6 +103,8 @@ interface DraftConfigControl {
   handleDraftSwitchMode: (mode: string) => void;
   /** draft 态执行后端选择（ZCode | Codex）；只写草稿意图，不触达 runtime。 */
   handleDraftSwitchBackend: (backend: ZCodeExecutionBackend) => void;
+  /** draft 态 Codex 策划模型选择；null = Default 哨兵（Codex 应用自身设置）。 */
+  handleDraftSelectCodexModel: (modelId: string | null) => void;
 }
 
 export function useDraftConfigControl(params: {
@@ -494,6 +496,15 @@ export function useDraftConfigControl(params: {
     [updateComposerDraft],
   );
 
+  // Codex 策划模型选择：null 是显式 Default 哨兵（Codex 应用自身设置）；
+  // 只在 draft 首发、建任务时生效，作用域与 executionBackend 一致。
+  const handleDraftSelectCodexModel = useCallback(
+    (modelId: string | null) => {
+      updateComposerDraft((current) => ({ ...current, codexModelId: modelId }));
+    },
+    [updateComposerDraft],
+  );
+
   return {
     modelSelectionRead,
     draftConfig,
@@ -508,6 +519,7 @@ export function useDraftConfigControl(params: {
     handleDraftSelectThought,
     handleDraftSwitchMode,
     handleDraftSwitchBackend,
+    handleDraftSelectCodexModel,
   };
 }
 

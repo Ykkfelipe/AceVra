@@ -1,4 +1,4 @@
-export type V4ComposerConfigPicker = "mode" | "model" | "thought" | "backend";
+export type V4ComposerConfigPicker = "mode" | "model" | "thought" | "backend" | "codexModel";
 
 export function resolveV4ComposerConfigPickerState(
   current: V4ComposerConfigPicker | null,

@@ -52,7 +52,6 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   ArrowUpIcon,
-  BotIcon,
   ClipboardPenLineIcon,
   InfoIcon,
   RotateCcwIcon,
@@ -160,6 +159,7 @@ import {
   type ModelSelectionSource,
 } from "@/v4/composer/V4ComposerToolbar.js";
 import { V4ComposerBackendSwitch } from "@/v4/composer/V4ComposerBackendControls.js";
+import { V4ComposerCodexModelSelect } from "@/v4/composer/V4ComposerCodexModelSelect.js";
 import {
   resolveV4ComposerConfigPickerState,
   type V4ComposerConfigPicker,
@@ -436,6 +436,9 @@ interface ConversationComposerProps {
   /** 新任务的执行后端选择（draft 态渲染）；缺省隐藏选择器。 */
   draftBackend?: ZCodeExecutionBackend;
   onSwitchBackend?: (backend: ZCodeExecutionBackend) => void;
+  /** Codex 后端的策划模型选择（draft 态）；null = Default 哨兵。 */
+  codexModelId?: string | null;
+  onSelectCodexModel?: (modelId: string | null) => void;
   /** host 未注册 codex-execution 服务时 false，Codex 菜单项禁用。 */
   codexBackendAvailable?: boolean;
   /** 打开当前 session 的 Status panel，并直达 Running 明细。 */
@@ -529,6 +532,8 @@ function ConversationComposerImpl({
   onSwitchMode,
   draftBackend,
   onSwitchBackend,
+  codexModelId,
+  onSelectCodexModel,
   codexBackendAvailable = false,
   onOpenRunningBackgroundWorks,
   backgroundWorkOpenTarget = "panel",
@@ -2072,17 +2077,16 @@ function ConversationComposerImpl({
             />
           ) : null}
           {draftMode && (draftBackend ?? "zcode") === "codex" ? (
-            // Codex 是外部执行账户，模型由 Codex 应用自己管理；这里不能展示 Agent 后端的
-            // 模型选择器，否则用户会把 GLM/Claude 等计划模型误认为 Codex 正在使用的模型。
-            <span
-              className="flex h-7 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface px-2 text-ui-base text-foreground-subtle"
-              data-testid="v4-composer-codex-model-indicator"
-            >
-              <BotIcon className="size-4 shrink-0" aria-hidden />
-              <span className="hidden whitespace-nowrap @xl/composer:inline">
-                {intl.formatMessage({ id: "chat.toolbar.backend.codex.modelManaged" })}
-              </span>
-            </span>
+            // Codex 后端使用 shared 契约的策划模型 allow-list（thread 级，建任务时生效）；
+            // 不能展示 Agent 后端的计划模型选择器，否则会把 GLM/Claude 等计划模型
+            // 误认为 Codex 正在使用的模型。
+            <V4ComposerCodexModelSelect
+              modelId={codexModelId ?? null}
+              disabled={disabled}
+              activeConfigPicker={activeConfigPicker}
+              onConfigPickerOpenChange={handleConfigPickerOpenChange}
+              onSelectModel={onSelectCodexModel ?? (() => {})}
+            />
           ) : (
             <V4ComposerModelControls
               workspacePath={workspacePath}
@@ -2147,6 +2151,7 @@ function ConversationComposerImpl({
     [
       canSend,
       activeConfigPicker,
+      codexModelId,
       intl,
       composerPhase,
       composerUsage,
@@ -2167,6 +2172,7 @@ function ConversationComposerImpl({
       onRecoverCustomModelSelection,
       onSendCompressionCommand,
       onSwitchBackend,
+      onSelectCodexModel,
       onSwitchMode,
       pending,
       provider,

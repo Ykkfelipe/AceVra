@@ -47,12 +47,22 @@ the internal runtime/product name. This is display copy only; runtime identifier
 
 ## Backend and model clarity
 
-The model picker always belongs to the built-in Agent backend. When the draft backend is an
-external execution account (Codex), the composer must not render the Agent model picker: Codex
-manages its own model inside the Codex app and does not consume the AceVra plan model catalog. In
-that state the composer renders a non-interactive “model managed by Codex” indicator instead.
-Claude is not a backend; Claude-family entries, when present, are models inside the Agent backend
-catalog.
+The Agent backend's model picker lists the AceVra plan catalog and selection drives the plan model
+as before. For the Codex backend, the composer renders a dedicated Codex model dropdown instead of
+the Agent picker:
+
+- The selectable list is the curated `CODEX_MODEL_OPTIONS` contract in
+  `@zcode/shared` (`codex-execution.ts`): **Default (Codex app setting)** plus the reviewed model
+  ids (`gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`).
+  The list is an exact allow-list, not a free-text field; new ids require a contract change.
+- `modelId: null/undefined` is the **Default** sentinel: Codex's own app setting is used and no
+  `model` field is sent.
+- Selection is draft-scoped (same `V4ComposerDraft` store as `executionBackend`) and applies at
+  **task creation** (`thread/start` model param). It is thread-level: mid-session switching is not
+  supported, and `thread/resume` keeps the thread's existing model.
+- The host must fail loud if the installed Codex binary rejects the `model` param; silently falling
+  back to default while displaying a chosen model is a defect.
+- Claude is not a backend; no Claude model surface exists or may be implied by this UI.
 
 ## Explicit input rejection
 

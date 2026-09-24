@@ -1246,6 +1246,7 @@ export function SessionPane({
     handleDraftSelectThought,
     handleDraftSwitchMode,
     handleDraftSwitchBackend,
+    handleDraftSelectCodexModel,
     promoteComposerDraft,
     captureAcceptedModelSelection,
     replaceComposerDraft,
@@ -1264,6 +1265,10 @@ export function SessionPane({
   const draftBackend = composerDraft.executionBackend ?? "zcode";
   const draftBackendRef = useRef<ZCodeExecutionBackend>(draftBackend);
   draftBackendRef.current = draftBackend;
+  // Codex 策划模型选择的 ref 与 draftBackendRef 同口径：首发回调读 ref，避免闭包过期。
+  const codexModelId = composerDraft.codexModelId ?? null;
+  const codexModelIdRef = useRef<string | null>(codexModelId);
+  codexModelIdRef.current = codexModelId;
   const codexExecutionService = useCodexExecutionService();
   const codexExecutionServiceRef = useRef(codexExecutionService);
   codexExecutionServiceRef.current = codexExecutionService;
@@ -2599,10 +2604,13 @@ export function SessionPane({
           return "blocked" as const;
         }
         // createTask 失败时任务不存在；异常交给 composer 保留草稿并展示发送错误。
+        // codexModelId 是策划 allow-list 选择；null/缺省 = Default 哨兵（不带 model 字段）。
+        const selectedCodexModelId = codexModelIdRef.current;
         const created = await codexService.createTask({
           workspacePath,
           ...(workspaceIdentity ? { workspaceIdentity } : {}),
           firstInput: effectiveText,
+          ...(selectedCodexModelId ? { modelId: selectedCodexModelId } : {}),
         });
         handleDraftSessionCreated(created.task.taskId, groupedDraftTaskAtSend, createSourceAtSend);
         return "sent" as const;
@@ -4435,6 +4443,8 @@ export function SessionPane({
       onSwitchMode={handleSwitchMode}
       draftBackend={draftBackend}
       onSwitchBackend={isDraft ? handleDraftSwitchBackend : undefined}
+      codexModelId={codexModelId}
+      onSelectCodexModel={isDraft ? handleDraftSelectCodexModel : undefined}
       codexBackendAvailable={codexExecutionService != null}
       onOpenRunningBackgroundWorks={
         sessionId && runningBackgroundWorkCount > 0 ? handleOpenRunningBackgroundWorks : undefined

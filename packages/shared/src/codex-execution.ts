@@ -16,6 +16,38 @@ export function isZCodeExecutionBackend(value: unknown): value is ZCodeExecution
   return value === "zcode" || value === "codex";
 }
 
+/**
+ * Codex 后端的策划模型 allow-list（exact allow-list，不做 family matcher）。
+ *
+ * id 会原样作为 thread/start 的 `model` 参数发给 Codex app-server；label 仅用于展示。
+ * `undefined`/`null` 是 Default 哨兵：表示沿用 Codex 应用自身设置，不发送 model 字段。
+ * 新增模型必须走契约变更（本文件），不允许 UI 自由输入，也不读取 ~/.codex/config.toml。
+ */
+export interface CodexModelOption {
+  readonly id: string;
+  readonly label: string;
+}
+
+export const CODEX_MODEL_OPTIONS: readonly CodexModelOption[] = [
+  { id: "gpt-6-astra", label: "GPT-6 Astra" },
+  { id: "gpt-6-sol", label: "GPT-6 Sol" },
+  { id: "gpt-6-luna", label: "GPT-6 Luna" },
+  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+  { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+];
+
+const CODEX_MODEL_IDS = new Set(CODEX_MODEL_OPTIONS.map((option) => option.id));
+
+export function isCodexModelOptionId(value: unknown): value is string {
+  return typeof value === "string" && CODEX_MODEL_IDS.has(value);
+}
+
+/** 已知 id 的展示名；未知 id 原样返回（容错旧草稿，不抛错）。 */
+export function codexModelOptionLabel(id: string): string {
+  return CODEX_MODEL_OPTIONS.find((option) => option.id === id)?.label ?? id;
+}
+
 /** createTask 结果：任务绑定元信息（不含任何会话正文）。 */
 export interface CodexTaskBinding {
   readonly taskId: string;
@@ -34,6 +66,12 @@ export interface CodexExecutionCreateTaskParams {
   readonly firstInput?: string;
   /** 可选标题；缺省由首条输入截取。 */
   readonly title?: string;
+  /**
+   * Codex 模型选择（`CODEX_MODEL_OPTIONS` 的 id）；缺省/空 = Default 哨兵，
+   * thread/start 不携带 model 字段，沿用 Codex 应用自身设置。thread 级参数：
+   * 仅在建任务时生效，无 mid-session 切换。
+   */
+  readonly modelId?: string;
 }
 
 export interface CodexExecutionCreateTaskResult {

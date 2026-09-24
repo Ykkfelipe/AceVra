@@ -384,8 +384,8 @@ export class CodexThreadProjection {
     return this.#commit([this.#log.append(row)]);
   }
 
-  buildSnapshot(sessionId: string): ReturnType<typeof buildCodexSnapshot> {
-    return buildCodexSnapshot(this.#state(), sessionId, this.#title);
+  buildSnapshot(sessionId: string, options?: { modelId?: string | null }): ReturnType<typeof buildCodexSnapshot> {
+    return buildCodexSnapshot(this.#state(), sessionId, this.#title, options);
   }
 
   rowsRange(params: { beforeRowId?: number; limit: number }): ConversationRow[] {

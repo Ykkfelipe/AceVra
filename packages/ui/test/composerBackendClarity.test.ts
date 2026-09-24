@@ -32,7 +32,11 @@ test("reject routing explains the paused input instead of locking silently", () 
   assert.equal(zhCN["chat.placeholder.inputPaused"], "智能体正在工作，暂时不能输入");
 });
 
-test("Codex backend copy states that the model is managed by Codex", () => {
-  assert.equal(enUS["chat.toolbar.backend.codex.modelManaged"], "Model managed by Codex");
-  assert.equal(zhCN["chat.toolbar.backend.codex.modelManaged"], "模型由 Codex 管理");
+test("Codex backend copy states the default sentinel and picker labels", () => {
+  assert.equal(enUS["chat.toolbar.backend.codex.modelManaged"], "Codex default");
+  assert.equal(enUS["chat.toolbar.backend.codex.modelPickerLabel"], "Codex model");
+  assert.equal(enUS["chat.toolbar.backend.codex.modelDefault"], "Default (Codex app setting)");
+  assert.equal(zhCN["chat.toolbar.backend.codex.modelManaged"], "Codex 默认");
+  assert.equal(zhCN["chat.toolbar.backend.codex.modelPickerLabel"], "Codex 模型");
+  assert.equal(zhCN["chat.toolbar.backend.codex.modelDefault"], "默认（Codex 应用设置）");
 });

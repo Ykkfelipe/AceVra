@@ -23,6 +23,8 @@ interface CodexTaskRuntimeParams {
   readonly workspaceIdentity?: string;
   readonly codexThreadId: string;
   readonly bridgeGeneration: number;
+  /** 建任务时的策划模型选择；null/undefined = Default 哨兵（Codex 应用自身设置）。 */
+  readonly codexModelId?: string | null;
 }
 
 export class CodexTaskRuntime {
@@ -32,6 +34,8 @@ export class CodexTaskRuntime {
   codexThreadId: string;
   /** 创建/重建时的 bridge generation；与 bridge.generation 不等即 stale。 */
   bridgeGeneration: number;
+  /** thread 级模型选择（thread/start 的 model 参数来源）；Default 哨兵为 null。 */
+  codexModelId: string | null;
   projection: CodexThreadProjection;
   /**
    * Codex 侧活动 turn id（thread/start 不分配 turn；来自 turn/start 响应的
@@ -48,6 +52,7 @@ export class CodexTaskRuntime {
     this.workspaceIdentity = params.workspaceIdentity;
     this.codexThreadId = params.codexThreadId;
     this.bridgeGeneration = params.bridgeGeneration;
+    this.codexModelId = params.codexModelId ?? null;
     this.projection = new CodexThreadProjection(this.logEpochFor(params.bridgeGeneration), now);
   }
 
@@ -103,7 +108,10 @@ export function extractCodexTurnId(result: unknown): string | null {
   const record = result as Record<string, unknown>;
   const direct = record.turnId ?? record.turn_id;
   if (typeof direct === "string" && direct.trim()) return direct;
-  const turn = typeof record.turn === "object" && record.turn !== null ? (record.turn as Record<string, unknown>) : null;
+  const turn =
+    typeof record.turn === "object" && record.turn !== null
+      ? (record.turn as Record<string, unknown>)
+      : null;
   if (turn && typeof turn.id === "string" && turn.id.trim()) return turn.id;
   return null;
 }
@@ -111,7 +119,7 @@ export function extractCodexTurnId(result: unknown): string | null {
 /** 启动一个新的 Codex thread（thread/start）；账号门禁在这里 fail closed。 */
 export async function startCodexThread(
   bridge: CodexAppServerPort,
-  params: { workspacePath: string; policy: CodexExecutionPolicy },
+  params: { workspacePath: string; policy: CodexExecutionPolicy; modelId?: string },
 ): Promise<string> {
   const account = (await bridge.call("account/read", {})) as {
     account?: unknown;
@@ -122,10 +130,14 @@ export async function startCodexThread(
   }
   // 宿主执行策略显式下发（approvalPolicy + sandbox），不再依赖 Codex 自身默认
   // （E2E 观察到的默认是 approvalPolicy:"never" + dangerFullAccess，不可接受）。
+  // modelId 是 thread 级策划 allow-list 选择；Default 哨兵（缺省/空）不携带 model 字段，
+  // 沿用 Codex 应用自身设置。二进制不支持该参数时必须 fail loud——静默回退会让 UI
+  // 显示一个并未生效的模型选择。
   const result = await bridge.call(CODEX_METHODS.threadStart, {
     cwd: params.workspacePath,
     approvalPolicy: params.policy.approvalPolicy,
     sandbox: params.policy.sandbox,
+    ...(params.modelId?.trim() ? { model: params.modelId.trim() } : {}),
   });
   const threadId = extractCodexThreadId(result);
   if (!threadId) throw new Error("codex_thread_start_missing_id");
@@ -149,7 +161,10 @@ export async function resumeCodexThread(
   // resume 返回可能只是请求回显（E2E 观察 {}）；只在明确的 thread 字段出现时才采纳新 id。
   if (typeof result === "object" && result !== null) {
     const record = result as Record<string, unknown>;
-    const thread = typeof record.thread === "object" && record.thread !== null ? (record.thread as Record<string, unknown>) : null;
+    const thread =
+      typeof record.thread === "object" && record.thread !== null
+        ? (record.thread as Record<string, unknown>)
+        : null;
     for (const candidate of [record.threadId, record.thread_id, thread?.id]) {
       if (typeof candidate === "string" && candidate.trim()) return candidate;
     }
@@ -181,7 +196,8 @@ export async function rebuildProjectionFromCodex(
     } catch {
       return;
     }
-    const record = typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
+    const record =
+      typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
     const items: unknown[] = Array.isArray(result)
       ? result
       : Array.isArray(record?.items)
@@ -203,7 +219,8 @@ export async function rebuildProjectionFromCodex(
 
 function normalizeHistoryItem(entry: unknown): CodexItem | null {
   // E2E 观察：thread/items/list 的条目是 {turnId, item:{type,…}} 包装；容错回退裸 item。
-  const record = typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : null;
+  const record =
+    typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : null;
   const unwrapped = record?.item ?? entry;
   const parsed = parseCodexNotification("item/completed", { item: unwrapped });
   if (parsed.type !== "itemCompleted") return null;
@@ -216,7 +233,10 @@ export function routeCodexNotification(
   method: string,
   params: unknown,
   rawRequest: { method: string; params: unknown; rawId: number } | undefined,
-): { commit: CodexProjectionCommit; approval: { rawId: number; interactionId: string } | null } | null {
+): {
+  commit: CodexProjectionCommit;
+  approval: { rawId: number; interactionId: string } | null;
+} | null {
   if (rawRequest) {
     const request = parseCodexServerRequest(rawRequest.method, rawRequest.params, rawRequest.rawId);
     if (request.type === "approval") {
@@ -297,12 +317,14 @@ export async function ensureRuntimeForTask(options: {
           ...(meta.workspaceIdentity ? { workspaceIdentity: meta.workspaceIdentity } : {}),
           codexThreadId: resumedThreadId,
           bridgeGeneration: generation,
+          ...(meta.codexModelId ? { codexModelId: meta.codexModelId } : {}),
         },
         now,
       );
     runtime.bridgeGeneration = generation;
     runtime.projection = projection;
     runtime.codexThreadId = resumedThreadId;
+    runtime.codexModelId = meta.codexModelId ?? null;
     // 旧代进程的 turn 已随进程消失：换代重建后不允许拿旧 turnId 去打断新进程。
     runtime.codexTurnId = null;
     runtimes.set(taskId, runtime);

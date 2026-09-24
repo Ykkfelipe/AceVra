@@ -10,6 +10,7 @@
 // 与「v4 composer 不做附件草稿持久化」的裁决一致）。
 import { logger } from "@/logger.js";
 import {
+  isCodexModelOptionId,
   isZCodeExecutionBackend,
   modelSelectionSchema,
   type ModelSelection,
@@ -30,6 +31,11 @@ export interface V4ComposerDraft {
    * 既定任务的后端由任务 meta 决定，切换会话后本字段不再消费。
    */
   executionBackend?: ZCodeExecutionBackend;
+  /**
+   * Codex 后端的策划模型选择（CODEX_MODEL_OPTIONS id）；null = Default 哨兵
+   * （Codex 应用自身设置，thread/start 不带 model）。只在 draft 首发、建任务时生效。
+   */
+  codexModelId?: string | null;
   /** 已处理的工具变更，防止重连快照再次覆盖用户选择。 */
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
@@ -146,6 +152,12 @@ function readDraft(value: unknown): V4ComposerDraft | null {
     ...(isZCodeExecutionBackend(value.executionBackend)
       ? { executionBackend: value.executionBackend }
       : {}),
+    // null 是合法的 Default 哨兵，必须与 undefined（未设置）区分保存。
+    ...(value.codexModelId === null
+      ? { codexModelId: null }
+      : isCodexModelOptionId(value.codexModelId)
+        ? { codexModelId: value.codexModelId }
+        : {}),
     ...(value.initializeFromNewTask === true && !mode.success
       ? { initializeFromNewTask: true as const }
       : {}),
@@ -201,6 +213,7 @@ export function persistV4ComposerDraft(
     !draft.mention &&
     !draft.mode &&
     !draft.modelSelection &&
+    draft.codexModelId == null &&
     !draft.initializeFromNewTask
   ) {
     delete file.scopes[scopeId];

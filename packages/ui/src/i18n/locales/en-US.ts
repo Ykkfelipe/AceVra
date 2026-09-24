@@ -4577,7 +4577,9 @@ const enUS: Record<string, string> = {
   "chat.toolbar.backend.codex.label": "Codex",
   "chat.toolbar.backend.codex.description": "Run tasks with the local Codex app agent",
   "chat.toolbar.backend.codex.unavailable": "unavailable",
-  "chat.toolbar.backend.codex.modelManaged": "Model managed by Codex",
+  "chat.toolbar.backend.codex.modelManaged": "Codex default",
+  "chat.toolbar.backend.codex.modelPickerLabel": "Codex model",
+  "chat.toolbar.backend.codex.modelDefault": "Default (Codex app setting)",
   "chat.toolbar.backend.codex.unsupportedInput":
     "Slash commands, attachments and shared context are not supported for Codex tasks yet",
   // CUA composer entry button

@@ -33,7 +33,13 @@ interface FakeBridgeState {
   errors: Map<string, string>;
   /** 可选的动态应答器：返回非 undefined 时优先于 results/errors（用于翻页等有状态形状）。 */
   callOverride?: (method: string, params: unknown) => unknown | undefined;
-  notifications: Array<(method: string, params: unknown, rawRequest?: { method: string; params: unknown; rawId: number }) => void>;
+  notifications: Array<
+    (
+      method: string,
+      params: unknown,
+      rawRequest?: { method: string; params: unknown; rawId: number },
+    ) => void
+  >;
 }
 
 function makeBridge(overrides: Partial<FakeBridgeState> = {}): {
@@ -76,7 +82,11 @@ function makeBridge(overrides: Partial<FakeBridgeState> = {}): {
     },
     onNotification(handler): () => void {
       state.notifications.push(
-        handler as (method: string, params: unknown, rawRequest?: { method: string; params: unknown; rawId: number }) => void,
+        handler as (
+          method: string,
+          params: unknown,
+          rawRequest?: { method: string; params: unknown; rawId: number },
+        ) => void,
       );
       return () => {};
     },
@@ -84,7 +94,7 @@ function makeBridge(overrides: Partial<FakeBridgeState> = {}): {
   return { port, state };
 }
 
-function makeTaskIndex() : { port: CodexTaskIndexPort; rows: Map<string, ZCodeTaskMeta> } {
+function makeTaskIndex(): { port: CodexTaskIndexPort; rows: Map<string, ZCodeTaskMeta> } {
   const rows = new Map<string, ZCodeTaskMeta>();
   return {
     rows,
@@ -124,7 +134,10 @@ function makeService(
   return { ...created, bridge, taskIndex };
 }
 
-function frameLog(frames: ConversationTopicFrame[], subscriptionId?: string): ConversationTopicFrame[] {
+function frameLog(
+  frames: ConversationTopicFrame[],
+  subscriptionId?: string,
+): ConversationTopicFrame[] {
   return frames.filter((frame) => !subscriptionId || frame.subscriptionId === subscriptionId);
 }
 
@@ -139,7 +152,10 @@ test("createTask fails closed without a signed-in Codex account", async () => {
 
 test("createTask persists the harness task ↔ codex thread binding and starts the first turn", async () => {
   const service = makeService();
-  const result = await service.service.createTask({ workspacePath: "/tmp/ws", firstInput: "fix the bug" });
+  const result = await service.service.createTask({
+    workspacePath: "/tmp/ws",
+    firstInput: "fix the bug",
+  });
   const taskId = result.task.taskId;
   assert.equal(result.task.executionBackend, "codex");
   assert.equal(result.task.codexThreadId, "id-thread-start");
@@ -165,15 +181,20 @@ test("createTask persists the harness task ↔ codex thread binding and starts t
   const frames: ConversationTopicFrame[] = [];
   const off = service.service.onDynamicConversationFrame();
   const dispose = off((frame) => frames.push(frame));
-  const subscribeAck = await service.service.subscribeConversationV4({ topic: `conversation/${taskId}` });
+  const subscribeAck = await service.service.subscribeConversationV4({
+    topic: `conversation/${taskId}`,
+  });
   await new Promise((resolve) => setTimeout(resolve, 10));
   dispose.dispose();
   const snapshots = frameLog(frames, subscribeAck.ack.subscriptionId).filter(
     (frame) => frame.payload.kind === "snapshot",
   );
   assert.ok(snapshots.length > 0);
-  const snapshot = snapshots[0]!.payload.kind === "snapshot" ? snapshots[0]!.payload.snapshot : null;
-  assert.ok(snapshot?.rows.window.some((row) => row.kind === "userInput" && row.text === "fix the bug"));
+  const snapshot =
+    snapshots[0]!.payload.kind === "snapshot" ? snapshots[0]!.payload.snapshot : null;
+  assert.ok(
+    snapshot?.rows.window.some((row) => row.kind === "userInput" && row.text === "fix the bug"),
+  );
   assert.equal(await service.service.isCodexTask(taskId), true);
   assert.equal(await service.service.isCodexTask("unknown-id"), false);
 });
@@ -184,7 +205,9 @@ test("sendText over the v4 envelope maps to turn/start and is acknowledged", asy
   const taskId = created.task.taskId;
   const frames: ConversationTopicFrame[] = [];
   const dispose = service.service.onDynamicConversationFrame()((frame) => frames.push(frame));
-  const subscribeAck = await service.service.subscribeConversationV4({ topic: `conversation/${taskId}` });
+  const subscribeAck = await service.service.subscribeConversationV4({
+    topic: `conversation/${taskId}`,
+  });
   await new Promise((resolve) => setTimeout(resolve, 10));
   const ack = await service.service.sendConversationCommandV4({
     envelope: {
@@ -224,7 +247,14 @@ test("stop maps to turn/interrupt {threadId, turnId}; unsupported commands are r
   const taskId = created.task.taskId;
   // turn id 未知（turn/start 响应缺 turn 字段且无 turn/started 通知）→ 宁可失败也不发缺字段 payload。
   const earlyStop = await service.service.sendConversationCommandV4({
-    envelope: { commandId: "c-stop-early", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+    envelope: {
+      commandId: "c-stop-early",
+      clientId: "client-1",
+      sessionId: taskId,
+      type: "stop",
+      payload: {},
+      issuedAt: 0,
+    },
   });
   assert.equal(earlyStop.status, "failed");
   assert.equal(earlyStop.reasonCode, "codex_interrupt_no_active_turn");
@@ -240,7 +270,14 @@ test("stop maps to turn/interrupt {threadId, turnId}; unsupported commands are r
     },
   });
   const stopAck = await service.service.sendConversationCommandV4({
-    envelope: { commandId: "c-2", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+    envelope: {
+      commandId: "c-2",
+      clientId: "client-1",
+      sessionId: taskId,
+      type: "stop",
+      payload: {},
+      issuedAt: 0,
+    },
   });
   assert.equal(stopAck.status, "accepted");
   const interrupt = service.bridge.state.calls.find((call) => call.method === "turn/interrupt");
@@ -280,16 +317,34 @@ test("turn/started notification backfills the interrupt turn id and turn/complet
     handler("turn/started", { threadId: "id-thread-start", turnId: "codex-live-turn" }, undefined);
   }
   const stopAck = await service.service.sendConversationCommandV4({
-    envelope: { commandId: "c-2b", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+    envelope: {
+      commandId: "c-2b",
+      clientId: "client-1",
+      sessionId: taskId,
+      type: "stop",
+      payload: {},
+      issuedAt: 0,
+    },
   });
   assert.equal(stopAck.status, "accepted");
   const interrupt = service.bridge.state.calls.find((call) => call.method === "turn/interrupt");
   assert.deepEqual(interrupt?.params, { threadId: "id-thread-start", turnId: "codex-live-turn" });
   for (const handler of service.bridge.state.notifications) {
-    handler("turn/completed", { threadId: "id-thread-start", turnId: "codex-live-turn", status: "ok" }, undefined);
+    handler(
+      "turn/completed",
+      { threadId: "id-thread-start", turnId: "codex-live-turn", status: "ok" },
+      undefined,
+    );
   }
   const lateStop = await service.service.sendConversationCommandV4({
-    envelope: { commandId: "c-2c", clientId: "client-1", sessionId: taskId, type: "stop", payload: {}, issuedAt: 0 },
+    envelope: {
+      commandId: "c-2c",
+      clientId: "client-1",
+      sessionId: taskId,
+      type: "stop",
+      payload: {},
+      issuedAt: 0,
+    },
   });
   assert.equal(lateStop.status, "failed");
   assert.equal(lateStop.reasonCode, "codex_interrupt_no_active_turn");
@@ -311,11 +366,15 @@ test("approval server requests reach the harness and decisions answer the raw re
   });
   // 模拟 app-server 的审批服务器请求。
   for (const handler of service.bridge.state.notifications) {
-    handler("item/commandExecution/requestApproval", { threadId: "id-thread-start", command: "rm -rf build" }, {
-      method: "item/commandExecution/requestApproval",
-      params: { threadId: "id-thread-start", command: "rm -rf build" },
-      rawId: 77,
-    });
+    handler(
+      "item/commandExecution/requestApproval",
+      { threadId: "id-thread-start", command: "rm -rf build" },
+      {
+        method: "item/commandExecution/requestApproval",
+        params: { threadId: "id-thread-start", command: "rm -rf build" },
+        rawId: 77,
+      },
+    );
   }
   const info = await service.service.listTasks();
   assert.equal(info.tasks.length, 1);
@@ -323,7 +382,9 @@ test("approval server requests reach the harness and decisions answer the raw re
   const interactions = await (async () => {
     const frames: ConversationTopicFrame[] = [];
     const dispose = service.service.onDynamicConversationFrame()((frame) => frames.push(frame));
-    const subscribeAck = await service.service.subscribeConversationV4({ topic: `conversation/${taskId}` });
+    const subscribeAck = await service.service.subscribeConversationV4({
+      topic: `conversation/${taskId}`,
+    });
     // initial frame 由服务端 queueMicrotask 投递，先让出再退订。
     await new Promise((resolve) => setTimeout(resolve, 10));
     dispose.dispose();
@@ -334,7 +395,9 @@ test("approval server requests reach the harness and decisions answer the raw re
           frame.payload.kind === "snapshot",
       )
       .at(-1);
-    return latest && latest.payload.kind === "snapshot" ? latest.payload.snapshot.pendingInteractions : [];
+    return latest && latest.payload.kind === "snapshot"
+      ? latest.payload.snapshot.pendingInteractions
+      : [];
   })();
   assert.equal(interactions.length, 1);
   const interactionId = interactions[0]!.interactionId;
@@ -384,12 +447,20 @@ test("unroutable approval requests fail closed with schema-true denial bodies", 
     handler(
       "item/commandExecution/requestApproval",
       { threadId: "unknown-thread", command: "rm -rf /" },
-      { method: "item/commandExecution/requestApproval", params: { threadId: "unknown-thread" }, rawId: 900 },
+      {
+        method: "item/commandExecution/requestApproval",
+        params: { threadId: "unknown-thread" },
+        rawId: 900,
+      },
     );
     handler(
       "item/permissions/requestApproval",
       { threadId: "unknown-thread", permissions: { fileSystem: { read: ["/etc"] } } },
-      { method: "item/permissions/requestApproval", params: { threadId: "unknown-thread" }, rawId: 901 },
+      {
+        method: "item/permissions/requestApproval",
+        params: { threadId: "unknown-thread" },
+        rawId: 901,
+      },
     );
   }
   assert.deepEqual(service.bridge.state.responses, [
@@ -401,7 +472,14 @@ test("unroutable approval requests fail closed with schema-true denial bodies", 
 test("unsupported commands without a session are rejected; renameSession updates the title", async () => {
   const service = makeService();
   const noSession = await service.service.sendConversationCommandV4({
-    envelope: { commandId: "c-7", clientId: "client-1", sessionId: null, type: "sendText", payload: { text: "x" }, issuedAt: 0 },
+    envelope: {
+      commandId: "c-7",
+      clientId: "client-1",
+      sessionId: null,
+      type: "sendText",
+      payload: { text: "x" },
+      issuedAt: 0,
+    },
   });
   assert.equal(noSession.status, "rejected");
   const created = await service.service.createTask({ workspacePath: "/tmp/ws", title: "my task" });
@@ -436,7 +514,12 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
     if (itemsPage === 0 && !cursor) {
       itemsPage = 1;
       return {
-        data: [{ turnId: "turn-hist", item: { type: "agentMessage", id: "hist-1", text: "history answer" } }],
+        data: [
+          {
+            turnId: "turn-hist",
+            item: { type: "agentMessage", id: "hist-1", text: "history answer" },
+          },
+        ],
         nextCursor: "cursor-2",
         backwardsCursor: null,
       };
@@ -444,7 +527,9 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
     assert.equal(cursor, "cursor-2", "second history page must follow nextCursor");
     itemsPage = 2;
     return {
-      data: [{ turnId: "turn-hist", item: { type: "agentMessage", id: "hist-2", text: "page two" } }],
+      data: [
+        { turnId: "turn-hist", item: { type: "agentMessage", id: "hist-2", text: "page two" } },
+      ],
       nextCursor: null,
       backwardsCursor: null,
     };
@@ -459,7 +544,9 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
     nextCursor: null,
     backwardsCursor: null,
   });
-  const subscribeAck = await service.service.subscribeConversationV4({ topic: `conversation/${taskId}` });
+  const subscribeAck = await service.service.subscribeConversationV4({
+    topic: `conversation/${taskId}`,
+  });
   assert.equal(subscribeAck.ack.mode, "snapshot");
   assert.equal(subscribeAck.ack.logEpoch, "codex-2");
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -467,7 +554,8 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
     (frame) => frame.payload.kind === "snapshot",
   );
   assert.ok(snapshots.length > 0, "rebuilt snapshot must arrive");
-  const snapshot = snapshots[0]!.payload.kind === "snapshot" ? snapshots[0]!.payload.snapshot : null;
+  const snapshot =
+    snapshots[0]!.payload.kind === "snapshot" ? snapshots[0]!.payload.snapshot : null;
   assert.ok(snapshot);
   assert.equal(snapshot.logEpoch, "codex-2");
   assert.ok(
@@ -484,21 +572,66 @@ test("bridge generation bump marks runtimes stale; subscribe rebuilds via thread
   });
   // 恢复的历史行可经 rowsRange 读取（E2E 观察的 {turnId, item} 包装必须被解包 + 翻页齐全）。
   const rows = await service.service.conversationRowsRangeV4({ sessionId: taskId, limit: 10 });
-  const historyTexts = rows.rows.filter((row) => row.kind === "assistantText").map((row) => row.text);
+  const historyTexts = rows.rows
+    .filter((row) => row.kind === "assistantText")
+    .map((row) => row.text);
   assert.deepEqual(historyTexts.sort(), ["history answer", "page two"]);
   dispose.dispose();
 });
 
 test("execution policy resolves by preset name and fails closed on unknown names", () => {
-  assert.deepEqual(resolveCodexExecutionPolicy(null).policy, CODEX_EXECUTION_POLICY_PRESETS.safeInteractive);
+  assert.deepEqual(
+    resolveCodexExecutionPolicy(null).policy,
+    CODEX_EXECUTION_POLICY_PRESETS.safeInteractive,
+  );
   assert.deepEqual(resolveCodexExecutionPolicy(undefined).adoptedDefault, false);
   assert.deepEqual(resolveCodexExecutionPolicy("workspaceWrite").policy, {
     approvalPolicy: "on-request",
     sandbox: "workspace-write",
   });
   // 显式指名才可达 unrestricted；未知名称回落默认并标记 adoptedDefault。
-  assert.deepEqual(resolveCodexExecutionPolicy("unrestricted").policy, CODEX_EXECUTION_POLICY_PRESETS.unrestricted);
+  assert.deepEqual(
+    resolveCodexExecutionPolicy("unrestricted").policy,
+    CODEX_EXECUTION_POLICY_PRESETS.unrestricted,
+  );
   const unknown = resolveCodexExecutionPolicy("yolo");
   assert.deepEqual(unknown.policy, DEFAULT_CODEX_EXECUTION_POLICY);
   assert.equal(unknown.adoptedDefault, true);
+});
+
+test("createTask sends the curated model on thread/start and persists it in meta", async () => {
+  const service = makeService();
+  const result = await service.service.createTask({
+    workspacePath: "/tmp/ws",
+    firstInput: "hi",
+    modelId: "gpt-6-astra",
+  });
+  const threadStart = service.bridge.state.calls.find((call) => call.method === "thread/start");
+  assert.ok(threadStart);
+  assert.equal(threadStart.params.model, "gpt-6-astra");
+  const meta = service.taskIndex.rows.get(result.task.taskId);
+  assert.equal(meta?.codexModelId, "gpt-6-astra");
+});
+
+test("createTask omits the model field for the Default sentinel and rejects non-curated ids", async () => {
+  const service = makeService();
+  const result = await service.service.createTask({
+    workspacePath: "/tmp/ws",
+    firstInput: "hi",
+  });
+  const threadStart = service.bridge.state.calls.find((call) => call.method === "thread/start");
+  assert.ok(threadStart);
+  assert.equal("model" in threadStart.params, false);
+  assert.equal(service.taskIndex.rows.get(result.task.taskId)?.codexModelId, undefined);
+
+  await assert.rejects(
+    service.service.createTask({
+      workspacePath: "/tmp/ws",
+      firstInput: "hi",
+      modelId: "gpt-4o",
+    }),
+    /codex_model_not_allowed/,
+  );
+  const calls = service.bridge.state.calls.filter((call) => call.method === "thread/start");
+  assert.equal(calls.length, 1);
 });

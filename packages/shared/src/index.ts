@@ -319,9 +319,13 @@ export type {
 export {
   ZCODE_EXECUTION_BACKENDS,
   isZCodeExecutionBackend,
+  CODEX_MODEL_OPTIONS,
+  isCodexModelOptionId,
+  codexModelOptionLabel,
 } from "./codex-execution.js";
 export type {
   ZCodeExecutionBackend,
+  CodexModelOption,
   CodexTaskBinding,
   CodexExecutionCreateTaskParams,
   CodexExecutionCreateTaskResult,

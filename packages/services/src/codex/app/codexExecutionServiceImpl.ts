@@ -6,7 +6,7 @@
 // OAuth URL 一律不进入本文件；任务↔thread 绑定持久化在 meta_json 的
 // executionBackend/codexThreadId。v4 命令处理见 codexConversationCommands.ts。
 import { Emitter } from "@zcode/rpc";
-import { createUuid } from "@zcode/shared";
+import { createUuid, isCodexModelOptionId } from "@zcode/shared";
 import type {
   CodexExecutionApprovalDecision,
   CodexExecutionCreateTaskParams,
@@ -100,7 +100,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
     frames.fire(
       runtime.buildFrame({
         subscriptionId,
-        payload: { kind: "snapshot", snapshot: runtime.projection.buildSnapshot(taskId) },
+        payload: { kind: "snapshot", snapshot: runtime.projection.buildSnapshot(taskId, { modelId: runtime.codexModelId }) },
         fromSeq: 0,
         toSeq: runtime.projection.seq,
       }),
@@ -187,9 +187,13 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   const service: ICodexExecutionService = {
     async createTask(params: CodexExecutionCreateTaskParams): Promise<CodexExecutionCreateTaskResult> {
       if (!deps.bridge.installed) throw new Error("codex_not_installed");
+      // 策划 allow-list 之外的 id 一律拒绝（fail loud），防止自由文本把任意值透传给 Codex。
+      const modelId = params.modelId?.trim() ? params.modelId.trim() : undefined;
+      if (modelId && !isCodexModelOptionId(modelId)) throw new Error(`codex_model_not_allowed: ${modelId}`);
       const codexThreadId = await startCodexThread(deps.bridge, {
         workspacePath: params.workspacePath,
         policy: deps.policy,
+        ...(modelId ? { modelId } : {}),
       });
       const taskId = createUuid();
       const createdAt = now();
@@ -207,6 +211,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
         mode: "build",
         executionBackend: "codex",
         codexThreadId,
+        ...(modelId ? { codexModelId: modelId } : {}),
       };
       const runtime = new CodexTaskRuntime(
         {
@@ -215,6 +220,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
           ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
           codexThreadId,
           bridgeGeneration: deps.bridge.generation,
+          ...(modelId ? { codexModelId: modelId } : {}),
         },
         now,
       );
