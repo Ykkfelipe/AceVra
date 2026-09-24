@@ -91,6 +91,10 @@ function parseCachedStatus(value: unknown): CuaPermissionStatus | null {
   }
 
   const parsed: CuaPermissionStatus = {
+    // 缓存只收 `available === true` 的实时结果。回填时必须恢复该判别字段，否则消费方
+    // 的 isCuaPermissionStatusAvailable 会把“首屏乐观缓存”误判成 Helper unavailable，
+    // 让已启用且已授权的输入框入口显示成启用失败。
+    available: true,
     grantOwner: candidate.grantOwner,
     accessibility: candidate.accessibility,
     accessibilityProbeOk: candidate.accessibilityProbeOk,

@@ -257,7 +257,10 @@ plugin-enablement failure and points to Settings; it must not claim a Helper fai
 ZCode restart. When the canonical plugin is confirmed enabled, that authoritative state suppresses
 any stale prior enablement error in the composer; an enablement error is shown only while the
 plugin is not confirmed enabled. This keeps the Settings switch, composer state, and error copy
-from displaying contradictory states.
+from displaying contradictory states. A valid cached permission-status projection is a first-screen
+display value, not a Helper failure: after cache validation it must preserve the same
+`available: true` contract as a live available Helper report so consumers cannot misclassify it as
+unavailable. The authoritative live permission read remains the Settings query.
 
 Reuse the existing permission rows and return-recovery flow. Add one software **Stop computer
 control** action, visible and enabled only while the authoritative service lease is active; repeated
