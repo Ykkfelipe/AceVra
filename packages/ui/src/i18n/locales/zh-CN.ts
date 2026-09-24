@@ -4027,6 +4027,7 @@ const zhCN: Record<string, string> = {
   "chat.placeholder.newTaskMobile": "向智能体提问…",
   "chat.placeholder.followUpAsk": "提出后续修改要求",
   "chat.placeholder.followUpQueue": "继续输入以排队后续修改",
+  "chat.placeholder.inputPaused": "智能体正在工作，暂时不能输入",
   "chat.placeholder.loading": "初始化任务中",
   "chat.attachments.dragHint": "松开以添加附件",
   "chat.composer.workspaceFileDragHint": "松开以引用此文件或目录",
@@ -4297,6 +4298,7 @@ const zhCN: Record<string, string> = {
   "chat.toolbar.backend.codex.label": "Codex",
   "chat.toolbar.backend.codex.description": "使用本机 Codex 应用 agent 执行任务",
   "chat.toolbar.backend.codex.unavailable": "不可用",
+  "chat.toolbar.backend.codex.modelManaged": "模型由 Codex 管理",
   "chat.toolbar.backend.codex.unsupportedInput": "Codex 任务暂不支持斜杠命令、附件与共享上下文",
   // CUA 输入框常驻入口按钮
   "chat.toolbar.computerUse.label": "电脑操作",

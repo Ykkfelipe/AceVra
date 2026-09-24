@@ -45,6 +45,22 @@ ownership.
 Composer entry copy uses the same generalized actor language: task placeholders say **agent**, not
 the internal runtime/product name. This is display copy only; runtime identifiers remain unchanged.
 
+## Backend and model clarity
+
+The model picker always belongs to the built-in Agent backend. When the draft backend is an
+external execution account (Codex), the composer must not render the Agent model picker: Codex
+manages its own model inside the Codex app and does not consume the AceVra plan model catalog. In
+that state the composer renders a non-interactive “model managed by Codex” indicator instead.
+Claude is not a backend; Claude-family entries, when present, are models inside the Agent backend
+catalog.
+
+## Explicit input rejection
+
+`inputRouting.mode = "reject"` is a runtime decision to refuse new input (for example while an
+external backend turn is running). When it is active, the composer keeps the editor disabled but
+must explain itself: the placeholder states that the agent is working and follow-up input is
+paused. Silent locking without copy is a presentation defect.
+
 ## Accessibility invariants
 
 - Every icon-only compact state retains an accessible name.

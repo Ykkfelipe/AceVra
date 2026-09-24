@@ -4304,6 +4304,7 @@ const enUS: Record<string, string> = {
   "chat.placeholder.newTaskMobile": "Ask the agent anything…",
   "chat.placeholder.followUpAsk": "Ask for follow-up changes",
   "chat.placeholder.followUpQueue": "Keep typing to queue follow-up changes",
+  "chat.placeholder.inputPaused": "The agent is working — follow-up input is paused",
   "chat.placeholder.loading": "Initializing task...",
   "chat.attachments.dragHint": "Drop to add attachments",
   "chat.composer.workspaceFileDragHint": "Drop to mention this file or folder",
@@ -4576,6 +4577,7 @@ const enUS: Record<string, string> = {
   "chat.toolbar.backend.codex.label": "Codex",
   "chat.toolbar.backend.codex.description": "Run tasks with the local Codex app agent",
   "chat.toolbar.backend.codex.unavailable": "unavailable",
+  "chat.toolbar.backend.codex.modelManaged": "Model managed by Codex",
   "chat.toolbar.backend.codex.unsupportedInput":
     "Slash commands, attachments and shared context are not supported for Codex tasks yet",
   // CUA composer entry button

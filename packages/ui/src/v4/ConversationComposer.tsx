@@ -52,6 +52,7 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   ArrowUpIcon,
+  BotIcon,
   ClipboardPenLineIcon,
   InfoIcon,
   RotateCcwIcon,
@@ -1611,12 +1612,14 @@ function ConversationComposerImpl({
   }, [listenAddToChatEvents, updateText, workspaceIdentity, workspacePath]);
 
   // 动态 placeholder（旧 chatViewPlaceholder 语义）：无历史 → newTask；
-  // 有历史空闲 → followUpAsk；有历史处理中 → followUpQueue。
+  // 有历史空闲 → followUpAsk；有历史处理中 → followUpQueue；
+  // inputRouting.mode=reject 是 runtime 显式拒绝输入，占位符必须解释锁因。
   const placeholder = intl.formatMessage({
     id: resolveChatPlaceholderKey({
       hasHistoryMessages: (snapshot?.rows.totalCount ?? 0) > 0,
       isTaskProcessing: canStop,
       compactNewTask: false,
+      inputRejected: mode === "reject",
     }),
   });
   const sendTooltipTitle = intl.formatMessage({
@@ -2068,27 +2071,41 @@ function ConversationComposerImpl({
               onSwitchBackend={onSwitchBackend}
             />
           ) : null}
-          <V4ComposerModelControls
-            workspacePath={workspacePath}
-            workspaceIdentity={workspaceIdentity}
-            modelSelectionView={modelSelectionView}
-            modelSelectionState={modelSelectionState}
-            modelSelectionReload={modelSelectionReload}
-            sessionId={sessionId ?? null}
-            phase={composerPhase}
-            provider={provider}
-            draftMode={draftMode}
-            draftConfig={draftConfig}
-            usage={composerUsage}
-            disabled={disabled}
-            activeConfigPicker={activeConfigPicker}
-            onConfigPickerOpenChange={handleConfigPickerOpenChange}
-            onSelectModel={handleSelectModelTrace}
-            onSelectThought={onSelectThought}
-            onSwitchMode={onSwitchMode}
-            onRecoverCustomModelSelection={onRecoverCustomModelSelection}
-            onSendCompressionCommand={onSendCompressionCommand}
-          />
+          {draftMode && (draftBackend ?? "zcode") === "codex" ? (
+            // Codex 是外部执行账户，模型由 Codex 应用自己管理；这里不能展示 Agent 后端的
+            // 模型选择器，否则用户会把 GLM/Claude 等计划模型误认为 Codex 正在使用的模型。
+            <span
+              className="flex h-7 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface px-2 text-ui-base text-foreground-subtle"
+              data-testid="v4-composer-codex-model-indicator"
+            >
+              <BotIcon className="size-4 shrink-0" aria-hidden />
+              <span className="hidden whitespace-nowrap @xl/composer:inline">
+                {intl.formatMessage({ id: "chat.toolbar.backend.codex.modelManaged" })}
+              </span>
+            </span>
+          ) : (
+            <V4ComposerModelControls
+              workspacePath={workspacePath}
+              workspaceIdentity={workspaceIdentity}
+              modelSelectionView={modelSelectionView}
+              modelSelectionState={modelSelectionState}
+              modelSelectionReload={modelSelectionReload}
+              sessionId={sessionId ?? null}
+              phase={composerPhase}
+              provider={provider}
+              draftMode={draftMode}
+              draftConfig={draftConfig}
+              usage={composerUsage}
+              disabled={disabled}
+              activeConfigPicker={activeConfigPicker}
+              onConfigPickerOpenChange={handleConfigPickerOpenChange}
+              onSelectModel={handleSelectModelTrace}
+              onSelectThought={onSelectThought}
+              onSwitchMode={onSwitchMode}
+              onRecoverCustomModelSelection={onRecoverCustomModelSelection}
+              onSendCompressionCommand={onSendCompressionCommand}
+            />
+          )}
         </span>
         {showStopControl ? (
           <ControlHintTooltip title={stopTooltipTitle} shortcut="Esc">
