@@ -75,6 +75,10 @@ release/0.1.0-alpha.1/build/
 release/0.1.0-alpha.1/validation/
 release/0.1.0-alpha.1/handoff/
 release/0.1.0-alpha.1/candidate/
+release/0.1.0-alpha.1/repaired-build/
+release/0.1.0-alpha.1/repaired-validation/
+release/0.1.0-alpha.1/repaired-handoff/
+release/0.1.0-alpha.1/fresh-build.log
 packages/desktop/resources/cua-helper/
 packages/zcode-cua/native/cua-helper/*.app/
 

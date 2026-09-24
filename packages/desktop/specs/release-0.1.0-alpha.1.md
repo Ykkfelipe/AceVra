@@ -142,17 +142,19 @@ The sideband protocol is fail-closed and ordered:
 ```text
 begin_acquire(owner/context) -> service generation reservation
   -> runtime calls Helper acquire_control
-  -> commit_acquire(lease id + Helper identity)
+  -> commit_acquire(authority lease id + native Helper lease id + Helper identity)
   -> service publishes active projection
 release_control | interruption | close | process disconnect
+  -> Helper release_control and native terminal cleanup
   -> service terminal generation
 ```
 
 Software Stop serializes with `begin_acquire`: it waits for that admission to settle, releases a
-newly committed lease, or returns `already_stopped` when no lease exists. A Stop that fences an
-in-flight generation makes its later `commit_acquire` fail; the runtime must then release the
-Helper lease immediately and may not publish it as active. Helper/host disconnect is also a service
-terminal signal and does not depend on a model response.
+newly committed lease through the stored native Helper lease ID and owner credentials, waits for
+the Helper's terminal `released` response, or returns `already_stopped` when no lease exists. A
+Stop that fences an in-flight generation makes its later `commit_acquire` fail; the runtime must
+then release the Helper lease immediately and may not publish it as active. Helper/host disconnect
+is also a service terminal signal and does not depend on a model response.
 
 Acquire, software Stop, model `release_control`, physical interruption, disconnect, and Helper
 shutdown update the service record in order. Software Stop with no active service lease returns
@@ -200,8 +202,20 @@ architectures, exact verified archive set, packaged native paths, relative-only 
 Helper version/build, strict app/Helper/probe signatures, stable certificate fingerprint and
 designated requirements, and scans for secrets, private keys, personal files, repository-relative
 runtime dependencies, `/tmp` runtime dependencies, and developer absolute paths. `codesign -d/-dv`
-details must be read from stderr as well as stdout. A successful ZIP integrity check or DMG image
-verify is necessary but never sufficient for candidate acceptance.
+details must be read from stderr as well as stdout. The outer app's designated requirement is read
+with `codesign -d -r-` and must contain `Identifier=com.acevra.desktop` plus a certificate-root
+anchor matching the signed Helper/probe root; an outer ad-hoc signature is always a local-alpha
+failure. A successful ZIP integrity check or DMG image verify is necessary but never sufficient for
+candidate acceptance.
+
+For the local engineering profile, the isolated self-signed `AceVra CUA Dev Signing` identity is
+not added to user or system trust settings. Electron Builder may discover the identity as
+unavailable because the certificate is self-signed; after Builder emits the arm64 app, the bundle
+runner signs the outer app directly with the already resolved identity, isolated keychain, and
+main-app entitlements, without deep-resigning the pre-signed Helper/probe. The runner then
+strictly verifies the outer signature, expected identity, hardened runtime, and certificate-root
+designated requirement before packaging continues. This is a local-alpha signing configuration, not
+Developer ID signing or notarization.
 
 ## Smallest release-safety UX
 
@@ -294,9 +308,14 @@ installed drill. The implementation adds
 mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop e2e:cua-alpha
 ```
 
-It covers safety-copy rendering, CUA off by default, no Stop before a lease, active Stop, repeated
-Stop, and released-state UI using the existing E2E build/run-id gate or a test-only fixture reachable
-only when both are present.
+The E2E must build and verify an isolated `local-engineering-alpha` renderer/main/preload artifact
+before launch, reject a production-profile or incomplete artifact, and wait for a business-root
+readiness marker emitted only after the real React business root mounts. It must not use
+`DOMContentLoaded`, the database startup-root notifier, or arbitrary sleeps as the acceptance
+condition. The scenario then navigates through the real Settings test IDs to the Computer Use
+surface and covers safety-copy rendering, CUA off by default, no Stop before a lease, active Stop,
+repeated Stop, released-state UI, and no later input using the existing E2E build/run-id gate or a
+test-only fixture reachable only when both are present.
 
 After Gatekeeper and fresh TCC, installed acceptance proves isolated roots and untouched production
 sentinels; no provider/model request or inference; updater inactivity; automatic packaged

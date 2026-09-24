@@ -421,6 +421,64 @@ export function resolveCuaSigningEnv(env = process.env, options = {}) {
   };
 }
 
+function signLocalAlphaOuterApp(envPatch) {
+  if (!isLocalEngineeringAlphaProfile(process.env) || !envPatch.CSC_KEYCHAIN) return;
+  const appPath = join(desktopDistRoot, "mac-arm64", "AceVra.app");
+  if (!existsSync(appPath)) {
+    throw new Error(`[bundle] local alpha app is missing for outer signing: ${appPath}`);
+  }
+  const identity = envPatch.APPLE_SIGNING_IDENTITY;
+  if (!identity) {
+    throw new Error("[bundle] local alpha outer signing identity is missing");
+  }
+  const entitlements = resolve(desktopRoot, "build", "entitlements.mac.plist");
+  const sign = spawnSync(
+    "/usr/bin/codesign",
+    [
+      "--force",
+      "--options",
+      "runtime",
+      "--sign",
+      identity,
+      "--keychain",
+      envPatch.CSC_KEYCHAIN,
+      "--entitlements",
+      entitlements,
+      appPath,
+    ],
+    { encoding: "utf8", env: { ...process.env, ...envPatch } },
+  );
+  if (sign.error || sign.status !== 0) {
+    throw new Error(
+      `[bundle] local alpha outer app signing failed: ${sign.stderr || sign.stdout || sign.error?.message || sign.status}`,
+    );
+  }
+  const details = spawnSync("/usr/bin/codesign", ["-dv", "--verbose=4", appPath], {
+    encoding: "utf8",
+    env: { ...process.env, ...envPatch },
+  });
+  const requirement = spawnSync("/usr/bin/codesign", ["-d", "-r-", appPath], {
+    encoding: "utf8",
+    env: { ...process.env, ...envPatch },
+  });
+  const detailsText = `${details.stdout ?? ""}${details.stderr ?? ""}`;
+  const requirementText = `${requirement.stdout ?? ""}${requirement.stderr ?? ""}`;
+  if (
+    details.status !== 0 ||
+    requirement.status !== 0 ||
+    /Signature=adhoc/i.test(detailsText) ||
+    !detailsText.includes(`Authority=${identity}`) ||
+    !/flags=.*runtime/.test(detailsText) ||
+    !requirementText.includes('identifier "com.acevra.desktop"') ||
+    !requirementText.includes("certificate root = H")
+  ) {
+    throw new Error(
+      `[bundle] local alpha outer app signature verification failed: ${detailsText.trim()} ${requirementText.trim()}`,
+    );
+  }
+  console.log(`[bundle] local alpha outer app signed with ${identity}`);
+}
+
 function resolveProductVersion() {
   const rootPackageJson = JSON.parse(readFileSync(join(workspaceRoot, "package.json"), "utf8"));
   return String(rootPackageJson.version ?? "").trim();
@@ -900,6 +958,7 @@ async function main() {
   await runTimedAsync("bundle:electron-builder", () =>
     runElectronBuilderWithRetry(buildArgs, buildEnv),
   );
+  signLocalAlphaOuterApp(cuaSigningEnv);
 
   runTimedSync("bundle:verify-runtime-dependencies", () =>
     verifyPackagedRuntimeDependencies(os, arch),

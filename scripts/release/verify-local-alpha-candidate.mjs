@@ -61,6 +61,10 @@ function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
+export function extractCertificateRoot(signingText) {
+  return /certificate root = H"([0-9a-f]+)"/i.exec(signingText)?.[1]?.toLowerCase() ?? null;
+}
+
 function rawBuildInventory(dist) {
   return readdirSync(dist, { withFileTypes: true })
     .map((entry) => ({ name: entry.name, kind: entry.isDirectory() ? "directory" : "file" }))
@@ -219,6 +223,8 @@ export function verifyLocalAlphaCandidate(distDir) {
     errors.push("helper-build-info.json is missing");
   }
 
+  let helperCertificateRoot = null;
+  let probeCertificateRoot = null;
   if (existsSync(helperPath)) {
     const helperPlist = join(helperPath, "Contents", "Info.plist");
     const helperId = plistValue(helperPlist, "CFBundleIdentifier");
@@ -266,9 +272,10 @@ export function verifyLocalAlphaCandidate(distDir) {
     }
     const helperRequirement = run("/usr/bin/codesign", ["-d", "-r-", helperPath]);
     const helperRequirementText = `${helperRequirement.output}${helperRequirement.stderr ?? ""}`;
+    helperCertificateRoot = extractCertificateRoot(helperRequirementText);
     if (
       !helperRequirementText.includes('identifier "dev.acevra.cua-helper"') ||
-      !helperRequirementText.includes("certificate root = H")
+      !helperCertificateRoot
     ) {
       errors.push("Helper designated requirement is not identifier-plus-certificate-root anchored");
     }
@@ -282,18 +289,32 @@ export function verifyLocalAlphaCandidate(distDir) {
     }
     const probeRequirement = run("/usr/bin/codesign", ["-d", "-r-", probePath]);
     const probeRequirementText = `${probeRequirement.output}${probeRequirement.stderr ?? ""}`;
+    probeCertificateRoot = extractCertificateRoot(probeRequirementText);
     if (
       !probeRequirementText.includes('identifier "dev.acevra.cua-peer-identity.development"') ||
-      !probeRequirementText.includes("certificate root = H")
+      !probeCertificateRoot
     ) {
       errors.push("Probe designated requirement is not identifier-plus-certificate-root anchored");
     }
   }
+  const appRequirement = run("/usr/bin/codesign", ["-d", "-r-", appPath]);
+  const appRequirementText = `${appRequirement.output}${appRequirement.stderr ?? ""}`;
+  const appCertificateRoot = extractCertificateRoot(appRequirementText);
   if (!/Runtime Version=/.test(appDetailsText) || !/flags=.*runtime/.test(appDetailsText)) {
     errors.push("app signature does not report the hardened runtime flag");
   }
-  if (!/certificate root = H/.test(appDetailsText)) {
-    errors.push("app designated requirement is not certificate-root anchored");
+  if (
+    !appRequirement.ok ||
+    !appRequirementText.includes('identifier "com.acevra.desktop"') ||
+    !appCertificateRoot
+  ) {
+    errors.push("app designated requirement is not identifier-plus-certificate-root anchored");
+  }
+  if (appCertificateRoot && helperCertificateRoot && appCertificateRoot !== helperCertificateRoot) {
+    errors.push("app and Helper certificate roots do not match");
+  }
+  if (appCertificateRoot && probeCertificateRoot && appCertificateRoot !== probeCertificateRoot) {
+    errors.push("app and peer probe certificate roots do not match");
   }
 
   const nested = scanCandidateContents(appPath);
