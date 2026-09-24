@@ -1364,3 +1364,47 @@ experiment, real physical mouse/Shift interruption, browser/provider/account/rem
 regression, or restart/persistence run was performed. The candidate is ready for the separately
 approved human installed-acceptance phase only; it is not yet daily-use accepted or public-distribution
 ready. Developer ID signing and notarization remain deferred.
+
+## 2026-09-24 installed UX repair continuation
+
+The previously installed app was proven to be stale `fff67d4b`, ad-hoc signed, and different from the
+validated handoff. It was not used as evidence. The final repaired handoff was built from `49d5fd6d`,
+validated across the raw app, ZIP-contained app, and mounted DMG app, then installed through the
+signature-preserving backup/staging/rollback runner.
+
+### Installed reproduction
+
+- Installed app: `/Applications/AceVra.app`, `com.acevra.desktop`, version `0.1.0-alpha.1`.
+- Embedded build metadata: `buildCommitId=49d5fd6d`, profile `local-engineering-alpha`.
+- Installed outer signature: `AceVra CUA Dev Signing`, hardened runtime, certificate-root DR.
+- Previous stale app backup: `/Applications/.AceVra.app.backup-13155475-8ea0-45aa-b197-3533201bec5b`.
+- Installed Computer Use Settings proof: visible `Computer Use` entry between Browser Use and Keyboard
+  Shortcuts; clicking it mounted the real page with service-backed permission projection.
+- Installed Computer Use permission result: Accessibility `Unknown`, Screen Recording `Unknown`; no
+  active exclusive lease, so Stop was correctly hidden.
+- Installed Codex proof: scan returned 44 candidates; cards showed meaningful first-user-message titles;
+  Preview expanded the first card with bounded User and Assistant text before import.
+
+The Codex account status displayed `Not connected` during this run; account/provider acceptance is not
+claimed. The old menu observation was a stale-artifact/provenance issue, not a failure of the repaired
+renderer.
+
+### Repairs and final candidate
+
+- `7b9b12a`: archive signing moved to Electron Builder `afterSign`; validator now checks archive-contained apps.
+- `767e0fe`: bounded Codex conversation previews and expandable candidate cards using the existing sanitized parser.
+- `cb6e28f`: package-aware E2E reads packaged build metadata and launches the packaged executable.
+- `49d5fd6`: installed runner uses signature-preserving `ditto` copies.
+- `8b917e8`: app tree hashing canonicalizes internal framework symlinks safely.
+
+Final candidate paths:
+
+- Build: `release/0.1.0-alpha.1/build-final-49d5fd6/`
+- Handoff: `release/0.1.0-alpha.1/handoff-final-49d5fd6/`
+- DMG: `release/0.1.0-alpha.1/handoff-final-49d5fd6/AceVra-0.1.0-alpha.1-arm64.dmg`
+- ZIP: `release/0.1.0-alpha.1/handoff-final-49d5fd6/AceVra-0.1.0-alpha.1-arm64.zip`
+- DMG SHA256: `b0bafdc4184308731b390f3b1153ca495483ccb19a18c625e2aaa9f54f31212a`
+- ZIP SHA256: `bf29e846bdddb03c45789b4898c26c8499927f5b539dbf2ecd824ef67cbe6421`
+
+Formal broader installed acceptance remains intentionally pending Gatekeeper/TCC/Input Monitoring,
+Helper/CUA, physical interruption, browser, artifact, account/provider, remote, and restart checkpoints.
