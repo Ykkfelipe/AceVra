@@ -27,7 +27,10 @@ The composer has two action clusters:
 Both clusters use a semantic `toolbar` role with a localized accessible name. Controls share one
 presentation contract:
 
-- compact `h-7` / `size-7` hit target with `rounded-lg`;
+- compact `h-7` hit target with a `min-w-7` icon-only floor, `rounded-lg`, and content-driven width
+  when a text label is visible;
+- visible labels must never be clipped by a square width or overlap a neighboring control; narrow
+  composer states hide the label and collapse to the icon-only floor;
 - outline affordance using semantic surface, border, and hover tokens;
 - visible keyboard focus using the repository's input-border-focused ring;
 - expanded picker state reflected by the existing Radix state and corresponding surface token;
@@ -38,6 +41,9 @@ presentation contract:
 The Computer Use entry remains a Settings entry, not a direct runtime toggle. Its visible state and
 tooltip remain owned by `cuaComposerEntryState`; this presentation spec does not change state
 ownership.
+
+Composer entry copy uses the same generalized actor language: task placeholders say **agent**, not
+the internal runtime/product name. This is display copy only; runtime identifiers remain unchanged.
 
 ## Accessibility invariants
 

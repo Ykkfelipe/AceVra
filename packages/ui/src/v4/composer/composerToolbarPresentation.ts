@@ -6,9 +6,14 @@
  * 各自演化出不同的 focus ring、hit target 和边框语言。
  */
 
-/** 动作控件共享外观：28px 命中目标 + outline 提示 + 明确键盘焦点。 */
+/**
+ * 动作控件共享外观：高度固定 28px；宽度随内容增长，min-w-7 只兜住 icon-only 态。
+ * 不能用 size-7：有文字标签时会把按钮锁成方块，造成相邻控件重叠。
+ */
 export const COMPOSER_TOOLBAR_TRIGGER_CLASS = [
-  "size-7",
+  "h-7",
+  "min-w-7",
+  "max-w-full",
   "rounded-lg",
   "border-border",
   "bg-surface",
