@@ -10,16 +10,19 @@ if (!runId || process.env.ZCODE_DESKTOP_E2E !== "1") {
 }
 
 const { _electron: electron } = await import("playwright-core");
-const executablePath = resolve(
-  "../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
-);
+const packagedAppPath = process.env.ZCODE_DESKTOP_E2E_APP_PATH?.trim();
+const executablePath = packagedAppPath
+  ? resolve(packagedAppPath, "Contents/MacOS/AceVra")
+  : resolve("../../node_modules/electron/dist/Electron.app/Contents/MacOS/Electron");
 
 async function runScenario({ active }) {
   console.log(`[e2e:cua-alpha] ${runId}: starting ${active ? "active" : "default-off"} scenario`);
   const dataRoot = mkdtempSync(join(tmpdir(), "acevra-cua-alpha-scenario-"));
   const app = await electron.launch({
     executablePath,
-    args: ["--no-sandbox", "--disable-gpu", resolve(".")],
+    args: packagedAppPath
+      ? [packagedAppPath, "--no-sandbox", "--disable-gpu"]
+      : ["--no-sandbox", "--disable-gpu", resolve(".")],
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -37,12 +40,17 @@ async function runScenario({ active }) {
     await page.locator('html[data-desktop-business-ready="true"]').waitFor({ state: "attached" });
     const title = await page.title();
     assert.match(title, /^(AceVra|Electron)$/);
-    await page.evaluate((workspacePath) => {
-      const store = window.__zcodeTabStoreE2E;
-      if (!store) throw new Error("guarded E2E tab store bridge is unavailable");
-      store.getState().addTab(workspacePath);
-      store.getState().openSettingsTab();
-    }, resolve("."));
+    const occupationPrompt = page.getByText("What do you do?", { exact: true });
+    try {
+      await occupationPrompt.waitFor({ state: "visible", timeout: 10_000 });
+      await page.keyboard.press("Escape");
+      await occupationPrompt.waitFor({ state: "hidden" });
+    } catch {
+      // A packaged app may already be past first-run onboarding.
+    }
+    const settingsButton = page.getByTestId("task-settings-button").first();
+    await settingsButton.waitFor({ state: "visible" });
+    await settingsButton.click();
     const section = page.getByTestId("settings-section-nav-computerUse");
     await section.waitFor({ state: "visible" });
     await section.click();

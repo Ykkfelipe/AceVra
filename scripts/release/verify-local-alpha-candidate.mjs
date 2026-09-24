@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable max-lines -- Release validation keeps archive, signature, provenance, and content checks together. */
 // Profile-aware validator for the AceVra 0.1.0-alpha.1 macOS arm64 candidate.
 //
 // It is intentionally not `scripts/doctor-macos-release-app.sh`: that doctor treats the expected
@@ -101,11 +102,15 @@ function verifyArchivedApp(archivePath, label, errors, expectedRoot) {
       appPath = join(mountPath, "AceVra.app");
     }
     const bundleId = plistValue(join(appPath, "Contents", "Info.plist"), "CFBundleIdentifier");
-    const version = plistValue(join(appPath, "Contents", "Info.plist"), "CFBundleShortVersionString");
+    const version = plistValue(
+      join(appPath, "Contents", "Info.plist"),
+      "CFBundleShortVersionString",
+    );
     if (bundleId !== "com.acevra.desktop") errors.push(`${label} app bundle id is ${bundleId}`);
     if (version !== rootVersion) errors.push(`${label} app version is ${version}`);
     const verify = run("/usr/bin/codesign", ["--verify", "--strict", "--deep", appPath]);
-    if (!verify.ok) errors.push(`${label} app strict signature verification failed: ${verify.output.trim()}`);
+    if (!verify.ok)
+      errors.push(`${label} app strict signature verification failed: ${verify.output.trim()}`);
     const details = run("/usr/bin/codesign", ["-dv", "--verbose=4", appPath]);
     const requirement = run("/usr/bin/codesign", ["-d", "-r-", appPath]);
     const detailsText = `${details.output}${details.stderr ?? ""}`;
