@@ -6,11 +6,13 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
 } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..", "..");
 const version = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
@@ -32,22 +34,33 @@ function assertDirectory(path, label) {
 
 function walkTree(rootPath) {
   const hash = createHash("sha256");
-  const visit = (current, relative) => {
+  const resolvedRoot = resolve(rootPath);
+  const visit = (current, relativePath) => {
     const entries = readdirSync(current, { withFileTypes: true }).sort((left, right) =>
       left.name.localeCompare(right.name),
     );
     for (const entry of entries) {
       const fullPath = join(current, entry.name);
-      const relativePath = relative ? `${relative}/${entry.name}` : entry.name;
+      const childRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
       const stat = lstatSync(fullPath);
-      if (stat.isSymbolicLink()) throw new Error(`app tree contains a symlink: ${relativePath}`);
-      hash.update(`${relativePath}\0${stat.mode}\0${stat.size}\0`);
-      if (stat.isDirectory()) visit(fullPath, relativePath);
-      else if (stat.isFile()) hash.update(readFileSync(fullPath));
-      else throw new Error(`unsupported app tree entry: ${relativePath}`);
+      hash.update(`${childRelativePath}\0${stat.mode}\0${stat.size}\0`);
+      if (stat.isSymbolicLink()) {
+        const target = realpathSync(fullPath);
+        const targetRelative = relative(resolvedRoot, target);
+        if (targetRelative.startsWith("..") || isAbsolute(targetRelative)) {
+          throw new Error(`app tree symlink escapes bundle: ${childRelativePath}`);
+        }
+        hash.update(readlinkSync(fullPath));
+      } else if (stat.isDirectory()) {
+        visit(fullPath, childRelativePath);
+      } else if (stat.isFile()) {
+        hash.update(readFileSync(fullPath));
+      } else {
+        throw new Error(`unsupported app tree entry: ${childRelativePath}`);
+      }
     }
   };
-  visit(rootPath, "");
+  visit(resolvedRoot, "");
   return hash.digest("hex");
 }
 
