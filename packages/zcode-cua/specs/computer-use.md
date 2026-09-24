@@ -1,6 +1,37 @@
 # Computer Use permission and identity foundation
 
-## CUA-3: controlled foreground input
+## Release 0.1.0-alpha.1 local engineering alpha
+
+The named local engineering alpha is a packaging profile, not a new product identity. The app
+keeps `com.acevra.desktop` / `AceVra`; existing Preview identity remains
+`com.acevra.desktop.preview` / `AceVra Preview`. The alpha packages the product Helper as
+`Resources/cua-helper/AceVra Computer Use.app` and the fixed peer-identity probe under the
+same candidate. Both are built and signed with the stable isolated `AceVra CUA Dev Signing`
+identity, and strict nested signature validation is required. The development Harness remains
+`AceVra Computer Use Dev.app` with its development identifier; it is never relabeled Developer
+ID. The alpha is self-signed and non-notarized, so Gatekeeper rejection is recorded rather than
+treated as trust.
+
+The alpha data root is `~/.zcode-local-engineering-alpha` (`.zcode/v2` for service state and
+`.zcode/computer-use` for CUA). `ZCODE_DESKTOP_HOME_DIR` or `ZCODE_DATA_BASE_DIR` may override
+it; when both are present they must resolve to the same canonical root or the profile fails
+closed. Explicit roots beat defaults and bootstrap, and the alpha never imports production
+`.zcode/v2/setting.json`. Commands, skills/settings, settings sync, skill sync, subagents,
+hooks, plugin sync, global CLI configuration, and CUA fallback use this one root.
+
+The placeholder public exports `loadRealNativeAddon`, `resolvePackagedNativeAddonPath`,
+`resolveInTreeAddonPath`, and `roleToKind` have no product consumer in this checkout. They are
+retained fail-closed: each throws the explicit "Computer Use is not available in this build"
+refusal instead of returning `undefined`, so a caller can never mistake a missing runtime for a
+working one. Removing them later requires a migration decision, not a silent deletion.
+
+The service lease record is the sole authority for the Helper lease owner, generation, Helper
+identity, and terminal state. Acquire, Stop, release, interruption, and disconnect use that
+record; Stop without a lease is `already_stopped`, and a generation fence rejects a competing
+acquire until release is terminal. There is no model-facing Stop tool. Candidate validation
+checks the exact `0.1.0-alpha.1` version and deterministic Helper build metadata, archive names,
+strict nested signatures, non-secret provenance, and candidate-content secret/path scans. No
+Developer ID, notarization, staple, public publish, push, tag, or merge is part of this profile.
 
 ### Product rules and owners
 
