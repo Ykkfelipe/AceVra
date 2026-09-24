@@ -1638,3 +1638,18 @@ Installed candidate: `handoff-final-7cb9b1c` (embedded `7cb9b1c3`, built
 (backup `.AceVra.app.backup-7d49b4df-84ad-477d-aad0-aba68cd24b0d`), app relaunched. Raw app,
 ZIP app, and mounted DMG passed the archive-aware validator. No TCC changes; broader acceptance
 remains paused.
+
+## 2026-09-24 codex model control scope fix
+
+User report: the Codex model dropdown “doesn't stay” and the selection had no effect. Root cause:
+the interactive dropdown rendered in every Codex composer, but `onSelectCodexModel` was only wired
+in draft mode — in a created Codex session the click was silently swallowed by a no-op callback,
+so the selection reverted and nothing was applied. Commit `0716d27` makes the control form
+explicit via `resolveCodexModelControlKind`: draft+codex = interactive dropdown; created session =
+static thread-model indicator (locked at creation, tooltip explains); other backends = Agent
+picker. Spec updated to forbid inert dropdowns.
+
+Installed `handoff-final-0716d27` (embedded `0716d27d`) via the tested runner after graceful
+shutdown; backup `.AceVra.app.backup-8ecc4f8d-23ce-42cf-b367-5771e348f02d`; validator passed for
+raw/ZIP/DMG. Note: reasoning-effort routing for Codex (`model_reasoning_effort`) remains
+unimplemented and is explicitly not claimed.
