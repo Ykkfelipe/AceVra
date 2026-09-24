@@ -82,6 +82,7 @@ release/0.1.0-alpha.1/precommit-build/
 release/0.1.0-alpha.1/precommit-validation/
 release/0.1.0-alpha.1/precommit-handoff/
 release/0.1.0-alpha.1/fresh-build.log
+packages/desktop/.cua-signing/
 packages/desktop/resources/cua-helper/
 packages/zcode-cua/native/cua-helper/*.app/
 
