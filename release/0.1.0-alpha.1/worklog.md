@@ -329,6 +329,8 @@ Executed during this review-blocker implementation revision:
 - `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 6 / behind 0, no upstream
 - `mise exec -- node scripts/mise-run.mjs pnpm architecture:check` — exit 0; violations 0, baseline 0, new 0
 - `mise exec -- node scripts/mise-run.mjs pnpm typecheck` — exit 0
+- `mise exec -- node scripts/mise-run.mjs pnpm --dir apps/zcode-cli/packages/node-repl-host build` — exit 0
+- `mise exec -- node scripts/mise-run.mjs pnpm --dir apps/zcode-cli/packages/bootstrap build` — exit 0
 - `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0; 76 warnings, 0 errors
 - `mise exec -- node scripts/mise-run.mjs pnpm build` — exit 0 under pinned Node 24.14.0
 - `mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop build:no-runtime-assets` —
@@ -743,3 +745,269 @@ no-clobber build directory, produce the exact arm64 archive names, rerun candida
 app/DMG/ZIP content scan, assemble the exact-five-file handoff, and then complete fresh human
 Gatekeeper/TCC, software Stop, and physical-interruption checkpoints. Do not distribute the current
 candidate.
+
+## Repaired-app revalidation — 2026-09-24
+
+**Disposition: BLOCKED / NOT ACCEPTED.** The current checkout is now at `f9c3369`
+(`fix(release): close confirmed review blockers`), but the installed application and generated
+candidate were not rebuilt or replaced. The installed app remains the prior copy described in
+`release/0.1.0-alpha.1/FINAL_RELEASE_REPORT.md:1-18`; the generated candidate is still the
+`fff67d4b` build recorded in `release/0.1.0-alpha.1/build.log:564-568` as cited by
+`release/0.1.0-alpha.1/FINAL_RELEASE_REPORT.md:50-54`.
+
+### Freshness and current source state
+
+- `node scripts/check-workspace-freshness.mjs` — exit 0; output reported
+  `基线新鲜：release/0.1.0-alpha，相对 origin/main：ahead 8 / behind 0（阈值 50）` and no configured
+  upstream.
+- `git log -5 --oneline --decorate` — current `HEAD=f9c3369`; no commit, push, tag, merge, or
+  publication was performed.
+- `/Applications/AceVra.app` still reports modification time `Sep 23 21:39:32 2026`, matching the
+  earlier installed copy rather than a newly rebuilt repair.
+
+### Installed identity, signature, Helper, and Gatekeeper
+
+Commands run against `/Applications/AceVra.app` produced:
+
+```text
+CFBundleIdentifier    com.acevra.desktop
+CFBundleDisplayName   AceVra
+CFBundleShortVersionString  0.1.0-alpha.1
+CFBundleVersion       0.1.0-alpha.1
+CFBundleExecutable    AceVra
+file                  Mach-O 64-bit executable arm64
+```
+
+- `codesign --verify --deep --strict --verbose=4 /Applications/AceVra.app` mechanically passed, but
+  `codesign -dv --verbose=4` still reported `Signature=adhoc`, `TeamIdentifier=not set`, and
+  CDHash `91beec99095cd75169eb620a72f55ed268cb448ab7fc214ac66f513b67098a96`.
+  `codesign -d -r-` still returned a CDHash-based requirement, not a certificate-root requirement.
+  The stable outer-signing repair is not present in the installed app.
+- The Helper at
+  `/Applications/AceVra.app/Contents/Resources/cua-helper/AceVra Computer Use.app` is
+  `dev.acevra.cua-helper`, version `0.1.0-alpha.1`, arm64, strictly signed, and still has the
+  stable requirement `identifier "dev.acevra.cua-helper" and certificate root = H"e67964f24cb4f07494050839d1653637c06e7a7c"`.
+- The peer verifier at
+  `/Applications/AceVra.app/Contents/Resources/cua-helper/peer-identity-probe` is
+  `dev.acevra.cua-peer-identity.development`, arm64, strictly signed, with stable requirement
+  `identifier "dev.acevra.cua-peer-identity.development" and certificate root = H"e67964f24cb4f07494050839d1653637c06e7a7c"`.
+  Its fail-closed no-socket check was run with `--requirement 'identifier "dev.acevra.cua-helper"'`
+  and returned `peer_token_unavailable` / exit 1.
+- The installed Helper metadata still contains the developer absolute path
+  `<developer-checkout>/packages/desktop/resources/cua-helper/AceVra Computer Use.app`.
+  The Helper is at the correct packaged resource path, but the provenance repair is not present in
+  the installed tree.
+- `spctl --assess --type execute` and `spctl --assess --type open --context
+context:primary-signature` both returned `rejected`. `xcrun stapler validate` returned
+  `AceVra.app does not have a ticket stapled to it.` The root xattr is only
+  `com.apple.provenance`; no quarantine-removal workaround was used.
+- Installed app process paths were observed under `/Applications/AceVra.app/Contents/`; no dev
+  server or source-checkout runtime was used. The installed app was finally quit gracefully:
+  `FINAL_QUIT=PASS`.
+
+### Helper TCC and CUA safety revalidation
+
+- Installed Helper non-prompting probe command:
+  `/Applications/AceVra.app/Contents/Resources/cua-helper/AceVra Computer Use.app/Contents/MacOS/AceVraComputerUse
+--expected-identifier dev.acevra.cua-helper`.
+  Output was reduced to identity and permission fields and reported `verified=true`,
+  `accessibility=true`, and `screenCapturePreflight=true`. These remain pre-existing grants, so
+  fresh TCC acceptance is blocked. No prompt, `tccutil`, System Settings mutation, or permission
+  bypass was attempted.
+- Exact safety E2E command run:
+  `mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop e2e:cua-alpha`.
+  Exit 1 at `packages/desktop/e2e/cua-release-safety.e2e.mjs:7`: `CUA alpha E2E requires the real
+E2E run id and build flag`. No renderer Stop scenario was substituted.
+- Supporting safety tests run during this revalidation:
+  - `mise exec -- node scripts/mise-run.mjs node --import tsx --test
+packages/services/test/cuaLeaseAuthority.test.ts packages/services/test/localAlphaHomeIsolation.test.ts
+packages/services/test/directHomeReaderInventory.test.ts` — exit 0, 17 passed, 0 failed.
+    This includes Stop serialization, late-commit fencing, and isolation tests; it is not installed
+    UI acceptance.
+  - `mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs` —
+    exit 0, 130 passed, 0 failed, including fail-closed peer/transport and CUA policy tests.
+  - `mise exec -- node scripts/mise-run.mjs bash packages/zcode-cua/native/cua-helper/run-foreground-policy-tests.sh
+&& mise exec -- node scripts/mise-run.mjs bash packages/zcode-cua/native/cua-helper/run-semantic-policy-tests.sh` —
+    exit 0; outputs were `foreground event classification tests passed` and
+    `semantic action policy tests passed`.
+- The installed app itself did not launch the product Helper during this revalidation;
+  `~/.zcode-local-engineering-alpha/.zcode/computer-use` remained absent and no
+  `AceVra Computer Use.app` process was observed. Installed software Stop, repeated Stop,
+  `already_stopped`, held-input cleanup, and exclusive lease release were therefore not run.
+- Input Monitoring and real physical interruption were not run. The worklog's cited native path
+  `packages/zcode-cua/native/cua-helper/ForegroundControl.swift:268-292,311-318` describes the
+  tap-failure behavior, but it is not a live permission or interruption measurement. No synthetic
+  mouse or Shift event was generated.
+
+### Installed browser, providers, remote features, and restart
+
+- Launch command:
+  `/usr/bin/open -n /Applications/AceVra.app --args --remote-debugging-port=9222
+--remote-debugging-address=127.0.0.1`.
+  Monotonic launch measurement: start `164617271610666`, CDP-ready `164618269706833`, elapsed
+  `998 ms`. `npx --yes agent-browser@latest --session acevra-revalidate connect 9222` and
+  `snapshot -i` observed the installed local `file://` renderer.
+- The observed body remained deterministic first-run onboarding:
+  `Welcome to AceVra`, `Connect to Z.ai Global`, `Connect to BigModel CN`, and `Use API key`.
+  Local/session storage key lists were empty. No provider button, API key, account, credential, or
+  inference action was taken. Browser navigation beyond this local renderer and embedded-browser
+  fixture behavior were not run. Existing remote features were not reachable or exercised.
+- During this run, `lsof -nP -iTCP -sTCP:ESTABLISHED` attributed an external socket from the
+  installed AceVra network child to `47.246.23.183:443`. The required redacting capture sink and
+  complete no-inference observer attribution were not established; no claim is made that this
+  socket is or is not provider-related.
+- The isolated userData/profile roots were present and the app process used
+  `~/Library/Application Support/AceVra Local Engineering Alpha`. The CUA state root remained
+  absent. This is deterministic state, not a new clean-install proof.
+- Graceful quit/relaunch was run again. Monotonic measurement: quit start `164645789673750`, quit
+  done `164646286246833`, relaunch start `164646415565416`, CDP-ready `164647461790041`, elapsed
+  `1046 ms`. The relaunched UI again showed the same onboarding text, empty local/session storage,
+  and the alpha workspace URL. Helper/CUA/account/provider restart persistence was not run.
+
+### Artifact and handoff boundary
+
+Commands run during this revalidation:
+
+```text
+hdiutil verify release/0.1.0-alpha.1/candidate/AceVra-0.1.0-alpha.1-mac-arm64.dmg
+# VALID
+
+unzip -t release/0.1.0-alpha.1/candidate/AceVra-0.1.0-alpha.1-mac-arm64.zip
+# No errors detected in compressed data
+
+(cd release/0.1.0-alpha.1 && shasum -a 256 -c SHA256SUMS.txt)
+# all six listed candidate files: OK
+```
+
+- Current archive hashes remained:
+  - DMG `3d730c0870110961b5b87af8ec4a6bd0b2373475245f12f7879e935b54244937`
+  - ZIP `4f9f0cebb28e4aa853cce874841d6d1526b64c0132e5e02178cc418811fd705b`
+- Exact candidate validation command was run and exited 1. Current errors were missing required
+  `AceVra-0.1.0-alpha.1-arm64.dmg/.zip`, unexpected `*-mac-arm64.*`, ad-hoc app signature,
+  non-certificate-root outer requirement, and the Helper developer absolute path.
+- Exact handoff assembly command exited 1 because `validation/` is absent.
+- Exact installed acceptance command exited 1 because `handoff/` is absent:
+  `mise exec -- node scripts/mise-run.mjs pnpm release:accept:installed -- --handoff
+"$PWD/release/0.1.0-alpha.1/handoff" --app /Applications/AceVra.app`.
+- Therefore the generated artifacts are integrity-valid but still fail the naming/signing/
+  provenance/deliverable contract. No artifact was published or replaced.
+
+### Human checkpoints and next action
+
+This revalidation remains blocked at the same human-only boundaries recorded above. A human must
+provide a genuinely fresh Gatekeeper/Open Anyway decision, remove any existing Helper TCC grants
+through System Settings and observe denial before fresh grants, then perform the real installed
+software Stop/repeated Stop and real physical mouse/Shift interruption measurements. No synthetic
+substitution is permitted. A newly rebuilt app/handoff is also required before these human checks
+can validate the repaired release.
+
+### Current-source checks
+
+- The first attempts to run `mise exec -- node scripts/mise-run.mjs pnpm typecheck` and
+  `mise exec -- node scripts/mise-run.mjs pnpm lint` were invoked from
+  `release/0.1.0-alpha.1` because the shell working directory had persisted there. Both failed with
+  `Cannot find module .../release/0.1.0-alpha.1/scripts/mise-run.mjs`; they were not treated as source
+  gate results.
+- Re-run against the repository root:
+  `mise exec -- node scripts/mise-run.mjs pnpm --dir <repo> typecheck` — exit 0.
+- Re-run against the repository root:
+  `mise exec -- node scripts/mise-run.mjs pnpm --dir <repo> lint` — exit 0,
+  `76 warnings and 0 errors`.
+- `git diff --check` — exit 0. The worklog and the pre-existing generated/untracked files remain the
+  only working-tree changes visible to this check.
+
+## Regeneration from repaired source — 2026-09-24
+
+**Disposition: BLOCKED / NOT ACCEPTED. No repaired candidate was produced.**
+
+Current source is `f9c33693bcf2f4b1c88bd60df10e1fe9992f902b`. A new no-clobber macOS arm64 bundle
+was attempted with the isolated local signing identity. The command failed during
+`prepare:runtime-assets` before Desktop build, native Helper preparation, signing, or Electron
+Builder:
+
+```text
+apps/zcode-cli/packages/node-repl-host/src/server.ts:387
+TS2353: 'leaseAuthority' does not exist in type 'ComputerUseRuntimeOptions'
+```
+
+The runtime passes the property at
+`apps/zcode-cli/packages/node-repl-host/src/server.ts:387`, while
+`packages/zcode-cua/index.d.ts:26-40` does not declare it. `repaired-build/` and
+`repaired-validation/` do not exist.
+
+### Commands run during regeneration
+
+- `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 8 / behind 0 and no configured
+  upstream.
+- Repaired no-clobber Desktop bundle command — exit 1 with the TS2353 error above.
+- `pnpm --dir <repo> architecture:check --changed` — exit 0; violations 0, baseline 0, new 0.
+- `pnpm --dir <repo> typecheck` — exit 0 for the root typecheck project list; this does not include
+  the separate CLI node-repl project that failed during build.
+- `pnpm --dir <repo> lint` — exit 0; 76 warnings and 0 errors.
+- `pnpm --dir <repo> fmt:check` — exit 1; 43 files reported.
+- `pnpm --dir <repo> verify:pre-push` — exit 0; lint warnings remain and architecture had zero
+  violations.
+- `pnpm --dir <repo> build` — exit 2; the CLI build failed at the same node-repl TS2353 error.
+- Exact CUA/release environment tests — exit 0; 133 passed, 0 failed.
+- Exact lease-authority/isolation tests — exit 0; 17 passed, 0 failed.
+- Exact release-runner tests — exit 0; 1 passed, 0 failed.
+- Foreground and semantic native policy scripts — exit 0.
+- Exact `e2e:cua-alpha` command without guards — exit 1 because run ID/build flag were absent.
+- Guarded `e2e:cua-alpha` — exit 1 because the first Electron window body was empty and did not match
+  the required local-engineering-alpha safety copy.
+- Old-candidate validator — exit 1 with seven errors, including wrong archive names, ad-hoc outer
+  signature, non-certificate-root outer DR, and Helper developer path.
+- Repaired-build validator — exit 1; app and both required archives are missing.
+- Handoff assembly — exit 1 because `repaired-validation/` is absent.
+- Installed acceptance — exit 1 because `repaired-handoff/` is absent.
+- `hdiutil verify` and `unzip -t` on the old DMG/ZIP — exit 0; both integrity checks passed.
+- Fresh `shasum -a 256` on the six old candidate files — completed; hashes match
+  `SHA256SUMS.txt`.
+- `spctl` on the old candidate and installed app — `rejected`.
+- `stapler validate` on the old candidate and installed app — no stapled ticket.
+
+### Repaired source versus generated/installed state
+
+The source now emits logical Helper `resourcePath`, defaults the CUA product path off unless
+explicitly enabled, integrates a service lease-authority/runtime bridge, changes physical exclusion
+to `flock` on the kernel-owned `/dev/null` device inode, and implements a real Playwright Electron
+launch. These source changes were not packaged because the build failed.
+
+The staged Helper metadata still has `appPath`, confirming native preparation was not reached. The
+old candidate and installed app remain ad-hoc and contain the developer path. The settings source
+still has no active-only software Stop control, and the E2E does not cover active/repeated/released
+Stop states.
+
+The installed Helper probe again reported pre-existing Accessibility and Screen Capture grants;
+fresh TCC remains blocked. Input Monitoring, repaired installed CUA, software Stop, and real physical
+mouse/Shift interruption were not run. No numeric physical interruption latency exists.
+
+### Final available-artifact secret/path scan
+
+The DMG was mounted read-only and the ZIP was extracted to a temporary directory. The repository's
+`scanCandidateContents` function was run against the unpacked candidate app, ZIP app, and DMG app. All
+three returned:
+
+```text
+developer-absolute-path at Contents/Resources/cua-helper/helper-build-info.json
+```
+
+No repaired archive existed to scan, so this is a failed available-candidate scan and not a repaired
+release pass.
+
+### Regenerated files
+
+- `release/0.1.0-alpha.1/FINAL_RELEASE_REPORT.md`
+- `release/0.1.0-alpha.1/RELEASE_NOTES.md`
+- `release/0.1.0-alpha.1/build-info.json`
+- `release/0.1.0-alpha.1/SHA256SUMS.txt`
+
+`SHA256SUMS.txt` intentionally identifies the rejected old candidate because no repaired artifact
+exists. No binary was committed, published, pushed, tagged, or merged.
+
+### Required next step
+
+Add the missing public `leaseAuthority` option to `ComputerUseRuntimeOptions` or remove the mismatched
+bridge, rerun the root/CLI build, then create a new no-clobber repaired candidate. Do not reuse the old
+archives. Candidate validation, exact names, signatures, app/DMG/ZIP secret/path scan, handoff, and
+human installed checkpoints remain mandatory.

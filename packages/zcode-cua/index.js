@@ -40,7 +40,6 @@ export function createComputerUseRuntime(options = {}) {
     typeof options.brokerSocketPath === "string" ? options.brokerSocketPath.trim() : "";
   const activeLeases = new Map();
   const leaseAuthority = options.leaseAuthority;
-  let pendingAuthorityLease;
 
   async function resolveSocketPath() {
     if (explicitSocketPath) return explicitSocketPath;
@@ -142,6 +141,21 @@ export function createComputerUseRuntime(options = {}) {
           });
         }
         let result;
+        if (
+          method === "acquire_control" &&
+          (!leaseAuthority || typeof input?.context?.sessionId !== "string")
+        ) {
+          throw Object.assign(new Error("foreground lease authority is unavailable"), {
+            code: "lease_authority_unavailable",
+          });
+        }
+        const reservation =
+          method === "acquire_control" && leaseAuthority
+            ? await leaseAuthority.beginAcquire({
+                session: input.context.sessionId,
+                task: input.context.turnId || input.context.sessionId,
+              })
+            : null;
         try {
           result = await broker.callBrokerMethod({
             socketPath: await resolveSocketPath(),
@@ -150,17 +164,65 @@ export function createComputerUseRuntime(options = {}) {
             timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
             expectedHelperIdentifiers: options.expectedHelperIdentifiers,
           });
-          if (leaseAuthority && pendingAuthorityLease) {
-            const committed = await leaseAuthority.commitAcquire(
-              pendingAuthorityLease.leaseId,
-              result?.helper_identity?.requirement ?? "verified-helper",
-            );
-            pendingAuthorityLease = undefined;
+          if (
+            reservation &&
+            result?.effect === "confirmed" &&
+            typeof result?.lease_id === "string"
+          ) {
+            const requirement = result?.helper_identity?.requirement;
+            if (typeof requirement !== "string" || requirement.length === 0) {
+              await broker
+                .callBrokerMethod({
+                  socketPath: await resolveSocketPath(),
+                  method: "release_control",
+                  params: {
+                    lease_id: result.lease_id,
+                    owner_session: input.context.sessionId,
+                    owner_task: params.owner_task,
+                  },
+                  timeoutMs: 2000,
+                  expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+                })
+                .catch(() => undefined);
+              throw Object.assign(new Error("verified Helper requirement is unavailable"), {
+                code: "lease_authority_unavailable",
+              });
+            }
+            const committed = await leaseAuthority.commitAcquire(reservation.leaseId, requirement);
             result = { ...result, lease_authority_generation: committed.generation };
+          } else if (reservation) {
+            await leaseAuthority.stop().catch(() => undefined);
+            if (result?.lease_id)
+              await broker
+                .callBrokerMethod({
+                  socketPath: await resolveSocketPath(),
+                  method: "release_control",
+                  params: {
+                    lease_id: result.lease_id,
+                    owner_session: input.context.sessionId,
+                    owner_task: params.owner_task,
+                  },
+                  timeoutMs: 2000,
+                  expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+                })
+                .catch(() => undefined);
           }
         } catch (error) {
-          if (pendingAuthorityLease) await leaseAuthority.stop().catch(() => undefined);
-          pendingAuthorityLease = undefined;
+          if (reservation) await leaseAuthority.stop().catch(() => undefined);
+          if (result?.lease_id)
+            await broker
+              .callBrokerMethod({
+                socketPath: await resolveSocketPath(),
+                method: "release_control",
+                params: {
+                  lease_id: result.lease_id,
+                  owner_session: input.context.sessionId,
+                  owner_task: params.owner_task,
+                },
+                timeoutMs: 2000,
+                expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+              })
+              .catch(() => undefined);
           throw error;
         }
         // The model-facing boundary. `observe` answers with a host path to the frame it wrote;

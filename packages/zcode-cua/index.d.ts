@@ -38,6 +38,11 @@ export interface ComputerUseRuntimeOptions {
    * builds (see `broker.js`); an unknown identity is refused rather than trusted.
    */
   expectedHelperIdentifiers?: readonly string[];
+  leaseAuthority?: {
+    beginAcquire(owner: { session: string; task: string }): Promise<{ leaseId: string }>;
+    commitAcquire(leaseId: string, helperRequirement: string): Promise<unknown>;
+    stop(): Promise<unknown>;
+  };
 }
 
 export {
