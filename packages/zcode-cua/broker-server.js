@@ -64,6 +64,19 @@ function resolveCuaPluginState(options) {
   };
 }
 
+export async function waitForProductHelperAdmission(transport, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!transport?.helperConnected && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  if (!transport?.helperConnected) {
+    throw new CuaHelperError("AceVra Computer Use Helper admission timed out", {
+      code: "helper_admission_timeout",
+    });
+  }
+  return transport;
+}
+
 export async function queryProductHelperPermissionStatus(transport) {
   if (!transport?.helperConnected) throw new CuaHelperError(UNAVAILABLE);
   return await transport.callMethod("permission_status", undefined, { timeoutMs: 3_000 });
@@ -165,7 +178,10 @@ export function createProductCuaHelperHost(options = {}) {
   let transport = null;
   let startup = null;
   const start = async () => {
-    if (transport) return { socketPath: transport.socketPath, pluginAuthority: "packaged-cua" };
+    if (transport) {
+      await waitForProductHelperAdmission(transport);
+      return { socketPath: transport.socketPath, pluginAuthority: "packaged-cua" };
+    }
     startup ??= (async () => {
       const env = options.env ?? process.env;
       const runTool = async (command, args) => {
@@ -198,19 +214,26 @@ export function createProductCuaHelperHost(options = {}) {
         peerProbeRequirement,
       });
       await next.start();
-      await runTool(
-        "/usr/bin/open",
-        buildHostConnectOpenArgs({
-          appPath,
-          socketPath: next.socketPath,
-          launchToken: next.token,
-          hostRequirement,
-          helperRequirement,
-          observationDir: `${env.ZCODE_HOME ?? ""}/computer-use/observations`,
-          idleMs: 15_000,
-        }),
-      );
       transport = next;
+      try {
+        await runTool(
+          "/usr/bin/open",
+          buildHostConnectOpenArgs({
+            appPath,
+            socketPath: next.socketPath,
+            launchToken: next.token,
+            hostRequirement,
+            helperRequirement,
+            observationDir: `${env.ZCODE_HOME ?? ""}/computer-use/observations`,
+            idleMs: 15_000,
+          }),
+        );
+        await waitForProductHelperAdmission(next);
+      } catch (error) {
+        await next.stop();
+        transport = null;
+        throw error;
+      }
       return { socketPath: next.socketPath, pluginAuthority: "packaged-cua" };
     })().catch((error) => {
       startup = null;

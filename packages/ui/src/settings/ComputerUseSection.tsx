@@ -239,6 +239,9 @@ export function ComputerUseSection({
   const helperContextKeyRef = useRef(helperContextKey);
   helperContextKeyRef.current = helperContextKey;
   const activeOnboardingOperationIdRef = useRef<string | null>(null);
+  const [pendingPermissionKind, setPendingPermissionKind] = useState<CuaPermissionKind | null>(
+    null,
+  );
   const permissionStatusCheckTokenRef = useRef<symbol | null>(null);
   const platformRef = useRef(platform);
   platformRef.current = platform;
@@ -423,11 +426,11 @@ export function ComputerUseSection({
   // 打开 macOS 系统设置引导用户授权指定权限（Accessibility / Screen Recording）。
   const openPermissionSettings = useCallback(
     async (initialPermission: CuaPermissionKind): Promise<void> => {
-      if (
-        typeof platform.openCuaPermissionOnboarding !== "function" ||
-        activeOnboardingOperationIdRef.current ||
-        permissionStatusCheckTokenRef.current
-      ) {
+      if (typeof platform.openCuaPermissionOnboarding !== "function") {
+        return;
+      }
+      if (activeOnboardingOperationIdRef.current) {
+        setPendingPermissionKind(initialPermission);
         return;
       }
       const checkToken = Symbol("cua-permission-status-check");
@@ -446,37 +449,8 @@ export function ComputerUseSection({
           toast(intl.formatMessage({ id: "cuaPermission.modal.unavailable" }));
           return;
         }
-        // 设置页行按钮过去直接使用 lastKnown 状态；另一窗口刚完成授权或当前刷新
-        // in-flight 时仍会打开过期 pane。点击边沿重新查询 Helper，只允许当前 denied/stale 的精确项。
-        let currentStatus = await cuaPermissionService.getStatus(path, workspaceIdentity, {
-          includeFunctionalProbes: false,
-        });
-        // 从系统设置授权返回后 App 会重启 Helper 才能读到新 TCC 授权，这段窗口内查询拿到的是
-        // 不可用状态（授权完立刻点行按钮，预检查退化成「暂时无法确认」
-        // 而非「已授权」）。状态不可用时短重试 2 次、间隔 2s，等 Helper 就绪后走到「已授权」
-        // 或真实缺权分支；期间守卫失效（卸载/重复点击/上下文切换）直接放弃，不再重试。
-        for (
-          let attempt = 0;
-          attempt < 2 && !isCuaPermissionStatusAvailable(currentStatus);
-          attempt += 1
-        ) {
-          await new Promise<void>((resolve) => setTimeout(resolve, 2000));
-          if (
-            !mountedRef.current ||
-            permissionStatusCheckTokenRef.current !== checkToken ||
-            helperContextKeyRef.current !== operationContextKey ||
-            returnRecoveryRef.current !== recoveryState
-          ) {
-            return;
-          }
-          currentStatus = await cuaPermissionService.getStatus(path, workspaceIdentity, {
-            includeFunctionalProbes: false,
-          });
-        }
-        // React concurrent commit 可能已经收到 workspace A→B 更新但 passive effect 尚未清理 A。
-        // render 同步更新的 context ref 是这段窗口内唯一可靠的失效信号；让出一个 macrotask后再判，
-        // 迟到的 A 状态不能为 B 打开原生设置页。
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        // The requested macOS pane does not depend on the current TCC status. Open it immediately;
+        // status is refreshed after the platform operation settles instead of adding a retry delay.
         if (
           !mountedRef.current ||
           permissionStatusCheckTokenRef.current !== checkToken ||
@@ -551,6 +525,16 @@ export function ComputerUseSection({
     },
     [platform, path, services, workspaceIdentity, intl, applyPendingGrant, refresh],
   );
+
+  useEffect(() => {
+    if (!pendingPermissionKind || activeOnboardingOperationIdRef.current) return;
+    setPendingPermissionKind(null);
+    void openPermissionSettings(pendingPermissionKind);
+  }, [openPermissionSettings, pendingPermissionKind]);
+
+  useEffect(() => {
+    setPendingPermissionKind(null);
+  }, [path, workspaceIdentity]);
 
   const onManualRestart = useCallback((): void => {
     void (returnRecoveryRef.current.pending ? applyPendingGrant() : onRestart());

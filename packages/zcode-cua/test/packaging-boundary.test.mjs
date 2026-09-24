@@ -11,6 +11,7 @@ import {
   resolvePackagedNativeAddonPath,
   resolveInTreeAddonPath,
   queryProductHelperPermissionStatus,
+  waitForProductHelperAdmission,
   roleToKind,
 } from "../broker-server.js";
 
@@ -62,6 +63,25 @@ test("permission status uses the same admitted Helper transport", async () => {
   );
 });
 
+test("product start waits for the admitted Helper transport", async () => {
+  let admitted = false;
+  const transport = {
+    get helperConnected() {
+      return admitted;
+    },
+  };
+  setTimeout(() => {
+    admitted = true;
+  }, 10);
+  const startedAt = Date.now();
+  await waitForProductHelperAdmission(transport, 500);
+  assert.equal(admitted, true);
+  assert.ok(Date.now() - startedAt >= 5);
+  await assert.rejects(
+    () => waitForProductHelperAdmission({ helperConnected: false }, 5),
+    /admission timed out/,
+  );
+});
 test("product consumers import only declared package entrypoints", async () => {
   const consumers = [
     "packages/services/src/node.ts",

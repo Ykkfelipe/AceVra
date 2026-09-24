@@ -24,6 +24,7 @@ import {
 interface FileConfigOptions {
   baseDir?: string;
   configFileName?: string;
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface LoadedConfig {
@@ -61,6 +62,11 @@ export interface PluginRemovePatchResult {
 const DEFAULT_CONFIG_FILE = "config.json";
 const DEFAULT_BASE_DIR = "~/.zcode/cli";
 
+export function getDefaultConfigBaseDir(env: NodeJS.ProcessEnv = process.env): string {
+  const isolatedHome = env.ZCODE_HOME?.trim();
+  return isolatedHome ? join(resolvePath(isolatedHome), "cli") : resolvePath(DEFAULT_BASE_DIR);
+}
+
 /**
  * Resolve path with ~ expansion
  */
@@ -78,7 +84,7 @@ export function loadFileConfig(filePath?: string, options: FileConfigOptions = {
   const resolvedPath = filePath
     ? resolvePath(filePath)
     : join(
-        resolvePath(options.baseDir ?? DEFAULT_BASE_DIR),
+        resolvePath(options.baseDir ?? getDefaultConfigBaseDir(options.env)),
         options.configFileName ?? DEFAULT_CONFIG_FILE,
       );
 
@@ -440,8 +446,8 @@ export async function removeSuppressedBuiltinInFileConfig(
 /**
  * Get default config file path
  */
-export function getDefaultConfigPath(): string {
-  return join(resolvePath(DEFAULT_BASE_DIR), DEFAULT_CONFIG_FILE);
+export function getDefaultConfigPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(getDefaultConfigBaseDir(env), DEFAULT_CONFIG_FILE);
 }
 
 /**

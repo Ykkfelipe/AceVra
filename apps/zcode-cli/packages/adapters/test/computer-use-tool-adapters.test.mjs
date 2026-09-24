@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, test } from "node:test";
 
 import { registerMcpTools } from "../../core/src/mcp/index.ts";
 import { createToolRegistry } from "../../core/src/tool/registry.ts";
 import { toAiSdkTools } from "../src/model/tool-transform.ts";
 import { ZCODE_CUA_OFFICIAL_MCP_NAMESPACE_NAME } from "@zcode/shared";
+import {
+  getDefaultConfigBaseDir,
+  getDefaultConfigPath,
+} from "../src/config/file-config.adapter.ts";
 
 const PROVIDERS = ["openai", "openai-compatible", "anthropic"];
 const names = ["mcp__computer-use__computer_press", "mcp__computer-use__computer_set_value"];
@@ -172,4 +176,14 @@ describe("Computer Use AI SDK provider projections", () => {
       }
     }
   });
+});
+
+test("isolated ZCODE_HOME owns the default plugin config path", () => {
+  const env = { ZCODE_HOME: "/tmp/acevra-alpha-home/.zcode" };
+  assert.equal(getDefaultConfigBaseDir(env), "/tmp/acevra-alpha-home/.zcode/cli");
+  assert.equal(getDefaultConfigPath(env), "/tmp/acevra-alpha-home/.zcode/cli/config.json");
+  assert.equal(
+    getDefaultConfigPath({}),
+    `${process.env.HOME ?? ""}/.zcode/cli/config.json`,
+  );
 });

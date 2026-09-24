@@ -30,7 +30,9 @@ if (packagedAppPath) {
 
 async function runScenario({ active }) {
   console.log(`[e2e:cua-alpha] ${runId}: starting ${active ? "active" : "default-off"} scenario`);
-  const dataRoot = mkdtempSync(join(tmpdir(), "acevra-cua-alpha-scenario-"));
+  const homeRoot = mkdtempSync(join(tmpdir(), "acevra-cua-alpha-home-"));
+  const profileRoot = mkdtempSync(join(tmpdir(), "acevra-cua-alpha-profile-"));
+  const dataRoot = profileRoot;
   const app = await electron.launch({
     executablePath,
     args: packagedAppPath
@@ -39,9 +41,10 @@ async function runScenario({ active }) {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      HOME: dataRoot,
-      ZCODE_DESKTOP_HOME_DIR: dataRoot,
-      ZCODE_DATA_BASE_DIR: dataRoot,
+      HOME: homeRoot,
+      ZCODE_DESKTOP_HOME_DIR: profileRoot,
+      ZCODE_DATA_BASE_DIR: profileRoot,
+      ZCODE_HOME: join(profileRoot, ".zcode"),
       ZCODE_DESKTOP_E2E: "1",
       ZCODE_DESKTOP_E2E_RUN_ID: runId,
       ZCODE_E2E_RUN_ID: runId,
@@ -80,6 +83,16 @@ async function runScenario({ active }) {
       }
       assert.equal(await enableToggle.isChecked(), true);
       assert.equal(await page.getByText(/Plugin not found/).count(), 0);
+      assert.equal(
+        await import("node:fs/promises").then(({ access }) =>
+          access(join(profileRoot, ".zcode", "cli", "config.json")).then(
+            () => true,
+            () => false,
+          ),
+        ),
+        true,
+        "isolated alpha plugin config should be written under ZCODE_HOME",
+      );
       const composerToggle = page.getByLabel("Show Computer Use button in the composer");
       await composerToggle.click();
       for (let attempt = 0; attempt < 30 && !(await composerToggle.isChecked()); attempt += 1) {
@@ -108,6 +121,7 @@ async function runScenario({ active }) {
   } finally {
     await app.close();
     rmSync(dataRoot, { recursive: true, force: true });
+    rmSync(homeRoot, { recursive: true, force: true });
   }
 }
 
