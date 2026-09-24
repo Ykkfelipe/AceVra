@@ -1433,3 +1433,20 @@ The repaired candidate is installed but not formally accepted. Human action is n
 open Settings → Computer Use, enable Computer Use, confirm no missing-plugin toast, click Open
 Accessibility Settings, return, click Open Screen Recording, and report whether System Settings opens.
 Do not change TCC permissions or run broader CUA acceptance yet.
+
+## 2026-09-24 isolated alpha permission-state repair
+
+The `1479bf4c` candidate fixes the confirmed HOME/ZCODE_HOME config-authority split, waits for
+admission before product Helper start resolves, opens permission rows immediately, and queues a
+second permission click instead of silently dropping it. The package-aware E2E now uses distinct
+HOME and alpha profile roots and verifies isolated plugin config persistence.
+
+Final handoff: `release/0.1.0-alpha.1/handoff-cua-1479bf4/`
+Installed backup: `/Applications/.AceVra.app.backup-cfac4eea-f717-4872-b329-fc791a69c6ce`
+Final hashes:
+
+- DMG: `dd19725ac7532342794e42aa365133430838b803302bd424efb432bcaa54ef8c`
+- ZIP: `d14c4d059ae91ec6c1ac43ac3f21db7353af0e7e3810ae98e82a0393035d8e38`
+
+The candidate is installed but not formally accepted. Human action is limited to the two Settings
+clicks and enablement check; no TCC changes or broader CUA acceptance is authorized yet.
