@@ -26,6 +26,7 @@ import {
   isLocalEngineeringAlphaProfile,
 } from "./scripts/desktop-release-profile.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
+import { verifyPackagedComputerUsePluginFromBuilderContext } from "./scripts/verify-official-plugin-assets.mjs";
 const ELECTRON_BUILDER_ARCH = {
   1: "x64",
   3: "arm64",
@@ -612,6 +613,9 @@ export default {
     );
     runTimedSync("afterPack:assertPackagedNodePtyPrebuild", () =>
       assertPackagedNodePtyPrebuild(context),
+    );
+    runTimedSync("afterPack:verifyOfficialComputerUsePlugin", () =>
+      verifyPackagedComputerUsePluginFromBuilderContext(context),
     );
     if (actualWindowsTarget) {
       await runTimedAsync("afterPack:writeWindowsInstallManifest", () =>

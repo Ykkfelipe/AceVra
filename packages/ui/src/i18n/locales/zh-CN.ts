@@ -6197,6 +6197,8 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.cua.default": "使用 Computer Use",
   "cuaPermission.modal.unavailable":
     "暂时无法确认 Helper 权限状态（Helper 可能还在启动）。请重新检查后再打开系统设置。",
+  "cuaPermission.modal.recheckButton": "重新检查权限",
+  "cuaPermission.modal.fallbackHint": "系统设置已打开到“隐私与安全性”，请手动选择所需权限。",
   "cuaPermission.live.title": "电脑操作需要 macOS 权限",
   "cuaPermission.live.description": "正在运行的电脑操作任务需要 macOS 权限，是否前往授权？",
   "cuaPermission.live.confirm": "前往授权",
@@ -6210,6 +6212,7 @@ const zhCN: Record<string, string> = {
   "cuaPermission.status.granted": "已授权",
   "cuaPermission.status.missing": "未授权",
   "cuaPermission.status.unknown": "未知",
+  "cuaPermission.status.unavailable": "Helper 不可用",
   "cuaPermission.status.stale": "授权状态需要重新确认",
   "cuaPermission.status.verifying": "已授权，正在验证",
   "cuaPermission.probeVerifyingHint": "系统授权已存在，正在验证实际控制与截图能力。",
@@ -6221,9 +6224,9 @@ const zhCN: Record<string, string> = {
   "cuaPermission.tools.untrustedRuntime":
     "检测到电脑控制工具，但它们并非来自已校验的 ZCode 官方插件。请检查插件安装后重新验证。",
   "cuaPermission.perm.accessibility": "辅助功能 (Accessibility)",
-  "cuaPermission.perm.accessibility.purpose": "读取/驱动 UI 元素 + 合成键鼠输入",
+  "cuaPermission.perm.accessibility.purpose": "授权 AceVra Computer Use.app 读取和控制界面元素",
   "cuaPermission.perm.screenRecording": "屏幕录制 (Screen Recording)",
-  "cuaPermission.perm.screenRecording.purpose": "截屏",
+  "cuaPermission.perm.screenRecording.purpose": "授权 AceVra Computer Use.app 截取屏幕",
   "cuaPermission.osFloorTitle":
     "电脑控制功能需要 macOS {minimum} 或更高版本（当前约为 macOS {current}）",
   "cuaPermission.osFloorDescription": "请先升级系统后再使用。授权设置在低版本系统上无法完成。",

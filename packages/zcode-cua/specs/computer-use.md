@@ -27,6 +27,36 @@ exports `loadRealNativeAddon`, `resolvePackagedNativeAddonPath`, `resolveInTreeA
 a working runtime or return an ambiguous empty result. Removing them later requires a migration
 decision, not a silent deletion.
 
+### Official plugin packaging and enablement
+
+`computer-use@zcode-plugins-official` is the single discoverable packaging and enablement unit
+for Computer Use. It is default-off: discovery must still publish the real official package so
+Settings can enable it, but no user config means the plugin is disabled and neither the runtime
+`computerUse` feature nor `node_repl` CUA injection is active. The legacy CUA identifiers and the
+`@zcode/zcode-cua` native runtime remain compatibility boundaries and are not renamed.
+
+The official plugin package is a content/enablement layer only. It supplies its manifest,
+Computer Use documentation, SDK bootstrap client, skill, package metadata, and public entrypoint;
+it does not carry a second Helper, broker socket, lease authority, native actuator, or native
+power. `@zcode/node-repl-host` continues to bundle the shared `node_repl` MCP runtime and imports
+`@zcode/zcode-cua`; the enabled Computer Use plugin contributes only its root for documentation
+and the official skill/client bootstrap.
+
+The plugin manager's merged user/workspace configuration is the sole mutable enablement owner.
+`resolvePluginRuntimeFeatures` and built-in `node_repl` registration consume the same loaded plugin
+outcome, while service-side CUA admission reads the same canonical plugin state for the workspace
+(including canonicalization of the preserved legacy ID). Missing plugin assets, failed seed, or an
+unavailable package must remain observable as a packaging/discovery failure; code must not suppress
+the error, fabricate a feature, or treat an environment flag as a substitute for persisted plugin
+state. The development-only CUA environment knob may request the internal development path, but it
+does not change the production default or bypass missing-plugin verification.
+
+Desktop filesystem bundles and SEA assets must both include the real package at
+`packages/zcode-cua-plugin` and verify `.zcode-plugin/plugin.json`, `package.json`,
+`docs/computer-use.md`, `scripts/computer-use-client.mjs`, and
+`skills/computer-use/SKILL.md`. Packaging verification reads the actual staged tree and fails when
+any required asset is absent; it does not rely only on a source manifest or generated declaration.
+
 The service lease record is the sole authority for the Helper lease owner, generation, Helper
 identity, and terminal state. The authenticated node-repl host constructs the runtime in a separate
 MCP process, so it must report lease lifecycle through a private authenticated local sideband to the

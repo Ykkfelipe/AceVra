@@ -43,6 +43,22 @@ export const officialSeaPlugins = [
     // 导致发布产物不 seed browser-use，进而无法装配宿主 node_repl MCP。
     version: "0.5.1",
   },
+  {
+    marketplace: "zcode-plugins-official",
+    name: "computer-use",
+    packageName: "@zcode/zcode-cua-plugin",
+    requiresRuntime: true,
+    // This is a content/enablement package. Its required assets are the client, docs and skill;
+    // the native runtime remains bundled by @zcode/node-repl-host and @zcode/zcode-cua.
+    requiredRuntimePaths: [
+      "package.json",
+      "docs/computer-use.md",
+      "scripts/computer-use-client.mjs",
+      "skills/computer-use/SKILL.md",
+    ],
+    rootPath: join("packages", "zcode-cua-plugin"),
+    version: "0.6.3",
+  },
 ];
 
 export const collectSeaOfficialPluginAssets = async ({

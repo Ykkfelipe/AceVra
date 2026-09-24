@@ -6495,6 +6495,9 @@ const enUS: Record<string, string> = {
   "chat.toolCall.cua.default": "Use Computer Use",
   "cuaPermission.modal.unavailable":
     "Couldn't verify the Helper permission status yet (it may still be starting). Check again before opening System Settings.",
+  "cuaPermission.modal.recheckButton": "Re-check permissions",
+  "cuaPermission.modal.fallbackHint":
+    "System Settings opened at Privacy & Security. Select the requested permission manually.",
   "cuaPermission.live.title": "Computer Use needs macOS permissions",
   "cuaPermission.live.description":
     "A running Computer Use task needs macOS permissions. Open the authorization guide?",
@@ -6509,6 +6512,7 @@ const enUS: Record<string, string> = {
   "cuaPermission.status.granted": "Granted",
   "cuaPermission.status.missing": "Missing",
   "cuaPermission.status.unknown": "Unknown",
+  "cuaPermission.status.unavailable": "Helper unavailable",
   "cuaPermission.status.stale": "Authorization needs verification",
   "cuaPermission.status.verifying": "Granted, verifying",
   "cuaPermission.probeVerifyingHint":
@@ -6521,9 +6525,11 @@ const enUS: Record<string, string> = {
   "cuaPermission.tools.untrustedRuntime":
     "Computer Use tools were found, but they did not come from the verified ZCode plugin. Review the plugin installation, then check again.",
   "cuaPermission.perm.accessibility": "Accessibility",
-  "cuaPermission.perm.accessibility.purpose": "Read/drive UI elements + synthesize input",
+  "cuaPermission.perm.accessibility.purpose":
+    "Grant AceVra Computer Use.app to read and control UI elements",
   "cuaPermission.perm.screenRecording": "Screen Recording",
-  "cuaPermission.perm.screenRecording.purpose": "Capture the screen",
+  "cuaPermission.perm.screenRecording.purpose":
+    "Grant AceVra Computer Use.app to capture the screen",
   "cuaPermission.osFloorTitle":
     "Computer Use requires macOS {minimum} or later (currently around macOS {current})",
   "cuaPermission.osFloorDescription":

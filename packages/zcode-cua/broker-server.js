@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import { CuaHelperError } from "./broker.js";
 import {
   buildHostConnectOpenArgs,
@@ -7,8 +10,64 @@ import {
 
 export const HELPER_ADDON_ENV = "ZCODE_CUA_HELPER_ADDON";
 export const WINDOWS_DEV_CONTROL_PROTOCOL = "zcode-cua-windows-dev/v1";
+const CANONICAL_CUA_PLUGIN_ID = "computer-use@zcode-plugins-official";
+const LEGACY_CUA_PLUGIN_ID = "zcode-cua@zcode-plugins-official";
 const UNAVAILABLE = "Computer Use is not available in this build.";
 const unavailableReject = () => Promise.reject(new CuaHelperError(UNAVAILABLE));
+
+function readPluginConfig(path) {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const plugins = parsed.plugins;
+    if (!plugins || typeof plugins !== "object" || Array.isArray(plugins)) return {};
+    return plugins;
+  } catch {
+    return {};
+  }
+}
+
+function readCuaPluginState(config) {
+  const enabledPlugins =
+    config.enabledPlugins && typeof config.enabledPlugins === "object" ? config.enabledPlugins : {};
+  const suppressedBuiltins = Array.isArray(config.suppressedBuiltins)
+    ? config.suppressedBuiltins
+    : [];
+  const enabled =
+    enabledPlugins[CANONICAL_CUA_PLUGIN_ID] ?? enabledPlugins[LEGACY_CUA_PLUGIN_ID] ?? false;
+  return {
+    enabled: enabled === true,
+    explicit:
+      Object.hasOwn(enabledPlugins, CANONICAL_CUA_PLUGIN_ID) ||
+      Object.hasOwn(enabledPlugins, LEGACY_CUA_PLUGIN_ID),
+    suppressed:
+      suppressedBuiltins.includes(CANONICAL_CUA_PLUGIN_ID) ||
+      suppressedBuiltins.includes(LEGACY_CUA_PLUGIN_ID),
+  };
+}
+
+function resolveCuaPluginState(options) {
+  const env = options.env ?? process.env;
+  const home = env.HOME?.trim() || env.USERPROFILE?.trim() || homedir();
+  const zcodeHome = env.ZCODE_HOME?.trim() || join(home, ".zcode");
+  const user = readCuaPluginState(readPluginConfig(join(zcodeHome, "cli", "config.json")));
+  if (!options.workingDirectory) return user;
+  const workspaceRoot = resolve(options.workingDirectory);
+  const workspaceFromRoot = readCuaPluginState(readPluginConfig(join(workspaceRoot, "zcode.json")));
+  const workspaceFromZcodeDir = readCuaPluginState(
+    readPluginConfig(join(workspaceRoot, ".zcode", "config.json")),
+  );
+  const workspace = workspaceFromZcodeDir.explicit ? workspaceFromZcodeDir : workspaceFromRoot;
+  return {
+    enabled: workspace.explicit ? workspace.enabled : user.enabled,
+    suppressed: workspace.suppressed || workspaceFromRoot.suppressed || user.suppressed,
+  };
+}
+
+export async function queryProductHelperPermissionStatus(transport) {
+  if (!transport?.helperConnected) throw new CuaHelperError(UNAVAILABLE);
+  return await transport.callMethod("permission_status", undefined, { timeoutMs: 3_000 });
+}
 
 export function buildHelperOpenArgs(spec, launcherPid) {
   if (!spec || typeof spec.appPath !== "string") return [];
@@ -203,7 +262,7 @@ export function createProductCuaHelperHost(options = {}) {
     },
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
-    queryPermissionStatus: async () => ({}),
+    queryPermissionStatus: async () => await queryProductHelperPermissionStatus(transport),
   };
 }
 function createUnavailableCuaHelperHost() {
@@ -229,11 +288,12 @@ function createUnavailableCuaHelperHost() {
     releaseControl: unavailableReject,
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
-    queryPermissionStatus: async () => ({}),
+    queryPermissionStatus: unavailableReject,
   };
 }
-export function isOfficialCuaPluginEnabledForWorkspace(_options) {
-  return false;
+export function isOfficialCuaPluginEnabledForWorkspace(options = {}) {
+  const state = resolveCuaPluginState(options);
+  return state.enabled && !state.suppressed;
 }
 export function createCuaProductMcpServerResolver(host, _options) {
   return {

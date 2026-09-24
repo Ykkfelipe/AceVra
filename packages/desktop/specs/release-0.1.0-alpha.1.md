@@ -121,7 +121,28 @@ that a second same-uid Helper cannot unlink and replace to obtain a second physi
 cannot be demonstrated, release remains blocked; the plan must not narrow the CUA-3 serialization
 claim to make the current implementation pass.
 
-## Authoritative software Stop
+## Official Computer Use plugin packaging
+
+The candidate and every desktop/SEA runtime include the real official package at
+`Resources/glm/packages/zcode-cua-plugin`. Its source package is
+`apps/zcode-cli/packages/zcode-cua-plugin`; that exact staged location is the root candidate used
+by bootstrap discovery. The staged package must contain the manifest and package metadata plus
+`docs/computer-use.md`, `scripts/computer-use-client.mjs`, and
+`skills/computer-use/SKILL.md`.
+
+The package remains default-off and retains the canonical
+`computer-use@zcode-plugins-official` ID plus all preserved legacy compatibility IDs. It is an
+enablement/content layer over the existing `@zcode/zcode-cua` runtime and shared
+`@zcode/node-repl-host`; packaging adds no native actuator, second Helper, second broker, or second
+lease authority. Discovery, runtime feature projection, `node_repl` registration, and service-side
+workspace admission consume the authoritative loaded plugin state rather than an independent flag
+or a hardcoded resolver result.
+
+The desktop agent preparation list, remote/desktop shared list, and SEA official-plugin asset list
+must contain the same package. Packaging verification inspects the actual destination tree and
+requires all four payload classes above plus the manifest/package metadata. A missing source
+package, missing seed asset, or failed staged-copy check is a fail-closed packaging error; it must
+not be hidden by suppressing the plugin or returning an empty capability.
 
 One service-side lease record is the sole authority for lease id, owner session/task, verified
 Helper requirement, generation, deadline, and terminal state. The model-facing runtime map is only

@@ -11,7 +11,7 @@ import {
 import { dirname, join, resolve, sep } from "node:path";
 import { writeBundledOfficialMarketplacePartitionSync } from "@zcode/adapters";
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE, type Logger } from "@zcode/contracts";
-import { isZCodeCuaInternalFeatureEnabled, ZCODE_CUA_OFFICIAL_PLUGIN_ID } from "@zcode/shared";
+import { ZCODE_CUA_OFFICIAL_PLUGIN_ID } from "@zcode/shared";
 import {
   createOfficialPluginCacheRetryBudget,
   getOfficialPluginCacheRetryAttempts,
@@ -229,14 +229,10 @@ export function resolveOfficialPluginRoots(input: {
   extraRoots?: string[];
   logger?: Logger;
   storageRoot: string;
-  suppressedBuiltins?: ReadonlySet<string>;
 }): string[] {
-  const suppressedBuiltins = new Set(input.suppressedBuiltins ?? []);
-  // zcode-cua 内置 plugin 默认不启用，由 feature flag 控制加载。在 seed/discovery 层门控
-  // （而非只隐藏某个 UI 面），这样开关关闭时用户无法经 plugin 列表/marketplace/MCP 设置/CLI 命令看到它。
-  if (!isZCodeCuaInternalFeatureEnabled(input.env ?? process.env)) {
-    suppressedBuiltins.add(ZCODE_CUA_OFFICIAL_PLUGIN_ID);
-  }
+  // Computer Use remains default-off through the official plugin definition's missing
+  // defaultEnabled declaration. It must still be seeded and discoverable so Settings can
+  // enable the real package; an environment feature flag cannot suppress the package itself.
   const failedSeeds = seedBundledOfficialPlugins({
     logger: input.logger,
     storageRoot: input.storageRoot,

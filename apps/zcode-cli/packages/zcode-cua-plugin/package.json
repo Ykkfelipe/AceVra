@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@zcode/zcode-cua-plugin",
+  "version": "0.6.3",
+  "private": true,
+  "description": "Official Computer Use content and enablement package. The native runtime, Helper, broker, and lease authority remain owned by @zcode/zcode-cua and its host integration.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./scripts/computer-use-client.mjs",
+  "exports": {
+    ".": "./scripts/computer-use-client.mjs",
+    "./computer-use-client": "./scripts/computer-use-client.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    ".zcode-plugin",
+    "docs",
+    "scripts",
+    "skills"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@zcode/zcode-cua": "workspace:*"
+  }
+}

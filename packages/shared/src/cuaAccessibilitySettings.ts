@@ -15,6 +15,8 @@ export interface CuaAccessibilitySettingsResult {
   sessionId?: string;
   /** 只有所有 staged 设置页都观察到任意 ZCode 窗口返回后才为 true。 */
   returnedFromSettings?: boolean;
+  /** True when at least one exact pane deep link fell back to the broader Privacy & Security surface. */
+  fallbackUsed?: boolean;
   /**
    * 同一 main onboarding 会话可能被多个窗口加入。每个独立 renderer/host 只有一个调用拿到 true，负责
    * 重启该 host 的 Helper；同一 renderer 的重复调用拿到 false。不能全局只选一个窗口，因为每个窗口

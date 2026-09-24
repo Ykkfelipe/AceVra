@@ -20,11 +20,11 @@ import type {
   PrepareCuaHelperPermissionDragResult,
 } from "@zcode/shared";
 import { createDesktopCuaHelperInstaller } from "./desktopCuaHelperInstaller.js";
-
-const MACOS_ACCESSIBILITY_SETTINGS_URL =
-  "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
-const MACOS_SCREEN_RECORDING_SETTINGS_URL =
-  "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
+import {
+  MACOS_PRIVACY_SECURITY_SETTINGS_URL,
+  openPermissionSettingsWithFallback,
+  settingsUrlForPermission,
+} from "./cuaPermissionSettingsFallback.js";
 
 interface OpenCuaAccessibilitySettingsOptions {
   initialPermission?: CuaPermissionKind;
@@ -162,12 +162,6 @@ function normalizeRequiredPermissions(
   return PERMISSION_STAGE_ORDER.filter((permission) => requestedSet.has(permission));
 }
 
-function settingsUrlForPermission(permission: CuaPermissionKind): string {
-  return permission === "screen_recording"
-    ? MACOS_SCREEN_RECORDING_SETTINGS_URL
-    : MACOS_ACCESSIBILITY_SETTINGS_URL;
-}
-
 function sameHelperPermissionIdentity(
   expected: HelperPermissionSubjectIdentity,
   actual: HelperPermissionSubjectIdentity,
@@ -226,6 +220,7 @@ interface ActiveOnboardingSession {
   requiredPermissions: Set<CuaPermissionKind>;
   processedPermissions: Set<CuaPermissionKind>;
   openedPermissions: CuaPermissionKind[];
+  fallbackUsed: boolean;
   acceptingRequirements: boolean;
   recoveryOwnerParticipantKeys: Set<string>;
   /**
@@ -291,6 +286,7 @@ class CuaPermissionOnboardingCoordinator {
       requiredPermissions: new Set(requiredPermissions),
       processedPermissions: new Set(),
       openedPermissions: [],
+      fallbackUsed: false,
       acceptingRequirements: true,
       recoveryOwnerParticipantKeys: new Set(),
     };
@@ -438,7 +434,17 @@ class CuaPermissionOnboardingCoordinator {
         const openSettingsUrl =
           options.openSettingsUrl ?? ((url: string) => shell.openExternal(url));
         const openSettings = async () => {
-          await openSettingsUrl(settingsUrlForPermission(permission));
+          if ((options.env ?? process.env).ZCODE_DESKTOP_E2E_PERMISSION_OPEN === "1") {
+            if (!session.openedPermissions.includes(permission)) {
+              session.openedPermissions.push(permission);
+            }
+            return;
+          }
+          session.fallbackUsed = await openPermissionSettingsWithFallback({
+            permission,
+            openSettingsUrl,
+            fallbackUrl: MACOS_PRIVACY_SECURITY_SETTINGS_URL,
+          });
           if (!session.openedPermissions.includes(permission)) {
             session.openedPermissions.push(permission);
           }
@@ -478,6 +484,7 @@ class CuaPermissionOnboardingCoordinator {
         returnedFromSettings:
           session.openedPermissions.length > 0 &&
           returnedCount === session.openedPermissions.length,
+        fallbackUsed: session.fallbackUsed,
         error: undefined,
       };
     } catch (error) {
@@ -487,6 +494,7 @@ class CuaPermissionOnboardingCoordinator {
         canceled: controller.signal.aborted || undefined,
         sessionId: session.sessionId,
         returnedFromSettings: false,
+        fallbackUsed: session.fallbackUsed,
         error: `permission onboarding failed: ${messageOf(error)}`,
       };
     } finally {
@@ -508,6 +516,14 @@ export async function openCuaPermissionOnboarding(
     };
   }
   const env = options.env ?? process.env;
+  if (env.ZCODE_DESKTOP_E2E_PERMISSION_OPEN === "1") {
+    return {
+      success: true,
+      sessionId: randomUUID(),
+      returnedFromSettings: true,
+      fallbackUsed: false,
+    };
+  }
   const defaultInstaller = options.ensureHelperInstalled
     ? null
     : createDesktopCuaHelperInstaller({

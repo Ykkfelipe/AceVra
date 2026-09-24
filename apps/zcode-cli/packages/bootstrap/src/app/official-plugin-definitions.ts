@@ -329,9 +329,8 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
     // 默认开启意味着每个新用户首启即注入整套工具集并拉起 Helper。
     // 「defaultEnabled 仅限内容型插件」的旧约定随之恢复完整。
     // 判定式是 enabledPlugins[id] ?? defaultEnabled：曾在设置页手动开过的用户已落盘
-    // 显式 true，不受本次默认值变更影响。改回默认开启时，需同步
-    // packages/shared/src/plugin-marketplaces.ts 的名单（bootstrap 单测机械对照两者）、
-    // isZCodeCuaInternalFeatureEnabled（打包层默认 true）与输入框入口 hidden 默认值的联动语义。
+    // 显式 true，不受本次默认值变更影响。Computer Use 的 feature/runtime 投影必须读取
+    // 这个真实 plugin outcome；不能另设会隐藏或伪造启用状态的 feature flag。
     name: "computer-use",
     hostMcpServerNames: ["node_repl"],
     // 用户露出名统一为「Computer Use / 电脑控制」。包名与 producer 仓库仍保持 zcode-cua，
@@ -353,9 +352,14 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       "../zcode-cua-plugin",
       "../../zcode-cua-plugin",
       "../../../zcode-cua-plugin",
+      // Source-tree bootstrap (pnpm workspace) and packaged Resources/glm discovery use
+      // different bases. Keep the real package path explicit instead of relying on a
+      // monorepo-only relative guess.
+      "apps/zcode-cli/packages/zcode-cua-plugin",
     ],
     requiredSeedPaths: OFFICIAL_CUA_REQUIRED_SEED_PATHS,
-    // 当前 CUA 为不可用占位包，无需复制 native runtime；避免把本地旧依赖继续带入缓存。
+    // The plugin contributes content and the SDK bootstrap client only. Native runtime,
+    // Helper, broker, and lease authority stay in @zcode/zcode-cua and its host package.
     runtimeTopLevelPaths: [],
     // 这里的 version 追踪上游 zcode-cua runtime 版本，使插件 UI 展示、缓存路径、
     // marketplace 条目都对齐；具体版本由原子 producer bump 工作流维护。

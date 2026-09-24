@@ -45,7 +45,6 @@ import { supportsLocalMacCuaPermissionOnboarding } from "@/lib/cuaPlatform.js";
 import { runAfterSuccessfulPluginEnabledChange } from "@/settings/pluginEnabledChange.js";
 import { createCuaPermissionOnboardingOperationId } from "@/lib/cuaPermissionOnboardingOperation.js";
 import { waitForAccessibilityNotStale } from "@/settings/cuaPermissionRestartVerify.js";
-import { requiredCuaPermissionsForFreshStatus } from "@/settings/cuaPermissionPreparation.js";
 import { ExternalLink } from "lucide-react";
 import {
   isComputerUseRemoteOrLinux,
@@ -486,26 +485,6 @@ export function ComputerUseSection({
         ) {
           return;
         }
-        if (
-          !isCuaPermissionStatusAvailable(currentStatus) ||
-          !requiredCuaPermissionsForFreshStatus(currentStatus).includes(initialPermission)
-        ) {
-          const permissionState = isCuaPermissionStatusAvailable(currentStatus)
-            ? initialPermission === "accessibility"
-              ? currentStatus.accessibility
-              : currentStatus.screenRecording
-            : null;
-          toast(
-            intl.formatMessage({
-              id:
-                permissionState === "granted"
-                  ? "cuaPermission.grantAlreadySatisfied"
-                  : "cuaPermission.modal.unavailable",
-            }),
-          );
-          refresh();
-          return;
-        }
         operationId = createCuaPermissionOnboardingOperationId();
         activeOnboardingOperationIdRef.current = operationId;
         const result = await platform.openCuaPermissionOnboarding({
@@ -530,6 +509,11 @@ export function ComputerUseSection({
         } else if (result?.success && result.returnedFromSettings) {
           // 同一 renderer 对 main session 的重复 join 只刷新；不同窗口各自会拿到本 host 的 recovery。
           refresh();
+        }
+        if (result?.success && result.fallbackUsed) {
+          toast(intl.formatMessage({ id: "cuaPermission.modal.fallbackHint" }), {
+            variant: "warning",
+          });
         }
         if (result?.success === false && !result.canceled) {
           toast(
@@ -605,6 +589,7 @@ export function ComputerUseSection({
   // 不再让它在每次轮询时把显示态翻成 "verifying"（否则会 granted↔verifying 反复横跳）。
   const statusView = (
     state: "granted" | "stale" | "denied" | "unknown" | undefined,
+    unavailable = false,
   ): { tone: StatusDotTone; text: string } => {
     if (state === "granted") {
       return {
@@ -626,8 +611,10 @@ export function ComputerUseSection({
       };
     }
     return {
-      tone: "muted",
-      text: intl.formatMessage({ id: "cuaPermission.status.unknown" }),
+      tone: unavailable ? "amber" : "muted",
+      text: intl.formatMessage({
+        id: unavailable ? "cuaPermission.status.unavailable" : "cuaPermission.status.unknown",
+      }),
     };
   };
 
@@ -662,8 +649,9 @@ export function ComputerUseSection({
   );
 
   // 两项权限的状态视图（圆点 tone + 文案），与圆点同源，避免文案/颜色不同步。
-  const acc = statusView(availableStatus?.accessibility);
-  const screenPerm = statusView(availableStatus?.screenRecording);
+  const permissionStatusUnavailable = Boolean(status && !isCuaPermissionStatusAvailable(status));
+  const acc = statusView(availableStatus?.accessibility, permissionStatusUnavailable);
+  const screenPerm = statusView(availableStatus?.screenRecording, permissionStatusUnavailable);
 
   // 输入框常驻入口的显隐。隐藏开关用 useSettings().update 写入
   // （直连 settingService 只落盘不刷新共享 snapshot，输入框按钮读不到新值）。
@@ -768,6 +756,16 @@ export function ComputerUseSection({
             Accessibility and Screen Recording access. Installation verification does not perform
             provider inference, model requests, credential prompts, or account authentication.
           </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            disabled={!supportsLocalMacWorkspace}
+            onClick={() => void refresh()}
+          >
+            {intl.formatMessage({ id: "cuaPermission.modal.recheckButton" })}
+          </Button>
         </div>
       ) : null}
       {/* 总开关：开/关 zcode-cua 插件（同步其 MCP + skill） */}

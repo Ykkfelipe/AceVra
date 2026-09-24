@@ -107,6 +107,22 @@ const remoteOfficialPluginPackages = [
     stagedPath: "packages/browser-use-plugin",
   },
   {
+    // Computer Use 官方内容/启用包。它不带 native runtime，远端仍复用
+    // @zcode/node-repl-host + @zcode/zcode-cua 的唯一 Helper/broker/lease authority。
+    packageName: "@zcode/zcode-cua-plugin",
+    relativePath: "apps/zcode-cli/packages/zcode-cua-plugin",
+    requiresRuntime: false,
+    requiredRuntimePaths: [],
+    requiredSeedPaths: [
+      ".zcode-plugin/plugin.json",
+      "package.json",
+      "docs/computer-use.md",
+      "scripts/computer-use-client.mjs",
+      "skills/computer-use/SKILL.md",
+    ],
+    stagedPath: "packages/zcode-cua-plugin",
+  },
+  {
     // node_repl 宿主：Browser Use 与 Computer Use 共用的 MCP runtime。远端 shared-host 缺它
     // 就没有 mcp__node_repl__js，bua/cua 两边都会连不上。
     packageName: "@zcode/node-repl-host",
@@ -146,6 +162,11 @@ function shouldCopyOfficialPluginAsset(sourcePath) {
 }
 const remoteOfficialPluginRequiredPaths = [
   "packages/browser-use-plugin/.zcode-plugin/plugin.json",
+  "packages/zcode-cua-plugin/.zcode-plugin/plugin.json",
+  "packages/zcode-cua-plugin/package.json",
+  "packages/zcode-cua-plugin/docs/computer-use.md",
+  "packages/zcode-cua-plugin/scripts/computer-use-client.mjs",
+  "packages/zcode-cua-plugin/skills/computer-use/SKILL.md",
   "packages/node-repl-host/.zcode-plugin/plugin.json",
 ];
 

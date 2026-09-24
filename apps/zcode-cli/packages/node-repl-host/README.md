@@ -17,7 +17,7 @@ bridge（Browser Use、Computer Use）都在这里。
 
 ## 产物仍由插件包携带
 
-`dist/mcp/server.js` 与 `scripts/computer-use-client.mjs` 在 SEA 发布清单
-（`OFFICIAL_BROWSER_USE_REQUIRED_SEED_PATHS`）里，路径不能动。所以 browser-use 的构建从本
-包的 `src/server.ts` 打包产出，CUA 的 client/docs 副本由构建脚本生成而非手工维护。
-把产物也搬出插件根目录，需要同时改 SEA 清单与 bootstrap 的 hostPackage 解析，是独立一步。
+`dist/mcp/server.js` is emitted by this package. Browser Use contributes its own client and docs;
+Computer Use contributes its client/docs/skill from `@zcode/zcode-cua-plugin`. Both official
+packages must be present in filesystem and SEA publication lists, while this host remains the
+only shared `node_repl` runtime.

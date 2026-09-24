@@ -494,7 +494,6 @@ import {
   type CuaProductMcpServerResolverContext,
   type CuaPermissionRestartOptions,
   type CuaPermissionRestartResult,
-  type CuaPermissionState,
   type CuaPermissionStatusQueryOptions,
   type CuaPermissionStatusResult,
   type CuaComputerControlStatus,
@@ -506,6 +505,7 @@ import {
   type WindowsCuaRuntime,
 } from "#src/cua-permission-broker/windowsCuaDevRuntime.js";
 import { createCanonicalCuaHelperInstaller } from "./cua-permission-broker/cuaHelperInstaller.js";
+import { projectAvailableCuaPermissionReport } from "./cua-permission-broker/cuaPermissionProjection.js";
 import { startLeaseAuthorityServer } from "./cua-permission-broker/lease-authority/server.js";
 import type { LeaseAuthority } from "./cua-permission-broker/lease-authority/contract.js";
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
@@ -532,7 +532,6 @@ import {
   type BrowserCommand,
   isZCodeCuaMcpCommand,
   isZCodeCuaMcpPackageArg,
-  isZCodeCuaInternalFeatureEnabled,
   ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY,
   type ZCodeAutomation,
   type ZCodeAutomationRun,
@@ -727,13 +726,11 @@ export function registerHostApiNetworkTransportForDispose(
 export function shouldEnableDefaultCuaProductHelper(
   options: {
     platform?: NodeJS.Platform;
-    env?: NodeJS.ProcessEnv;
   } = {},
 ): boolean {
-  // CUA 已随正式版默认开启（isZCodeCuaInternalFeatureEnabled 默认 ON，仅显式 0/false/off 关闭；2026-08 注释更正——旧注释称默认关闭已过期）。显式开启后 macOS 使用既有产品 Helper，Windows 使用安装包内 runtime；
-  // 两端都保持按需启动。关闭时不创建 host、不探测资源、不产生子进程或权限提示。
-  const env = options.env ?? process.env;
-  if (!isZCodeCuaInternalFeatureEnabled(env)) return false;
+  // The official plugin state owns admission. This lower-level factory only decides whether
+  // the current platform has a product Helper implementation; it must not infer enablement
+  // from a feature flag or from the presence of a package.
   const platform = options.platform ?? process.platform;
   return platform === "darwin" || platform === "win32";
 }
@@ -1029,7 +1026,7 @@ export function createDefaultCuaProductHelper(
 ): DefaultCuaProductHelper | undefined {
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
-  if (!shouldEnableDefaultCuaProductHelper({ platform, env })) {
+  if (!shouldEnableDefaultCuaProductHelper({ platform })) {
     return undefined;
   }
   const logger = createServiceLogger("cua-product-helper");
@@ -1775,11 +1772,6 @@ export function createLocalServices(options: {
   // service 创建完成后再赋值。Helper recovery 始终不能回收 Agent。
   let hasActiveTurnRef: (() => boolean) | undefined;
   const isCuaEnabledForContext = (context?: CuaProductMcpServerResolverContext): boolean =>
-    // 保留 main 原有 gate 行为（避免回归）：dev/internal 特性开启时（ZCODE_CUA_DEV_MODE=1 或
-    // ZCODE_CUA_PRODUCT_HELPER=1）即视为启用，不依赖 config.json 显式 enable——main 的 bootstrap
-    // 用 isZCodeCuaInternalFeatureEnabled 门控 bundled plugin，与 feat 的 workspace enablement 不同。
-    // 生产路径（dev mode off）回落到官方插件 workspace enablement 判定（与 feat 一致）。
-    isZCodeCuaInternalFeatureEnabled(process.env) ||
     isOfficialCuaPluginEnabledForWorkspace({
       env: process.env,
       workingDirectory: context?.workspacePath,
@@ -1929,36 +1921,18 @@ export function createLocalServices(options: {
         // 硬化 session 状态查询：只复用本服务图已有的 CUA-1.75 session；若没有则尝试一次
         // hardened startup。startup/admission 失败只返回 unavailable，绝不探测稳定 socket 或调用
         // legacy broker；后续查询可以重新尝试 hardened startup。
-        const mapStandaloneReport = (report: {
-          grant_owner: string;
-          owner?: { display_name?: string };
-          accessibility: CuaPermissionState;
-          accessibility_probe_ok?: boolean;
-          screen_recording: CuaPermissionState;
-          screen_recording_readout?: {
-            preflight: boolean | null;
-            source: string;
-            cached?: boolean;
-            note?: string;
-          };
-        }) =>
-          ({
-            grantOwner: report.grant_owner,
-            grantOwnerDisplayName: report.owner?.display_name ?? report.grant_owner,
-            accessibility: report.accessibility,
-            accessibilityProbeOk: report.accessibility_probe_ok === true,
-            screenRecording: report.screen_recording,
-            ...(report.screen_recording_readout
-              ? { screenRecordingReadout: report.screen_recording_readout }
-              : {}),
-            // 这条路径没有跑功能探针，所以 false 只表示「未测量」，不表示屏幕录制被拒绝；
-            // state 让消费方不必猜这个 false 的含义。注意 screenRecording（TCC 记录态）本身
-            // 也可能陈旧：常驻 Helper 的 CGPreflight 是进程缓存的，撤销授权后它会继续报
-            // granted 直到重启（CUA-0.5 实测）。真正可用与否只有实际抓屏能回答，即 observe
-            // 的 effect。
-            screenCaptureProbeOk: false,
-            screenCaptureProbeState: "not_run",
-          }) as const;
+        const mapStandaloneReport = (
+          report: Parameters<typeof projectAvailableCuaPermissionReport>[0],
+        ) => ({
+          ...projectAvailableCuaPermissionReport(report),
+          // 这条路径没有跑功能探针，所以 false 只表示「未测量」，不表示屏幕录制被拒绝；
+          // state 让消费方不必猜这个 false 的含义。注意 screenRecording（TCC 记录态）本身
+          // 也可能陈旧：常驻 Helper 的 CGPreflight 是进程缓存的，撤销授权后它会继续报
+          // granted 直到重启（CUA-0.5 实测）。真正可用与否只有实际抓屏能回答，即 observe
+          // 的 effect。
+          screenCaptureProbeOk: false,
+          screenCaptureProbeState: "not_run" as const,
+        });
         const existingSession = peekHardenedCuaHelperSession();
         const session = existingSession ?? (await ensureHardenedCuaHelperSession());
         if (!session) {
@@ -2023,12 +1997,18 @@ export function createLocalServices(options: {
             reason: "AceVra Computer Use lifecycle is disposed.",
           };
         }
+        if (!report.grant_owner) {
+          return {
+            available: false,
+            reason: "AceVra Computer Use Helper did not report a verified grant owner.",
+          };
+        }
+        const verifiedReport = { ...report, grant_owner: report.grant_owner };
         const reportedOwnerDisplayName =
           typeof report.owner?.display_name === "string" ? report.owner.display_name : undefined;
         return {
-          grantOwner: report.grant_owner,
+          ...projectAvailableCuaPermissionReport(verifiedReport),
           grantOwnerDisplayName: reportedOwnerDisplayName ?? report.grant_owner,
-          accessibility: report.accessibility,
           accessibilityProbeOk:
             report.accessibility_probe?.ok === true &&
             report.accessibility_probe?.classification === "functional",

@@ -99,7 +99,22 @@ const officialPluginPackages = [
     runtimeBuildScript: "scripts/build.mjs",
     stagedPath: "packages/browser-use-plugin",
   },
-
+  {
+    // Computer Use 官方内容/启用包。它不携带 native runtime；node_repl 与
+    // @zcode/zcode-cua 继续拥有唯一的 Helper/broker/lease authority。
+    packageName: "@zcode/zcode-cua-plugin",
+    relativePath: "apps/zcode-cli/packages/zcode-cua-plugin",
+    requiresRuntime: false,
+    requiredRuntimePaths: [],
+    requiredSeedPaths: [
+      ".zcode-plugin/plugin.json",
+      "package.json",
+      "docs/computer-use.md",
+      "scripts/computer-use-client.mjs",
+      "skills/computer-use/SKILL.md",
+    ],
+    stagedPath: "packages/zcode-cua-plugin",
+  },
   {
     // node_repl 宿主：Browser Use 与 Computer Use 共用的 MCP runtime，本轮抽成独立包。
     // 它没有 listing（不进插件市场展示面），但生产包首启 seed 必须拿到它的 dist runtime，

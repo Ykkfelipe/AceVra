@@ -10,6 +10,7 @@ import {
   loadRealNativeAddon,
   resolvePackagedNativeAddonPath,
   resolveInTreeAddonPath,
+  queryProductHelperPermissionStatus,
   roleToKind,
 } from "../broker-server.js";
 
@@ -33,6 +34,32 @@ test("product host is available and starts fail-closed without an installer", as
   assert.equal(host.running, false);
   assert.equal(host.socketPath, null);
   await assert.rejects(() => host.start(), /bundled|packaged|Helper/);
+});
+
+test("permission status uses the same admitted Helper transport", async () => {
+  const calls = [];
+  const report = await queryProductHelperPermissionStatus({
+    helperConnected: true,
+    async callMethod(method, params, options) {
+      calls.push({ method, params, options });
+      return {
+        available: true,
+        accessibility: "denied",
+        screen_recording: "granted",
+        grant_owner: "dev.acevra.cua-helper",
+      };
+    },
+  });
+  assert.equal(report.available, true);
+  assert.equal(report.accessibility, "denied");
+  assert.equal(report.screen_recording, "granted");
+  assert.deepEqual(calls, [
+    { method: "permission_status", params: undefined, options: { timeoutMs: 3_000 } },
+  ]);
+  await assert.rejects(
+    () => queryProductHelperPermissionStatus({ helperConnected: false }),
+    /Computer Use is not available/,
+  );
 });
 
 test("product consumers import only declared package entrypoints", async () => {

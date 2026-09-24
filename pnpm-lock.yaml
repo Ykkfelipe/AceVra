@@ -506,6 +506,12 @@ importers:
         specifier: ^5.9.0
         version: 5.9.3
 
+  apps/zcode-cli/packages/zcode-cua-plugin:
+    dependencies:
+      '@zcode/zcode-cua':
+        specifier: workspace:*
+        version: link:../../../../packages/zcode-cua
+
   apps/zcode-cli/packages/shared-types:
     devDependencies:
       '@types/node':
