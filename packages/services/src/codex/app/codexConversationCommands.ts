@@ -14,7 +14,14 @@ interface CodexCommandContext {
   readonly bridge: CodexAppServerPort;
   readonly taskIndex: CodexTaskIndexPort;
   emitCommit(taskId: string, commit: CodexProjectionCommit): void;
-  sendTurn(params: { taskId: string; content: string; commandId?: string }): Promise<void>;
+  sendTurn(params: {
+    taskId: string;
+    content: string;
+    commandId?: string;
+    /** v4 sendText payload 携带的 turn 级模型/effort 覆盖（providerId=codex 才有值）。 */
+    modelId?: string;
+    effort?: "minimal" | "low" | "medium" | "high";
+  }): Promise<void>;
   now(): number;
 }
 
@@ -47,7 +54,10 @@ export async function handleConversationCommand(
   const revision = () => runtime.projection.revision;
   switch (envelope.type) {
     case "sendText": {
-      const payload = envelope.payload as { text?: unknown };
+      const payload = envelope.payload as {
+        text?: unknown;
+        codexTurnOverride?: unknown;
+      };
       const text = typeof payload.text === "string" ? payload.text : "";
       if (!text.trim()) {
         return ackOf({
@@ -57,8 +67,21 @@ export async function handleConversationCommand(
           reasonCode: "fault.command.emptyText",
         });
       }
+      // turn 级覆盖只透传字符串；allow-list 校验在 service.sendTurn 内 fail loud。
+      const override =
+        payload.codexTurnOverride && typeof payload.codexTurnOverride === "object"
+          ? (payload.codexTurnOverride as { modelId?: unknown; effort?: unknown })
+          : null;
+      const modelId = typeof override?.modelId === "string" ? override.modelId : undefined;
+      const effort = typeof override?.effort === "string" ? (override.effort as "minimal" | "low" | "medium" | "high") : undefined;
       try {
-        await context.sendTurn({ taskId, content: text, commandId: envelope.commandId });
+        await context.sendTurn({
+          taskId,
+          content: text,
+          commandId: envelope.commandId,
+          ...(modelId ? { modelId } : {}),
+          ...(effort ? { effort } : {}),
+        });
       } catch (error) {
         // 以 failed ACK 收口：renderer 按真实失败原因 settle，而不是走 transport-error 盲路。
         return ackOf({

@@ -32,15 +32,17 @@ export const COMPOSER_TOOLBAR_GROUP_CLASS = "flex min-w-0 items-center gap-1";
 /**
  * Codex 模型控件的形态裁决（纯函数，便于确定性测试）。
  *
- * - draft + codex：可交互下拉（thread 级选择在建任务时生效）。
- * - 非 draft + codex：静态指示器——thread 模型在创建时已锁定，这里绝不能渲染
- *   一个点击后被静默吞掉的假下拉（那正是“选不上/不生效”缺陷的来源）。
- * - 其余（Agent 后端 / 非本后端）：返回 null，由 Agent 的模型选择器接管。
+ * Codex 0.155.0-alpha.16.4 的 turn/start 接受 per-turn `model` + `effort`
+ * 覆盖（schema 原文：“Override … for this turn and subsequent turns”），所以
+ * 既有 Codex 会话同样可以切换模型/effort —— 两种场景都渲染可交互下拉：
+ * - draft + codex / 既有 Codex 会话 = dropdown
+ * - 其余（Agent 后端 / 非本后端）= null，由 Agent 的模型选择器接管。
  */
 export function resolveCodexModelControlKind(params: {
   draftMode: boolean;
+  codexSession: boolean;
   backend: "zcode" | "codex";
-}): "dropdown" | "static" | null {
-  if (params.backend !== "codex") return null;
-  return params.draftMode ? "dropdown" : "static";
+}): "dropdown" | null {
+  if (params.draftMode) return params.backend === "codex" ? "dropdown" : null;
+  return params.codexSession ? "dropdown" : null;
 }

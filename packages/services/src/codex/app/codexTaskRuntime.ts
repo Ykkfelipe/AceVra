@@ -25,6 +25,8 @@ interface CodexTaskRuntimeParams {
   readonly bridgeGeneration: number;
   /** 建任务时的策划模型选择；null/undefined = Default 哨兵（Codex 应用自身设置）。 */
   readonly codexModelId?: string | null;
+  /** 当前生效 reasoning effort（Codex 回报或 turn 覆盖确认）；null = 未确认。 */
+  readonly codexEffort?: string | null;
 }
 
 export class CodexTaskRuntime {
@@ -34,8 +36,10 @@ export class CodexTaskRuntime {
   codexThreadId: string;
   /** 创建/重建时的 bridge generation；与 bridge.generation 不等即 stale。 */
   bridgeGeneration: number;
-  /** thread 级模型选择（thread/start 的 model 参数来源）；Default 哨兵为 null。 */
+  /** 当前生效模型：Codex 回报值（thread/start 响应或 thread/started 通知）优先于请求值。 */
   codexModelId: string | null;
+  /** 当前生效 reasoning effort；turn/start 覆盖被接受后同步（覆盖作用于本 turn 及后续）。 */
+  codexEffort: string | null;
   projection: CodexThreadProjection;
   /**
    * Codex 侧活动 turn id（thread/start 不分配 turn；来自 turn/start 响应的
@@ -53,6 +57,7 @@ export class CodexTaskRuntime {
     this.codexThreadId = params.codexThreadId;
     this.bridgeGeneration = params.bridgeGeneration;
     this.codexModelId = params.codexModelId ?? null;
+    this.codexEffort = params.codexEffort ?? null;
     this.projection = new CodexThreadProjection(this.logEpochFor(params.bridgeGeneration), now);
   }
 
@@ -116,11 +121,31 @@ export function extractCodexTurnId(result: unknown): string | null {
   return null;
 }
 
+/** thread/start、thread/resume 响应读数：model/effort 是 Codex 回报的实际生效值。 */
+export interface CodexThreadReport {
+  threadId: string;
+  model: string | null;
+  effort: string | null;
+}
+
+function extractCodexThreadReport(result: unknown): CodexThreadReport | null {
+  const threadId = extractCodexThreadId(result);
+  if (!threadId) return null;
+  const record = typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
+  const thread =
+    record && typeof record.thread === "object" && record.thread !== null
+      ? (record.thread as Record<string, unknown>)
+      : null;
+  const asId = (value: unknown): string | null =>
+    typeof value === "string" && value.trim() ? value.trim() : null;
+  return { threadId, model: asId(thread?.model), effort: asId(thread?.reasoningEffort) };
+}
+
 /** 启动一个新的 Codex thread（thread/start）；账号门禁在这里 fail closed。 */
 export async function startCodexThread(
   bridge: CodexAppServerPort,
   params: { workspacePath: string; policy: CodexExecutionPolicy; modelId?: string },
-): Promise<string> {
+): Promise<CodexThreadReport> {
   const account = (await bridge.call("account/read", {})) as {
     account?: unknown;
     requiresOpenaiAuth?: boolean;
@@ -130,7 +155,7 @@ export async function startCodexThread(
   }
   // 宿主执行策略显式下发（approvalPolicy + sandbox），不再依赖 Codex 自身默认
   // （E2E 观察到的默认是 approvalPolicy:"never" + dangerFullAccess，不可接受）。
-  // modelId 是 thread 级策划 allow-list 选择；Default 哨兵（缺省/空）不携带 model 字段，
+  // modelId 是策划 allow-list 选择；Default 哨兵（缺省/空）不携带 model 字段，
   // 沿用 Codex 应用自身设置。二进制不支持该参数时必须 fail loud——静默回退会让 UI
   // 显示一个并未生效的模型选择。
   const result = await bridge.call(CODEX_METHODS.threadStart, {
@@ -139,17 +164,17 @@ export async function startCodexThread(
     sandbox: params.policy.sandbox,
     ...(params.modelId?.trim() ? { model: params.modelId.trim() } : {}),
   });
-  const threadId = extractCodexThreadId(result);
-  if (!threadId) throw new Error("codex_thread_start_missing_id");
-  return threadId;
+  const report = extractCodexThreadReport(result);
+  if (!report) throw new Error("codex_thread_start_missing_id");
+  return report;
 }
 
-/** 恢复既有 thread（thread/resume）；返回 Codex 采纳的 thread id（取不到则沿用原 id）。 */
+/** 恢复既有 thread（thread/resume）；返回 Codex 回报的 thread 读数（取不到 id 则沿用原 id）。 */
 export async function resumeCodexThread(
   bridge: CodexAppServerPort,
   threadId: string,
   policy: CodexExecutionPolicy,
-): Promise<string> {
+): Promise<CodexThreadReport> {
   // excludeTurns:true 是 schema 文本明确推荐的用法（全量历史 hydration 已废弃，
   // 分页走 thread/items/list）；同时重申宿主策略，防止旧线程带着宽松策略复活。
   const result = await bridge.call(CODEX_METHODS.threadResume, {
@@ -159,17 +184,8 @@ export async function resumeCodexThread(
     excludeTurns: true,
   });
   // resume 返回可能只是请求回显（E2E 观察 {}）；只在明确的 thread 字段出现时才采纳新 id。
-  if (typeof result === "object" && result !== null) {
-    const record = result as Record<string, unknown>;
-    const thread =
-      typeof record.thread === "object" && record.thread !== null
-        ? (record.thread as Record<string, unknown>)
-        : null;
-    for (const candidate of [record.threadId, record.thread_id, thread?.id]) {
-      if (typeof candidate === "string" && candidate.trim()) return candidate;
-    }
-  }
-  return threadId;
+  const report = extractCodexThreadReport(result);
+  return report ?? { threadId, model: null, effort: null };
 }
 
 /** 冷恢复分页上限：防病态 cursor 循环；正常线程远小于此。 */
@@ -252,8 +268,10 @@ export function routeCodexNotification(
   }
   const notification = parseCodexNotification(method, params);
   if (notification.type === "threadStarted") {
-    // thread/start 的返回缺 id 时，以通知兜底。
+    // thread/start 的返回缺 id 时，以通知兜底；model/effort 以 Codex 回报为准。
     runtime.codexThreadId = notification.threadId;
+    if (notification.model) runtime.codexModelId = notification.model;
+    if (notification.effort) runtime.codexEffort = notification.effort;
     return null;
   }
   if (notification.type === "turnStarted") {
@@ -301,13 +319,16 @@ export async function ensureRuntimeForTask(options: {
     const generation = bridge.generation;
     const projection = new CodexThreadProjection(`codex-${generation}`, now);
     // resume / 重建先行，成功后才换入 runtime：中途失败不能把空投影永久写进缓存。
-    const resumedThreadId = await resumeCodexThread(bridge, meta.codexThreadId, policy);
-    await rebuildProjectionFromCodex(bridge, resumedThreadId, projection);
+    const resumed = await resumeCodexThread(bridge, meta.codexThreadId, policy);
+    await rebuildProjectionFromCodex(bridge, resumed.threadId, projection);
     await reanchorRegisteredArtifactsAfterRebuild({
       registry: taskArtifacts,
       taskId,
       projection,
     });
+    // 模型读数优先级：resume 响应回报（最新）> meta 持久化 > null（Default 哨兵）。
+    const codexModelId = resumed.model ?? meta.codexModelId ?? null;
+    const codexEffort = resumed.effort ?? null;
     const runtime =
       existing ??
       new CodexTaskRuntime(
@@ -315,16 +336,18 @@ export async function ensureRuntimeForTask(options: {
           taskId,
           workspacePath: meta.workspacePath,
           ...(meta.workspaceIdentity ? { workspaceIdentity: meta.workspaceIdentity } : {}),
-          codexThreadId: resumedThreadId,
+          codexThreadId: resumed.threadId,
           bridgeGeneration: generation,
-          ...(meta.codexModelId ? { codexModelId: meta.codexModelId } : {}),
+          codexModelId,
+          codexEffort,
         },
         now,
       );
     runtime.bridgeGeneration = generation;
     runtime.projection = projection;
-    runtime.codexThreadId = resumedThreadId;
-    runtime.codexModelId = meta.codexModelId ?? null;
+    runtime.codexThreadId = resumed.threadId;
+    runtime.codexModelId = codexModelId;
+    runtime.codexEffort = codexEffort;
     // 旧代进程的 turn 已随进程消失：换代重建后不允许拿旧 turnId 去打断新进程。
     runtime.codexTurnId = null;
     runtimes.set(taskId, runtime);

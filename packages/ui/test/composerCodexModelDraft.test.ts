@@ -39,10 +39,12 @@ test("codex model draft roundtrips curated ids and the null default sentinel", (
       text: "hi",
       executionBackend: "codex",
       codexModelId: null,
+      codexEffort: "high",
       updatedAt: 0,
     });
     const sentinel = readV4ComposerDraft("/tmp/ws", undefined, "__draft__");
     assert.equal(sentinel?.codexModelId, null);
+    assert.equal(sentinel?.codexEffort, "high");
   } finally {
     data.clear();
     delete (globalThis as { window?: unknown }).window;

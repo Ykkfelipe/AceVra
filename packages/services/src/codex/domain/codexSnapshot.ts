@@ -45,7 +45,7 @@ export function buildCodexSnapshot(
   state: CodexProjectionState,
   sessionId: string,
   title: string,
-  options?: { modelId?: string | null },
+  options?: { modelId?: string | null; effort?: string | null },
 ): ConversationSnapshot {
   return {
     protocolVersion: 1,
@@ -68,9 +68,9 @@ export function buildCodexSnapshot(
     meta: { title, titleSource: "default" },
     config: {
       provider: "codex",
-      // thread 级模型选择（建任务时锁定）；空串 = Default 哨兵（Codex 应用自身设置）。
+      // thread 级模型读数（Codex 回报的实际生效值）；空串 = Default 哨兵。
       model: options?.modelId ?? "",
-      thought: "",
+      thought: options?.effort ?? "",
       thoughtLevels: [],
       followupMode: "queue",
       mode: "build",

@@ -347,4 +347,10 @@ test("snapshot config.model reflects the thread-level curated model selection", 
     "gpt-5.6-terra",
   );
   assert.equal(projection.buildSnapshot("task-1", { modelId: null }).config.model, "");
+  // config.thought 承载 Codex 回报/覆盖后的 reasoning effort，供 UI 显示实际生效读数。
+  assert.equal(projection.buildSnapshot("task-1", { effort: "high" }).config.thought, "high");
+  assert.equal(
+    projection.buildSnapshot("task-1", { modelId: "gpt-6-luna", effort: "medium" }).config.model,
+    "gpt-6-luna",
+  );
 });

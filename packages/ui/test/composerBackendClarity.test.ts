@@ -32,11 +32,15 @@ test("reject routing explains the paused input instead of locking silently", () 
   assert.equal(zhCN["chat.placeholder.inputPaused"], "智能体正在工作，暂时不能输入");
 });
 
-test("Codex backend copy states the default sentinel and picker labels", () => {
+test("Codex backend copy states the default sentinel, picker labels, and effort tiers", () => {
   assert.equal(enUS["chat.toolbar.backend.codex.modelManaged"], "Codex default");
   assert.equal(enUS["chat.toolbar.backend.codex.modelPickerLabel"], "Codex model");
   assert.equal(enUS["chat.toolbar.backend.codex.modelDefault"], "Default (Codex app setting)");
+  assert.equal(enUS["chat.toolbar.backend.codex.effort.label"], "Reasoning effort");
+  assert.equal(enUS["chat.toolbar.backend.codex.effort.high"], "High");
   assert.equal(zhCN["chat.toolbar.backend.codex.modelManaged"], "Codex 默认");
   assert.equal(zhCN["chat.toolbar.backend.codex.modelPickerLabel"], "Codex 模型");
   assert.equal(zhCN["chat.toolbar.backend.codex.modelDefault"], "默认（Codex 应用设置）");
+  assert.equal(zhCN["chat.toolbar.backend.codex.effort.label"], "推理强度");
+  assert.equal(zhCN["chat.toolbar.backend.codex.effort.high"], "高");
 });

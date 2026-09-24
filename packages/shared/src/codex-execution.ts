@@ -48,6 +48,18 @@ export function codexModelOptionLabel(id: string): string {
   return CODEX_MODEL_OPTIONS.find((option) => option.id === id)?.label ?? id;
 }
 
+/**
+ * Codex reasoning effort allow-list。schema 层面 effort 是「模型 advertised 的非空字符串」，
+ * 无法本地枚举；gpt-5/6 家族对外稳定支持的是这四档。超出范围的值可能在 turn/start
+ * 被拒，因此 UI 与 host 都以此 allow-list 为准。
+ */
+export const CODEX_EFFORT_OPTIONS = ["minimal", "low", "medium", "high"] as const;
+export type CodexEffortOption = (typeof CODEX_EFFORT_OPTIONS)[number];
+
+export function isCodexEffortOption(value: unknown): value is CodexEffortOption {
+  return typeof value === "string" && (CODEX_EFFORT_OPTIONS as readonly string[]).includes(value);
+}
+
 /** createTask 结果：任务绑定元信息（不含任何会话正文）。 */
 export interface CodexTaskBinding {
   readonly taskId: string;
@@ -57,6 +69,10 @@ export interface CodexTaskBinding {
   readonly codexThreadId: string;
   readonly title: string;
   readonly createdAt: number;
+  /** Codex 回报的当前生效模型（thread/start 响应）；null = 沿用应用默认。 */
+  readonly model?: string | null;
+  /** Codex 回报的当前生效 reasoning effort；null = 未确认。 */
+  readonly effort?: string | null;
 }
 
 export interface CodexExecutionCreateTaskParams {
@@ -72,10 +88,21 @@ export interface CodexExecutionCreateTaskParams {
    * 仅在建任务时生效，无 mid-session 切换。
    */
   readonly modelId?: string;
+  /** 首个 turn 的 reasoning effort 覆盖（`CODEX_EFFORT_OPTIONS`）；缺省 = 不覆盖。 */
+  readonly effort?: CodexEffortOption;
 }
 
 export interface CodexExecutionCreateTaskResult {
   readonly task: CodexTaskBinding;
+}
+
+/**
+ * Codex 任务当前生效的模型/effort 读数（来自 thread/start 响应或 turn/start 覆盖）。
+ * model/effort 为 Codex 回报的原值；null = 未确认（沿用 Codex 应用默认）。
+ */
+export interface CodexTaskModelState {
+  readonly model: string | null;
+  readonly effort: string | null;
 }
 
 export interface CodexExecutionSendTurnParams {
@@ -83,6 +110,12 @@ export interface CodexExecutionSendTurnParams {
   readonly content: string;
   /** v4 command envelope 的 commandId，供 ACK 对账；缺省由服务端生成。 */
   readonly commandId?: string;
+  /**
+   * turn 级模型/effort 覆盖（Codex schema：「Override the model/effort for this turn and
+   * subsequent turns」）。只接受策划 allow-list 内的值；缺省 = 本次不覆盖。
+   */
+  readonly modelId?: string;
+  readonly effort?: CodexEffortOption;
 }
 
 export interface CodexExecutionApprovalDecision {

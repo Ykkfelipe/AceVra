@@ -105,6 +105,8 @@ interface DraftConfigControl {
   handleDraftSwitchBackend: (backend: ZCodeExecutionBackend) => void;
   /** draft 态 Codex 策划模型选择；null = Default 哨兵（Codex 应用自身设置）。 */
   handleDraftSelectCodexModel: (modelId: string | null) => void;
+  /** Codex reasoning effort 覆盖；null = 不覆盖。对既有 Codex 会话同样可改（turn 级生效）。 */
+  handleDraftSelectCodexEffort: (effort: string | null) => void;
 }
 
 export function useDraftConfigControl(params: {
@@ -505,6 +507,14 @@ export function useDraftConfigControl(params: {
     [updateComposerDraft],
   );
 
+  // effort 是 turn 级覆盖（作用于本 turn 及后续），既有 Codex 会话也可随时改。
+  const handleDraftSelectCodexEffort = useCallback(
+    (effort: string | null) => {
+      updateComposerDraft((current) => ({ ...current, codexEffort: effort }));
+    },
+    [updateComposerDraft],
+  );
+
   return {
     modelSelectionRead,
     draftConfig,
@@ -520,6 +530,7 @@ export function useDraftConfigControl(params: {
     handleDraftSwitchMode,
     handleDraftSwitchBackend,
     handleDraftSelectCodexModel,
+    handleDraftSelectCodexEffort,
   };
 }
 

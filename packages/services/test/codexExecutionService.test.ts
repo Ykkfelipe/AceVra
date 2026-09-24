@@ -635,3 +635,67 @@ test("createTask omits the model field for the Default sentinel and rejects non-
   const calls = service.bridge.state.calls.filter((call) => call.method === "thread/start");
   assert.equal(calls.length, 1);
 });
+
+test("createTask stores the model/effort Codex actually reports back", async () => {
+  const bridge = makeBridge();
+  bridge.state.results.set("thread/start", {
+    thread: { id: "id-thread-start", model: "gpt-6-luna", reasoningEffort: "medium" },
+  });
+  const service = makeService(bridge);
+  const result = await service.service.createTask({ workspacePath: "/tmp/ws", firstInput: "hi" });
+  const meta = service.taskIndex.rows.get(result.task.taskId);
+  // 请求侧未指定 model（Default 哨兵），meta 记录的是 Codex 回报的实际生效读数。
+  assert.equal(meta?.codexModelId, "gpt-6-luna");
+  assert.equal(meta?.codexEffort, "medium");
+  assert.equal(result.task.model, "gpt-6-luna");
+  assert.equal(result.task.effort, "medium");
+  const threadStart = bridge.state.calls.find((call) => call.method === "thread/start");
+  assert.equal("model" in (threadStart?.params as object), false);
+});
+
+test("sendTurn applies model/effort overrides on turn/start and persists them", async () => {
+  const service = makeService();
+  const created = await service.service.createTask({ workspacePath: "/tmp/ws", firstInput: "hi" });
+  await service.service.sendTurn({
+    taskId: created.task.taskId,
+    content: "again",
+    modelId: "gpt-5.6-terra",
+    effort: "high",
+  });
+  const turnStart = service.bridge.state.calls.findLast((call) => call.method === "turn/start");
+  assert.equal((turnStart?.params as { model?: string }).model, "gpt-5.6-terra");
+  assert.equal((turnStart?.params as { effort?: string }).effort, "high");
+  const meta = service.taskIndex.rows.get(created.task.taskId);
+  assert.equal(meta?.codexModelId, "gpt-5.6-terra");
+  assert.equal(meta?.codexEffort, "high");
+});
+
+test("sendTurn rejects non-curated model/effort before touching turn/start", async () => {
+  const service = makeService();
+  const created = await service.service.createTask({ workspacePath: "/tmp/ws", firstInput: "hi" });
+  await assert.rejects(
+    service.service.sendTurn({ taskId: created.task.taskId, content: "x", modelId: "gpt-4o" }),
+    /codex_model_not_allowed/,
+  );
+  await assert.rejects(
+    service.service.sendTurn({
+      taskId: created.task.taskId,
+      content: "x",
+      effort: "ultra" as never,
+    }),
+    /codex_effort_not_allowed/,
+  );
+});
+
+test("thread/started notification updates runtime model/effort from Codex's Thread object", async () => {
+  const { parseCodexNotification } = await import("../src/codex/domain/codexWire.js");
+  const parsed = parseCodexNotification("thread/started", {
+    thread: { id: "t1", model: "gpt-6-sol", reasoningEffort: "low" },
+  });
+  assert.deepEqual(parsed, {
+    type: "threadStarted",
+    threadId: "t1",
+    model: "gpt-6-sol",
+    effort: "low",
+  });
+});

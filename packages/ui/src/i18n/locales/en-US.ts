@@ -4580,7 +4580,11 @@ const enUS: Record<string, string> = {
   "chat.toolbar.backend.codex.modelManaged": "Codex default",
   "chat.toolbar.backend.codex.modelPickerLabel": "Codex model",
   "chat.toolbar.backend.codex.modelDefault": "Default (Codex app setting)",
-  "chat.toolbar.backend.codex.modelLocked": "Model is fixed for this task (chosen when it started)",
+  "chat.toolbar.backend.codex.effort.label": "Reasoning effort",
+  "chat.toolbar.backend.codex.effort.minimal": "Minimal",
+  "chat.toolbar.backend.codex.effort.low": "Low",
+  "chat.toolbar.backend.codex.effort.medium": "Medium",
+  "chat.toolbar.backend.codex.effort.high": "High",
   "chat.toolbar.backend.codex.unsupportedInput":
     "Slash commands, attachments and shared context are not supported for Codex tasks yet",
   // CUA composer entry button

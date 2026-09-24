@@ -262,12 +262,15 @@ display value, not a Helper failure: after cache validation it must preserve the
 `available: true` contract as a live available Helper report so consumers cannot misclassify it as
 unavailable. The authoritative live permission read remains the Settings query.
 
-Codex backend model selection is thread-level and curated: the composer offers **Default (Codex app
-setting)** plus the exact `CODEX_MODEL_OPTIONS` allow-list from the shared codex-execution contract,
-persists the choice in the composer draft, and sends it as the `thread/start` `model` param at task
-creation. The host fails loud if the installed Codex binary rejects the param. There is no
-mid-session switch, no Claude model surface (Claude has no execution backend), and no Agent
-plan-catalog change.
+Codex backend model selection is curated and thread/turn scoped: the composer offers **Default
+(Codex app setting)** plus the exact `CODEX_MODEL_OPTIONS` allow-list from the shared
+codex-execution contract, and effort from `CODEX_EFFORT_OPTIONS` (minimal/low/medium/high).
+Verified against the installed Codex (0.155.0-alpha.16.4): `thread/start` accepts `model`,
+`turn/start` accepts `model` + `effort` overrides that persist for subsequent turns, and Codex
+reports the adopted `model` / `reasoningEffort` — so the UI displays Codex's reported value
+(snapshot config) rather than guessing, and mid-session switching is supported via
+`codexTurnOverride` on the v4 sendText payload. The host fails loud on non-allow-list values. There
+is no Claude model surface (Claude has no execution backend) and no Agent plan-catalog change.
 
 Reuse the existing permission rows and return-recovery flow. Add one software **Stop computer
 control** action, visible and enabled only while the authoritative service lease is active; repeated

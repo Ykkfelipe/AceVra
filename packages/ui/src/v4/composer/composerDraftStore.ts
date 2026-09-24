@@ -10,6 +10,7 @@
 // 与「v4 composer 不做附件草稿持久化」的裁决一致）。
 import { logger } from "@/logger.js";
 import {
+  isCodexEffortOption,
   isCodexModelOptionId,
   isZCodeExecutionBackend,
   modelSelectionSchema,
@@ -33,9 +34,14 @@ export interface V4ComposerDraft {
   executionBackend?: ZCodeExecutionBackend;
   /**
    * Codex 后端的策划模型选择（CODEX_MODEL_OPTIONS id）；null = Default 哨兵
-   * （Codex 应用自身设置，thread/start 不带 model）。只在 draft 首发、建任务时生效。
+   * （Codex 应用自身设置，thread/start 不带 model）。draft 首发建任务时生效。
    */
   codexModelId?: string | null;
+  /**
+   * Codex reasoning effort 覆盖（CODEX_EFFORT_OPTIONS）；null = 不覆盖。
+   * 既用于 draft 首个 turn，也用于既有会话的后续每个 turn 的显式覆盖。
+   */
+  codexEffort?: string | null;
   /** 已处理的工具变更，防止重连快照再次覆盖用户选择。 */
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
@@ -158,6 +164,11 @@ function readDraft(value: unknown): V4ComposerDraft | null {
       : isCodexModelOptionId(value.codexModelId)
         ? { codexModelId: value.codexModelId }
         : {}),
+    ...(value.codexEffort === null
+      ? { codexEffort: null }
+      : isCodexEffortOption(value.codexEffort)
+        ? { codexEffort: value.codexEffort }
+        : {}),
     ...(value.initializeFromNewTask === true && !mode.success
       ? { initializeFromNewTask: true as const }
       : {}),
@@ -214,6 +225,7 @@ export function persistV4ComposerDraft(
     !draft.mode &&
     !draft.modelSelection &&
     draft.codexModelId == null &&
+    draft.codexEffort == null &&
     !draft.initializeFromNewTask
   ) {
     delete file.scopes[scopeId];

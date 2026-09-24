@@ -52,7 +52,6 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import {
   ArrowUpIcon,
-  BotIcon,
   ClipboardPenLineIcon,
   InfoIcon,
   RotateCcwIcon,
@@ -162,7 +161,6 @@ import {
 import { V4ComposerBackendSwitch } from "@/v4/composer/V4ComposerBackendControls.js";
 import { V4ComposerCodexModelSelect } from "@/v4/composer/V4ComposerCodexModelSelect.js";
 import { resolveCodexModelControlKind } from "@/v4/composer/composerToolbarPresentation.js";
-import { codexModelOptionLabel } from "@zcode/shared";
 import {
   resolveV4ComposerConfigPickerState,
   type V4ComposerConfigPicker,
@@ -442,6 +440,14 @@ interface ConversationComposerProps {
   /** Codex 后端的策划模型选择（draft 态）；null = Default 哨兵。 */
   codexModelId?: string | null;
   onSelectCodexModel?: (modelId: string | null) => void;
+  /** Codex reasoning effort 覆盖；null = 不覆盖（turn 级生效）。 */
+  codexEffort?: string | null;
+  onSelectCodexEffort?: (effort: string | null) => void;
+  /** 既有会话是否由 Codex 后端驱动（snapshot.config.provider=codex）。 */
+  codexSession?: boolean;
+  /** Codex 回报的实际生效读数（无显式覆盖时的展示兜底）。 */
+  codexActualModel?: string | null;
+  codexActualEffort?: string | null;
   /** host 未注册 codex-execution 服务时 false，Codex 菜单项禁用。 */
   codexBackendAvailable?: boolean;
   /** 打开当前 session 的 Status panel，并直达 Running 明细。 */
@@ -537,6 +543,11 @@ function ConversationComposerImpl({
   onSwitchBackend,
   codexModelId,
   onSelectCodexModel,
+  codexEffort,
+  onSelectCodexEffort,
+  codexSession,
+  codexActualModel,
+  codexActualEffort,
   codexBackendAvailable = false,
   onOpenRunningBackgroundWorks,
   backgroundWorkOpenTarget = "panel",
@@ -2081,35 +2092,21 @@ function ConversationComposerImpl({
           ) : null}
           {resolveCodexModelControlKind({
             draftMode,
+            codexSession: codexSession === true,
             backend: draftBackend ?? "zcode",
           }) === "dropdown" ? (
-            // draft + Codex：策划 allow-list 下拉，选择在建任务（thread/start）时生效。
-            // 不能展示 Agent 后端的计划模型选择器，否则会把 GLM/Claude 等计划模型
-            // 误认为 Codex 正在使用的模型。
+            // draft + Codex 与既有 Codex 会话共用同一可交互下拉：模型是策划 allow-list，
+            // effort 是 turn 级覆盖（Codex schema：作用于本 turn 及后续 turns）。
+            // 展示值优先用草稿显式选择；无显式选择时显示 Codex 回报的实际生效读数。
             <V4ComposerCodexModelSelect
-              modelId={codexModelId ?? null}
+              modelId={codexModelId ?? codexActualModel ?? null}
+              effort={codexEffort ?? codexActualEffort ?? null}
               disabled={disabled}
               activeConfigPicker={activeConfigPicker}
               onConfigPickerOpenChange={handleConfigPickerOpenChange}
               onSelectModel={onSelectCodexModel ?? (() => {})}
+              onSelectEffort={onSelectCodexEffort ?? (() => {})}
             />
-          ) : resolveCodexModelControlKind({
-              draftMode,
-              backend: draftBackend ?? "zcode",
-            }) === "static" ? (
-            // 非 draft 的 Codex 会话：thread 模型在创建时已锁定。这里必须渲染静态指示器，
-            // 不能渲染点击后被静默吞掉的假下拉（“选不上/不生效”缺陷的来源）。
-            <span
-              className="flex h-7 min-w-0 items-center gap-1 rounded-lg border border-border bg-surface px-2 text-ui-base text-foreground-subtle"
-              data-testid="v4-composer-codex-model-indicator"
-              title={intl.formatMessage({ id: "chat.toolbar.backend.codex.modelLocked" })}
-            >
-              <BotIcon className="size-4 shrink-0" aria-hidden />
-              <span className="hidden whitespace-nowrap @xl/composer:inline">
-                {codexModelOptionLabel(snapshot?.config.model ?? "") ||
-                  intl.formatMessage({ id: "chat.toolbar.backend.codex.modelManaged" })}
-              </span>
-            </span>
           ) : (
             <V4ComposerModelControls
               workspacePath={workspacePath}
@@ -2175,6 +2172,10 @@ function ConversationComposerImpl({
       canSend,
       activeConfigPicker,
       codexModelId,
+      codexEffort,
+      codexSession,
+      codexActualModel,
+      codexActualEffort,
       intl,
       composerPhase,
       composerUsage,
@@ -2196,6 +2197,7 @@ function ConversationComposerImpl({
       onSendCompressionCommand,
       onSwitchBackend,
       onSelectCodexModel,
+      onSelectCodexEffort,
       onSwitchMode,
       pending,
       provider,

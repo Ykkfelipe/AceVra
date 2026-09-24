@@ -344,6 +344,8 @@ export interface ZCodeTaskMeta {
    * 仅记录建任务时的选择，供恢复后快照展示；不参与 mid-session 切换。
    */
   codexModelId?: string;
+  /** Codex 回报/覆盖的当前生效 reasoning effort；缺省 = 未确认（Codex 应用默认）。 */
+  codexEffort?: string;
   /** 未读任务记录最近一次标记/产生未读的时间，用于跨重启保留蓝点状态。 */
   unreadAt?: number;
   /** 持久化的任务状态，记录最后一次 prompt 的结果 */

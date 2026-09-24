@@ -39,6 +39,9 @@ export interface CodexTaskIndexPort {
       status?: ZCodeTaskMeta["status"];
       lastError?: ZCodeTaskMeta["lastError"];
       updatedAt?: number;
+      // turn 级覆盖被接受后持久化的当前生效读数。
+      codexModelId?: string;
+      codexEffort?: string;
     };
   }): Promise<ZCodeTaskMeta>;
   getTaskMeta(params: {

@@ -1247,6 +1247,7 @@ export function SessionPane({
     handleDraftSwitchMode,
     handleDraftSwitchBackend,
     handleDraftSelectCodexModel,
+    handleDraftSelectCodexEffort,
     promoteComposerDraft,
     captureAcceptedModelSelection,
     replaceComposerDraft,
@@ -1269,6 +1270,10 @@ export function SessionPane({
   const codexModelId = composerDraft.codexModelId ?? null;
   const codexModelIdRef = useRef<string | null>(codexModelId);
   codexModelIdRef.current = codexModelId;
+  // effort 是 turn 级覆盖：draft 首个 turn 与既有会话每个 turn 都在首发/发送路径携带。
+  const codexEffort = composerDraft.codexEffort ?? null;
+  const codexEffortRef = useRef<string | null>(codexEffort);
+  codexEffortRef.current = codexEffort;
   const codexExecutionService = useCodexExecutionService();
   const codexExecutionServiceRef = useRef(codexExecutionService);
   codexExecutionServiceRef.current = codexExecutionService;
@@ -1302,13 +1307,17 @@ export function SessionPane({
     () => createComposerSubmissionConfig(draftConfigRef.current, modelSelectionView),
     [draftConfigRef, modelSelectionView],
   );
+  // 既有会话由 Codex 后端驱动时（snapshot.config.provider=codex），composer 需要：
+  // - 放行发送（不依赖 zcode 计划模型选择）；- 渲染 codex 模型/effort 控件。
+  const isCodexSession = snapshot?.config.provider === "codex";
   // Codex 后端首发不需要 zcode 模型选择；就绪态与 submission 构造都放行。
   // 生成的 stub submission 只被 zcode 命令路径消费，Codex 分支不会读取。
   const composerSubmissionReady = useMemo(
     () =>
       draftBackend === "codex" ||
+      isCodexSession ||
       createComposerSubmissionConfig(draftConfig, modelSelectionView) !== null,
-    [draftBackend, draftConfig, modelSelectionView],
+    [draftBackend, isCodexSession, draftConfig, modelSelectionView],
   );
   const codingPlanUpgradeDialog = useOptionalCodingPlanUpgradeDialog();
   const openSettingsTab = useOptionalTabStore((state) => state.openSettingsTab);
@@ -2604,13 +2613,17 @@ export function SessionPane({
           return "blocked" as const;
         }
         // createTask 失败时任务不存在；异常交给 composer 保留草稿并展示发送错误。
-        // codexModelId 是策划 allow-list 选择；null/缺省 = Default 哨兵（不带 model 字段）。
+        // modelId/effort 是显式选择（allow-list 内）；null/缺省 = Default 哨兵。
         const selectedCodexModelId = codexModelIdRef.current;
+        const selectedCodexEffort = codexEffortRef.current;
         const created = await codexService.createTask({
           workspacePath,
           ...(workspaceIdentity ? { workspaceIdentity } : {}),
           firstInput: effectiveText,
           ...(selectedCodexModelId ? { modelId: selectedCodexModelId } : {}),
+          ...(selectedCodexEffort
+            ? { effort: selectedCodexEffort as "minimal" | "low" | "medium" | "high" }
+            : {}),
         });
         handleDraftSessionCreated(created.task.taskId, groupedDraftTaskAtSend, createSourceAtSend);
         return "sent" as const;
@@ -2645,7 +2658,7 @@ export function SessionPane({
         toast(intl.formatMessage({ id: "chat.goal.planModeBlocked" }));
         return "blocked" as const;
       }
-      if (!submission) {
+      if (!submission && !isCodexSession) {
         logger.warn("[v4-pane] Submission 缺少完整模型或模式配置");
         return "blocked" as const;
       }
@@ -2659,7 +2672,8 @@ export function SessionPane({
         // resumeGoal 等控制命令也不应被发送消息确认框截获。
         return "confirmationRequired" as const;
       }
-      if (slashCommand === null || slashCommand.kind === "sendGoalCommand") {
+      // Start-Plan 推荐只属于 zcode Agent 路径（Codex 会话无 zcode plan catalog，submission 可为 null）。
+      if (submission && (slashCommand === null || slashCommand.kind === "sendGoalCommand")) {
         const original = submission.modelSelection;
         const chosen = await recommendStartPlan(original);
         if (!chosen) return "blocked" as const;
@@ -2685,7 +2699,7 @@ export function SessionPane({
           snapshotRef.current?.revision,
           heldQueueDisposition,
           expectedHeldQueueItemIds,
-          submission,
+          submission ?? undefined,
         );
         if (consumed === "confirmationRequired") return consumed;
         if (consumed) {
@@ -2711,7 +2725,7 @@ export function SessionPane({
             undefined,
             heldQueueDisposition,
             expectedHeldQueueItemIds,
-            submission,
+            submission ?? undefined,
           );
           return;
         }
@@ -2724,7 +2738,7 @@ export function SessionPane({
               0,
               heldQueueDisposition,
               expectedHeldQueueItemIds,
-              submission,
+              submission ?? undefined,
               (messageId) => reportDraftCreated(prewarm.sessionId, createSourceAtSend, messageId),
             );
             if (consumed === "confirmationRequired") return consumed;
@@ -2749,7 +2763,7 @@ export function SessionPane({
           }
         }
         const draftConfigPayload = buildDraftCreateConfigPayload(
-          { ...draftConfigRef.current, modelSelection: submission.modelSelection },
+          { ...draftConfigRef.current, modelSelection: submission?.modelSelection },
           appFollowupMode,
         );
         const createAck = await dispatchSubmissionCommand(
@@ -2772,7 +2786,7 @@ export function SessionPane({
           0,
           heldQueueDisposition,
           expectedHeldQueueItemIds,
-          submission,
+          submission ?? undefined,
           (messageId) => reportDraftCreated(newSessionId, createSourceAtSend, messageId),
         );
         return;
@@ -2830,7 +2844,7 @@ export function SessionPane({
         // fallback 有 prewarm 投影时必须以 Agent 当前配置为 base；只有从未拿到投影
         // 才使用冻结的初始化元组。否则 provider fallback 后会把 localStorage 旧模型重新写回。
         const draftConfigPayload = buildDraftCreateConfigPayload(
-          { ...draftConfigRef.current, modelSelection: submission.modelSelection },
+          { ...draftConfigRef.current, modelSelection: submission?.modelSelection },
           appFollowupMode,
         );
         if (readyAttachments.length === 0 && !sharedContextRefs?.length) {
@@ -2904,11 +2918,23 @@ export function SessionPane({
         return;
       }
       // 附件 ref 已在 composer 预传状态机中收口。
+      // Codex 会话：草稿里显式选过的模型/effort 以 turn 级覆盖随每次 sendText 携带
+      // （Codex schema：作用于本 turn 及后续 turns）；未显式选择时不携带，沿用 thread 读数。
+      const codexTurnOverride =
+        isCodexSession && (codexModelId || codexEffort)
+          ? {
+              ...(codexModelId ? { modelId: codexModelId } : {}),
+              ...(codexEffort
+                ? { effort: codexEffort as "minimal" | "low" | "medium" | "high" }
+                : {}),
+            }
+          : undefined;
       const ack = await dispatchSubmissionCommand(
         "sendText",
         {
           text: effectiveText,
           ...submission,
+          ...(codexTurnOverride ? { codexTurnOverride } : {}),
           ...(readyAttachments.length > 0 ? { attachments: readyAttachments } : {}),
           ...(options?.requestedDelivery
             ? {
@@ -4444,7 +4470,12 @@ export function SessionPane({
       draftBackend={draftBackend}
       onSwitchBackend={isDraft ? handleDraftSwitchBackend : undefined}
       codexModelId={codexModelId}
-      onSelectCodexModel={isDraft ? handleDraftSelectCodexModel : undefined}
+      onSelectCodexModel={handleDraftSelectCodexModel}
+      codexEffort={codexEffort}
+      onSelectCodexEffort={handleDraftSelectCodexEffort}
+      codexSession={isCodexSession}
+      codexActualModel={isCodexSession ? (snapshot?.config.model || null) : null}
+      codexActualEffort={isCodexSession ? (snapshot?.config.thought || null) : null}
       codexBackendAvailable={codexExecutionService != null}
       onOpenRunningBackgroundWorks={
         sessionId && runningBackgroundWorkCount > 0 ? handleOpenRunningBackgroundWorks : undefined

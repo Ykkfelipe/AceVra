@@ -12,5 +12,8 @@ export function toCodexTaskBinding(meta: ZCodeTaskMeta): CodexTaskBinding {
     codexThreadId: meta.codexThreadId ?? "",
     title: meta.title,
     createdAt: meta.createdAt,
+    // 模型/effort 是 Codex 回报的公开配置读数，不含任何凭证材料。
+    model: meta.codexModelId ?? null,
+    effort: meta.codexEffort ?? null,
   };
 }

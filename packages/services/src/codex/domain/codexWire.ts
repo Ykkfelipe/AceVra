@@ -79,7 +79,13 @@ export type CodexItem =
 
 /** 服务器主动下发的通知（无请求 id 语义）。 */
 export type CodexServerNotification =
-  | { readonly type: "threadStarted"; readonly threadId: string }
+  | {
+      readonly type: "threadStarted";
+      readonly threadId: string;
+      /** Codex 回报的实际生效模型/effort（Thread.model / Thread.reasoningEffort）。 */
+      readonly model: string | null;
+      readonly effort: string | null;
+    }
   | { readonly type: "turnStarted"; readonly threadId: string | null; readonly turnId: string | null }
   | {
       readonly type: "turnCompleted";
@@ -218,7 +224,16 @@ export function parseCodexNotification(method: string, params: unknown): CodexSe
         asOptionalString(record.threadId) ??
         asOptionalString(record.thread_id) ??
         asOptionalString(thread?.id);
-      return id ? { type: "threadStarted", threadId: id } : { type: "unknown", method };
+      // Thread 对象同时回报实际生效的 model 与 reasoningEffort（probe 验证于
+      // 0.155.0-alpha.16.4）；UI 展示以此为准，而不是我们请求的值。
+      return id
+        ? {
+            type: "threadStarted",
+            threadId: id,
+            model: asOptionalString(thread?.model) ?? null,
+            effort: asOptionalString(thread?.reasoningEffort) ?? null,
+          }
+        : { type: "unknown", method };
     }
     case "turn/started":
       return { type: "turnStarted", threadId, turnId };

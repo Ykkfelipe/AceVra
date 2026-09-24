@@ -39,3 +39,14 @@ test("codex model label lookup covers curated ids and falls back verbatim", () =
   assert.equal(codexModelOptionLabel("gpt-5.6-terra"), "GPT-5.6 Terra");
   assert.equal(codexModelOptionLabel("unknown-model"), "unknown-model");
 });
+
+test("codex effort allow-list covers the gpt-5/6 stable tiers only", async () => {
+  const { CODEX_EFFORT_OPTIONS, isCodexEffortOption } = await import("../src/codex-execution.js");
+  assert.deepEqual([...CODEX_EFFORT_OPTIONS], ["minimal", "low", "medium", "high"]);
+  for (const value of CODEX_EFFORT_OPTIONS) {
+    assert.equal(isCodexEffortOption(value), true);
+  }
+  assert.equal(isCodexEffortOption("xhigh"), false);
+  assert.equal(isCodexEffortOption(""), false);
+  assert.equal(isCodexEffortOption(null), false);
+});

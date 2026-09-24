@@ -1,16 +1,20 @@
-// Codex 后端的策划模型下拉（draft 首发、thread 级）。
-// 列表是 shared codex-execution 契约里的 exact allow-list；null = Default 哨兵。
-// 视觉契约与 backend/mode 开关同源（COMPOSER_TOOLBAR_TRIGGER_CLASS），
-// 状态由 useDraftConfigControl 拥有，本组件是纯展示 + 单选回调。
+// Codex 后端模型/effort 下拉。
+// - 模型：策划 allow-list（CODEX_MODEL_OPTIONS），null = Default 哨兵（Codex 应用设置）。
+// - effort：turn 级覆盖（CODEX_EFFORT_OPTIONS），null = 不覆盖。
+// Codex 0.155.0-alpha.16.4 的 turn/start 同时接受 model + effort 覆盖（作用于本 turn
+// 及后续 turns），因此既有 Codex 会话同样可交互，不是静态只读。
+// 视觉契约与 backend/mode 开关同源（COMPOSER_TOOLBAR_TRIGGER_CLASS）；值经
+// useDraftConfigControl 的草稿 store 落到 SessionPane 首发/发送路径。
 import { memo } from "react";
-import { BotIcon, CheckIcon, ChevronDownIcon, CircleDotIcon } from "lucide-react";
-import { CODEX_MODEL_OPTIONS, codexModelOptionLabel } from "@zcode/shared";
+import { BotIcon, CheckIcon, ChevronDownIcon, CircleDotIcon, GaugeIcon } from "lucide-react";
+import { CODEX_EFFORT_OPTIONS, CODEX_MODEL_OPTIONS, codexModelOptionLabel } from "@zcode/shared";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu.js";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
@@ -25,23 +29,32 @@ export const V4_COMPOSER_CODEX_MODEL_TRIGGER_TEST_ID = "v4-composer-codex-model-
 
 function V4ComposerCodexModelSelectImpl({
   modelId,
+  effort,
   disabled,
   activeConfigPicker,
   onConfigPickerOpenChange,
   onSelectModel,
+  onSelectEffort,
 }: {
-  /** null = Default 哨兵（Codex 应用自身设置）。 */
+  /** 显式模型选择；null = 不覆盖（draft 发 Default / 会话沿用 thread 当前读数）。 */
   modelId: string | null;
+  /** 显式 effort 覆盖；null = 不覆盖。 */
+  effort: string | null;
   disabled?: boolean;
   activeConfigPicker: V4ComposerConfigPicker | null;
   onConfigPickerOpenChange: (picker: V4ComposerConfigPicker, open: boolean) => void;
   onSelectModel: (modelId: string | null) => void;
+  onSelectEffort: (effort: string | null) => void;
 }) {
   const { intl } = useZCodeIntl();
-  const value = modelId ?? "";
-  const triggerLabel = modelId
+  const modelValue = modelId && CODEX_MODEL_OPTIONS.some((o) => o.id === modelId) ? modelId : "";
+  const effortValue = effort && CODEX_EFFORT_OPTIONS.includes(effort as never) ? effort : "";
+  const modelLabel = modelId
     ? codexModelOptionLabel(modelId)
     : intl.formatMessage({ id: "chat.toolbar.backend.codex.modelManaged" });
+  const effortLabel = effort
+    ? intl.formatMessage({ id: `chat.toolbar.backend.codex.effort.${effort}` })
+    : null;
 
   return (
     <DropdownMenu
@@ -69,8 +82,9 @@ function V4ComposerCodexModelSelectImpl({
             )}
           >
             <BotIcon className="size-4" />
-            <span className="hidden @xl/composer:inline group-data-[composer-compact=true]/codex-model:hidden">
-              {triggerLabel}
+            <span className="hidden max-w-40 truncate @xl/composer:inline group-data-[composer-compact=true]/codex-model:hidden">
+              {modelLabel}
+              {effortLabel ? ` · ${effortLabel}` : ""}
             </span>
             <ChevronDownIcon className="hidden size-3.5 @xl/composer:block group-data-[composer-compact=true]/codex-model:hidden" />
           </Button>
@@ -79,7 +93,7 @@ function V4ComposerCodexModelSelectImpl({
       <DropdownMenuContent
         side="top"
         sideOffset={4}
-        className="w-64"
+        className="w-72"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           if (!isCoarseTouchDevice())
@@ -88,11 +102,28 @@ function V4ComposerCodexModelSelectImpl({
               ?.focus();
         }}
       >
-        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onSelectModel(next || null)}>
+        <DropdownMenuRadioGroup
+          value={modelValue}
+          onValueChange={(next) => onSelectModel(next || null)}
+        >
+          {CODEX_MODEL_OPTIONS.map((option) => (
+            <DropdownMenuRadioItem
+              key={option.id}
+              value={option.id}
+              data-testid={`v4-composer-codex-model-select-item-${option.id}`}
+              className="min-h-12 items-start gap-3 py-1.5"
+            >
+              <CheckIcon className="mt-0.5 size-4.5 shrink-0 opacity-0" aria-hidden />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span>{option.label}</span>
+                <span className="font-mono text-ui-xs text-foreground-subtlest">{option.id}</span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
           <DropdownMenuRadioItem
             value=""
             data-testid="v4-composer-codex-model-select-item-default"
-            className="min-h-13 items-start gap-3 py-2"
+            className="min-h-12 items-start gap-3 py-1.5"
           >
             <CircleDotIcon className="mt-0.5 size-4.5 shrink-0" />
             <span className="flex min-w-0 flex-col gap-0.5">
@@ -102,17 +133,26 @@ function V4ComposerCodexModelSelectImpl({
               </span>
             </span>
           </DropdownMenuRadioItem>
-          {CODEX_MODEL_OPTIONS.map((option) => (
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <div className="flex items-center gap-1.5 px-2 py-1 text-ui-xs text-foreground-subtlest">
+          <GaugeIcon className="size-3.5" aria-hidden />
+          <span>{intl.formatMessage({ id: "chat.toolbar.backend.codex.effort.label" })}</span>
+        </div>
+        <DropdownMenuRadioGroup
+          value={effortValue}
+          onValueChange={(next) => onSelectEffort(next || null)}
+        >
+          {CODEX_EFFORT_OPTIONS.map((value) => (
             <DropdownMenuRadioItem
-              key={option.id}
-              value={option.id}
-              data-testid={`v4-composer-codex-model-select-item-${option.id}`}
-              className="min-h-13 items-start gap-3 py-2"
+              key={value}
+              value={value}
+              data-testid={`v4-composer-codex-effort-select-item-${value}`}
+              className="min-h-9 items-center gap-3 py-1"
             >
-              <CheckIcon className="mt-0.5 size-4.5 shrink-0 opacity-0" aria-hidden />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span>{option.label}</span>
-                <span className="font-mono text-ui-xs text-foreground-subtlest">{option.id}</span>
+              <CheckIcon className="size-4 shrink-0 opacity-0" aria-hidden />
+              <span className="text-ui-base">
+                {intl.formatMessage({ id: `chat.toolbar.backend.codex.effort.${value}` })}
               </span>
             </DropdownMenuRadioItem>
           ))}

@@ -48,24 +48,34 @@ the internal runtime/product name. This is display copy only; runtime identifier
 ## Backend and model clarity
 
 The Agent backend's model picker lists the AceVra plan catalog and selection drives the plan model
-as before. For the Codex backend, the composer renders a dedicated Codex model dropdown instead of
-the Agent picker:
+as before. For the Codex backend, the composer renders a dedicated Codex model + effort control
+instead of the Agent picker, in **both** new-task drafts and existing Codex conversations:
 
-- The selectable list is the curated `CODEX_MODEL_OPTIONS` contract in
-  `@zcode/shared` (`codex-execution.ts`): **Default (Codex app setting)** plus the reviewed model
-  ids (`gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`).
-  The list is an exact allow-list, not a free-text field; new ids require a contract change.
-- `modelId: null/undefined` is the **Default** sentinel: Codex's own app setting is used and no
-  `model` field is sent.
-- Selection is draft-scoped (same `V4ComposerDraft` store as `executionBackend`) and applies at
-  **task creation** (`thread/start` model param). It is thread-level: mid-session switching is not
-  supported, and `thread/resume` keeps the thread's existing model.
-- Because of that thread-level lock, the interactive dropdown may only render in draft mode. A
-  created Codex session renders a **static** indicator showing the thread's model (or “Codex
-  default”). Rendering an inert dropdown that swallows clicks there is the “selection doesn't
-  stick” defect class and is forbidden.
-- The host must fail loud if the installed Codex binary rejects the `model` param; silently falling
-  back to default while displaying a chosen model is a defect.
+- The model list is the curated `CODEX_MODEL_OPTIONS` contract in `@zcode/shared`
+  (`codex-execution.ts`): **Default (Codex app setting)** plus the reviewed ids
+  (`gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`).
+  Exact allow-list, not a free-text field; new ids require a contract change.
+- Effort uses `CODEX_EFFORT_OPTIONS` (`minimal` / `low` / `medium` / `high`). The Codex
+  `ReasoningEffort` schema type is an open string (“advertised by the model”), so the curated list is
+  the contract; a value outside it is rejected host-side (fail loud).
+- `null/undefined` is the **Default / no override** sentinel: no `model` / `effort` field is sent
+  and Codex keeps its own settings.
+- Verified against the installed binary (`codex-cli 0.155.0-alpha.16.4`,
+  `app-server generate-json-schema` + live handshake):
+  - `thread/start` accepts a top-level `model`;
+  - `turn/start` accepts `model` and `effort` overrides whose description is “Override the
+    model/effort for this turn **and subsequent turns**”, so **mid-session switching is supported**
+    (the earlier “thread-level lock” note is superseded);
+  - both the `thread/start` response and the `Thread` object in `thread/started` report the
+    actually-adopted `model` and `reasoningEffort`.
+- The displayed value is therefore Codex's **reported** model/effort (snapshot `config.model` /
+  `config.thought`) whenever the user has no explicit override — “which model is answering” is
+  never guessed, it is what Codex reported (e.g. the app's config default such as `gpt-6-luna`).
+- An explicit override in the session-scoped composer draft is sent as `codexTurnOverride` on the
+  v4 `sendText` payload (schema-strict, host validates against the allow-list). Draft task
+  creation sends the model via `thread/start` and the effort on the first turn.
+- The host fails loud when the installed Codex binary rejects `model` / `effort`; silently falling
+  back while displaying a chosen value is a defect.
 - Claude is not a backend; no Claude model surface exists or may be implied by this UI.
 
 ## Explicit input rejection

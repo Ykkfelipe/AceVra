@@ -4301,7 +4301,11 @@ const zhCN: Record<string, string> = {
   "chat.toolbar.backend.codex.modelManaged": "Codex 默认",
   "chat.toolbar.backend.codex.modelPickerLabel": "Codex 模型",
   "chat.toolbar.backend.codex.modelDefault": "默认（Codex 应用设置）",
-  "chat.toolbar.backend.codex.modelLocked": "模型在任务创建时已锁定",
+  "chat.toolbar.backend.codex.effort.label": "推理强度",
+  "chat.toolbar.backend.codex.effort.minimal": "极低",
+  "chat.toolbar.backend.codex.effort.low": "低",
+  "chat.toolbar.backend.codex.effort.medium": "中",
+  "chat.toolbar.backend.codex.effort.high": "高",
   "chat.toolbar.backend.codex.unsupportedInput": "Codex 任务暂不支持斜杠命令、附件与共享上下文",
   // CUA 输入框常驻入口按钮
   "chat.toolbar.computerUse.label": "电脑操作",

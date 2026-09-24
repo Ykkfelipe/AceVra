@@ -322,10 +322,13 @@ export {
   CODEX_MODEL_OPTIONS,
   isCodexModelOptionId,
   codexModelOptionLabel,
+  CODEX_EFFORT_OPTIONS,
+  isCodexEffortOption,
 } from "./codex-execution.js";
 export type {
   ZCodeExecutionBackend,
   CodexModelOption,
+  CodexEffortOption,
   CodexTaskBinding,
   CodexExecutionCreateTaskParams,
   CodexExecutionCreateTaskResult,

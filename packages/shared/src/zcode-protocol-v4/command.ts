@@ -106,6 +106,16 @@ export const commandPayloadSchemas = {
       // 定时任务会话的后续用户输入也必须保持 turn-scoped 工具面隔离；不能借用
       // automationId，否则会把普通用户输入误标成一次 automation 派发。
       toolDisallowlist: z.array(z.string().min(1)).optional(),
+      // Codex 后端的 turn 级模型/effort 覆盖（Codex schema：Override … for this turn and
+      // subsequent turns）。仅 codex 命令路径消费；host 侧对值做 allow-list fail-loud 校验，
+      // 缺省 = 本次不覆盖（沿用 thread 当前读数）。
+      codexTurnOverride: z
+        .object({
+          modelId: z.string().trim().min(1).optional(),
+          effort: z.enum(["minimal", "low", "medium", "high"]).optional(),
+        })
+        .strict()
+        .optional(),
     })
     .superRefine((payload, context) => {
       if (payload.automationId && payload.offPeakTaskId) {

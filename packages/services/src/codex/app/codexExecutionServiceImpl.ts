@@ -6,7 +6,7 @@
 // OAuth URL 一律不进入本文件；任务↔thread 绑定持久化在 meta_json 的
 // executionBackend/codexThreadId。v4 命令处理见 codexConversationCommands.ts。
 import { Emitter } from "@zcode/rpc";
-import { createUuid, isCodexModelOptionId } from "@zcode/shared";
+import { createUuid } from "@zcode/shared";
 import type {
   CodexExecutionApprovalDecision,
   CodexExecutionCreateTaskParams,
@@ -36,7 +36,8 @@ import { codexUnroutableApprovalResponse } from "#src/codex/domain/codexApproval
 import type { ITaskArtifactRegistry } from "#src/task-artifacts/contract.js";
 import { deliverUserNamedCodexArtifacts } from "./codexDeliveryIntegration.js";
 import { toCodexTaskBinding } from "#src/codex/domain/codexBinding.js";
-import type { CodexExecutionPolicy } from "#src/codex/domain/codexPolicy.js";
+import type { CodexExecutionPolicy, CodexModelOverride } from "#src/codex/domain/codexPolicy.js";
+import { resolveCodexModelOverride } from "#src/codex/domain/codexPolicy.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
 import {
   CodexTaskRuntime,
@@ -47,6 +48,10 @@ import {
   startCodexThread,
 } from "./codexTaskRuntime.js";
 import type { CodexAppServerPort, CodexTaskIndexPort } from "./codexPorts.js";
+import {
+  persistCodexStatus,
+  persistCodexTurnOverride,
+} from "./codexTaskPersistence.js";
 import type { ICodexExecutionService } from "./codexExecutionService.js";
 import { handleConversationCommand } from "./codexConversationCommands.js";
 
@@ -97,45 +102,36 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   function emitSnapshot(subscriptionId: string, taskId: string): void {
     const runtime = runtimes.get(taskId);
     if (!runtime || !subscriptions.has(subscriptionId)) return;
+    const snapshot = runtime.projection.buildSnapshot(taskId, {
+      modelId: runtime.codexModelId,
+      effort: runtime.codexEffort,
+    });
     frames.fire(
       runtime.buildFrame({
         subscriptionId,
-        payload: { kind: "snapshot", snapshot: runtime.projection.buildSnapshot(taskId, { modelId: runtime.codexModelId }) },
+        payload: { kind: "snapshot", snapshot },
         fromSeq: 0,
         toSeq: runtime.projection.seq,
       }),
     );
   }
 
-  function persistStatus(taskId: string, status: ZCodeTaskMeta["status"]): void {
+  const persistenceContext = { taskIndex: deps.taskIndex, now, warn: (message: string) => logger.warn(undefined, message) };
+  const persistStatus = (taskId: string, status: ZCodeTaskMeta["status"]): void => {
     const runtime = runtimes.get(taskId);
-    if (!runtime) return;
-    void deps.taskIndex
-      .updateTaskState({
-        workspacePath: runtime.workspacePath,
-        ...(runtime.workspaceIdentity ? { workspaceIdentity: runtime.workspaceIdentity } : {}),
-        taskId,
-        patch: { status, updatedAt: now() },
-      })
-      .catch((error) => logger.warn(undefined, `codex task status write failed: ${String(error)}`));
-  }
+    if (runtime) persistCodexStatus(persistenceContext, runtime, status);
+  };
+  const persistTurnOverride = (runtime: CodexTaskRuntime, override: CodexModelOverride): void =>
+    persistCodexTurnOverride(persistenceContext, runtime, override);
 
 
   // ── bridge 通知扇入：按 threadId 路由到 runtime 并归约成帧 ──
   const offNotification = deps.bridge.onNotification((method, params, rawRequest) => {
     try {
-      const record =
-        typeof params === "object" && params !== null ? (params as Record<string, unknown>) : null;
-      const threadId =
-        typeof record?.threadId === "string"
-          ? record.threadId
-          : typeof record?.thread_id === "string"
-            ? record.thread_id
-            : null;
+      const record = typeof params === "object" && params !== null ? (params as Record<string, unknown>) : null;
+      const threadId = typeof record?.threadId === "string" ? record.threadId : typeof record?.thread_id === "string" ? record.thread_id : null;
       const runtime = selectRuntimeForNotification([...runtimes.values()], threadId);
-      const routed = runtime
-        ? routeCodexNotification(runtime, method, params, rawRequest)
-        : null;
+      const routed = runtime ? routeCodexNotification(runtime, method, params, rawRequest) : null;
       if (!routed) {
         // 审批类服务器请求必须可路由：无法定位 thread 的审批回 denied 并告警，
         // 绝不静默丢弃（那会让 turn 无 UI 可审批地挂死）。
@@ -173,33 +169,33 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   });
 
   /** 确保 runtime 可用；失败路径绝不污染缓存，错误一律脱敏后再出通道。 */
-  const ensureRuntime = (taskId: string): Promise<CodexTaskRuntime> =>
-    ensureRuntimeForTask({
-      bridge: deps.bridge,
-      taskIndex: deps.taskIndex,
-      policy: deps.policy,
-      taskArtifacts: deps.taskArtifacts,
-      runtimes,
-      taskId,
-      now,
-    });
+  const ensureRuntime = (taskId: string): Promise<CodexTaskRuntime> => ensureRuntimeForTask({
+    bridge: deps.bridge, taskIndex: deps.taskIndex, policy: deps.policy,
+    taskArtifacts: deps.taskArtifacts, runtimes, taskId, now,
+  });
 
   const service: ICodexExecutionService = {
     async createTask(params: CodexExecutionCreateTaskParams): Promise<CodexExecutionCreateTaskResult> {
       if (!deps.bridge.installed) throw new Error("codex_not_installed");
-      // 策划 allow-list 之外的 id 一律拒绝（fail loud），防止自由文本把任意值透传给 Codex。
-      const modelId = params.modelId?.trim() ? params.modelId.trim() : undefined;
-      if (modelId && !isCodexModelOptionId(modelId)) throw new Error(`codex_model_not_allowed: ${modelId}`);
-      const codexThreadId = await startCodexThread(deps.bridge, {
+      // allow-list 之外的 id 一律拒绝（fail loud），防止自由文本把任意值透传给 Codex。
+      const override = resolveCodexModelOverride({ modelId: params.modelId, effort: params.effort });
+      const thread = await startCodexThread(deps.bridge, {
         workspacePath: params.workspacePath,
         policy: deps.policy,
-        ...(modelId ? { modelId } : {}),
+        ...(override.modelId ? { modelId: override.modelId } : {}),
       });
       const taskId = createUuid();
       const createdAt = now();
       const title =
         params.title?.trim() ||
         (params.firstInput?.trim().slice(0, 60) || "Codex task").replace(/\s+/g, " ");
+      // meta 持久化的是 Codex 回报的实际生效读数（thread/start 响应），而不是请求值。
+      const effectiveModelId = thread.model ?? override.modelId ?? null;
+      const effectiveEffort = thread.effort ?? null;
+      const codexMetaFields = {
+        ...(effectiveModelId ? { codexModelId: effectiveModelId } : {}),
+        ...(effectiveEffort ? { codexEffort: effectiveEffort } : {}),
+      };
       const meta: ZCodeTaskMeta = {
         taskId,
         traceId: `codex-${taskId}`,
@@ -210,31 +206,32 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
         updatedAt: createdAt,
         mode: "build",
         executionBackend: "codex",
-        codexThreadId,
-        ...(modelId ? { codexModelId: modelId } : {}),
+        codexThreadId: thread.threadId,
+        ...codexMetaFields,
       };
       const runtime = new CodexTaskRuntime(
         {
           taskId,
           workspacePath: params.workspacePath,
           ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
-          codexThreadId,
+          codexThreadId: thread.threadId,
           bridgeGeneration: deps.bridge.generation,
-          ...(modelId ? { codexModelId: modelId } : {}),
+          codexModelId: effectiveModelId,
+          codexEffort: effectiveEffort,
         },
         now,
       );
       runtime.projection.setTitle(title);
       runtimes.set(taskId, runtime);
       await deps.taskIndex.syncTaskMeta({ meta });
-      if (params.firstInput?.trim()) {
-        await service.sendTurn({ taskId, content: params.firstInput });
-      }
+      if (params.firstInput?.trim()) await service.sendTurn({ taskId, content: params.firstInput, ...(override.effort ? { effort: override.effort } : {}) });
       return { task: toCodexTaskBinding(meta) };
     },
 
     async sendTurn(params: CodexExecutionSendTurnParams): Promise<{ accepted: boolean; commandId: string }> {
       const runtime = await ensureRuntime(params.taskId);
+      // turn 级覆盖同样受 allow-list 约束；Codex schema：覆盖作用于本 turn 及后续 turns。
+      const override = resolveCodexModelOverride({ modelId: params.modelId, effort: params.effort });
       const commandId = params.commandId || createUuid();
       const turnId = `codex-turn-${++runtime.turnCounter}-${commandId.slice(0, 8)}`;
       const commit = runtime.projection.beginUserTurn({ text: params.content, turnId, commandId });
@@ -245,8 +242,11 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
         const result = await deps.bridge.call(CODEX_METHODS.turnStart, {
           threadId: runtime.codexThreadId,
           input: [{ type: "text", text: params.content }],
+          ...(override.modelId ? { model: override.modelId } : {}),
+          ...(override.effort ? { effort: override.effort } : {}),
         });
         runtime.codexTurnId = extractCodexTurnId(result);
+        persistTurnOverride(runtime, override);
       } catch (error) {
         // Codex 不会为这次 turn 发 turn/completed；投影必须本地收口成 failed，
         // 否则 UI 停在幽灵 running 轮上（canStop 永真）。
@@ -362,8 +362,14 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
           bridge: deps.bridge,
           taskIndex: deps.taskIndex,
           emitCommit,
-          sendTurn: async ({ taskId: id, content, commandId }) => {
-            await service.sendTurn({ taskId: id, content, ...(commandId ? { commandId } : {}) });
+          sendTurn: async ({ taskId: id, content, commandId, modelId, effort }) => {
+            await service.sendTurn({
+              taskId: id,
+              content,
+              ...(commandId ? { commandId } : {}),
+              ...(modelId ? { modelId } : {}),
+              ...(effort ? { effort } : {}),
+            });
           },
           now,
         },

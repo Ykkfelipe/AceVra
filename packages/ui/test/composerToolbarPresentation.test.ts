@@ -54,9 +54,21 @@ test("composer toolbar controls expand with labels and preserve an icon-only flo
   assert.equal(COMPOSER_TOOLBAR_GROUP_CLASS, "flex min-w-0 items-center gap-1");
 });
 
-test("codex model control is interactive only in draft and static in created sessions", () => {
-  assert.equal(resolveCodexModelControlKind({ draftMode: true, backend: "codex" }), "dropdown");
-  assert.equal(resolveCodexModelControlKind({ draftMode: false, backend: "codex" }), "static");
-  assert.equal(resolveCodexModelControlKind({ draftMode: true, backend: "zcode" }), null);
-  assert.equal(resolveCodexModelControlKind({ draftMode: false, backend: "zcode" }), null);
+test("codex model control is interactive in both draft and created codex sessions", () => {
+  assert.equal(
+    resolveCodexModelControlKind({ draftMode: true, codexSession: false, backend: "codex" }),
+    "dropdown",
+  );
+  assert.equal(
+    resolveCodexModelControlKind({ draftMode: false, codexSession: true, backend: "zcode" }),
+    "dropdown",
+  );
+  assert.equal(
+    resolveCodexModelControlKind({ draftMode: true, codexSession: false, backend: "zcode" }),
+    null,
+  );
+  assert.equal(
+    resolveCodexModelControlKind({ draftMode: false, codexSession: false, backend: "zcode" }),
+    null,
+  );
 });
