@@ -74,6 +74,7 @@ export function useClaudeSessionMigration(params: {
   const [limitInput, setLimitInput] = useState(String(DEFAULT_LIMIT));
   const [candidates, setCandidates] = useState<ZCodeImportableSessionCandidate[]>([]);
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+  const [expandedSessionIds, setExpandedSessionIds] = useState<string[]>([]);
   const [scanError, setScanError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [lastImportResult, setLastImportResult] = useState<ZCodeImportSessionsResult | null>(null);
@@ -147,6 +148,14 @@ export function useClaudeSessionMigration(params: {
     );
   }, [candidates]);
 
+  const toggleSessionExpansion = useCallback((sessionId: string) => {
+    setExpandedSessionIds((previous) =>
+      previous.includes(sessionId)
+        ? previous.filter((current) => current !== sessionId)
+        : [...previous, sessionId],
+    );
+  }, []);
+
   const clearSelectedSessions = useCallback(() => {
     setSelectedSessionIds([]);
   }, []);
@@ -181,6 +190,11 @@ export function useClaudeSessionMigration(params: {
           nextCandidates.some(
             (candidate) => candidate.sessionId === sessionId && !candidate.alreadyImported,
           ),
+        ),
+      );
+      setExpandedSessionIds((previous) =>
+        previous.filter((sessionId) =>
+          nextCandidates.some((candidate) => candidate.sessionId === sessionId),
         ),
       );
       logger.info(
@@ -302,6 +316,7 @@ export function useClaudeSessionMigration(params: {
     candidates,
     selectedSessionIds,
     selectedCount: selectedSessionIds.length,
+    expandedSessionIds,
     scanError,
     importError,
     lastImportResult,
@@ -311,6 +326,7 @@ export function useClaudeSessionMigration(params: {
     importSessions,
     importSelectedSessions,
     toggleSessionSelection,
+    toggleSessionExpansion,
     selectAllSessions,
     clearSelectedSessions,
   };

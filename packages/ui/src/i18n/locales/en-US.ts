@@ -2049,6 +2049,11 @@ const enUS: Record<string, string> = {
   "settings.migration.candidatesDescription":
     "Select one or more sessions to import. Each imported session is written back into the task list for its own workspace.",
   "settings.migration.alreadyImported": "Already imported",
+  "settings.migration.selectSession": "Select session {title}",
+  "settings.migration.expandPreview": "Preview",
+  "settings.migration.collapsePreview": "Hide preview",
+  "settings.migration.previewUser": "User",
+  "settings.migration.previewAssistant": "Assistant",
   "settings.migration.candidatesCount": "{count} candidates",
   "settings.migration.selectedCount": "{count} selected",
   "settings.migration.selectAll": "Select all",

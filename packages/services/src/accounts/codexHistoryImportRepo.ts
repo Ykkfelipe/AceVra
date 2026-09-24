@@ -12,11 +12,10 @@
  * This module only discovers and parses; it does not mutate Codex's store.
  */
 import { readdir, stat } from "node:fs/promises";
-import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ZCodeImportableSessionCandidate } from "@zcode/shared";
+import { parseCodexRolloutPreview } from "#src/accounts/codexHistoryImportParser.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
 const logger = createServiceLogger("codex-history-import");
@@ -37,27 +36,6 @@ export function resolveCodexSessionsDir(codexHome?: string): string {
     }
   }
   return join(configuredHome || join(homedir(), ".codex"), "sessions");
-}
-
-/** Read only the first line of a rollout; the header is all we need for a candidate. */
-async function readRolloutHeader(filePath: string): Promise<Record<string, unknown> | null> {
-  const stream = createReadStream(filePath, { encoding: "utf8" });
-  const rl = createInterface({ input: stream, crlfDelay: Infinity });
-  try {
-    for await (const line of rl) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        return JSON.parse(trimmed) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  } finally {
-    rl.close();
-    stream.close();
-  }
 }
 
 async function collectRolloutFiles(dir: string): Promise<string[]> {
@@ -105,23 +83,19 @@ export async function scanCodexImportableSessions(
     }
     if (options.modifiedSince !== undefined && updatedAt < options.modifiedSince) continue;
 
-    const header = await readRolloutHeader(file);
-    if (header?.type !== "session_meta") continue;
-    const payload = (header.payload ?? null) as Record<string, unknown> | null;
-    if (!payload) continue;
-    const sessionId = typeof payload.session_id === "string" ? payload.session_id : undefined;
-    const cwd = typeof payload.cwd === "string" ? payload.cwd : undefined;
-    if (!sessionId || !cwd) continue;
-    if (options.workspacePath && cwd !== options.workspacePath) continue;
+    const preview = await parseCodexRolloutPreview(file).catch(() => null);
+    if (!preview) continue;
+    if (options.workspacePath && preview.workspacePath !== options.workspacePath) continue;
 
-    const createdRaw = typeof payload.timestamp === "string" ? Date.parse(payload.timestamp) : NaN;
     candidates.push({
       provider: "codex",
-      sessionId,
-      workspacePath: cwd,
+      sessionId: preview.sessionId,
+      workspacePath: preview.workspacePath,
       sourcePath: file,
       updatedAt,
-      ...(Number.isFinite(createdRaw) ? { createdAt: createdRaw } : {}),
+      createdAt: preview.createdAt,
+      previewTitle: preview.title,
+      previewMessages: preview.previewMessages,
     });
   }
 

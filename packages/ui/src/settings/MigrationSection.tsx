@@ -50,6 +50,7 @@ export function MigrationSection({
     candidates,
     selectedSessionIds,
     selectedCount,
+    expandedSessionIds,
     scanError,
     importError,
     lastImportResult,
@@ -58,6 +59,7 @@ export function MigrationSection({
     scan,
     importSelectedSessions,
     toggleSessionSelection,
+    toggleSessionExpansion,
     selectAllSessions,
     clearSelectedSessions,
   } = useClaudeSessionMigration({
@@ -222,11 +224,13 @@ export function MigrationSection({
         candidates={candidates}
         selectedSessionIds={selectedSessionIds}
         selectedCount={selectedCount}
+        expandedSessionIds={expandedSessionIds}
         importError={importError}
         lastImportResult={lastImportResult}
         isImporting={isImporting}
         dateTimeFormatter={dateTimeFormatter}
         onToggleSelection={toggleSessionSelection}
+        onToggleExpansion={toggleSessionExpansion}
         onSelectAll={selectAllSessions}
         onClearSelection={clearSelectedSessions}
         onImportSelected={() => {

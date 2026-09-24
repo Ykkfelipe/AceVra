@@ -1,4 +1,4 @@
-import { Check, Download, Loader2, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Download, Loader2, TriangleAlert } from "lucide-react";
 import type {
   ZCodeImportSessionsResult,
   ZCodeImportableSessionCandidate,
@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert.js";
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.js";
+import { Checkbox } from "@/components/ui/checkbox.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { cn } from "@/components/lib/utils.js";
 
@@ -23,6 +24,11 @@ function getKnownReasonLabel(
   }
 
   return reason;
+}
+
+function workspaceDisplayName(workspacePath: string): string {
+  const segments = workspacePath.split(/[\\/]/u).filter(Boolean);
+  return segments.at(-1) ?? workspacePath;
 }
 
 function ImportIssuesList({
@@ -49,14 +55,14 @@ function ImportIssuesList({
           >
             <div className="font-mono text-ui-base text-foreground">{item.sessionId}</div>
             {item.workspacePath ? (
-              <div className="mt-1 text-ui-xs text-foreground-subtle">
-                {intl.formatMessage({ id: "settings.migration.workspacePathLabel" })}
-              </div>
-            ) : null}
-            {item.workspacePath ? (
-              <div className="break-all font-mono text-ui-xs text-foreground-subtlest">
-                {item.workspacePath}
-              </div>
+              <>
+                <div className="mt-1 text-ui-xs text-foreground-subtle">
+                  {intl.formatMessage({ id: "settings.migration.workspacePathLabel" })}
+                </div>
+                <div className="break-all font-mono text-ui-xs text-foreground-subtlest">
+                  {item.workspacePath}
+                </div>
+              </>
             ) : null}
             <div className="mt-1 text-ui-base text-foreground-subtle">
               {getKnownReasonLabel(intl, item.reason)}
@@ -73,11 +79,13 @@ export function MigrationCandidatesCard({
   candidates,
   selectedSessionIds,
   selectedCount,
+  expandedSessionIds,
   importError,
   lastImportResult,
   isImporting,
   dateTimeFormatter,
   onToggleSelection,
+  onToggleExpansion,
   onSelectAll,
   onClearSelection,
   onImportSelected,
@@ -86,11 +94,13 @@ export function MigrationCandidatesCard({
   candidates: ZCodeImportableSessionCandidate[];
   selectedSessionIds: string[];
   selectedCount: number;
+  expandedSessionIds: string[];
   importError: string | null;
   lastImportResult: ZCodeImportSessionsResult | null;
   isImporting: boolean;
   dateTimeFormatter: Intl.DateTimeFormat;
   onToggleSelection: (sessionId: string) => void;
+  onToggleExpansion: (sessionId: string) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
   onImportSelected: () => void;
@@ -204,74 +214,118 @@ export function MigrationCandidatesCard({
           <div className="space-y-2">
             {candidates.map((candidate) => {
               const isSelected = selectedSessionIds.includes(candidate.sessionId);
+              const isExpanded = expandedSessionIds.includes(candidate.sessionId);
               const alreadyImported = candidate.alreadyImported === true;
+              const previewMessages = candidate.previewMessages ?? [];
+              const previewId = `migration-preview-${candidate.provider}-${candidate.sessionId}`;
+              const sessionLabel = candidate.previewTitle || candidate.sessionId.slice(0, 8);
+              const workspaceLabel = workspaceDisplayName(candidate.workspacePath);
 
               return (
-                <button
+                <div
                   key={candidate.sessionId}
-                  type="button"
-                  disabled={isImporting || alreadyImported}
                   className={cn(
-                    "w-full rounded-lg border px-3 py-3 text-left transition-colors",
+                    "rounded-lg border px-3 py-3 text-left transition-colors",
                     isSelected
                       ? "border-primary bg-accent"
                       : "border-border bg-background hover:bg-surface",
                     alreadyImported && "cursor-default opacity-70",
                   )}
-                  onClick={() => onToggleSelection(candidate.sessionId)}
                 >
                   <div className="flex items-start gap-3">
-                    <div
-                      className={cn(
-                        "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
-                        isSelected
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-input text-transparent",
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={isSelected}
+                      disabled={isImporting || alreadyImported}
+                      aria-label={intl.formatMessage(
+                        { id: "settings.migration.selectSession" },
+                        { title: sessionLabel },
                       )}
-                    >
-                      <Check className="size-3.5" />
-                    </div>
+                      onCheckedChange={() => onToggleSelection(candidate.sessionId)}
+                    />
                     <div className="min-w-0 flex-1 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="min-w-0 flex-1 text-ui-base font-medium text-foreground">
-                          <span className="line-clamp-1 break-all">
-                            {candidate.previewTitle || candidate.sessionId}
-                          </span>
-                        </div>
-                        <Badge variant="outline" className="font-mono">
-                          {candidate.sessionId.slice(0, 8)}
-                        </Badge>
-                        {alreadyImported ? (
-                          <Badge variant="secondary">
-                            {intl.formatMessage({ id: "settings.migration.alreadyImported" })}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <div className="grid gap-2 text-ui-base text-foreground-subtle grid-cols-[minmax(0,1fr)_auto] items-center">
-                        <div className="min-w-0 space-y-1">
-                          <div className="font-mono text-ui-xs text-foreground-subtle">
-                            {candidate.sessionId}
+                      <div className="flex min-w-0 items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="min-w-0 flex-1 text-ui-base font-medium text-foreground">
+                              <span className="line-clamp-1 break-all">{sessionLabel}</span>
+                            </div>
+                            <Badge variant="outline" className="font-mono">
+                              {candidate.sessionId.slice(0, 8)}
+                            </Badge>
+                            {alreadyImported ? (
+                              <Badge variant="secondary">
+                                {intl.formatMessage({ id: "settings.migration.alreadyImported" })}
+                              </Badge>
+                            ) : null}
+                            {previewMessages.length > 0 ? (
+                              <Button
+                                type="button"
+                                size="xs"
+                                variant="ghost"
+                                aria-expanded={isExpanded}
+                                aria-controls={previewId}
+                                onClick={() => onToggleExpansion(candidate.sessionId)}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="size-3" aria-hidden="true" />
+                                ) : (
+                                  <ChevronDown className="size-3" aria-hidden="true" />
+                                )}
+                                {intl.formatMessage({
+                                  id: isExpanded
+                                    ? "settings.migration.collapsePreview"
+                                    : "settings.migration.expandPreview",
+                                })}
+                              </Button>
+                            ) : null}
                           </div>
-                          <div className="text-ui-xs text-foreground-subtle">
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-ui-xs text-foreground-subtle">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div>
                             {intl.formatMessage({ id: "settings.migration.workspacePathLabel" })}
                           </div>
-                          <div className="break-all font-mono text-ui-xs text-foreground-subtlest">
-                            {candidate.workspacePath}
-                          </div>
-                          <div className="line-clamp-1 break-all font-mono text-ui-xs text-foreground-subtlest">
-                            {candidate.sourcePath}
+                          <div
+                            className="break-all font-mono text-foreground-subtlest"
+                            title={candidate.workspacePath}
+                          >
+                            {workspaceLabel}
                           </div>
                         </div>
-                        <div className="text-right text-ui-xs text-foreground-subtle">
+                        <div className="shrink-0">
                           {intl.formatMessage(
                             { id: "settings.migration.updatedAt" },
                             { time: dateTimeFormatter.format(candidate.updatedAt) },
                           )}
                         </div>
                       </div>
+                      {isExpanded && previewMessages.length > 0 ? (
+                        <div
+                          id={previewId}
+                          className="space-y-3 rounded-lg border border-border bg-surface px-3 py-3"
+                        >
+                          {previewMessages.map((message) => (
+                            <div key={message.role} className="min-w-0 space-y-1">
+                              <div className="text-ui-xs font-medium text-foreground-subtle">
+                                {intl.formatMessage({
+                                  id:
+                                    message.role === "user"
+                                      ? "settings.migration.previewUser"
+                                      : "settings.migration.previewAssistant",
+                                })}
+                              </div>
+                              <div className="whitespace-pre-wrap break-words text-ui-base text-foreground">
+                                {message.content}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

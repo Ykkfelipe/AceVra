@@ -1931,6 +1931,11 @@ const zhCN: Record<string, string> = {
   "settings.migration.candidatesDescription":
     "选择一个或多个会话后执行导入；每条记录会写入它自己的目标 workspace 任务列表。",
   "settings.migration.alreadyImported": "已导入",
+  "settings.migration.selectSession": "选择会话 {title}",
+  "settings.migration.expandPreview": "预览",
+  "settings.migration.collapsePreview": "收起预览",
+  "settings.migration.previewUser": "用户",
+  "settings.migration.previewAssistant": "助手",
   "settings.migration.candidatesCount": "{count} 条候选",
   "settings.migration.selectedCount": "已选 {count} 条",
   "settings.migration.selectAll": "全选",

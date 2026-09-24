@@ -1,6 +1,9 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
+import type { ZCodeImportableSessionPreviewMessage } from "@zcode/shared";
 import { deriveSessionTitle } from "#src/session/sessionTitle.js";
+
+export const CODEX_IMPORT_PREVIEW_MAX_CODE_POINTS = 240;
 
 export interface CodexImportedMessage {
   role: "user" | "assistant";
@@ -16,6 +19,14 @@ export interface CodexImportedSession {
   title?: string;
   model?: string;
   messages: CodexImportedMessage[];
+}
+
+export interface CodexRolloutPreview {
+  sessionId: string;
+  workspacePath: string;
+  createdAt: number;
+  title: string;
+  previewMessages: ZCodeImportableSessionPreviewMessage[];
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {
@@ -43,13 +54,22 @@ function textContent(value: unknown, expectedType: "input_text" | "output_text")
     .join("\n\n");
 }
 
-/** Parse only visible user/assistant text. Tool, reasoning, metadata and credential-shaped
- * fields are intentionally outside the AceVra imported-history contract. */
-export async function parseCodexRollout(filePath: string): Promise<CodexImportedSession | null> {
+function truncatePreviewText(text: string): string {
+  const codePoints = Array.from(text);
+  if (codePoints.length <= CODEX_IMPORT_PREVIEW_MAX_CODE_POINTS) return text;
+  return `${codePoints.slice(0, CODEX_IMPORT_PREVIEW_MAX_CODE_POINTS - 3).join("")}...`;
+}
+
+async function parseCodexRolloutFile(
+  filePath: string,
+  mode: "full" | "preview",
+): Promise<CodexImportedSession | CodexRolloutPreview | null> {
   const input = createReadStream(filePath, { encoding: "utf8" });
   const lines = createInterface({ input, crlfDelay: Infinity });
   let header: Record<string, unknown> | undefined;
   const messages: CodexImportedMessage[] = [];
+  const previewMessages: ZCodeImportableSessionPreviewMessage[] = [];
+  let firstVisibleUserText: string | undefined;
   let updatedAt: number | undefined;
   let model: string | undefined;
   try {
@@ -69,7 +89,7 @@ export async function parseCodexRollout(filePath: string): Promise<CodexImported
       }
       const at = timestamp(record.timestamp);
       if (at !== undefined) updatedAt = Math.max(updatedAt ?? at, at);
-      if (record.type === "turn_context") {
+      if (mode === "full" && record.type === "turn_context") {
         const contextModel = object(record.payload)?.model;
         if (typeof contextModel === "string" && /^[A-Za-z0-9._/-]{1,80}$/u.test(contextModel)) {
           model = contextModel;
@@ -82,16 +102,43 @@ export async function parseCodexRollout(filePath: string): Promise<CodexImported
       if (role !== "user" && role !== "assistant") continue;
       const content = textContent(payload.content, role === "user" ? "input_text" : "output_text");
       if (!content) continue;
-      messages.push({ role, content, ...(at === undefined ? {} : { timestamp: at }) });
+
+      if (mode === "preview") {
+        firstVisibleUserText ??= role === "user" ? content : undefined;
+        if (!previewMessages.some((message) => message.role === role)) {
+          previewMessages.push({ role, content: truncatePreviewText(content) });
+        }
+        if (
+          previewMessages.some((message) => message.role === "user") &&
+          previewMessages.some((message) => message.role === "assistant")
+        ) {
+          break;
+        }
+      } else {
+        messages.push({ role, content, ...(at === undefined ? {} : { timestamp: at }) });
+      }
     }
   } finally {
     lines.close();
     input.close();
   }
+
   const sessionId = typeof header?.session_id === "string" ? header.session_id.trim() : "";
   const workspacePath = typeof header?.cwd === "string" ? header.cwd.trim() : "";
   const createdAt = timestamp(header?.timestamp);
-  if (!sessionId || !workspacePath || createdAt === undefined || messages.length === 0) return null;
+  if (!sessionId || !workspacePath || createdAt === undefined) return null;
+
+  if (mode === "preview") {
+    return {
+      sessionId,
+      workspacePath,
+      createdAt,
+      title: deriveSessionTitle(firstVisibleUserText ?? "", []) || sessionId.slice(0, 8),
+      previewMessages,
+    };
+  }
+
+  if (messages.length === 0) return null;
   const firstUser = messages.find((message) => message.role === "user");
   const title = firstUser ? deriveSessionTitle(firstUser.content, []) : undefined;
   const headerModel =
@@ -108,4 +155,17 @@ export async function parseCodexRollout(filePath: string): Promise<CodexImported
     ...(model ? { model } : {}),
     messages,
   };
+}
+
+/** Parse only visible user/assistant text. Tool, reasoning, metadata and credential-shaped
+ * fields are intentionally outside the AceVra imported-history contract. */
+export async function parseCodexRollout(filePath: string): Promise<CodexImportedSession | null> {
+  return (await parseCodexRolloutFile(filePath, "full")) as CodexImportedSession | null;
+}
+
+/** Scan-time mode that stops after the first visible user and assistant messages. */
+export async function parseCodexRolloutPreview(
+  filePath: string,
+): Promise<CodexRolloutPreview | null> {
+  return (await parseCodexRolloutFile(filePath, "preview")) as CodexRolloutPreview | null;
 }

@@ -99,6 +99,12 @@ export interface ZCodeTaskCreateResult extends ZCodeTaskMeta {
  */
 export type ZCodeImportSessionSourceProvider = "claude" | "codex";
 
+/** 导入候选的瞬时、纯文本消息预览；不携带时间戳、工具或元数据。 */
+export interface ZCodeImportableSessionPreviewMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 /** 外部原生 session 的导入候选。 */
 export interface ZCodeImportableSessionCandidate {
   provider: ZCodeImportSessionSourceProvider;
@@ -108,6 +114,8 @@ export interface ZCodeImportableSessionCandidate {
   updatedAt: number;
   createdAt?: number;
   previewTitle?: string;
+  /** 扫描时已有的首条可见 user/assistant 文本，最多各一条且由服务层限制长度。 */
+  previewMessages?: ZCodeImportableSessionPreviewMessage[];
   alreadyImported?: boolean;
 }
 

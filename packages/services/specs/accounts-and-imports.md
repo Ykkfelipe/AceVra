@@ -364,6 +364,27 @@ remain distinct import scopes. Only user-visible user/assistant text
 is converted; tool calls/results, reasoning, metadata, unknown record types and credentials are
 ignored.
 
+### Candidate previews and expansion
+
+History scan candidates expose only deterministic, display-only preview metadata derived from
+the same sanitized user/assistant message extractors used by import. The candidate contract may
+contain a bounded title and at most one visible user and one visible assistant preview message;
+each preview body is capped at 240 Unicode code points including its truncation marker. Full
+source paths, reasoning, tool calls/results, metadata, credentials, raw records, and source
+offsets remain excluded from preview metadata. The title is the existing bounded
+first-visible-user-message title, with the first eight session-ID characters as fallback. Preview
+generation performs no model/provider/account call.
+
+Expansion is local UI state owned by the shared migration hook. It does not trigger another file
+read, import, or network request. The candidate card renders previews as escaped plain text, keeps
+selection and expansion as separate controls, preserves already-imported/duplicate provenance, and
+prioritizes workspace/date metadata over full local paths. Malformed or missing sessions remain
+bounded candidates or visible scan errors according to the existing import error contract.
+
+Claude uses the same shared candidate presentation and, when the existing sanitized head parser
+can provide the same bounded fields without duplicating parsing logic, the same preview policy.
+Otherwise Claude parity is explicitly deferred rather than introducing a second parser.
+
 Codex rollout sessions are local Codex history only. Account/App Server APIs do not establish
 availability of general chatgpt.com conversations; no browser scraping, cookie copying, or
 invented cloud-history endpoint is permitted.
