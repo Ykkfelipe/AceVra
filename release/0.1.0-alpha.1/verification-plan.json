@@ -13,8 +13,9 @@
   "packageScript": "bundle:desktop",
   "packageScripts": ["pnpm --filter @zcode/desktop e2e:cua-alpha"],
   "focusedTests": [
-    "mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs",
+    "mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs packages/desktop/scripts/macos-window-bounds-targets.test.mjs",
     "mise exec -- node scripts/mise-run.mjs node --import tsx --test packages/services/test/cuaLeaseAuthority.test.ts packages/services/test/localAlphaHomeIsolation.test.ts packages/services/test/directHomeReaderInventory.test.ts",
     "mise exec -- node scripts/mise-run.mjs node --test scripts/release/*.test.mjs"
-  ]
+  ],
+  "pinnedToolchain": "mise.toml Node 24.14.0"
 }

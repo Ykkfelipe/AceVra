@@ -324,32 +324,31 @@ Verification plan updated in `release/0.1.0-alpha.1/verification-plan.json` with
 package scripts plus the Desktop CUA E2E command and focused test commands. The accepted
 implementation is not a candidate until the remaining gates below pass.
 
-Executed during this implementation revision:
+Executed during this gate-fix revision:
 
-- `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 3 / behind 0, no upstream
-- `mise exec -- node scripts/mise-run.mjs pnpm architecture:check --changed` — exit 0;
+- `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 4 / behind 0, no upstream
+- `mise exec -- node scripts/mise-run.mjs pnpm architecture:check` — exit 0;
   `architecture: OK`, violations 0, baseline 0, new 0
 - `mise exec -- node scripts/mise-run.mjs pnpm typecheck` — exit 0
 - `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0; 75 warnings, 0 errors
-- `mise exec -- node scripts/mise-run.mjs pnpm fmt:check` — exit 1; pre-existing 42 files
-- changed-file `mise exec -- node scripts/mise-run.mjs pnpm exec oxfmt --check ...` — exit 0
-- `mise exec -- node scripts/mise-run.mjs pnpm build` — exit 0
-- `mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs` — exit 0;
-  130 tests / 23 suites passed
-- focused lease/data tests — exit 0; 16 tests passed
-- `mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop e2e:cua-alpha` — exit 1;
-  correctly refused because the required E2E build flag and run id were not supplied
-- `mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate -- --build-dir
-release/0.1.0-alpha.1/candidate --json` — exit 1; historical candidate rejected for old archive
-  names, ad-hoc outer signature, and developer absolute provenance
-- `mise exec -- node scripts/mise-run.mjs pnpm bundle:desktop -- --os mac --arch arm64 --dry-run` —
-  exit 0; no bundle was produced and the local isolated signing keychain was not available
+- `mise exec -- node scripts/mise-run.mjs pnpm verify:pre-push` — exit 0
+- `mise exec -- node scripts/mise-run.mjs pnpm build` — exit 0 under pinned Node 24.14.0
+- `mise exec -- node scripts/mise-run.mjs pnpm fmt:check` — exit 1; 42 pre-existing unrelated files
+  remain unformatted; no unrelated files were changed
+- `mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs
+packages/desktop/scripts/macos-window-bounds-targets.test.mjs` — exit 0; 132 tests passed
+- `mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate` — not run to completion:
+  no current `release/0.1.0-alpha.1/build/` candidate exists
+- `mise exec -- node scripts/mise-run.mjs pnpm release:assemble:candidate` — not run to completion:
+  no validation fixture exists
+- `mise exec -- node scripts/mise-run.mjs pnpm release:accept:installed` — not run: no handoff and no
+  installed-app acceptance arguments/checkpoints exist
+- `mise exec -- node scripts/mise-run.mjs pnpm bundle:desktop -- --os mac --arch arm64` — not run to
+  completion: the isolated local signing keychain is unavailable
 - `git diff --check` — exit 0
 
-Not run or blocked: full candidate bundle/validation/assembly, native foreground/semantic scripts,
-real Desktop E2E, installation, Gatekeeper, fresh TCC, software Stop, physical input, and installed
-acceptance. Earlier audit statements are historical evidence only and are not promoted to current
-passes.
+The release scripts remain fail-closed when their required artifact, argument, signature, or human
+checkpoint is absent. No gate is reported as passed from a dry run or an unrun command.
 
 ## Installed-app acceptance and final human checkpoints
 
