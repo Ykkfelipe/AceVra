@@ -9,6 +9,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isLocalEngineeringAlphaProfile } from "./desktop-release-profile.mjs";
+import { resolveWindowBoundsTargets } from "./macos-window-bounds-targets.mjs";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = join(packageRoot, "native", "macos-window-bounds", "main.swift");
@@ -43,24 +45,29 @@ if (!hasSwiftc()) {
 mkdirSync(outputDir, { recursive: true });
 
 try {
-  // 同时产出 arm64 与 x86_64 的 universal 二进制，避免发布包在另一架构上无法执行。
+  const arm64Path = `${outputPath}-arm64`;
   execFileSync(
     "xcrun",
-    ["swiftc", "-O", "-target", "arm64-apple-macos11", sourcePath, "-o", `${outputPath}-arm64`],
+    ["swiftc", "-O", "-target", "arm64-apple-macos11", sourcePath, "-o", arm64Path],
     { stdio: "inherit" },
   );
-  execFileSync(
-    "xcrun",
-    ["swiftc", "-O", "-target", "x86_64-apple-macos11", sourcePath, "-o", `${outputPath}-x86_64`],
-    { stdio: "inherit" },
-  );
-  execFileSync(
-    "lipo",
-    ["-create", `${outputPath}-arm64`, `${outputPath}-x86_64`, "-output", outputPath],
-    { stdio: "inherit" },
-  );
-  execFileSync("rm", ["-f", `${outputPath}-arm64`, `${outputPath}-x86_64`]);
-  console.log(`[window-bounds] 已构建 universal 二进制：${outputPath}`);
+  const targets = resolveWindowBoundsTargets(process.env);
+  if (targets.length === 1) {
+    // This alpha is arm64-only; do not compile an unused x86_64 slice on Apple Silicon hosts.
+    execFileSync("mv", [arm64Path, outputPath]);
+    console.log(`[window-bounds] 已构建 alpha arm64 二进制：${outputPath}`);
+  } else {
+    execFileSync(
+      "xcrun",
+      ["swiftc", "-O", "-target", "x86_64-apple-macos11", sourcePath, "-o", `${outputPath}-x86_64`],
+      { stdio: "inherit" },
+    );
+    execFileSync("lipo", ["-create", arm64Path, `${outputPath}-x86_64`, "-output", outputPath], {
+      stdio: "inherit",
+    });
+    execFileSync("rm", ["-f", arm64Path, `${outputPath}-x86_64`]);
+    console.log(`[window-bounds] 已构建 universal 二进制：${outputPath}`);
+  }
 } catch (error) {
   console.warn(
     "[window-bounds] 构建失败；权限浮窗仍可用但不会吸附：",

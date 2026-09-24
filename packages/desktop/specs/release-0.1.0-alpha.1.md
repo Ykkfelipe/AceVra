@@ -19,6 +19,16 @@ authoritative lease record. CUA owns the Helper, peer session, foreground lease,
 native cleanup. Packaging owns the clean candidate and non-secret release sidecars. UI presents
 release safety state but owns no Helper or lease state.
 
+## Deterministic gate execution
+
+The release gates run through the repository-pinned Node toolchain (`mise.toml` Node 24.14.0).
+Root build and bundle scripts must preserve that toolchain for nested workspace processes; an
+unsupported system Node is an execution error, not a reason to weaken the release artifact. The
+candidate and installed-acceptance scripts remain fail-closed when their required directories,
+arguments, signatures, or human checkpoints are absent. Architecture checks also require every
+managed module to expose its declared `module.ts` artifact; this release does not change the
+behavior of those modules.
+
 ## Profile and data isolation
 
 `local-engineering-alpha` has these exact defaults:
@@ -48,6 +58,11 @@ The profile disables normal and forced updater checks. The local alpha has no pu
 must not infer update availability from Preview, production, or a local `latest-mac.yml` file.
 
 ## Native CUA packaging and runtime
+
+The alpha packaging command must build only the declared arm64 target. On an arm64 macOS
+builder, the optional window-bounds helper is also arm64-only; x86_64 compatibility output is
+not required for this named alpha and must not make the build fail on Apple Silicon hosts that
+lack the x86_64 Swift compatibility libraries. General non-alpha packaging remains unchanged.
 
 The candidate must contain working product CUA, not merely signed payloads. The product runtime
 must use the declared public CUA entrypoints and automatically start the packaged Helper; it must
