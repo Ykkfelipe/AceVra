@@ -80,10 +80,15 @@ instead of the Agent picker, in **both** new-task drafts and existing Codex conv
 
 ## Explicit input rejection
 
-`inputRouting.mode = "reject"` is a runtime decision to refuse new input (for example while an
-external backend turn is running). When it is active, the composer keeps the editor disabled but
-must explain itself: the placeholder states that the agent is working and follow-up input is
-paused. Silent locking without copy is a presentation defect.
+`inputRouting.mode = "reject"` is a runtime decision to refuse *sending* new input (for example
+while an external backend turn is running). When it is active:
+
+- the editor stays **typeable** — a follow-up draft must never be trapped or lost;
+- sending stays blocked by the existing routing gate (`submitDisabled`), and Stop remains available;
+- the placeholder explains the state: the agent is working, but the user may type a follow-up now.
+
+Silently disabling the whole editor here (the earlier behavior) is the “locked chat” defect and is
+forbidden.
 
 ## Accessibility invariants
 

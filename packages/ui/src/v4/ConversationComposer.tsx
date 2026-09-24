@@ -2338,7 +2338,10 @@ function ConversationComposerImpl({
           taskId={sessionId}
           skillCatalogSessionId={skillCatalogSessionId}
           placeholder={placeholder}
-          disabled={disabled || mode === "reject"}
+          // inputRouting.mode=reject 只阻止“发送”（submitDisabled 已按 routingAllowsSend
+          // 关闭发送键），不禁用编辑：Codex turn 运行期间仍应允许用户先输入后续要求，
+          // 草稿不丢、turn 结束后可直接发送。整块 disabled=…||reject 正是“chat 锁死”缺陷。
+          disabled={disabled}
           submitting={pending}
           submitDisabled={pending || !routingAllowsSend || !attachmentsReady || !submissionReady}
           allowSubmitWhenEmpty={

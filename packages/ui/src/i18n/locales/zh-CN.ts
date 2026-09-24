@@ -4027,7 +4027,7 @@ const zhCN: Record<string, string> = {
   "chat.placeholder.newTaskMobile": "向智能体提问…",
   "chat.placeholder.followUpAsk": "提出后续修改要求",
   "chat.placeholder.followUpQueue": "继续输入以排队后续修改",
-  "chat.placeholder.inputPaused": "智能体正在工作，暂时不能输入",
+  "chat.placeholder.inputPaused": "智能体正在工作，你可以先输入后续要求",
   "chat.placeholder.loading": "初始化任务中",
   "chat.attachments.dragHint": "松开以添加附件",
   "chat.composer.workspaceFileDragHint": "松开以引用此文件或目录",

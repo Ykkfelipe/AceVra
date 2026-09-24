@@ -27,9 +27,9 @@ test("reject routing explains the paused input instead of locking silently", () 
   );
   assert.equal(
     enUS["chat.placeholder.inputPaused"],
-    "The agent is working — follow-up input is paused",
+    "The agent is working — you can type a follow-up now",
   );
-  assert.equal(zhCN["chat.placeholder.inputPaused"], "智能体正在工作，暂时不能输入");
+  assert.equal(zhCN["chat.placeholder.inputPaused"], "智能体正在工作，你可以先输入后续要求");
 });
 
 test("Codex backend copy states the default sentinel, picker labels, and effort tiers", () => {

@@ -4304,7 +4304,7 @@ const enUS: Record<string, string> = {
   "chat.placeholder.newTaskMobile": "Ask the agent anything…",
   "chat.placeholder.followUpAsk": "Ask for follow-up changes",
   "chat.placeholder.followUpQueue": "Keep typing to queue follow-up changes",
-  "chat.placeholder.inputPaused": "The agent is working — follow-up input is paused",
+  "chat.placeholder.inputPaused": "The agent is working — you can type a follow-up now",
   "chat.placeholder.loading": "Initializing task...",
   "chat.attachments.dragHint": "Drop to add attachments",
   "chat.composer.workspaceFileDragHint": "Drop to mention this file or folder",
