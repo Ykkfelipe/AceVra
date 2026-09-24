@@ -30,6 +30,8 @@ export interface ComputerUseRuntimeOptions {
   brokerSocketPath?: string;
   refreshMarkerPath?: string;
   ensureBrokerAvailable?: () => Promise<void>;
+  /** Host-owned capability gate; MCP request metadata cannot enable foreground control. */
+  allowForegroundControl?: () => boolean;
   env?: Record<string, string | undefined>;
   /**
    * Helper signing identifiers this runtime will accept. Defaults to the ids this repository
@@ -48,11 +50,13 @@ export {
   COMPUTER_USE_MODEL_TO_METHOD,
   COMPUTER_USE_MODEL_GUIDANCE,
   COMPUTER_USE_ROUTES,
+  COMPUTER_USE_FOREGROUND_METHODS,
   normalizeComputerUseResult,
   canonicalComputerUseMcpName,
   resolveComputerUseCapabilities,
   resolveComputerUseMethod,
   validSemanticActionInput,
+  validForegroundInput,
 } from "./capability-contract.js";
 export type {
   ComputerUseClassification,

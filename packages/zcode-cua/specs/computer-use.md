@@ -1,5 +1,91 @@
 # Computer Use permission and identity foundation
 
+## CUA-3: controlled foreground input
+
+### Product rules and owners
+
+`BACKGROUND` is the existing CUA-2 semantic route. It never acquires the desktop, moves the
+pointer, activates an app, or synthesizes a key. `EXCLUSIVE_FOREGROUND` requires an explicit
+`acquire_control` response before `activate_target`, `move_pointer`, `click`, `type_text`,
+`key_press`, `scroll`, or `drag`. A foreground method never falls back to a semantic method or
+silently acquires control. Semantic `press` and `set_value` remain preferred.
+`control_status(lease_id)` is a read-only status check for the owning UI and acceptance harness.
+
+The signed Helper owns the exclusive lease, held input state, event observation, target identity,
+and geometry snapshots. A process-wide kernel lock in a fixed per-user location serializes
+separate Helper instances on the physical desktop. The host relay continues to own the peer-bound
+session and capability admission; it neither synthesizes input nor duplicates the lease. The
+authenticated stdio host owns a separate foreground-control capability; request metadata is
+routing defense-in-depth and cannot create that capability. The model-facing runtime validates
+shapes and local desktop context before using the same broker. Remote replayable/mobile and
+subagent contexts cannot acquire or use foreground control. A
+restarted Helper has no inherited lease or observation identity. A stopped host disconnects its
+Helper; the Helper releases held events and the global lock when the connection ends.
+
+The lease records an opaque random id, owning session/task, Helper launch identity, acquisition
+and deadline, optional observed app/window, last geometry, state, and interruption timestamp.
+Its maximum life is bounded; operations cannot extend it indefinitely. A competing acquisition
+returns `exclusive_busy`. Release is idempotent for the owning lease. Missing, expired, mismatched,
+interrupted, or released leases refuse every foreground action. Target loss, focus loss, policy
+refusal, Helper/host disconnect, event-tap failure, or physical input closes the lease.
+
+### Admission and event order
+
+```text
+local task → normalized Computer tool → token-gated host relay → admitted signed Helper
+  → global desktop lock → passive event tap → exclusive lease id
+  → fresh Helper observation → geometry/target/focus check → bounded CGEvent input
+  → pointer/AX readback → delivery + application effect → release or next checked action
+physical input → tap marks interrupted → no new posts → held-input cleanup → lease release
+```
+
+The Helper uses a passive Quartz event tap to observe pointer and keyboard events. Every
+AceVra-created CGEvent carries a per-lease `eventSourceUserData` marker. Only a marker generated
+inside the current Helper lease is exempt from interruption; all other relevant events interrupt,
+including synthetic events from another process. The marker is an event classifier, never an
+authorization token. If the tap cannot be installed or remains disabled, lease acquisition or
+continuation refuses. The actual permission behavior must be measured with the signed Helper;
+an Accessibility grant alone is not presumed to prove monitoring works.
+
+### Geometry, focus, and native input
+
+The Helper issues an opaque observation id together with a timestamp, display topology and
+coordinate-space metadata. Coordinates are global Quartz display points with top-left origin;
+the observation includes each display's point bounds and pixel scale. Negative origins are valid.
+The Helper checks the observation id, age, topology, target window id/bounds, and finite coordinate
+inside the observed display before any pointer post. It refuses `stale_geometry` on a mismatch;
+it never estimates a transform. Window-relative coordinates are transformed only against the
+same revalidated window bounds. A continuing lease accepts a new Helper observation of the same
+app/window; moving windows require this refresh before another input.
+
+`activate_target` is explicit and accepts only a Helper-observed app/window. Click, typing,
+keys, scroll, and drag require the expected app/window to be foreground immediately before input.
+Typing additionally inspects the focused AX element; absent or mismatched focus, secure/password
+roles or attributes, and unreadable security state refuse. No shell launch path is involved.
+
+`move_pointer` confirms arrival from a measured cursor readback. `click` sends only a primary
+down/up pair. `scroll` clamps finite deltas; `drag` is a bounded down/move/up sequence. Key names
+and modifier combinations use a small allowlist. `type_text` is size-bounded and evidence records
+length only. Every down is paired with a defensive up in a cleanup path, including interrupted
+drag and key/modifier failure. Cleanup never begins a new user-visible action after interruption.
+
+### Results and acceptance
+
+Foreground operations are `REQUIRES_FOREGROUND` with `route: quartz_input` (or a typed refusal
+with `route: none`). They retain CUA-2.5 `effect`, evidence, classification and code fields and
+add `input_delivery` and `application_effect`. `CGEvent.post` alone does not confirm an
+application effect. A measured pointer arrival may confirm movement; click, key, scroll, and drag
+report application effect `unknown` unless an AX/pixel readback proves a target transition.
+`unknown` must never be promoted to `confirmed` by the runtime or provider projection.
+
+Deterministic tests cover lease serialization/expiry/restart, tagged versus unmarked events,
+geometry and focus refusal, bounded input, secure fields, cleanup, result separation, and all
+existing CUA security boundaries. Live acceptance uses the canonical signed ARM64 development
+Helper and a harmless local AppKit fixture. A genuine physical event is required for the final
+interruption proof; a generated unmarked CGEvent is only a deterministic classifier test. Release
+builds still require a compatible universal toolchain; this machine's ARM64 acceptance does not
+waive the x86_64 requirement.
+
 ## CUA-2.5: normalized Computer Use capability
 
 ### Current tool path (inspected before implementation)

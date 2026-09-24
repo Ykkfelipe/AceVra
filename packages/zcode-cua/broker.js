@@ -196,8 +196,18 @@ const BROKER_METHOD_KINDS = Object.freeze({
   list_apps: "read",
   list_windows: "read",
   observe: "read",
+  control_status: "read",
   press: "mutating",
   set_value: "mutating",
+  acquire_control: "mutating",
+  release_control: "mutating",
+  activate_target: "mutating",
+  move_pointer: "mutating",
+  click: "mutating",
+  type_text: "mutating",
+  key_press: "mutating",
+  scroll: "mutating",
+  drag: "mutating",
 });
 
 export function isBrokerMethod(method) {

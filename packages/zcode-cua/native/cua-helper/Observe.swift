@@ -20,7 +20,9 @@ import UniformTypeIdentifiers
 
 /// The methods this helper serves. Everything else is refused at the native dispatch boundary.
 let supportedBrokerMethods: Set<String> = [
-    "permission_status", "list_apps", "list_windows", "observe", "press", "set_value",
+    "permission_status", "list_apps", "list_windows", "observe", "control_status", "press", "set_value",
+    "acquire_control", "release_control", "activate_target", "move_pointer", "click",
+    "type_text", "key_press", "scroll", "drag",
 ]
 
 // MARK: - Observation bounds
@@ -272,6 +274,10 @@ func observeResult(params: [String: Any]) -> [String: Any] {
             "max_actions_per_element": ObservationLimits.maxActionsPerElement,
         ],
     ]
+    // 前台坐标只能绑定这次 Helper 实际看到的窗口及显示器布局，不能从模型声称的旧几何生成。
+    if let geometry = ForegroundController.shared.rememberObservation(pid: pid, windowId: windowId) {
+        result["foreground_geometry"] = geometry
+    }
     var evidence: [[String: Any]] = []
     var routes: [String] = []
     var failures: [String] = []

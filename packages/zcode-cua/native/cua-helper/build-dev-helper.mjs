@@ -64,10 +64,16 @@ const SIGNING_DIR = resolve(
 );
 const KEYCHAIN = join(SIGNING_DIR, "acevra-cua-dev.keychain-db");
 const IDENTITY = argValue("--identity", "AceVra CUA Dev Signing");
-
 if (process.platform !== "darwin") {
   console.log("[cua-helper] skipped: the helper is macOS-only");
   process.exit(0);
+}
+
+// 签名材料必须先存在；否则构建脚本若先清空安装目录，会删除仍可用的签名 Helper。
+if (!ALLOW_UNSIGNED && !existsSync(KEYCHAIN)) {
+  console.error(`[cua-helper] signing keychain missing: ${KEYCHAIN}`);
+  console.error("[cua-helper] run signing/create-dev-signing-identity.sh first");
+  process.exit(1);
 }
 
 const PRODUCT_HELPER_BUNDLE_IDS = [
@@ -197,11 +203,6 @@ if (ALLOW_UNSIGNED) {
   });
   signature = "adhoc (--allow-unsigned)";
 } else {
-  if (!existsSync(KEYCHAIN)) {
-    console.error(`[cua-helper] signing keychain missing: ${KEYCHAIN}`);
-    console.error("[cua-helper] run signing/create-dev-signing-identity.sh first");
-    process.exit(1);
-  }
   execFileSync(
     "codesign",
     [

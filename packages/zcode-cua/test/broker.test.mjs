@@ -48,24 +48,42 @@ const VERIFIED_IDENTITY = Object.freeze({
 });
 
 describe("method registry", () => {
-  it("registers CUA observation and bounded semantic methods", () => {
-    for (const method of ["permission_status", "list_apps", "list_windows", "observe"]) {
+  it("registers observations, semantic actions, and explicitly leased foreground methods", () => {
+    for (const method of [
+      "permission_status",
+      "list_apps",
+      "list_windows",
+      "observe",
+      "control_status",
+    ]) {
       assert.equal(isBrokerMethod(method), true, `${method} should be a broker method`);
       assert.equal(isReadOnlyBrokerMethod(method), true, `${method} should be read-only`);
     }
-    for (const method of ["press", "set_value"]) {
+    for (const method of [
+      "press",
+      "set_value",
+      "acquire_control",
+      "release_control",
+      "activate_target",
+      "move_pointer",
+      "click",
+      "type_text",
+      "key_press",
+      "scroll",
+      "drag",
+    ]) {
       assert.equal(isBrokerMethod(method), true);
       assert.equal(isReadOnlyBrokerMethod(method), false);
     }
   });
 
-  it("refuses every mutating name so it can never reach an actuator", () => {
+  it("refuses arbitrary and legacy actuator names", () => {
     for (const method of [
       "left_click",
       "type",
       "key",
-      "scroll",
-      "drag",
+      "left_mouse_down",
+      "key_event_blob",
       "kill_app",
       "unknown_actuator",
     ]) {
@@ -345,6 +363,40 @@ describe("Computer Use runtime", () => {
           blank: false,
         },
       }),
+      acquire_control: async () => ({
+        operation: "acquire_control",
+        effect: "confirmed",
+        route: "quartz_input",
+        classification: "REQUIRES_FOREGROUND",
+        mode: "EXCLUSIVE_FOREGROUND",
+        input_delivery: "none",
+        application_effect: "unknown",
+        evidence: [],
+        lease_id: "00000000-0000-0000-0000-000000000001",
+        helper_identity: VERIFIED_IDENTITY,
+      }),
+      click: async () => ({
+        operation: "click",
+        effect: "unknown",
+        route: "quartz_input",
+        classification: "REQUIRES_FOREGROUND",
+        mode: "EXCLUSIVE_FOREGROUND",
+        input_delivery: "confirmed",
+        application_effect: "unknown",
+        evidence: [],
+        helper_identity: VERIFIED_IDENTITY,
+      }),
+      release_control: async () => ({
+        operation: "release_control",
+        effect: "confirmed",
+        route: "quartz_input",
+        classification: "REQUIRES_FOREGROUND",
+        mode: "EXCLUSIVE_FOREGROUND",
+        input_delivery: "none",
+        application_effect: "unknown",
+        evidence: [],
+        helper_identity: VERIFIED_IDENTITY,
+      }),
       press: async (params) => ({
         operation: "press",
         semantic_ref: params.semantic_ref,
@@ -427,6 +479,87 @@ describe("Computer Use runtime", () => {
     assert.equal(result.structuredContent.effect, "unknown");
     assert.equal(result.structuredContent.classification, "BEST_EFFORT_BACKGROUND");
     assert.equal(parsed.evidence[0].verification, "unproven");
+  });
+
+  it("projects leased foreground effects without claiming click application success", async () => {
+    const runtime = createComputerUseRuntime({
+      brokerSocketPath: socketPath,
+      allowForegroundControl: () => true,
+    });
+    const context = {
+      sessionId: "session",
+      turnId: "turn",
+      runtimeScope: "main",
+      clientMode: "desktop-continuous",
+      deliveryKind: "desktop-continuous",
+    };
+    const observation_id = "00000000-0000-0000-0000-000000000002";
+    const acquired = await runtime.execute({
+      toolName: "computer.acquire_control",
+      arguments: { observation_id },
+      context,
+    });
+    assert.equal(acquired.structuredContent.lease_id, "00000000-0000-0000-0000-000000000001");
+    const clicked = await runtime.execute({
+      toolName: "computer.click",
+      arguments: {
+        observation_id,
+        lease_id: acquired.structuredContent.lease_id,
+        point: { x: -80, y: 40 },
+      },
+      context,
+    });
+    assert.equal(clicked.structuredContent.input_delivery, "confirmed");
+    assert.equal(clicked.structuredContent.application_effect, "unknown");
+    assert.equal(clicked.structuredContent.effect, "unknown");
+    const released = await runtime.execute({
+      toolName: "computer.release_control",
+      arguments: { lease_id: acquired.structuredContent.lease_id },
+      context,
+    });
+    assert.equal(released.structuredContent.effect, "confirmed");
+  });
+
+  it("rejects remote, fork, and malformed foreground requests before broker dispatch", async () => {
+    const runtime = createComputerUseRuntime({
+      brokerSocketPath: socketPath,
+      allowForegroundControl: () => true,
+    });
+    const before = seen.length;
+    const observation_id = "00000000-0000-0000-0000-000000000002";
+    const local = {
+      sessionId: "session",
+      runtimeScope: "main",
+      clientMode: "desktop-continuous",
+      deliveryKind: "desktop-continuous",
+    };
+    for (const context of [
+      { ...local, clientMode: "web-remote-replayable" },
+      { ...local, remoteSessionId: "remote" },
+      { ...local, runtimeScope: "subagent" },
+    ]) {
+      const result = await runtime.execute({
+        toolName: "computer.acquire_control",
+        arguments: { observation_id },
+        context,
+      });
+      assert.equal(result.structuredContent.code, "local_only");
+    }
+    const malformed = await runtime.execute({
+      toolName: "computer.click",
+      arguments: { lease_id: observation_id, observation_id, point: { x: NaN, y: 1 } },
+      context: local,
+    });
+    assert.equal(malformed.structuredContent.code, "bad_request");
+    assert.equal(seen.length, before);
+    const untrusted = createComputerUseRuntime({ brokerSocketPath: socketPath });
+    const forged = await untrusted.execute({
+      toolName: "computer.acquire_control",
+      arguments: { observation_id },
+      context: local,
+    });
+    assert.equal(forged.structuredContent.code, "local_only");
+    assert.equal(seen.length, before);
   });
 
   it("rejects action arguments that are not exactly semantic references before broker dispatch", async () => {

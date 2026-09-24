@@ -80,14 +80,26 @@ func brokerDispatch(
             "method '\(method)' is not available", code: "not_authorized",
             id: request["id"])
     }
-    if ["press", "set_value"].contains(method), !cuaHostConnectSessionActive {
+    if ["press", "set_value", "control_status", "acquire_control", "release_control", "activate_target",
+        "move_pointer", "click", "type_text", "key_press", "scroll", "drag"].contains(method),
+       !cuaHostConnectSessionActive {
         return brokerFail("semantic actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
     }
     let params = request["params"] as? [String: Any] ?? [:]
+    if ["acquire_control", "release_control", "activate_target", "move_pointer", "click",
+        "type_text", "key_press", "scroll", "drag"].contains(method),
+       !validForegroundBrokerParams(method, params) {
+        return brokerFail("foreground request shape is invalid", code: "bad_request", id: request["id"])
+    }
     switch method {
     case "permission_status":
         return brokerOk(permissionStatusResult(peer: peer), id: request["id"])
+    case "control_status":
+        guard Set(params.keys) == ["lease_id"] else {
+            return brokerFail("control_status requires lease_id", code: "bad_request", id: request["id"])
+        }
+        return brokerOk(ForegroundController.shared.status(params), id: request["id"])
     case "list_apps":
         return brokerOk(listAppsResult(), id: request["id"])
     case "list_windows":
@@ -121,9 +133,50 @@ func brokerDispatch(
             current, _ in current
         }
         return brokerOk(result, id: request["id"])
+    case "acquire_control":
+        return brokerOk(ForegroundController.shared.acquire(params), id: request["id"])
+    case "release_control":
+        return brokerOk(ForegroundController.shared.release(params), id: request["id"])
+    case "activate_target":
+        return brokerOk(ForegroundController.shared.activate(params), id: request["id"])
+    case "move_pointer":
+        return brokerOk(ForegroundController.shared.movePointer(params), id: request["id"])
+    case "click":
+        return brokerOk(ForegroundController.shared.click(params), id: request["id"])
+    case "type_text":
+        return brokerOk(ForegroundController.shared.typeText(params), id: request["id"])
+    case "key_press":
+        return brokerOk(ForegroundController.shared.keyPress(params), id: request["id"])
+    case "scroll":
+        return brokerOk(ForegroundController.shared.scroll(params), id: request["id"])
+    case "drag":
+        return brokerOk(ForegroundController.shared.drag(params), id: request["id"])
     default:
         return brokerFail("unreachable", code: "internal", id: request["id"])
     }
+}
+
+private func validForegroundBrokerParams(_ method: String, _ params: [String: Any]) -> Bool {
+    let common: Set<String> = ["owner_session", "owner_task"]
+    let fields: Set<String>
+    switch method {
+    case "acquire_control": fields = ["observation_id"]
+    case "release_control": fields = ["lease_id"]
+    case "activate_target": fields = ["lease_id", "observation_id"]
+    case "move_pointer", "click": fields = ["lease_id", "observation_id", "point"]
+    case "type_text": fields = ["lease_id", "observation_id", "text"]
+    case "key_press": fields = ["lease_id", "observation_id", "key", "modifiers"]
+    case "scroll": fields = ["lease_id", "observation_id", "point", "delta_x", "delta_y"]
+    case "drag": fields = ["lease_id", "observation_id", "start", "end"]
+    default: return false
+    }
+    guard Set(params.keys) == common.union(fields) else { return false }
+    for key in ["owner_session", "owner_task"] {
+        guard let value = params[key] as? String, !value.isEmpty, value.count <= 128,
+              !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        else { return false }
+    }
+    return true
 }
 
 // MARK: - Server
@@ -262,6 +315,7 @@ func runBrokerHostClient(socketPath: String, launchToken: String, connectTimeout
     // the pinned requirement above, so serve without the per-connection peer gate bind mode uses.
     cuaHostConnectSessionActive = true
     serveBrokerRequests(fd, peer: nil)
+    ForegroundController.shared.shutdown()
     close(fd)
     exit(0)  // the host session ended; an unattended helper does not linger
 }

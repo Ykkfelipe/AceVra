@@ -381,6 +381,8 @@ export function captureComputerUseRuntimeFromEnvironment(
   return createComputerUseRuntime({
     brokerSocketPath: socketPath,
     refreshMarkerPath: env.ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER?.trim(),
+    // This process is the authenticated stdio host. Request metadata remains routing data only.
+    allowForegroundControl: () => true,
   });
 }
 
