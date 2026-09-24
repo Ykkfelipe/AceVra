@@ -2,8 +2,8 @@
   "schemaVersion": 4,
   "product": "AceVra",
   "version": "0.1.0-alpha.1",
-  "buildCommitId": "0716d27d",
-  "buildTime": "2026-09-24T18:30:13.736Z",
+  "buildCommitId": "faeb0e54",
+  "buildTime": "2026-09-24T19:27:08.851Z",
   "releaseProfile": "local-engineering-alpha",
   "distribution": "local engineering alpha",
   "branch": "release/0.1.0-alpha",
@@ -41,10 +41,10 @@
     "AceVra-0.1.0-alpha.1-arm64.dmg",
     "AceVra-0.1.0-alpha.1-arm64.zip"
   ],
-  "handoff": "release/0.1.0-alpha.1/handoff-final-0716d27",
+  "handoff": "release/0.1.0-alpha.1/handoff-final-faeb0e5",
   "installedPath": "/Applications/AceVra.app",
-  "installedRevision": "0716d27d",
-  "installedBackup": "/Applications/.AceVra.app.backup-8ecc4f8d-23ce-42cf-b367-5771e348f02d",
-  "installedAcceptance": "0716d27 static codex model indicator installed; human draft-dropdown check pending",
+  "installedRevision": "faeb0e54",
+  "installedBackup": "/Applications/.AceVra.app.backup-429bdc98-518c-43c1-ab14-2c033cffb861",
+  "installedAcceptance": "faeb0e5 codex model/effort transparency installed; human check pending",
   "broaderAcceptance": "paused; no TCC changes or broader CUA/browser/provider/artifact/remote/restart acceptance"
 }

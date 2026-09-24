@@ -1653,3 +1653,21 @@ Installed `handoff-final-0716d27` (embedded `0716d27d`) via the tested runner af
 shutdown; backup `.AceVra.app.backup-8ecc4f8d-23ce-42cf-b367-5771e348f02d`; validator passed for
 raw/ZIP/DMG. Note: reasoning-effort routing for Codex (`model_reasoning_effort`) remains
 unimplemented and is explicitly not claimed.
+
+## 2026-09-24 codex model/effort transparency (`faeb0e5`)
+
+Verified against the user's installed `codex-cli 0.155.0-alpha.16.4` (schema + live handshake):
+`thread/start` accepts `model`; `turn/start` accepts `model` + `effort` overrides ("for this turn
+and subsequent turns" — mid-session switching IS supported; earlier "thread-level lock" note was
+wrong); Codex reports the adopted `model` and `reasoningEffort` in the thread/start response and
+`Thread` object.
+
+Repairs: wire/runtime/snapshot/meta now carry Codex's *reported* model/effort; turn-level
+`codexTurnOverride` on v4 sendText applies per-turn model/effort (schema-strict, allow-list
+fail-loud); composer shows a live model+effort dropdown in draft AND existing Codex sessions
+(fixes the “locked composer” and “selection doesn't stick” symptoms); existing Codex sessions no
+longer gate submission on the ZCode plan-model selection. Focused tests: 32 Codex + 9 UI passed;
+typecheck/lint/architecture clean. Installed via the tested runner (backup
+`.AceVra.app.backup-429bdc98-518c-43c1-ab14-2c033cffb861`); validator passed raw/ZIP/DMG. One
+live verification turn was executed against the user's Codex account during protocol probing
+(flagged separately; no further inference probes).
