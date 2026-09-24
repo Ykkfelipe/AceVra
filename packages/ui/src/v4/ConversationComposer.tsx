@@ -160,6 +160,7 @@ import {
 } from "@/v4/composer/V4ComposerToolbar.js";
 import { V4ComposerBackendSwitch } from "@/v4/composer/V4ComposerBackendControls.js";
 import { V4ComposerCodexModelSelect } from "@/v4/composer/V4ComposerCodexModelSelect.js";
+import { CodexComposerUsage } from "@/v4/composer/CodexComposerUsage.js";
 import { resolveCodexModelControlKind } from "@/v4/composer/composerToolbarPresentation.js";
 import {
   resolveV4ComposerConfigPickerState,
@@ -437,6 +438,7 @@ interface ConversationComposerProps {
   /** 新任务的执行后端选择（draft 态渲染）；缺省隐藏选择器。 */
   draftBackend?: ZCodeExecutionBackend;
   onSwitchBackend?: (backend: ZCodeExecutionBackend) => void;
+  onSelectAgentProvider?: (providerId: string, modelId: string) => void;
   /** Codex 后端的策划模型选择（draft 态）；null = Default 哨兵。 */
   codexModelId?: string | null;
   onSelectCodexModel?: (modelId: string | null) => void;
@@ -541,6 +543,7 @@ function ConversationComposerImpl({
   onSwitchMode,
   draftBackend,
   onSwitchBackend,
+  onSelectAgentProvider,
   codexModelId,
   onSelectCodexModel,
   codexEffort,
@@ -2080,14 +2083,17 @@ function ConversationComposerImpl({
         className={COMPOSER_TOOLBAR_GROUP_CLASS}
       >
         <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden empty:hidden">
-          {draftMode && onSwitchBackend ? (
+          {draftMode && onSwitchBackend && onSelectAgentProvider ? (
             <V4ComposerBackendSwitch
               backend={draftBackend ?? "zcode"}
+              selectedProviderId={draftConfig?.provider ?? null}
+              modelSelectionView={modelSelectionView}
               codexAvailable={codexBackendAvailable}
               disabled={disabled}
               activeConfigPicker={activeConfigPicker}
               onConfigPickerOpenChange={handleConfigPickerOpenChange}
               onSwitchBackend={onSwitchBackend}
+              onSelectAgentProvider={onSelectAgentProvider}
             />
           ) : null}
           {resolveCodexModelControlKind({
@@ -2098,15 +2104,20 @@ function ConversationComposerImpl({
             // draft + Codex 与既有 Codex 会话共用同一可交互下拉：模型是策划 allow-list，
             // effort 是 turn 级覆盖（Codex schema：作用于本 turn 及后续 turns）。
             // 展示值优先用草稿显式选择；无显式选择时显示 Codex 回报的实际生效读数。
-            <V4ComposerCodexModelSelect
-              modelId={codexModelId ?? codexActualModel ?? null}
-              effort={codexEffort ?? codexActualEffort ?? null}
-              disabled={disabled}
-              activeConfigPicker={activeConfigPicker}
-              onConfigPickerOpenChange={handleConfigPickerOpenChange}
-              onSelectModel={onSelectCodexModel ?? (() => {})}
-              onSelectEffort={onSelectCodexEffort ?? (() => {})}
-            />
+            <>
+              <CodexComposerUsage />
+              <V4ComposerCodexModelSelect
+                modelId={codexModelId ?? null}
+                actualModelId={codexActualModel ?? null}
+                effort={codexEffort ?? null}
+                actualEffort={codexActualEffort ?? null}
+                disabled={disabled}
+                activeConfigPicker={activeConfigPicker}
+                onConfigPickerOpenChange={handleConfigPickerOpenChange}
+                onSelectModel={onSelectCodexModel ?? (() => {})}
+                onSelectEffort={onSelectCodexEffort ?? (() => {})}
+              />
+            </>
           ) : (
             <V4ComposerModelControls
               workspacePath={workspacePath}
@@ -2196,6 +2207,7 @@ function ConversationComposerImpl({
       onRecoverCustomModelSelection,
       onSendCompressionCommand,
       onSwitchBackend,
+      onSelectAgentProvider,
       onSelectCodexModel,
       onSelectCodexEffort,
       onSwitchMode,

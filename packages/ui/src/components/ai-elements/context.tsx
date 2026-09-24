@@ -16,12 +16,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { createContext, useContext, useMemo } from "react";
 import { getUsage } from "tokenlens";
 import { formatCompactTokenNumber } from "@/lib/tokenNumberFormat.js";
+import { UsageRing } from "@/components/UsageRing.js";
 
 const PERCENT_MAX = 100;
-const ICON_RADIUS = 10;
-const ICON_VIEWBOX = 24;
-const ICON_CENTER = 12;
-const ICON_STROKE_WIDTH = 4;
 
 type ModelId = string;
 
@@ -73,42 +70,9 @@ export const Context = ({ usedTokens, maxTokens, usage, modelId, ...props }: Con
 
 const ContextIcon = () => {
   const { usedTokens, maxTokens } = useContextValue();
-  const circumference = 2 * Math.PI * ICON_RADIUS;
   const usedPercent = formatUsagePercent(usedTokens, maxTokens);
-  const dashOffset = circumference * (1 - usedPercent);
 
-  return (
-    <svg
-      aria-hidden="true"
-      className="size-3.5"
-      focusable="false"
-      style={{ color: "currentcolor" }}
-      viewBox={`0 0 ${ICON_VIEWBOX} ${ICON_VIEWBOX}`}
-    >
-      <circle
-        cx={ICON_CENTER}
-        cy={ICON_CENTER}
-        fill="none"
-        opacity="0.25"
-        r={ICON_RADIUS}
-        stroke="currentColor"
-        strokeWidth={ICON_STROKE_WIDTH}
-      />
-      <circle
-        cx={ICON_CENTER}
-        cy={ICON_CENTER}
-        fill="none"
-        opacity="0.7"
-        r={ICON_RADIUS}
-        stroke="currentColor"
-        strokeDasharray={`${circumference} ${circumference}`}
-        strokeDashoffset={dashOffset}
-        strokeLinecap="round"
-        strokeWidth={ICON_STROKE_WIDTH}
-        style={{ transform: "rotate(-90deg)", transformOrigin: "center" }}
-      />
-    </svg>
-  );
+  return <UsageRing percent={usedPercent} />;
 };
 
 export type ContextTriggerProps = ComponentProps<typeof Button> & {

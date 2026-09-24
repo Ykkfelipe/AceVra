@@ -100,6 +100,58 @@ test("missing Codex executable is not-installed", async () => {
   service.dispose();
 });
 
+test("Codex link survives service recreation and existing sign-in never starts OAuth", async () => {
+  const client = await executable('printf "codex-test\\n"');
+  const persisted: { codexHarnessLinkEnabled?: boolean } = {};
+  const calls: string[] = [];
+  const account = {
+    installed: true,
+    executablePath: client.path,
+    onNotification: () => () => {},
+    call: async (method: string) => {
+      calls.push(method);
+      if (method === "account/read") return { account: { type: "chatgpt" } };
+      if (method === "account/rateLimits/read") return {};
+      throw new Error(`unexpected call: ${method}`);
+    },
+    stop() {},
+    dispose() {},
+  } as unknown as CodexAppServerBridge;
+  const settingService = {
+    get: async () => ({ ...persisted }),
+    update: async (patch: { codexHarnessLinkEnabled?: boolean }) => {
+      persisted.codexHarnessLinkEnabled = patch.codexHarnessLinkEnabled;
+    },
+  } as unknown as NonNullable<Parameters<typeof createAccountBridgeService>[0]["settingService"]>;
+  const makeService = () =>
+    createAccountBridgeService({
+      codexBridge: account,
+      settingService,
+      openExternalUrl: async () => {
+        throw new Error("OAuth should not open");
+      },
+    });
+  try {
+    const first = makeService();
+    assert.equal((await first.readStatus("codex")).state, "connected");
+    await first.disconnect("codex");
+    assert.equal((await first.readStatus("codex")).state, "disconnected");
+    first.dispose();
+
+    const second = makeService();
+    assert.equal((await second.readStatus("codex")).state, "disconnected");
+    const result = await second.connect("codex");
+    assert.equal(result.status.state, "connected");
+    assert.equal(result.completed, true);
+    assert.equal(calls.includes("account/login/start"), false);
+    second.dispose();
+
+    assert.equal((await makeService().readStatus("codex")).state, "connected");
+  } finally {
+    await rm(client.dir, { recursive: true, force: true });
+  }
+});
+
 test("Claude signed-out status is disconnected and launch/status failures terminate", async () => {
   const client = await executable(
     'if [ "$1" = "--version" ]; then echo 2.0.0; else echo \'{"loggedIn":false}\'; fi',

@@ -839,7 +839,8 @@ export function InlineEditableProviderCard({
             onApiKeyCompositionEnd={handleTechnicalInputCompositionEnd}
             onToggleApiKeyVisibility={() => setApiKeyVisible((value) => !value)}
           />
-        ) : isApiKeyProvider ? (
+        ) : null}
+        {isApiKeyProvider ? (
           <p className="text-ui-sm text-foreground-subtle" data-testid="provider-credential-state">
             {intl.formatMessage({
               id:

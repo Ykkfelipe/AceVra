@@ -112,7 +112,7 @@ export const commandPayloadSchemas = {
       codexTurnOverride: z
         .object({
           modelId: z.string().trim().min(1).optional(),
-          effort: z.enum(["minimal", "low", "medium", "high"]).optional(),
+          effort: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]).optional(),
         })
         .strict()
         .optional(),

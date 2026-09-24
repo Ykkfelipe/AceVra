@@ -165,9 +165,12 @@ export function AccountBridgeDetailView({
               <Loader2Icon className="size-3.5 animate-spin" aria-hidden="true" />
             ) : null}
             {intl.formatMessage({
-              id: verifiedSignedIn
-                ? "settings.accounts.action.reconnect"
-                : "settings.accounts.action.connect",
+              id:
+                isCodex && status?.state === "disconnected" && !status.sourceSignInChecked
+                  ? "settings.accounts.action.enableLink"
+                  : verifiedSignedIn
+                    ? "settings.accounts.action.reconnect"
+                    : "settings.accounts.action.connect",
             })}
           </Button>
         }

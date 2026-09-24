@@ -35,6 +35,17 @@ export function resolveAccountBridgeStatusView(
     case "error":
       return { tone: "red", labelId: "settings.accounts.bridge.error", spinning: false };
     default:
+      if (status.source === "codex") {
+        // 修复依据：桥接关闭时 host 不执行 account/read，sourceSignedIn 只是占位值；
+        // 本机 Codex 会话仍可能运行，不能把桥接关闭显示成 Codex 本身不可用。
+        return {
+          tone: "subtle",
+          labelId: status.sourceSignInChecked
+            ? "settings.accounts.bridge.codexSignInNeeded"
+            : "settings.accounts.bridge.codexLinkOff",
+          spinning: false,
+        };
+      }
       return { tone: "subtle", labelId: "settings.accounts.bridge.disconnected", spinning: false };
   }
 }

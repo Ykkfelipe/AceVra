@@ -1,10 +1,8 @@
 // v4 命令信封 → Codex 动作（app 层）。
 // sendText → turn/start；stop → turn/interrupt；resolveInteraction → 审批应答；
 // renameSession → 任务索引标题；其余命令一律 rejected（fault.command.unsupportedBackend）。
-import type {
-  CommandAck,
-  CommandEnvelope,
-} from "@zcode/shared/zcode-protocol-v4";
+import type { CommandAck, CommandEnvelope } from "@zcode/shared/zcode-protocol-v4";
+import type { CodexEffortOption } from "@zcode/shared";
 import { CODEX_METHODS, scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
 import type { CodexTaskRuntime } from "./codexTaskRuntime.js";
@@ -20,7 +18,7 @@ interface CodexCommandContext {
     commandId?: string;
     /** v4 sendText payload 携带的 turn 级模型/effort 覆盖（providerId=codex 才有值）。 */
     modelId?: string;
-    effort?: "minimal" | "low" | "medium" | "high";
+    effort?: CodexEffortOption;
   }): Promise<void>;
   now(): number;
 }
@@ -73,7 +71,8 @@ export async function handleConversationCommand(
           ? (payload.codexTurnOverride as { modelId?: unknown; effort?: unknown })
           : null;
       const modelId = typeof override?.modelId === "string" ? override.modelId : undefined;
-      const effort = typeof override?.effort === "string" ? (override.effort as "minimal" | "low" | "medium" | "high") : undefined;
+      const effort =
+        typeof override?.effort === "string" ? (override.effort as CodexEffortOption) : undefined;
       try {
         await context.sendTurn({
           taskId,
@@ -126,10 +125,17 @@ export async function handleConversationCommand(
           message: scrubCodexErrorDetail(error instanceof Error ? error.message : String(error)),
         });
       }
-      return ackOf({ commandId: envelope.commandId, status: "accepted", revisionAtDecision: revision() });
+      return ackOf({
+        commandId: envelope.commandId,
+        status: "accepted",
+        revisionAtDecision: revision(),
+      });
     }
     case "resolveInteraction": {
-      const payload = envelope.payload as { interactionId?: unknown; answer?: { optionId?: unknown } };
+      const payload = envelope.payload as {
+        interactionId?: unknown;
+        answer?: { optionId?: unknown };
+      };
       const interactionId = typeof payload.interactionId === "string" ? payload.interactionId : "";
       const optionId = payload.answer?.optionId === "approved" ? "approved" : "denied";
       const resolution = runtime.projection.resolveApproval(interactionId, optionId);
@@ -166,7 +172,11 @@ export async function handleConversationCommand(
           patch: { title, titleOverridden: true, updatedAt: context.now() },
         });
       }
-      return ackOf({ commandId: envelope.commandId, status: "accepted", revisionAtDecision: revision() });
+      return ackOf({
+        commandId: envelope.commandId,
+        status: "accepted",
+        revisionAtDecision: revision(),
+      });
     }
     default:
       return ackOf({

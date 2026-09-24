@@ -13,7 +13,12 @@
 // 安全姿态：普通路径一律 safeInteractive（审批开启 + 只读沙箱）；unrestricted 仅作为
 // 显式宿主级预设保留（ZCODE_CODEX_EXECUTION_POLICY 环境变量显式指名），绝不允许成为
 // 默认值。未知名称 fail closed 回落到默认策略。
-import { isCodexEffortOption, isCodexModelOptionId, type CodexEffortOption } from "@zcode/shared";
+import {
+  codexModelReasoningEfforts,
+  isCodexEffortOption,
+  isCodexModelOptionId,
+  type CodexEffortOption,
+} from "@zcode/shared";
 
 /** thread/turn 级模型/effort 覆盖（allow-list 校验后的透传形状）。 */
 export interface CodexModelOverride {
@@ -37,6 +42,13 @@ export function resolveCodexModelOverride(params: {
   }
   if (effort && !isCodexEffortOption(effort)) {
     throw new Error(`codex_effort_not_allowed: ${effort}`);
+  }
+  if (
+    modelId &&
+    effort &&
+    !codexModelReasoningEfforts(modelId).includes(effort as CodexEffortOption)
+  ) {
+    throw new Error(`codex_effort_not_supported_for_model: ${modelId}/${effort}`);
   }
   return {
     ...(modelId ? { modelId } : {}),
@@ -81,7 +93,10 @@ export function resolveCodexExecutionPolicy(name: string | null | undefined): {
 } {
   const key = typeof name === "string" ? name.trim() : "";
   if (key && (PRESET_NAMES as readonly string[]).includes(key)) {
-    return { policy: CODEX_EXECUTION_POLICY_PRESETS[key as CodexExecutionPolicyPresetName], adoptedDefault: false };
+    return {
+      policy: CODEX_EXECUTION_POLICY_PRESETS[key as CodexExecutionPolicyPresetName],
+      adoptedDefault: false,
+    };
   }
   return { policy: DEFAULT_CODEX_EXECUTION_POLICY, adoptedDefault: Boolean(key) };
 }

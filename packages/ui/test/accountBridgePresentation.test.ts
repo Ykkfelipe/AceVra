@@ -51,7 +51,27 @@ test("bridge state maps to the shipped status tones and labels", () => {
     "connecting must spin",
   );
   assert.equal(resolveAccountBridgeStatusView(status({ state: "error" })).tone, "red");
-  assert.equal(resolveAccountBridgeStatusView(status({ state: "disconnected" })).tone, "subtle");
+  assert.deepEqual(
+    resolveAccountBridgeStatusView(
+      status({ state: "disconnected", sourceSignInChecked: false, sourceSignedIn: false }),
+    ),
+    {
+      tone: "subtle",
+      labelId: "settings.accounts.bridge.codexLinkOff",
+      spinning: false,
+    },
+  );
+  assert.equal(
+    resolveAccountBridgeStatusView(
+      status({ state: "disconnected", sourceSignInChecked: true, sourceSignedIn: false }),
+    ).labelId,
+    "settings.accounts.bridge.codexSignInNeeded",
+  );
+  assert.equal(
+    resolveAccountBridgeStatusView(status({ source: "claude-code", state: "disconnected" }))
+      .labelId,
+    "settings.accounts.bridge.disconnected",
+  );
 });
 
 test("sign-in is only treated as a fact when the host actually checked it", () => {

@@ -16,6 +16,7 @@ test("the curated Codex model list is an exact, unique allow-list", () => {
     "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-5.6-luna",
+    "gpt-5.5",
   ]);
   for (const option of CODEX_MODEL_OPTIONS) {
     assert.equal(typeof option.label, "string");
@@ -40,13 +41,13 @@ test("codex model label lookup covers curated ids and falls back verbatim", () =
   assert.equal(codexModelOptionLabel("unknown-model"), "unknown-model");
 });
 
-test("codex effort allow-list covers the gpt-5/6 stable tiers only", async () => {
+test("codex effort tiers match the reviewed model-specific catalog", async () => {
   const { CODEX_EFFORT_OPTIONS, isCodexEffortOption } = await import("../src/codex-execution.js");
-  assert.deepEqual([...CODEX_EFFORT_OPTIONS], ["minimal", "low", "medium", "high"]);
+  assert.deepEqual([...CODEX_EFFORT_OPTIONS], ["low", "medium", "high", "xhigh", "max", "ultra"]);
   for (const value of CODEX_EFFORT_OPTIONS) {
     assert.equal(isCodexEffortOption(value), true);
   }
-  assert.equal(isCodexEffortOption("xhigh"), false);
+  assert.equal(isCodexEffortOption("minimal"), false);
   assert.equal(isCodexEffortOption(""), false);
   assert.equal(isCodexEffortOption(null), false);
 });

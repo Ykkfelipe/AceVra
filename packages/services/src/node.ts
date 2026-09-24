@@ -2588,6 +2588,7 @@ export function createLocalServices(options: {
         // Host-side only: the Codex OAuth callback targets localhost on this machine, so
         // the URL must be opened here and never forwarded to a remote browser.
         codexBridge: codexAppServerBridge,
+        settingService,
         openExternalUrl: openExternalUrlOnHost,
       }),
     )

@@ -24,6 +24,7 @@ import {
   testId,
   ZCODE_AGENT_PROVIDER,
   type ZCodeExecutionBackend,
+  type CodexEffortOption,
 } from "@zcode/shared";
 import { useCodexExecutionService } from "@/hooks/useCodexExecutionService.js";
 import type {
@@ -1243,6 +1244,7 @@ export function SessionPane({
     draftConfigRef,
     resolveInitialDraftConfig,
     handleDraftSelectModel,
+    handleDraftSelectProvider,
     handleDraftSelectThought,
     handleDraftSwitchMode,
     handleDraftSwitchBackend,
@@ -2621,9 +2623,7 @@ export function SessionPane({
           ...(workspaceIdentity ? { workspaceIdentity } : {}),
           firstInput: effectiveText,
           ...(selectedCodexModelId ? { modelId: selectedCodexModelId } : {}),
-          ...(selectedCodexEffort
-            ? { effort: selectedCodexEffort as "minimal" | "low" | "medium" | "high" }
-            : {}),
+          ...(selectedCodexEffort ? { effort: selectedCodexEffort as CodexEffortOption } : {}),
         });
         handleDraftSessionCreated(created.task.taskId, groupedDraftTaskAtSend, createSourceAtSend);
         return "sent" as const;
@@ -2924,9 +2924,7 @@ export function SessionPane({
         isCodexSession && (codexModelId || codexEffort)
           ? {
               ...(codexModelId ? { modelId: codexModelId } : {}),
-              ...(codexEffort
-                ? { effort: codexEffort as "minimal" | "low" | "medium" | "high" }
-                : {}),
+              ...(codexEffort ? { effort: codexEffort as CodexEffortOption } : {}),
             }
           : undefined;
       const ack = await dispatchSubmissionCommand(
@@ -4469,13 +4467,14 @@ export function SessionPane({
       onSwitchMode={handleSwitchMode}
       draftBackend={draftBackend}
       onSwitchBackend={isDraft ? handleDraftSwitchBackend : undefined}
+      onSelectAgentProvider={isDraft ? handleDraftSelectProvider : undefined}
       codexModelId={codexModelId}
       onSelectCodexModel={handleDraftSelectCodexModel}
       codexEffort={codexEffort}
       onSelectCodexEffort={handleDraftSelectCodexEffort}
       codexSession={isCodexSession}
-      codexActualModel={isCodexSession ? (snapshot?.config.model || null) : null}
-      codexActualEffort={isCodexSession ? (snapshot?.config.thought || null) : null}
+      codexActualModel={isCodexSession ? snapshot?.config.model || null : null}
+      codexActualEffort={isCodexSession ? snapshot?.config.thought || null : null}
       codexBackendAvailable={codexExecutionService != null}
       onOpenRunningBackgroundWorks={
         sessionId && runningBackgroundWorkCount > 0 ? handleOpenRunningBackgroundWorks : undefined

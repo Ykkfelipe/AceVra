@@ -7,6 +7,8 @@ import { applyComposerPermissionGrant } from "@/v4/composer/composerPermissionGr
 // 统一来自目标 Host ModelSelectionView。
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  codexModelReasoningEfforts,
+  isCodexEffortOption,
   ZCODE_AGENT_PROVIDER,
   resolveExecutionState,
   type ZCodeExecutionBackend,
@@ -99,6 +101,7 @@ interface DraftConfigControl {
     expectedSelection?: ModelSelection,
   ) => () => void;
   handleDraftSelectModel: (modelProvider: string, model: string) => void;
+  handleDraftSelectProvider: (providerId: string, modelId: string) => void;
   handleDraftSelectThought: (thought: string) => void;
   handleDraftSwitchMode: (mode: string) => void;
   /** draft 态执行后端选择（ZCode | Codex）；只写草稿意图，不触达 runtime。 */
@@ -439,6 +442,23 @@ export function useDraftConfigControl(params: {
     [modelSelectionView, updateDraftConfig, workspaceIdentity, workspacePath],
   );
 
+  const handleDraftSelectProvider = useCallback(
+    (providerId: string, modelId: string) => {
+      const selected = { providerId, modelId };
+      const modelSelection = modelSelectionView
+        ? (completeNewModelSelection(modelSelectionView, selected) ?? selected)
+        : selected;
+      // 修复：供应商和模型须在同一草稿写入中切换，避免首发读到旧后端配新模型。
+      updateComposerDraft((current) => ({
+        ...current,
+        executionBackend: "zcode",
+        modelSelection,
+        initializeFromNewTask: undefined,
+      }));
+    },
+    [modelSelectionView, updateComposerDraft],
+  );
+
   const handleDraftSelectThought = useCallback(
     (thought: string) => {
       updateDraftConfig((current) => {
@@ -502,7 +522,14 @@ export function useDraftConfigControl(params: {
   // 只在 draft 首发、建任务时生效，作用域与 executionBackend 一致。
   const handleDraftSelectCodexModel = useCallback(
     (modelId: string | null) => {
-      updateComposerDraft((current) => ({ ...current, codexModelId: modelId }));
+      updateComposerDraft((current) => ({
+        ...current,
+        codexModelId: modelId,
+        ...(isCodexEffortOption(current.codexEffort) &&
+        !codexModelReasoningEfforts(modelId).includes(current.codexEffort)
+          ? { codexEffort: null }
+          : {}),
+      }));
     },
     [updateComposerDraft],
   );
@@ -526,6 +553,7 @@ export function useDraftConfigControl(params: {
     promoteComposerDraft,
     captureAcceptedModelSelection,
     handleDraftSelectModel,
+    handleDraftSelectProvider,
     handleDraftSelectThought,
     handleDraftSwitchMode,
     handleDraftSwitchBackend,

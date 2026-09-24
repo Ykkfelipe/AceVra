@@ -161,10 +161,43 @@ demand with the rest of the status.
 
 ### Sign-in state honesty
 
-Codex answers `account/read` only while its app-server child process is running, and the
-harness link is in-memory. A snapshot taken with the link disabled therefore carries a
-placeholder `sourceSignedIn: false`. `AccountBridgeStatus.sourceSignInChecked` marks whether
-the source was actually asked, and the UI only states "Signed in"/"Signed out" when it was.
+Codex answers `account/read` only while its app-server child process is running. The harness
+link preference is persisted in app settings, without credentials. On upgrade, a missing Codex
+preference defaults to enabled so an existing Codex sign-in is recognized; an explicit disconnect
+persists disabled across host and app restarts. Claude Code keeps its prior disabled default.
+When the Codex link is disabled, `sourceSignInChecked` remains false because the source is not
+asked. The UI only states "Signed in"/"Signed out" when it was actually checked.
+
+The account service owns link transitions and reads/writes the preference through the settings
+service. On Connect, it checks `account/read` first. An existing account enables the link and
+returns connected without starting OAuth. A missing account starts browser sign-in; completion
+then re-reads the source. A source read failure is an error and must not trigger another OAuth
+round trip. Disconnect persists disabled and never logs out of Codex. Local task execution
+still checks Codex sign-in directly, independent of this optional settings link.
+
+```mermaid
+sequenceDiagram
+  participant UI as Settings
+  participant A as Account service
+  participant P as Settings service
+  participant C as Codex app-server
+  UI->>A: read status
+  A->>P: read link preference
+  P-->>A: enabled (missing Codex value = true)
+  A->>C: account/read
+  C-->>A: source account or error
+  A-->>UI: verified status
+  UI->>A: Connect (if needed)
+  A->>C: account/read
+  alt already signed in
+    A->>P: persist enabled
+    A-->>UI: connected, no OAuth
+  else signed out
+    A->>P: persist enabled
+    A->>C: account/login/start
+    A-->>UI: browser sign-in result
+  end
+```
 
 ## Claude Code — account connection via the CLI auth surface
 

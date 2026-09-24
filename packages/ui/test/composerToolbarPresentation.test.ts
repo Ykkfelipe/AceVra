@@ -7,6 +7,7 @@ import {
   COMPOSER_TOOLBAR_TRIGGER_CLASS,
   resolveCodexModelControlKind,
 } from "../src/v4/composer/composerToolbarPresentation.js";
+import { resolveV4ComposerConfigPickerState } from "../src/v4/composer/configPickerState.js";
 
 test("the built-in composer backend is presented as a generalized agent", () => {
   assert.equal(enUS["chat.toolbar.backend.zcode.label"], "Agent");
@@ -71,4 +72,17 @@ test("codex model control is interactive in both draft and created codex session
     resolveCodexModelControlKind({ draftMode: false, codexSession: false, backend: "zcode" }),
     null,
   );
+});
+
+test("Codex model and effort menus occupy separate picker slots", () => {
+  assert.equal(resolveV4ComposerConfigPickerState(null, "codexModel", true), "codexModel");
+  assert.equal(
+    resolveV4ComposerConfigPickerState("codexModel", "codexEffort", true),
+    "codexEffort",
+  );
+  assert.equal(
+    resolveV4ComposerConfigPickerState("codexEffort", "codexModel", false),
+    "codexEffort",
+  );
+  assert.equal(resolveV4ComposerConfigPickerState("codexEffort", "codexEffort", false), null);
 });

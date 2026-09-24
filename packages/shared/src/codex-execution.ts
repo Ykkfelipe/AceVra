@@ -26,15 +26,44 @@ export function isZCodeExecutionBackend(value: unknown): value is ZCodeExecution
 export interface CodexModelOption {
   readonly id: string;
   readonly label: string;
+  readonly reasoningEfforts: readonly CodexEffortOption[];
 }
 
+export const CODEX_EFFORT_OPTIONS = ["low", "medium", "high", "xhigh", "max", "ultra"] as const;
+export type CodexEffortOption = (typeof CODEX_EFFORT_OPTIONS)[number];
+
 export const CODEX_MODEL_OPTIONS: readonly CodexModelOption[] = [
-  { id: "gpt-6-astra", label: "GPT-6 Astra" },
-  { id: "gpt-6-sol", label: "GPT-6 Sol" },
-  { id: "gpt-6-luna", label: "GPT-6 Luna" },
-  { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
-  { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
-  { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+  {
+    id: "gpt-6-astra",
+    label: "GPT-6 Astra",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
+    id: "gpt-6-sol",
+    label: "GPT-6 Sol",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
+    id: "gpt-6-luna",
+    label: "GPT-6 Luna",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+  },
+  {
+    id: "gpt-5.6-sol",
+    label: "GPT-5.6 Sol",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
+    id: "gpt-5.6-terra",
+    label: "GPT-5.6 Terra",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
+    id: "gpt-5.6-luna",
+    label: "GPT-5.6 Luna",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+  },
+  { id: "gpt-5.5", label: "GPT-5.5", reasoningEfforts: ["low", "medium", "high", "xhigh"] },
 ];
 
 const CODEX_MODEL_IDS = new Set(CODEX_MODEL_OPTIONS.map((option) => option.id));
@@ -48,13 +77,15 @@ export function codexModelOptionLabel(id: string): string {
   return CODEX_MODEL_OPTIONS.find((option) => option.id === id)?.label ?? id;
 }
 
-/**
- * Codex reasoning effort allow-list。schema 层面 effort 是「模型 advertised 的非空字符串」，
- * 无法本地枚举；gpt-5/6 家族对外稳定支持的是这四档。超出范围的值可能在 turn/start
- * 被拒，因此 UI 与 host 都以此 allow-list 为准。
- */
-export const CODEX_EFFORT_OPTIONS = ["minimal", "low", "medium", "high"] as const;
-export type CodexEffortOption = (typeof CODEX_EFFORT_OPTIONS)[number];
+/** Return the advertised, curated effort tiers for a selected model. */
+export function codexModelReasoningEfforts(
+  modelId: string | null | undefined,
+): readonly CodexEffortOption[] {
+  return (
+    CODEX_MODEL_OPTIONS.find((option) => option.id === modelId)?.reasoningEfforts ??
+    CODEX_EFFORT_OPTIONS
+  );
+}
 
 export function isCodexEffortOption(value: unknown): value is CodexEffortOption {
   return typeof value === "string" && (CODEX_EFFORT_OPTIONS as readonly string[]).includes(value);
@@ -82,11 +113,7 @@ export interface CodexExecutionCreateTaskParams {
   readonly firstInput?: string;
   /** 可选标题；缺省由首条输入截取。 */
   readonly title?: string;
-  /**
-   * Codex 模型选择（`CODEX_MODEL_OPTIONS` 的 id）；缺省/空 = Default 哨兵，
-   * thread/start 不携带 model 字段，沿用 Codex 应用自身设置。thread 级参数：
-   * 仅在建任务时生效，无 mid-session 切换。
-   */
+  /** Codex 模型选择；缺省/空 = Default 哨兵，沿用 Codex 应用自身设置。 */
   readonly modelId?: string;
   /** 首个 turn 的 reasoning effort 覆盖（`CODEX_EFFORT_OPTIONS`）；缺省 = 不覆盖。 */
   readonly effort?: CodexEffortOption;

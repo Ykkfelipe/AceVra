@@ -10,7 +10,9 @@ import type {
 } from "./config/index.js";
 import {
   ApiKeyAccessConfig,
+  isApiKeyAccess,
   ModelConfig,
+  ProviderApiConfig,
   ProviderConfigMap,
   ProviderConfig as ProviderConfigValue,
   ProviderTemplateMap,
@@ -93,6 +95,33 @@ function writableProviderOverlay(
   throw new Error(`Provider 不存在: ${providerId}`);
 }
 
+function preserveOmittedProviderSecrets(
+  incoming: ProviderConfig,
+  stored: ProviderConfig | undefined,
+): ProviderConfig {
+  if (!stored) return incoming;
+  let access = incoming.access;
+  let api = incoming.api;
+  if (
+    isApiKeyAccess(access) &&
+    isApiKeyAccess(stored.access) &&
+    access.type === stored.access.type &&
+    access.apiKey === undefined &&
+    stored.access.apiKey !== undefined
+  ) {
+    // 修复原因：Settings View 必须剔除已保存的 Key；后续公开字段保存若把缺省当清空，
+    // 会覆盖 Host 唯一的凭据事实。只有显式空串/null 才代表用户要求清除。
+    access = new ApiKeyAccessConfig({ ...access.toJSON(), apiKey: stored.access.apiKey });
+  }
+  if (api && stored.api && api.headers === undefined && stored.api.headers !== undefined) {
+    // 同一安全边界也剔除私有 headers；保留省略字段，显式 {} 仍可清空。
+    api = new ProviderApiConfig({ ...api.toJSON(), headers: stored.api.headers });
+  }
+  return access === incoming.access && api === incoming.api
+    ? incoming
+    : new ProviderConfigValue({ ...incoming, access, api });
+}
+
 export class ProviderConfigService implements ProviderSource<ProviderConfigSnapshot> {
   readonly #zcodeBuiltinSource: ProviderSource<ProviderConfigLayerSnapshot>;
   readonly #personalRepository: PersonalProviderConfigRepository;
@@ -170,7 +199,7 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
       if (!currentPersonal && !builtin) {
         throw new Error(`Personal Provider 尚未创建: ${providerId}`);
       }
-      let normalized = config;
+      let normalized = preserveOmittedProviderSecrets(config, currentPersonal);
       if (builtin) {
         if (normalized.group != null && normalized.group !== builtin.group) {
           throw new Error(`Personal Overlay 不能改写 Built-in Provider group: ${providerId}`);

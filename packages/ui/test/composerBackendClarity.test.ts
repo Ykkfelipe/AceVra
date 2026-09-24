@@ -37,10 +37,14 @@ test("Codex backend copy states the default sentinel, picker labels, and effort 
   assert.equal(enUS["chat.toolbar.backend.codex.modelPickerLabel"], "Codex model");
   assert.equal(enUS["chat.toolbar.backend.codex.modelDefault"], "Default (Codex app setting)");
   assert.equal(enUS["chat.toolbar.backend.codex.effort.label"], "Reasoning effort");
+  assert.equal(enUS["chat.toolbar.backend.codex.effort.default"], "Default");
+  assert.equal(enUS["chat.toolbar.backend.codex.usage.label"], "Codex usage");
   assert.equal(enUS["chat.toolbar.backend.codex.effort.high"], "High");
   assert.equal(zhCN["chat.toolbar.backend.codex.modelManaged"], "Codex 默认");
   assert.equal(zhCN["chat.toolbar.backend.codex.modelPickerLabel"], "Codex 模型");
   assert.equal(zhCN["chat.toolbar.backend.codex.modelDefault"], "默认（Codex 应用设置）");
   assert.equal(zhCN["chat.toolbar.backend.codex.effort.label"], "推理强度");
+  assert.equal(zhCN["chat.toolbar.backend.codex.effort.default"], "默认");
+  assert.equal(zhCN["chat.toolbar.backend.codex.usage.label"], "Codex 用量");
   assert.equal(zhCN["chat.toolbar.backend.codex.effort.high"], "高");
 });

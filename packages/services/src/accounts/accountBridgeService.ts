@@ -26,6 +26,7 @@ import type {
   AccountBridgeUsage,
 } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import type { ISettingService } from "#src/setting/setting.js";
 import { CodexAppServerBridge } from "#src/accounts/codexAppServerBridge.js";
 import { discoverExecutable } from "#src/accounts/executableDiscovery.js";
 import {
@@ -38,12 +39,6 @@ const execFileAsync = promisify(execFile);
 const logger = createServiceLogger("account-bridge");
 
 const LOGIN_COMPLETION_TIMEOUT_MS = 5 * 60_000;
-
-/** Harness-side link state, persisted per source. Contains no credential material. */
-interface HarnessLinkState {
-  enabled: boolean;
-  lastError?: string;
-}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -62,6 +57,8 @@ function sanitizeError(error: unknown): string {
 }
 
 export interface AccountBridgeServiceDeps {
+  /** Persists the user's harness link choice without touching source credentials. */
+  readonly settingService?: Pick<ISettingService, "get" | "update">;
   /** Opens a URL with the host's default browser. Host-side only. */
   readonly openExternalUrl: (url: string) => Promise<void>;
   readonly codexExecutablePath?: string;
@@ -87,10 +84,30 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
     extraCandidates: ["~/.local/bin/claude", "~/.claude/local/claude"],
   });
 
-  const links: Record<AccountBridgeSource, HarnessLinkState> = {
-    codex: { enabled: false },
-    "claude-code": { enabled: false },
+  const fallbackLinks: Record<AccountBridgeSource, boolean> = {
+    codex: true,
+    "claude-code": false,
   };
+
+  async function linkEnabled(source: AccountBridgeSource): Promise<boolean> {
+    if (!deps.settingService) return fallbackLinks[source];
+    const settings = await deps.settingService.get();
+    return source === "codex"
+      ? (settings.codexHarnessLinkEnabled ?? true)
+      : (settings.claudeHarnessLinkEnabled ?? false);
+  }
+
+  async function setLinkEnabled(source: AccountBridgeSource, enabled: boolean): Promise<void> {
+    if (!deps.settingService) {
+      fallbackLinks[source] = enabled;
+      return;
+    }
+    await deps.settingService.update(
+      source === "codex"
+        ? { codexHarnessLinkEnabled: enabled }
+        : { claudeHarnessLinkEnabled: enabled },
+    );
+  }
 
   /** Latest login completion, keyed by the opaque loginId. No credential material. */
   const loginCompletions = new Map<string, { success: boolean; error?: string }>();
@@ -132,7 +149,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
     if (!codex.installed) {
       return { ...base, state: "not-installed", sourceSignedIn: false, sourceSignInChecked: false };
     }
-    if (!links.codex.enabled) {
+    if (!(await linkEnabled("codex"))) {
       // Bridge intentionally disabled; do not start the child process.
       // `account/read` is therefore never asked, so the sign-in state is unknown, not false.
       return { ...base, state: "disconnected", sourceSignedIn: false, sourceSignInChecked: false };
@@ -154,7 +171,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       const signedIn = Boolean(account);
       return {
         ...base,
-        state: signedIn && links.codex.enabled ? "connected" : "disconnected",
+        state: signedIn ? "connected" : "disconnected",
         sourceSignedIn: signedIn,
         sourceSignInChecked: true,
         ...(identity ? { identity } : {}),
@@ -182,8 +199,20 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
         status: await readCodexStatus(),
       };
     }
-    links.codex.enabled = true;
     try {
+      // 旧实现每次点击 Connect 都启动 OAuth，尽管本机 Codex 已登录；先询问源账号。
+      const existing = (await codex.call("account/read", {}, 15_000)) as {
+        account?: Record<string, unknown> | null;
+      };
+      await setLinkEnabled("codex", true);
+      if (existing?.account) {
+        return {
+          source: "codex",
+          started: true,
+          completed: true,
+          status: await readCodexStatus(),
+        };
+      }
       const started = (await codex.call("account/login/start", { type: "chatgpt" })) as {
         authUrl?: string;
         loginId?: string;
@@ -214,7 +243,6 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       };
     } catch (error) {
       const reason = sanitizeError(error);
-      links.codex.lastError = reason;
       return { source: "codex", started: false, error: reason, status: await readCodexStatus() };
     }
   }
@@ -304,7 +332,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       const loggedIn = (parsed as { loggedIn?: unknown } | null)?.loggedIn === true;
       return {
         ...base,
-        state: loggedIn && links["claude-code"].enabled ? "connected" : "disconnected",
+        state: loggedIn && (await linkEnabled("claude-code")) ? "connected" : "disconnected",
         sourceSignedIn: loggedIn,
         sourceSignInChecked: true,
         ...(identity ? { identity } : {}),
@@ -330,7 +358,7 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
         status: before,
       };
     }
-    links["claude-code"].enabled = true;
+    await setLinkEnabled("claude-code", true);
     if (before.sourceSignedIn) {
       // Already signed in at the source; enabling the bridge is all that is required.
       return {
@@ -351,7 +379,6 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
       };
     } catch (error) {
       const reason = sanitizeError(error);
-      links["claude-code"].lastError = reason;
       return {
         source: "claude-code",
         started: true,
@@ -409,8 +436,8 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
      * Deliberately does NOT call Codex `account/logout` or `claude auth logout`.
      */
     async disconnect(source: AccountBridgeSource): Promise<AccountBridgeStatus> {
-      links[source].enabled = false;
-      delete links[source].lastError;
+      // 旧内存标志在 Host 重启时丢失，导致已登录用户反复看到未链接；显式选择写入设置。
+      await setLinkEnabled(source, false);
       // stop(), not dispose(): the harness link is disabled but the bridge stays restartable,
       // and the user's Codex login is untouched either way.
       if (source === "codex") codex.stop();
@@ -421,10 +448,10 @@ export function createAccountBridgeService(deps: AccountBridgeServiceDeps) {
     async reconnectBridge(source: AccountBridgeSource): Promise<AccountBridgeStatus> {
       if (source === "codex") {
         codex.stop();
-        links.codex.enabled = true;
+        await setLinkEnabled("codex", true);
         await codex.ensureStarted().catch(() => undefined);
       } else {
-        links["claude-code"].enabled = true;
+        await setLinkEnabled("claude-code", true);
       }
       return source === "codex" ? readCodexStatus() : readClaudeStatus();
     },

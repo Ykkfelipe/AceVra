@@ -7,6 +7,11 @@
 - `AccountBridgeDetail` owns only presentation of the harness connection and the reported
   source sign-in fact. Disconnect stops the harness bridge; it never logs the source account
   out.
+- The Codex account bridge is separate from Codex task execution. With the bridge disabled,
+  `account/read` is not called and source sign-in is unknown, even when a local Codex chat can
+  run. Settings must label that state **AceVra account link off**, not imply Codex chat is
+  unavailable or that the source account is signed out. A checked, unsigned account uses a
+  distinct **Codex sign-in needed** label. The host remains the single owner of both facts.
 - `CommandCodeCliStatus` presents the supported CLI status in the Command Code provider
   detail. The provider remains the sole Command Code navigation identity.
 - Coding Plan account status and optional plan/catalog inventory have separate owners. A
@@ -24,9 +29,17 @@
 
 ## Product rules
 
+- A custom provider API key field is blank after a saved credential is sanitized out of the
+  Settings view. The form shows the authoritative `credentialState` beside the input so a blank
+  field is not mistaken for a failed save. Editing another provider field does not clear the
+  saved key. A new provider with no models displays the next step before it can appear in chat.
+
 - Codex usage displays only backend-reported percentages, reset timestamps, and window
   durations. Labels derive deterministically from returned duration: 300 minutes means
   5-hour; 10080 minutes means weekly; other values remain generic.
+- Each Codex usage window keeps its remaining percentage text and horizontal bar, and adds a
+  circular remaining-usage indicator using the same reported percentage and shared context-ring
+  presentation used in the main composer. No second usage source or estimate is introduced.
 - Claude copy describes this connection's available status fields. It must not claim that
   Claude has no usage API. Never render quota estimates when the local status has no usage.
 - Command Code appears once in Model Settings. Its compact CLI metadata includes
@@ -60,3 +73,7 @@
    catalog, and usage data refresh from their owning services.
 8. Development presentation fixtures render the same account and status views without service
    contexts. Fixture callbacks are inert and no fixture path calls a live service.
+9. With the Codex account link disabled, a local Codex task can still answer through its existing
+   sign-in. Model Settings says **AceVra account link off**, offers **Enable account link**, and
+   makes no claim about the unqueried Codex sign-in state. A checked unsigned account says
+   **Codex sign-in needed for account details**.

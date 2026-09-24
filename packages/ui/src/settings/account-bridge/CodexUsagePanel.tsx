@@ -10,6 +10,7 @@
  * says so instead of drawing an empty bar.
  */
 import type { AccountBridgeStatus, AccountBridgeUsage } from "@zcode/shared";
+import { UsageRing } from "@/components/UsageRing.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import {
   formatQuotaResetTime,
@@ -96,13 +97,16 @@ function UsageWindowCard({ window }: { window: CodexUsageWindowView }) {
           {intl.formatMessage({ id: label.id }, label.values)}
         </span>
       </div>
-      <div className="mt-2 flex min-w-0 items-baseline gap-1.5">
+      <div className="mt-2 flex min-w-0 items-center gap-2">
         <span className="text-ui-lg font-semibold leading-none text-foreground">
           {formatRemainingPercentage(locale, remainingPercent)}
         </span>
         {resetTime ? (
           <span className="min-w-0 truncate text-ui-sm text-foreground-subtle">{resetTime}</span>
         ) : null}
+        <span className="ml-auto shrink-0" style={{ color: USAGE_WINDOW_COLOR }}>
+          <UsageRing percent={remainingPercent / 100} className="size-8" />
+        </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
         <div
