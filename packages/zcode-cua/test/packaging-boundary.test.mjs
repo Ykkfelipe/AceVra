@@ -1,7 +1,5 @@
-// Packaged CUA boundary: the placeholder runtime stays fail-closed and consumers stay on the
-// declared public entrypoints.
-//
-// Run: mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/packaging-boundary.test.mjs
+// Product CUA packaging boundary. Legacy native-addon exports remain fail-closed; the product
+// Host is the hardened packaged Helper transport and never falls back to the legacy stable socket.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -15,7 +13,7 @@ import {
   roleToKind,
 } from "../broker-server.js";
 
-test("placeholder native resolution stays fail-closed", async () => {
+test("legacy native resolution stays fail-closed", async () => {
   for (const call of [
     () => loadRealNativeAddon(),
     () => resolvePackagedNativeAddonPath(),
@@ -30,11 +28,11 @@ test("placeholder native resolution stays fail-closed", async () => {
   );
 });
 
-test("the product host factory does not silently report a running Helper", () => {
+test("product host is available and starts fail-closed without an installer", async () => {
   const host = createProductCuaHelperHost();
   assert.equal(host.running, false);
   assert.equal(host.socketPath, null);
-  assert.equal(host.pluginAuthority, null);
+  await assert.rejects(() => host.start(), /bundled|packaged|Helper/);
 });
 
 test("product consumers import only declared package entrypoints", async () => {

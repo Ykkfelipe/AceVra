@@ -20,12 +20,15 @@ const READER_FILES = [
   "src/hooks/hooksService.ts",
   "src/plugin-sync/pluginSyncService.ts",
   "src/cua-permission-broker/darwinCuaHelperTransport.ts",
+  "src/mcp-sync/mcpSyncService.ts",
+  "src/zcode-agent/modelTrajectoryFileTail.ts",
 ];
 
 for (const relative of READER_FILES) {
   test(`${relative} resolves user home through the canonical helper`, async () => {
     const source = await readFile(new URL(`../${relative}`, import.meta.url), "utf8");
     assert.match(source, /getUserHomeDir/);
+    assert.doesNotMatch(source, /homedir\(\)/);
     assert.doesNotMatch(source, /process\.env\.HOME\?\.trim\(\)/);
     assert.doesNotMatch(source, /process\.env\.USERPROFILE\?\.trim\(\)/);
   });

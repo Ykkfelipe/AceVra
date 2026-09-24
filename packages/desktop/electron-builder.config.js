@@ -20,6 +20,10 @@ import {
   resolveDesktopArtifactSuffix,
   resolveDesktopProductIdentity,
 } from "./scripts/desktop-product-identity.mjs";
+import {
+  LOCAL_ENGINEERING_ALPHA_PROFILE,
+  isLocalEngineeringAlphaProfile,
+} from "./scripts/desktop-release-profile.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
 const ELECTRON_BUILDER_ARCH = {
   1: "x64",
@@ -243,6 +247,9 @@ const PACKAGING_PRUNE_PATTERNS = [
 ];
 
 function buildDesktopArtifactName(platformName, extension = "${ext}") {
+  if (platformName === "mac" && isLocalEngineeringAlphaProfile(process.env)) {
+    return `\${productName}-\${version}-arm64.\${ext}`;
+  }
   // 测试环境产物必须和正式安装包文件名区分，避免上传、下载或人工验收时混用。
   return `\${productName}-\${version}-${platformName}-\${arch}${desktopArtifactEnvSuffix}.${extension}`;
 }

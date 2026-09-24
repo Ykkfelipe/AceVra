@@ -1,0 +1,20 @@
+{
+  "scripts": [
+    "architecture:check",
+    "typecheck",
+    "lint",
+    "fmt:check",
+    "verify:pre-push",
+    "build",
+    "release:verify:candidate",
+    "release:assemble:candidate",
+    "release:accept:installed"
+  ],
+  "packageScript": "bundle:desktop",
+  "packageScripts": ["pnpm --filter @zcode/desktop e2e:cua-alpha"],
+  "focusedTests": [
+    "mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs",
+    "mise exec -- node scripts/mise-run.mjs node --import tsx --test packages/services/test/cuaLeaseAuthority.test.ts packages/services/test/localAlphaHomeIsolation.test.ts packages/services/test/directHomeReaderInventory.test.ts",
+    "mise exec -- node scripts/mise-run.mjs node --test scripts/release/*.test.mjs"
+  ]
+}

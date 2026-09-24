@@ -65,10 +65,7 @@ export interface HardenedCuaHelperSessionOptions {
 function dataRootOf(env: NodeJS.ProcessEnv) {
   // ZCODE_HOME wins, then the profile home; never silently fall back to production ~/.zcode.
   const home = env?.ZCODE_HOME?.trim() || join(getUserHomeDir(env), ".zcode");
-  return {
-    home,
-    baseRoot: join(home, "computer-use"),
-  };
+  return { home, baseRoot: join(home, "computer-use") };
 }
 
 function helperAppCandidates(env: NodeJS.ProcessEnv) {
@@ -81,7 +78,17 @@ function helperAppCandidates(env: NodeJS.ProcessEnv) {
   ];
 }
 
+function packagedResourcePath(env: NodeJS.ProcessEnv, name: string): string | null {
+  const explicit = env?.ZCODE_CUA_PACKAGED_RESOURCES_DIR?.trim();
+  if (explicit) return join(explicit, name);
+  const helper = env?.ZCODE_CUA_BUNDLED_HELPER_APP_PATH?.trim();
+  if (helper) return join(helper, "..", name);
+  return null;
+}
+
 export function resolveHelperAppCandidate(env: NodeJS.ProcessEnv = process.env): string | null {
+  const packaged = packagedResourcePath(env, "AceVra Computer Use.app");
+  if (packaged) return existsSync(packaged) ? packaged : null;
   return helperAppCandidates(env).find((candidate) => existsSync(candidate)) ?? null;
 }
 
@@ -93,8 +100,10 @@ export function resolveHelperAppCandidate(env: NodeJS.ProcessEnv = process.env):
  * the endpoint is created.
  */
 export function resolvePeerIdentityProbe(env: NodeJS.ProcessEnv = process.env): string | null {
-  const { baseRoot } = dataRootOf(env);
   const explicit = env?.ZCODE_CUA_PEER_IDENTITY_PROBE?.trim();
+  const packaged = packagedResourcePath(env, "peer-identity-probe");
+  if (packaged) return existsSync(packaged) ? packaged : null;
+  const { baseRoot } = dataRootOf(env);
   const candidates = [
     ...(explicit ? [explicit] : []),
     join(baseRoot, "dev", "peer-identity-probe"),

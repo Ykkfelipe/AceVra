@@ -19,19 +19,30 @@ closed. Explicit roots beat defaults and bootstrap, and the alpha never imports 
 `.zcode/v2/setting.json`. Commands, skills/settings, settings sync, skill sync, subagents,
 hooks, plugin sync, global CLI configuration, and CUA fallback use this one root.
 
-The placeholder public exports `loadRealNativeAddon`, `resolvePackagedNativeAddonPath`,
-`resolveInTreeAddonPath`, and `roleToKind` have no product consumer in this checkout. They are
-retained fail-closed: each throws the explicit "Computer Use is not available in this build"
-refusal instead of returning `undefined`, so a caller can never mistake a missing runtime for a
-working one. Removing them later requires a migration decision, not a silent deletion.
+The current `broker-server.js` product Host is a pre-release placeholder and is not an accepted
+runtime. The local alpha replaces that product integration with the existing CUA-3 Host, installer,
+lifecycle, MCP resolver, permission, and hardened transport paths. The unused legacy/native-addon
+exports `loadRealNativeAddon`, `resolvePackagedNativeAddonPath`, `resolveInTreeAddonPath`,
+`createAxReadOnlyMethods`, `ROLE_TO_KIND`, and `roleToKind` remain fail-closed: they must not report
+a working runtime or return an ambiguous empty result. Removing them later requires a migration
+decision, not a silent deletion.
 
 The service lease record is the sole authority for the Helper lease owner, generation, Helper
-identity, and terminal state. Acquire, Stop, release, interruption, and disconnect use that
-record; Stop without a lease is `already_stopped`, and a generation fence rejects a competing
-acquire until release is terminal. There is no model-facing Stop tool. Candidate validation
-checks the exact `0.1.0-alpha.1` version and deterministic Helper build metadata, archive names,
-strict nested signatures, non-secret provenance, and candidate-content secret/path scans. No
-Developer ID, notarization, staple, public publish, push, tag, or merge is part of this profile.
+identity, and terminal state. The authenticated node-repl host constructs the runtime in a separate
+MCP process, so it must report lease lifecycle through a private authenticated local sideband to the
+services authority; its private `activeLeases` map cannot remain authoritative. The sideband is
+injected only into the official CUA MCP server, uses `0700`/`0600`, is sanitized from Bash/tools and
+unrelated children, and carries `begin_acquire`, `commit_acquire`, `release/interruption`, and
+disconnect/close events. Stop serializes with an in-flight `begin_acquire`; a fenced late commit is
+rejected and the runtime immediately releases the Helper lease. Existing turn/session operation
+events are display/lifecycle projections and are not reused as lease state.
+
+Acquire, Stop, release, interruption, and disconnect use the service record; Stop without a lease is
+`already_stopped`, and a generation fence rejects a competing acquire until release is terminal.
+There is no model-facing Stop tool. Candidate validation checks the exact `0.1.0-alpha.1` version
+and deterministic Helper build metadata, archive names, strict nested signatures, non-secret
+provenance, and candidate-content secret/path scans. No Developer ID, notarization, staple, public
+publish, push, tag, or merge is part of this profile.
 
 ### Product rules and owners
 
@@ -43,32 +54,45 @@ silently acquires control. Semantic `press` and `set_value` remain preferred.
 `control_status(lease_id)` is a read-only status check for the owning UI and acceptance harness.
 
 The signed Helper owns the exclusive lease, held input state, event observation, target identity,
-and geometry snapshots. A process-wide kernel lock in a fixed per-user location serializes
-separate Helper instances on the physical desktop. The host relay continues to own the peer-bound
-session and capability admission; it neither synthesizes input nor duplicates the lease. The
-authenticated stdio host owns a separate foreground-control capability; request metadata is
-routing defense-in-depth and cannot create that capability. The model-facing runtime validates
-shapes and local desktop context before using the same broker. Remote replayable/mobile and
-subagent contexts cannot acquire or use foreground control. A
-restarted Helper has no inherited lease or observation identity. A stopped host disconnects its
-Helper; the Helper releases held events and the global lock when the connection ends.
+and geometry snapshots. A kernel-backed physical-desktop exclusion serializes separate Helper
+instances; the mechanism must not be a replaceable user-writable pathname such as
+`/tmp/acevra-cua-exclusive-<uid>.lock`. If a second same-uid process can unlink and recreate the
+current lock path, release is blocked rather than treating the pathname check as process-wide
+serialization. The host relay continues to own the peer-bound session and capability admission; it
+neither synthesizes input nor duplicates the lease. The authenticated stdio host owns a separate
+foreground-control capability; request metadata is routing defense-in-depth and cannot create that
+capability. The model-facing runtime validates shapes and local desktop context before using the
+same broker. Remote replayable/mobile and subagent contexts cannot acquire or use foreground
+control. A restarted Helper has no inherited lease or observation identity. A stopped host
+disconnects its Helper; the Helper releases held events and the global lock when the connection
+ends.
 
 The lease records an opaque random id, owning session/task, Helper launch identity, acquisition
 and deadline, optional observed app/window, last geometry, state, and interruption timestamp.
 Its maximum life is bounded; operations cannot extend it indefinitely. A competing acquisition
-returns `exclusive_busy`. Release is idempotent for the owning lease. Missing, expired, mismatched,
+returns `exclusive_busy`. The service-side software Stop is idempotent: with no active service lease
+it returns `already_stopped`, and after a successful terminal release repeated Stop remains
+successful independently of the Helper's bounded native replay window. A late raw native
+`release_control` outside that window may return `invalid_lease`; the service does not use that
+bounded native idempotency as the user-facing Stop contract. Missing, expired, mismatched,
 interrupted, or released leases refuse every foreground action. Target loss, focus loss, policy
 refusal, Helper/host disconnect, event-tap failure, or physical input closes the lease.
 
 ### Admission and event order
 
 ```text
-local task → normalized Computer tool → token-gated host relay → admitted signed Helper
+local task → normalized Computer tool → service begin_acquire reservation
+  → token-gated host relay → admitted signed Helper
   → global desktop lock → passive event tap → exclusive lease id
+  → service commit_acquire(active generation)
   → fresh Helper observation → geometry/target/focus check → bounded CGEvent input
   → pointer/AX readback → delivery + application effect → release or next checked action
-physical input → tap marks interrupted → no new posts → held-input cleanup → lease release
+Stop | physical input | release | disconnect → fence old generation → cleanup → service terminal
 ```
+
+A software Stop that observes an in-flight acquire waits for that admission to settle. If the
+Helper acquire committed first, Stop releases it; otherwise Stop returns `already_stopped` and no
+later commit from the fenced generation may become active.
 
 The Helper uses a passive Quartz event tap to observe pointer and keyboard events. Every
 AceVra-created CGEvent carries a per-lease `eventSourceUserData` marker. Only a marker generated
@@ -109,13 +133,14 @@ application effect. A measured pointer arrival may confirm movement; click, key,
 report application effect `unknown` unless an AX/pixel readback proves a target transition.
 `unknown` must never be promoted to `confirmed` by the runtime or provider projection.
 
-Deterministic tests cover lease serialization/expiry/restart, tagged versus unmarked events,
-geometry and focus refusal, bounded input, secure fields, cleanup, result separation, and all
-existing CUA security boundaries. Live acceptance uses the canonical signed ARM64 development
-Helper and a harmless local AppKit fixture. A genuine physical event is required for the final
-interruption proof; a generated unmarked CGEvent is only a deterministic classifier test. Release
-builds still require a compatible universal toolchain; this machine's ARM64 acceptance does not
-waive the x86_64 requirement.
+Deterministic tests cover lease serialization/expiry/restart, generation-fenced Stop, service-level
+idempotency, tagged versus unmarked events, geometry and focus refusal, bounded input, secure fields,
+cleanup, result separation, and all existing CUA security boundaries. Live acceptance uses the
+canonical signed ARM64 development Helper and a harmless local AppKit fixture. A genuine physical
+event is required for the final interruption proof; a generated unmarked CGEvent is only a
+deterministic classifier test. General CUA-3 releases retain the compatible universal-toolchain
+requirement. The named `0.1.0-alpha.1` local alpha is the explicit exception: it is arm64-only and
+an x64/universal alpha request must fail rather than package an incompatible Helper.
 
 ## CUA-2.5: normalized Computer Use capability
 
@@ -298,15 +323,18 @@ rebuild produces a new cdhash and the grant is lost. Therefore:
 
 Resolved by the existing contract, unchanged by this work:
 
-| Variant     | Path                                                        |
-| ----------- | ----------------------------------------------------------- |
-| production  | `<ZCODE_HOME>/computer-use/AceVra Computer Use.app`         |
-| preview     | `<ZCODE_HOME>/computer-use/preview/AceVra Computer Use.app` |
-| development | `<ZCODE_HOME>/computer-use/dev/AceVra Computer Use Dev.app` |
+| Variant             | Path                                                         |
+| ------------------- | ------------------------------------------------------------ |
+| local alpha package | `<process.resourcesPath>/cua-helper/AceVra Computer Use.app` |
+| production          | `<ZCODE_HOME>/computer-use/AceVra Computer Use.app`          |
+| preview             | `<ZCODE_HOME>/computer-use/preview/AceVra Computer Use.app`  |
+| development         | `<ZCODE_HOME>/computer-use/dev/AceVra Computer Use Dev.app`  |
 
-Development and preview use separate sub-roots because their build ids differ and a shared
-root would let one install overwrite the other. `ZCODE_HOME` resolves below the runtime's
-own data root, so the custom-fork runtime never writes the product's `~/.zcode`.
+The local alpha resolves the packaged product Helper and peer probe directly below
+`process.resourcesPath`; installed users do not copy them below `ZCODE_HOME`. Development and
+preview use separate sub-roots because their build ids differ and a shared root would let one
+install overwrite the other. `ZCODE_HOME` resolves below the runtime's own data root, so the
+custom-fork runtime never writes the product's `~/.zcode`.
 
 ## Ownership and invariants
 
@@ -319,10 +347,11 @@ own data root, so the custom-fork runtime never writes the product's `~/.zcode`.
   not report this field yet** — its report carries `identity.bundleId` and
   `identity.designatedRequirement` instead. Populating `grant_owner` from the Helper's own
   verified identity is a CUA-1 task, not something this phase measured.
-- **Signature is the identity.** The Helper must never be built with the product's Helper
-  bundle id (`dev.acevra.cua-helper`): an installed product Helper already holds a grant under
-  that id, so reusing it both collides with the product install and makes any permission
-  measurement meaningless. `build-dev-helper.mjs` refuses to build with it.
+- **Signature is the identity.** The development Harness Helper must never be built with the
+  product Helper bundle id (`dev.acevra.cua-helper`): an installed product Helper already holds a
+  grant under that id, so reusing it both collides with the product install and makes any
+  development permission measurement meaningless. `build-dev-helper.mjs` refuses to build with it;
+  the separate alpha product builder is the only allowed producer for that identity.
 - **The launch relationship is not an identity.** Because LaunchServices detaches the Helper
   (`ppid = 1`), no parent-pid or process-tree check can authenticate the caller. Any peer
   check must resolve the caller's pid to a code signature and validate it against the
@@ -431,12 +460,13 @@ These are the only active Helper identities accepted by the integrated build. Th
 `dev.zcode.cua-helper*` identifiers below are retained only to describe frozen CUA-0.5 evidence;
 they are not compatibility allowances in the active launcher or broker policy.
 
-| Purpose              | Active identity                                 |
-| -------------------- | ----------------------------------------------- |
-| App (production)     | `com.acevra.desktop` (`AceVra`)                 |
-| App (development)    | `com.acevra.desktop.development` (`AceVra Dev`) |
-| Helper (production)  | `dev.acevra.cua-helper`                         |
-| Helper (development) | `dev.acevra.cua-helper.development`             |
+| Purpose                   | Active identity                                       |
+| ------------------------- | ----------------------------------------------------- |
+| App (production/alpha)    | `com.acevra.desktop` (`AceVra`)                       |
+| App (development)         | `com.acevra.desktop.development` (`AceVra Dev`)       |
+| Helper (production/alpha) | `dev.acevra.cua-helper`                               |
+| Helper (development)      | `dev.acevra.cua-helper.development`                   |
+| Peer-identity probe       | `dev.acevra.cua-peer-identity.development` (retained) |
 
 `zcode://` stays untouched regardless of the rename, because it remains an OAuth
 compatibility requirement.
@@ -509,8 +539,9 @@ stale conditions) are identity-agnostic and carry over unchanged.
   development helper id, which `tccutil reset Accessibility|ScreenCapture <bundle-id>` removes.
 - No product bundle id, and no existing installed Helper (the product's own installs under
   `~/.zcode/computer-use/`) is read, written or re-signed by this work.
-- Nothing here is wired into packaging: the dev helper is never bundled into the app. When
-  CUA-1 wires a real Helper, it must reproduce this identity model rather than inherit one.
+- At the CUA-0.5 development-foundation phase, the dev Helper was not wired into packaging. The
+  named local alpha later introduced a separate product builder and packaged-resource contract;
+  the dev Helper remains unbundled and must never inherit the product bundle id.
 
 ## Acceptance
 
@@ -1212,9 +1243,10 @@ nested-code checking, and reports `bundle_validated` in the identity envelope.
   `--require-peer-identifier` enforcement available exactly as CUA-1 left it.
 - Every mutating tool name stays unreachable: nothing in this phase touches the actuator
   boundary, the runtime map, or the protocol.
-- The product-host stubs in `packages/zcode-cua/broker-server.js` stay fail-closed — including
-  `buildHelperOpenArgs`, which remains the upstream product-integration surface. The hardened
-  transport carries its own launcher (`buildHostConnectOpenArgs`) until that integration.
+- The CUA-1.5 phase left the product-host stubs in `packages/zcode-cua/broker-server.js`
+  fail-closed. The named `0.1.0-alpha.1` product integration supersedes that temporary boundary:
+  it must use the hardened launcher/transport and packaged resources, while unrelated legacy
+  native-addon exports remain fail-closed.
 
 ## Remaining limitations (named, not implied)
 

@@ -81,6 +81,14 @@ modules:
       - packages/zcode-cua/broker-server.js
       - packages/zcode-cua/host-transport.js
       - packages/zcode-cua/capability-contract.js
+  - id: cua-lease-authority
+    roots: [packages/services/src/cua-permission-broker/lease-authority]
+    managed: true
+    requires: [shared, rpc, services, zcode-cua]
+    publicEntrypoints: [packages/services/src/cua-permission-broker/lease-authority/contract.ts]
+    layers: { domain: domain, app: app, adapters: adapters }
+    layerOrder: [domain, app, adapters]
+    owner: computer-use
 
 global:
   maxFileLines: 400

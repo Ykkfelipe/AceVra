@@ -703,6 +703,15 @@ export function ComputerUseSection({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-ui-sm text-foreground-subtle">
+        <p className="font-medium text-ui-base text-foreground">AceVra local engineering alpha</p>
+        <p className="mt-1">
+          This self-signed, non-notarized build uses an isolated data root and has updates disabled.
+          Computer Use is off until you enable it and grant AceVra Computer Use.app Accessibility
+          and Screen Recording access. Installation verification does not perform provider
+          inference, model requests, credential prompts, or account authentication.
+        </p>
+      </div>
       {/* 总开关：开/关 zcode-cua 插件（同步其 MCP + skill） */}
       <SettingsGroupCard>
         <SettingsRow

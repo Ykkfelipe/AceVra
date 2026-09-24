@@ -14,6 +14,7 @@ import test from "node:test";
 
 import { getUserHomeDir, getUserZCodeDir } from "../src/paths.js";
 import { hasGlobalCliZCodeCuaServer } from "../src/node.js";
+import { resolveModelIODirs } from "../src/zcode-agent/modelTrajectoryFileTail.js";
 import {
   resolveHelperAppCandidate,
   resolvePeerIdentityProbe,
@@ -56,6 +57,34 @@ test("alpha readers never observe a production CLI config sentinel", () => {
     readFileSync(join(productionHome, ".zcode", "cli", "config.json"), "utf8"),
   );
   assert.equal(productionConfig.mcp.servers["zcode-cua"].command, "production-sentinel");
+});
+
+test("model trajectory roots use the canonical user home without production fallback", () => {
+  const profileHome = tempDir();
+  const env = {
+    HOME: "/production-home",
+    ZCODE_HOME: join(profileHome, ".zcode"),
+  } as NodeJS.ProcessEnv;
+  const previousHome = process.env.HOME;
+  const previousZcodeHome = process.env.ZCODE_HOME;
+  process.env.HOME = env.HOME;
+  process.env.ZCODE_HOME = env.ZCODE_HOME;
+  try {
+    const dirs = resolveModelIODirs();
+    assert.equal(
+      dirs.some((directory) => directory.includes("/production-home")),
+      false,
+    );
+    assert.equal(
+      dirs.some((directory) => directory.startsWith(profileHome)),
+      true,
+    );
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousZcodeHome === undefined) delete process.env.ZCODE_HOME;
+    else process.env.ZCODE_HOME = previousZcodeHome;
+  }
 });
 
 test("CUA helper and probe resolve under the alpha computer-use root", () => {

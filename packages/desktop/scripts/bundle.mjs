@@ -843,6 +843,11 @@ function verifyPackagedRuntimeDependencies(os, arch) {
 
 async function main() {
   const { os, arch, skipPrepare, skipBuild, dryRun } = parseArgs(process.argv.slice(2));
+  if (isLocalEngineeringAlphaProfile(process.env) && (os !== "mac" || arch !== "arm64")) {
+    throw new Error(
+      `[bundle] local-engineering-alpha requires --os mac --arch arm64; got ${os}/${arch}`,
+    );
+  }
   const buildArgs = [
     "exec",
     "electron-builder",
@@ -861,6 +866,7 @@ async function main() {
     ZCODE_TARGET_OS: os,
     ZCODE_TARGET_ARCH: arch,
     ...cuaSigningEnv,
+    ZCODE_ENABLE_MAC_SIGN: cuaSigningEnv.CUA_SIGNING_DIR ? "1" : process.env.ZCODE_ENABLE_MAC_SIGN,
     ...createElectronRuntimeMirrorEnv(resolveElectronMirror()),
     ...createElectronBuilderBinariesMirrorEnv(resolveElectronBuilderBinariesMirror()),
   };

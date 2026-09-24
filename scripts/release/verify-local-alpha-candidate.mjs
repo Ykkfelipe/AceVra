@@ -10,9 +10,17 @@
 // Usage:
 //   node scripts/release/verify-local-alpha-candidate.mjs --dist DIR [--json]
 
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 
 const workspaceRoot = resolve(import.meta.dirname, "..", "..");
@@ -24,14 +32,18 @@ function argValue(name, fallback) {
 
 function run(command, args, options = {}) {
   try {
-    return {
-      ok: true,
-      output: execFileSync(command, args, {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        ...options,
-      }),
-    };
+    const result = spawnSync(command, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      ...options,
+    });
+    if (result.error || result.status !== 0) {
+      return {
+        ok: false,
+        output: `${result.stdout ?? ""}${result.stderr ?? ""}${result.error?.message ?? ""}`,
+      };
+    }
+    return { ok: true, output: result.stdout ?? "", stderr: result.stderr ?? "" };
   } catch (error) {
     return {
       ok: false,
@@ -226,7 +238,7 @@ export function verifyLocalAlphaCandidate(distDir) {
   if (!appVerify.ok)
     errors.push(`app strict signature verification failed: ${appVerify.output.trim()}`);
   const appDetails = run("/usr/bin/codesign", ["-dv", "--verbose=4", appPath]);
-  const appDetailsText = appDetails.output;
+  const appDetailsText = `${appDetails.output}${appDetails.stderr ?? ""}`;
   if (/Signature=adhoc/i.test(appDetailsText)) errors.push("app is ad-hoc signed");
   if (/Authority=Developer ID Application/i.test(appDetailsText)) {
     errors.push("app claims a Developer ID authority that this local alpha must not use");
@@ -301,13 +313,28 @@ See build-info.json and SHA256SUMS.txt for non-secret provenance.
 
 const isEntrypoint = process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename);
 if (isEntrypoint) {
-  const distDir = argValue(
-    "--dist",
-    resolve(workspaceRoot, "release", "0.1.0-alpha.1", "candidate"),
+  const buildDir = resolve(
+    argValue(
+      "--build-dir",
+      argValue("--dist", resolve(workspaceRoot, "release", "0.1.0-alpha.1", "build")),
+    ),
   );
-  const result = verifyLocalAlphaCandidate(distDir);
-  if (result.ok) {
-    writeCandidateProvenance(distDir, result);
+  const validationDirArg = argValue("--validation-dir");
+  const result = verifyLocalAlphaCandidate(buildDir);
+  if (result.ok && validationDirArg) {
+    const validationDir = resolve(validationDirArg);
+    if (existsSync(validationDir))
+      throw new Error(`validation directory already exists: ${validationDir}`);
+    mkdirSync(validationDir);
+    cpSync(result.appPath, join(validationDir, "AceVra.app"), { recursive: true });
+    for (const archive of result.archives)
+      cpSync(join(buildDir, archive), join(validationDir, archive));
+    writeCandidateProvenance(validationDir, {
+      ...result,
+      appPath: join(validationDir, "AceVra.app"),
+    });
+  } else if (result.ok) {
+    writeCandidateProvenance(buildDir, result);
   }
   for (const warning of result.warnings) console.warn(`[candidate] warning: ${warning}`);
   for (const error of result.errors) console.error(`[candidate] ${error}`);

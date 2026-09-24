@@ -526,6 +526,12 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
               DEV_HELPER_APP_NAME,
             )
           : undefined;
+  const bundledCuaPeerIdentityProbePath = packagedDesktop
+    ? join(process.resourcesPath, "cua-helper", "peer-identity-probe")
+    : undefined;
+  const packagedCuaResourcesDir = packagedDesktop
+    ? join(process.resourcesPath, "cua-helper")
+    : undefined;
   const windowsAppInstallDir = resolveWindowsAppInstallDirForDataBaseDirGuard();
   const agentTelemetryEnv = readZCodeAgentTelemetryEnv(rawInheritedEnv);
   // Desktop 身份由 host 从凭据仓库和本机状态读取后可信注入；外部环境只能配置 OTLP 连接，
@@ -585,6 +591,12 @@ export function buildHostProcessEnv(hostProcessLocalEnv: Record<string, string>)
     ...(windowsAppInstallDir ? { [ZCODE_WINDOWS_APP_INSTALL_DIR_ENV]: windowsAppInstallDir } : {}),
     ...(bundledCuaHelperAppPath
       ? { [ZCODE_CUA_BUNDLED_HELPER_APP_PATH_ENV]: bundledCuaHelperAppPath }
+      : {}),
+    ...(bundledCuaPeerIdentityProbePath
+      ? { ZCODE_CUA_PEER_IDENTITY_PROBE: bundledCuaPeerIdentityProbePath }
+      : {}),
+    ...(packagedCuaResourcesDir
+      ? { ZCODE_CUA_PACKAGED_RESOURCES_DIR: packagedCuaResourcesDir }
       : {}),
     ...(rawInheritedEnv.ZCODE_FORK_DEV?.trim() === "1"
       ? {
