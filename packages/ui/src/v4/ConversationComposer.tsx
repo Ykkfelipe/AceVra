@@ -171,6 +171,7 @@ import type { ConversationPromptTelemetrySeed } from "@/v4/telemetry/conversatio
 import type { ComposerSubmissionConfig } from "@/v4/composer/composerSubmissionConfig.js";
 import { buildV4ConversationPromptTelemetryExtraDetail } from "@/v4/telemetry/conversationPromptTelemetry.js";
 import { resolveAttachableShareContext } from "@/lib/conversationShareContext.js";
+import { COMPOSER_TOOLBAR_GROUP_CLASS } from "@/v4/composer/composerToolbarPresentation.js";
 
 const MODEL_SELECTION_LOADING_STATE: ModelSelectionState = { status: "loading" };
 
@@ -2051,7 +2052,11 @@ function ConversationComposerImpl({
   );
   const submitControlNode = useMemo(
     () => (
-      <div className="flex min-w-0 items-center gap-1">
+      <div
+        role="toolbar"
+        aria-label={intl.formatMessage({ id: "chat.composer.taskOptions.label" })}
+        className={COMPOSER_TOOLBAR_GROUP_CLASS}
+      >
         <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden empty:hidden">
           {draftMode && onSwitchBackend ? (
             <V4ComposerBackendSwitch
@@ -2125,6 +2130,7 @@ function ConversationComposerImpl({
     [
       canSend,
       activeConfigPicker,
+      intl,
       composerPhase,
       composerUsage,
       codexBackendAvailable,
@@ -2165,7 +2171,11 @@ function ConversationComposerImpl({
   // 不在 composer 暴露局部开关；后台入口只消费同一 snapshot，不维护第二份任务状态。
   const leadingActionsNode = useMemo(
     () => (
-      <>
+      <div
+        role="toolbar"
+        aria-label={intl.formatMessage({ id: "chat.composer.leadingActions.label" })}
+        className={COMPOSER_TOOLBAR_GROUP_CLASS}
+      >
         <V4ComposerModeSwitch
           workspacePath={workspacePath}
           workspaceIdentity={workspaceIdentity}
@@ -2190,12 +2200,13 @@ function ConversationComposerImpl({
           onOpen={onOpenRunningBackgroundWorks}
           openTarget={backgroundWorkOpenTarget}
         />
-      </>
+      </div>
     ),
     [
       activeConfigPicker,
       canStop,
       disabled,
+      intl,
       draftConfig,
       handleConfigPickerOpenChange,
       backgroundWorkOpenTarget,

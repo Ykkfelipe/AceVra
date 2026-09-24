@@ -34,6 +34,7 @@ import {
   useToolbarShortcutBindings,
 } from "@/v4/composer/toolbarShortcuts.js";
 import type { V4ComposerToolbarProps } from "@/v4/composer/V4ComposerToolbar.js";
+import { COMPOSER_TOOLBAR_TRIGGER_CLASS } from "@/v4/composer/composerToolbarPresentation.js";
 
 function noop(): void {}
 
@@ -109,14 +110,16 @@ function V4ComposerModeSwitchImpl({
         >
           <DropdownMenuTrigger asChild>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               disabled={disabled}
               data-testid={TID_CHAT_MODE_SELECT_TRIGGER}
               data-composer-collapse-priority="0"
               aria-label={intl.formatMessage({ id: "chat.toolbar.mode.label" })}
+              aria-haspopup="menu"
               className={cn(
-                "group/mode size-7 gap-1 rounded-lg p-0 text-ui-base @xl/composer:w-auto @xl/composer:px-2 data-[composer-compact=true]:w-7 data-[composer-compact=true]:px-0",
+                "group/mode gap-1 p-0 @xl/composer:w-auto @xl/composer:px-2 data-[composer-compact=true]:w-7 data-[composer-compact=true]:px-0",
+                COMPOSER_TOOLBAR_TRIGGER_CLASS,
                 selected.id === "yolo" && "text-warning hover:text-warning",
               )}
             >
@@ -201,7 +204,10 @@ function V4ComposerModeSwitchImpl({
               data-composer-collapse-priority="2"
               onClick={() => onSwitchMode("plan-off")}
               aria-label={intl.formatMessage({ id: "chat.plan.removeMarker" })}
-              className="group/plan size-7 gap-1 rounded-lg p-0 text-ui-base @xl/composer:w-auto @xl/composer:px-2 text-foreground-subtle hover:text-foreground-subtle data-[composer-compact=true]:w-7 data-[composer-compact=true]:px-0"
+              className={cn(
+                "group/plan gap-1 p-0 text-foreground-subtle hover:text-foreground-subtle @xl/composer:w-auto @xl/composer:px-2 data-[composer-compact=true]:w-7 data-[composer-compact=true]:px-0",
+                COMPOSER_TOOLBAR_TRIGGER_CLASS,
+              )}
             >
               <LightbulbIcon className="size-4 group-hover/plan:hidden group-focus-visible/plan:hidden" />
               <XIcon className="hidden size-4 group-hover/plan:block group-focus-visible/plan:block" />

@@ -20,6 +20,7 @@ import {
   useCuaComposerEntry,
   type UseCuaComposerEntryParams,
 } from "@/hooks/useCuaComposerEntry.js";
+import { COMPOSER_TOOLBAR_TRIGGER_CLASS } from "@/v4/composer/composerToolbarPresentation.js";
 
 type V4ComposerCuaEntryProps = UseCuaComposerEntryParams;
 
@@ -57,7 +58,7 @@ function V4ComposerCuaEntryMounted(props: V4ComposerCuaEntryProps) {
     <ControlHintTooltip title={tooltip}>
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="default"
         data-testid={TID_V4_COMPOSER_CUA_ENTRY}
         data-composer-collapse-priority="1"
@@ -72,8 +73,9 @@ function V4ComposerCuaEntryMounted(props: V4ComposerCuaEntryProps) {
         aria-disabled={view.interactionDisabled || undefined}
         onClick={view.clickAction === "open-settings" ? onActivate : undefined}
         className={
-          "group/cua h-7 w-fit justify-center gap-1 rounded-lg px-1.5 py-1.5 text-ui-base " +
-          (view.interactionDisabled ? "opacity-50" : "")
+          "group/cua h-7 w-fit justify-center gap-1 px-1.5 py-1.5 text-ui-base " +
+          COMPOSER_TOOLBAR_TRIGGER_CLASS +
+          (view.interactionDisabled ? " opacity-50" : "")
         }
       >
         <MonitorCogIcon className="size-4 shrink-0" aria-hidden />

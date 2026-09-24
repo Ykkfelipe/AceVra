@@ -4571,8 +4571,8 @@ const enUS: Record<string, string> = {
     "After compression, the context used by this conversation is still larger than the target model's available context after reserving maximum output. Model switching was canceled.",
   "chat.toolbar.mode.label": "Switch mode",
   "chat.toolbar.backend.label": "Agent backend",
-  "chat.toolbar.backend.zcode.label": "ZCode",
-  "chat.toolbar.backend.zcode.description": "Run tasks with the built-in ZCode agent",
+  "chat.toolbar.backend.zcode.label": "Agent",
+  "chat.toolbar.backend.zcode.description": "Run tasks with the built-in agent",
   "chat.toolbar.backend.codex.label": "Codex",
   "chat.toolbar.backend.codex.description": "Run tasks with the local Codex app agent",
   "chat.toolbar.backend.codex.unavailable": "unavailable",
@@ -4584,7 +4584,7 @@ const enUS: Record<string, string> = {
     "Computer Use is idle — it will start automatically on first use",
   "chat.toolbar.computerUse.tooltip.starting": "Enabling Computer Use plugin…",
   "chat.toolbar.computerUse.tooltip.ready":
-    "Computer Use ready — just describe what you want ZCode to do",
+    "Computer Use ready — just describe what you want the agent to do",
   "chat.toolbar.computerUse.tooltip.permissionRequired":
     "Missing macOS permissions — click to grant",
   "chat.toolbar.computerUse.tooltip.error":
@@ -4593,6 +4593,8 @@ const enUS: Record<string, string> = {
     "A conversation is running. Computer Use can't be toggled right now — try again after it finishes.",
   "chat.toolbar.mode.description":
     "Switch the task's permission and execution mode, such as default, plan, or accept edits.",
+  "chat.composer.leadingActions.label": "Conversation actions",
+  "chat.composer.taskOptions.label": "Task options",
   "chat.toolbar.thoughtLevel.label": "Reasoning effort",
   "chat.toolbar.thoughtLevel.tooltip": "Thought level",
   "chat.toolbar.thoughtLevel.placeholder": "Select reasoning level",

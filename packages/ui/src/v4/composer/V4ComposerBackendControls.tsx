@@ -1,6 +1,7 @@
-// 新任务的执行后端选择器（Agent：ZCode | Codex）。
+// 新任务的执行后端选择器（Agent：内置 Agent | Codex）。
 // 只作用于 draft（新任务）；既定任务的后端不可切换。与 mode/model 开关同构：
-// ghost 按钮 + DropdownMenuRadioGroup，仅编辑 Renderer 草稿意图，不发运行时命令。
+// outline 按钮 + DropdownMenuRadioGroup，仅编辑 Renderer 草稿意图，不发运行时命令。
+// “zcode” 只是稳定的 runtime/backend 值；用户可见名称统一用 Agent。
 import { memo } from "react";
 import { BotIcon, ChevronDownIcon, SparklesIcon } from "lucide-react";
 import { testId, type ZCodeExecutionBackend } from "@zcode/shared";
@@ -18,6 +19,7 @@ import { isCoarseTouchDevice } from "@/lib/pickerFocus.js";
 import { TID_V4_COMPOSER_INPUT } from "@zcode/shared";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import type { V4ComposerConfigPicker } from "@/v4/composer/configPickerState.js";
+import { COMPOSER_TOOLBAR_TRIGGER_CLASS } from "@/v4/composer/composerToolbarPresentation.js";
 
 const BACKEND_OPTIONS: ReadonlyArray<{
   value: ZCodeExecutionBackend;
@@ -56,7 +58,8 @@ function V4ComposerBackendSwitchImpl({
   onSwitchBackend: (backend: ZCodeExecutionBackend) => void;
 }) {
   const { intl } = useZCodeIntl();
-  const selected = BACKEND_OPTIONS.find((option) => option.value === backend) ?? BACKEND_OPTIONS[0]!;
+  const selected =
+    BACKEND_OPTIONS.find((option) => option.value === backend) ?? BACKEND_OPTIONS[0]!;
   return (
     <DropdownMenu
       open={activeConfigPicker === "backend"}
@@ -68,14 +71,16 @@ function V4ComposerBackendSwitchImpl({
       >
         <DropdownMenuTrigger asChild>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             disabled={disabled}
             data-testid="v4-composer-backend-select-trigger"
             data-composer-collapse-priority="1"
             aria-label={intl.formatMessage({ id: "chat.toolbar.backend.label" })}
+            aria-haspopup="menu"
             className={cn(
-              "group/backend size-7 gap-1 rounded-lg p-0 text-ui-base @xl/composer:w-auto @xl/composer:px-2 data-[composer-compact=true]:w-7 data-[composer-compact=true]:px-0",
+              "group/backend gap-1 p-0 @xl/composer:w-auto @xl/composer:px-2 data-[composer-compact=true]:w-7 data-[composer-compact=true]:px-0",
+              COMPOSER_TOOLBAR_TRIGGER_CLASS,
             )}
           >
             <selected.Icon className="size-4" />
