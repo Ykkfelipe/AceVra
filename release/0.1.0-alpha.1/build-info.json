@@ -2,8 +2,8 @@
   "schemaVersion": 4,
   "product": "AceVra",
   "version": "0.1.0-alpha.1",
-  "buildCommitId": "faeb0e54",
-  "buildTime": "2026-09-24T19:27:08.851Z",
+  "buildCommitId": "8d96aa26",
+  "buildTime": "2026-09-24T19:49:02.867Z",
   "releaseProfile": "local-engineering-alpha",
   "distribution": "local engineering alpha",
   "branch": "release/0.1.0-alpha",
@@ -41,10 +41,10 @@
     "AceVra-0.1.0-alpha.1-arm64.dmg",
     "AceVra-0.1.0-alpha.1-arm64.zip"
   ],
-  "handoff": "release/0.1.0-alpha.1/handoff-final-faeb0e5",
+  "handoff": "release/0.1.0-alpha.1/handoff-final-8d96aa2",
   "installedPath": "/Applications/AceVra.app",
-  "installedRevision": "faeb0e54",
-  "installedBackup": "/Applications/.AceVra.app.backup-429bdc98-518c-43c1-ab14-2c033cffb861",
-  "installedAcceptance": "faeb0e5 codex model/effort transparency installed; human check pending",
+  "installedRevision": "8d96aa26",
+  "installedBackup": "/Applications/.AceVra.app.backup-8784b2b6-a911-429f-9811-759bc8230558",
+  "installedAcceptance": "8d96aa2 composer unlock + codex turn recovery installed; human check pending",
   "broaderAcceptance": "paused; no TCC changes or broader CUA/browser/provider/artifact/remote/restart acceptance"
 }

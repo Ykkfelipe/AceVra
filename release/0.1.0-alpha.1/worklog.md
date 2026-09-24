@@ -1671,3 +1671,22 @@ typecheck/lint/architecture clean. Installed via the tested runner (backup
 `.AceVra.app.backup-429bdc98-518c-43c1-ab14-2c033cffb861`); validator passed raw/ZIP/DMG. One
 live verification turn was executed against the user's Codex account during protocol probing
 (flagged separately; no further inference probes).
+
+## 2026-09-24 composer unlock + stuck Codex turn recovery (`f75f6d2`, `8d96aa2`)
+
+User report: composer showed "agent is working — follow-up input is paused" after the Codex turn
+had already finished. Two defects, both fixed:
+
+1. `f75f6d2`: `inputRouting.mode=reject` disabled the whole editor. Now only sending is blocked
+   (`submitDisabled` via routing gate); the editor stays typeable so a follow-up draft is never
+   trapped, and the placeholder explains the state.
+2. `8d96aa2`: the installed Codex (0.155.0-alpha.16.4) sends `turn/completed` with
+   `status/error/id` nested under `turn` (old top-level shape kept supported), and notifications
+   arriving before their runtime registers were silently dropped — a dropped completion leaves the
+   projection permanently `running`. Fixes: nested-shape parsing + bounded per-thread notification
+   buffer replayed via `attachRuntime` on createTask and cold-recovery/bridge-generation paths.
+
+Verified: 32 Codex + 9 UI tests, typecheck, lint (0 errors), architecture (0 violations), raw/ZIP/DMG
+validator all passed. Installed via tested runner (backup
+`.AceVra.app.backup-8784b2b6-a911-429f-9811-759bc8230558`), embedded `8d96aa26` confirmed, app
+relaunched.
