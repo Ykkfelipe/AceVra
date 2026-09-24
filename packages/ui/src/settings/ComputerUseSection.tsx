@@ -571,15 +571,10 @@ export function ComputerUseSection({
         className="text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300"
         aria-label={intl.formatMessage({ id: labelId })}
         title={intl.formatMessage({ id: labelId })}
-        disabled={!settled}
         onClick={() => void openPermissionSettings(kind)}
       >
         <ExternalLink className="size-4" aria-hidden="true" />
-        <span className="hidden sm:inline">
-          {intl.formatMessage({
-            id: settled ? labelId : "cuaPermission.status.verifying",
-          })}
-        </span>
+        <span className="hidden sm:inline">{intl.formatMessage({ id: labelId })}</span>
       </Button>
     );
   };

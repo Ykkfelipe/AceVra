@@ -73,16 +73,14 @@ async function runScenario({ active }) {
     const stop = page.getByTestId("cua-stop-computer-control");
     if (!active) {
       assert.equal(await stop.count(), 0);
-      const enableToggle = page.getByRole("checkbox", { name: "Enable Computer Use" });
+      const enableToggle = page.getByLabel("Enable Computer Use");
       await enableToggle.click();
       for (let attempt = 0; attempt < 30 && !(await enableToggle.isChecked()); attempt += 1) {
         await page.waitForTimeout(100);
       }
       assert.equal(await enableToggle.isChecked(), true);
       assert.equal(await page.getByText(/Plugin not found/).count(), 0);
-      const composerToggle = page.getByRole("checkbox", {
-        name: "Show Computer Use button in the composer",
-      });
+      const composerToggle = page.getByLabel("Show Computer Use button in the composer");
       await composerToggle.click();
       for (let attempt = 0; attempt < 30 && !(await composerToggle.isChecked()); attempt += 1) {
         await page.waitForTimeout(100);
