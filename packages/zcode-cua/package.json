@@ -34,6 +34,10 @@
       "types": "./pip-session-node.d.ts",
       "import": "./pip-session-node.js"
     },
+    "./lease-authority-client": {
+      "types": "./lease-authority-client.d.ts",
+      "import": "./lease-authority-client.js"
+    },
     "./broker": {
       "types": "./broker.d.ts",
       "import": "./broker.js"

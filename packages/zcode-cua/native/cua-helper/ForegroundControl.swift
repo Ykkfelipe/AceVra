@@ -145,12 +145,14 @@ final class ForegroundController {
     }
 
     private func acquireGlobalLock() -> Bool {
-        let path = "/tmp/acevra-cua-exclusive-\(getuid()).lock"
-        let fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        // Use the kernel-owned /dev/null device inode rather than a replaceable pathname.
+        // A same-uid process cannot unlink and recreate this inode, so flock remains a single
+        // physical-desktop exclusion boundary across Helper instances. This is deliberately
+        // broader than the CUA namespace: the release claim is one physical desktop lease.
+        let fd = open("/dev/null", O_RDWR | O_CLOEXEC)
         guard fd >= 0 else { return false }
         var metadata = stat()
-        guard fstat(fd, &metadata) == 0, (metadata.st_mode & S_IFMT) == S_IFREG,
-              metadata.st_uid == getuid(), metadata.st_nlink == 1,
+        guard fstat(fd, &metadata) == 0, (metadata.st_mode & S_IFMT) == S_IFCHR,
               flock(fd, LOCK_EX | LOCK_NB) == 0 else {
             close(fd)
             return false

@@ -61,6 +61,12 @@ function sha256(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
+function rawBuildInventory(dist) {
+  return readdirSync(dist, { withFileTypes: true })
+    .map((entry) => ({ name: entry.name, kind: entry.isDirectory() ? "directory" : "file" }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function walkFiles(root, limit = 200_000) {
   const files = [];
   const stack = [root];
@@ -141,6 +147,7 @@ export function verifyLocalAlphaCandidate(distDir) {
   const errors = [];
   const warnings = [];
   const dist = resolve(distDir);
+  const rawInventory = existsSync(dist) ? rawBuildInventory(dist) : [];
   const appPath = join(dist, "mac-arm64", "AceVra.app");
 
   const expectedArchives = [`AceVra-${rootVersion}-arm64.dmg`, `AceVra-${rootVersion}-arm64.zip`];
@@ -155,7 +162,7 @@ export function verifyLocalAlphaCandidate(distDir) {
 
   if (!existsSync(appPath)) {
     errors.push(`missing app bundle: ${appPath}`);
-    return { ok: false, errors, warnings, appPath, archives: archiveEntries };
+    return { ok: false, errors, warnings, appPath, archives: archiveEntries, rawInventory };
   }
 
   const infoPlist = join(appPath, "Contents", "Info.plist");
@@ -247,6 +254,48 @@ export function verifyLocalAlphaCandidate(distDir) {
     warnings.push("unable to read app signing identifier");
   }
 
+  if (existsSync(helperPath)) {
+    const helperArch = run("/usr/bin/lipo", [
+      "-archs",
+      join(helperPath, "Contents", "MacOS", "AceVraComputerUse"),
+    ]);
+    if (!helperArch.ok || helperArch.output.trim() !== "arm64") {
+      errors.push(
+        `Helper architecture is ${helperArch.output.trim() || "unavailable"}, expected arm64`,
+      );
+    }
+    const helperRequirement = run("/usr/bin/codesign", ["-d", "-r-", helperPath]);
+    const helperRequirementText = `${helperRequirement.output}${helperRequirement.stderr ?? ""}`;
+    if (
+      !helperRequirementText.includes('identifier "dev.acevra.cua-helper"') ||
+      !helperRequirementText.includes("certificate root = H")
+    ) {
+      errors.push("Helper designated requirement is not identifier-plus-certificate-root anchored");
+    }
+  }
+  if (existsSync(probePath)) {
+    const probeArch = run("/usr/bin/lipo", ["-archs", probePath]);
+    if (!probeArch.ok || probeArch.output.trim() !== "arm64") {
+      errors.push(
+        `Probe architecture is ${probeArch.output.trim() || "unavailable"}, expected arm64`,
+      );
+    }
+    const probeRequirement = run("/usr/bin/codesign", ["-d", "-r-", probePath]);
+    const probeRequirementText = `${probeRequirement.output}${probeRequirement.stderr ?? ""}`;
+    if (
+      !probeRequirementText.includes('identifier "dev.acevra.cua-peer-identity.development"') ||
+      !probeRequirementText.includes("certificate root = H")
+    ) {
+      errors.push("Probe designated requirement is not identifier-plus-certificate-root anchored");
+    }
+  }
+  if (!/Runtime Version=/.test(appDetailsText) || !/flags=.*runtime/.test(appDetailsText)) {
+    errors.push("app signature does not report the hardened runtime flag");
+  }
+  if (!/certificate root = H/.test(appDetailsText)) {
+    errors.push("app designated requirement is not certificate-root anchored");
+  }
+
   const nested = scanCandidateContents(appPath);
   for (const finding of nested.slice(0, 50)) {
     errors.push(`candidate content scan: ${finding.kind} at ${finding.path}`);
@@ -262,6 +311,7 @@ export function verifyLocalAlphaCandidate(distDir) {
     bundleId,
     shortVersion,
     bundleVersion,
+    rawInventory,
   };
 }
 

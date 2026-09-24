@@ -204,7 +204,7 @@ const fingerprint =
 
 process.stdout.write(
   `${JSON.stringify({
-    appPath: appDir,
+    resourcePath: "AceVra Computer Use.app",
     bundleId: BUNDLE_ID,
     executableName: PRODUCT_EXECUTABLE_NAME,
     version: VERSION,

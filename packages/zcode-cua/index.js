@@ -39,6 +39,8 @@ export function createComputerUseRuntime(options = {}) {
   const explicitSocketPath =
     typeof options.brokerSocketPath === "string" ? options.brokerSocketPath.trim() : "";
   const activeLeases = new Map();
+  const leaseAuthority = options.leaseAuthority;
+  let pendingAuthorityLease;
 
   async function resolveSocketPath() {
     if (explicitSocketPath) return explicitSocketPath;
@@ -129,13 +131,38 @@ export function createComputerUseRuntime(options = {}) {
               owner_task: input.context.turnId || input.context.sessionId,
             }
           : (input?.arguments ?? {});
-        const result = await broker.callBrokerMethod({
-          socketPath: await resolveSocketPath(),
-          method,
-          params,
-          timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
-          expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-        });
+        if (
+          method === "acquire_control" &&
+          leaseAuthority &&
+          typeof input?.context?.sessionId === "string"
+        ) {
+          pendingAuthorityLease = await leaseAuthority.beginAcquire({
+            session: input.context.sessionId,
+            task: input.context.turnId || input.context.sessionId,
+          });
+        }
+        let result;
+        try {
+          result = await broker.callBrokerMethod({
+            socketPath: await resolveSocketPath(),
+            method,
+            params,
+            timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+            expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+          });
+          if (leaseAuthority && pendingAuthorityLease) {
+            const committed = await leaseAuthority.commitAcquire(
+              pendingAuthorityLease.leaseId,
+              result?.helper_identity?.requirement ?? "verified-helper",
+            );
+            pendingAuthorityLease = undefined;
+            result = { ...result, lease_authority_generation: committed.generation };
+          }
+        } catch (error) {
+          if (pendingAuthorityLease) await leaseAuthority.stop().catch(() => undefined);
+          pendingAuthorityLease = undefined;
+          throw error;
+        }
         // The model-facing boundary. `observe` answers with a host path to the frame it wrote;
         // that path is a host-internal detail, so it is replaced here by the opaque reference and
         // the whole result is bounded before it is serialized into model context.

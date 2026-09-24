@@ -15,6 +15,7 @@ import {
   type NodeReplRunResult,
 } from "@zcode/core/repl";
 import { createComputerUseRuntime, type ComputerUseRuntime } from "@zcode/zcode-cua";
+import { createLeaseAuthorityClient } from "@zcode/zcode-cua/lease-authority-client";
 import { z } from "zod";
 import {
   createBrowserBridgeGlobals,
@@ -383,6 +384,7 @@ export function captureComputerUseRuntimeFromEnvironment(
     refreshMarkerPath: env.ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER?.trim(),
     // This process is the authenticated stdio host. Request metadata remains routing data only.
     allowForegroundControl: () => true,
+    leaseAuthority: createLeaseAuthorityClient(env),
   });
 }
 

@@ -324,34 +324,35 @@ Verification plan updated in `release/0.1.0-alpha.1/verification-plan.json` with
 package scripts plus the Desktop CUA E2E command and focused test commands. The accepted
 implementation is not a candidate until the remaining gates below pass.
 
-Executed during this gate-fix revision:
+Executed during this review-blocker implementation revision:
 
 - `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 6 / behind 0, no upstream
 - `mise exec -- node scripts/mise-run.mjs pnpm architecture:check` — exit 0; violations 0, baseline 0, new 0
 - `mise exec -- node scripts/mise-run.mjs pnpm typecheck` — exit 0
-- `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0; 75 warnings, 0 errors
-- `mise exec -- node scripts/mise-run.mjs pnpm verify:pre-push` — exit 0
+- `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0; 76 warnings, 0 errors
 - `mise exec -- node scripts/mise-run.mjs pnpm build` — exit 0 under pinned Node 24.14.0
-- `pnpm build` — exit 0 under the current environment's Node 26.9.0; this is not the pinned release
-  toolchain and is supporting evidence only
-- `mise exec -- node scripts/mise-run.mjs pnpm fmt:check` — exit 1; 42 pre-existing unrelated files
-  remain unformatted; no unrelated files were changed
-- `mise exec -- node scripts/mise-run.mjs node --test packages/zcode-cua/test/*.test.mjs
-packages/desktop/scripts/macos-window-bounds-targets.test.mjs` — exit 0; 132 tests passed
-- `mise exec -- node scripts/mise-run.mjs node --test scripts/release/alpha-bundle-env.test.mjs` —
-  exit 0; 1 test passed
-- `pnpm bundle:desktop -- --os mac --arch arm64` — exit 1; the release profile was applied, but
-  the isolated signing keychain is unavailable
+- `mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop build:no-runtime-assets` —
+  exit 0; current desktop renderer/main rebuilt for E2E
+- `mise exec -- node scripts/mise-run.mjs pnpm fmt:check` — not rerun after the final source
+  changes; prior result remains exit 1 for 42 unrelated files
+- `mise exec -- node scripts/mise-run.mjs pnpm exec oxfmt --check <changed release files>` — exit 0
+- `mise exec -- node scripts/mise-run.mjs node --import tsx --test
+packages/services/test/leaseAuthorityServer.test.ts packages/services/test/cuaLeaseAuthority.test.ts
+packages/zcode-cua/test/packaging-boundary.test.mjs` — exit 0; 7 tests passed
+- `xcrun swiftc -swift-version 5 -O -target arm64-apple-macos12.0 ... ForegroundControl sources` —
+  exit 0; changed native Helper sources compile
+- `ZCODE_DESKTOP_E2E=1 ZCODE_DESKTOP_E2E_RUN_ID=acevra-alpha-local-001 mise exec -- node
+scripts/mise-run.mjs pnpm --filter @zcode/desktop e2e:cua-alpha` — exit 1; Playwright launched
+  Electron but the built renderer body was empty, so the required safety/stop assertions were not
+  accepted
+- `pnpm bundle:desktop -- --os mac --arch arm64` — exit 1; local signing keychain is unavailable
 - `mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate` — exit 1; no current
   `release/0.1.0-alpha.1/build/` candidate exists
-- `mise exec -- node scripts/mise-run.mjs pnpm release:assemble:candidate` — not run to completion:
-  no validation fixture exists
-- `mise exec -- node scripts/mise-run.mjs pnpm release:accept:installed` — not run: no handoff and no
-  installed-app acceptance arguments/checkpoints exist
+- handoff assembly and installed acceptance — not run; no validated handoff or installed app
 - `git diff --check` — exit 0
 
-The release scripts remain fail-closed when their required artifact, argument, signature, or human
-checkpoint is absent. No gate is reported as passed from a dry run or an unrun command.
+Unresolved human checkpoints remain Gatekeeper **Open Anyway**, fresh TCC denial/grant, installed
+Helper/CUA, software Stop, and real mouse/Shift physical interruption. None are fabricated.
 
 ## Installed-app acceptance and final human checkpoints
 
@@ -459,3 +460,286 @@ require a separate spec-first change.
   packaging/install acceptance
 - broad ZCode-to-AceVra rename, `@zcode` rename, `zcode://` change, or Preview compatibility removal
 - Gatekeeper/TCC bypasses or synthetic substitution for the physical-input checkpoint
+
+## Installed acceptance execution — 2026-09-23/24
+
+**Result: BLOCKED / not an accepted installed release.** The generated DMG was installed and the
+installed app was exercised, but the candidate is not releasable and several acceptance gates were
+not runnable. No provider inference, account authentication, source checkout, development server,
+Swift compiler, permission mutation, synthetic physical input, publish, push, tag, or merge was
+performed.
+
+### 1. Baseline, provenance, and install
+
+- `node scripts/check-workspace-freshness.mjs` — exit 0. Output: `基线新鲜：release/0.1.0-alpha，相对 origin/main：ahead 7 / behind 0（阈值 50）`; the command also reported no configured upstream.
+- Before installation, `/Applications/AceVra.app` did not exist: `/usr/bin/stat`/inspection command
+  printed `NO_EXISTING_ACEVRA_APP`. Therefore there was no existing provenance to resolve and no
+  backup/replacement transaction was needed.
+- Candidate path was `release/0.1.0-alpha.1/candidate/AceVra-0.1.0-alpha.1-mac-arm64.dmg`.
+  `file` reported `zlib compressed data`; `shasum -a 256` reported
+  `3d730c0870110961b5b87af8ec4a6bd0b2373475245f12f7879e935b54244937`; `hdiutil verify` ended
+  with `verified ... hdiutil: verify: checksum ... is VALID`.
+- Mounted read-only with `hdiutil attach -readonly -nobrowse -mountpoint
+/tmp/acevra-alpha-install-501 ...`. The mounted app was installed with `/usr/bin/ditto` into
+  `/Applications/AceVra.app` after a no-existing-target check; no `sudo`, recursive deletion, or
+  quarantine removal was used. `ditto` plus strict verification passed for the staging copy and
+  the installed copy. Installed owner/mode: `felipemore:staff`, `drwxr-xr-x`.
+
+### 2. Installed product identity and packaged boundary
+
+Commands run against `/Applications/AceVra.app`:
+
+```text
+/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' .../Info.plist
+# com.acevra.desktop
+/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' .../Info.plist
+# AceVra
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' .../Info.plist
+# 0.1.0-alpha.1
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' .../Info.plist
+# 0.1.0-alpha.1
+/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' .../Info.plist
+# AceVra
+file .../Contents/MacOS/AceVra
+# Mach-O 64-bit executable arm64
+```
+
+- Installed and DMG file-tree digests were identical:
+  `88dcd11385782336c45132fa78cbaf2e37533646c268e29e90c2ecdc2cfffc53` for both trees.
+- The installed app, product Helper, and peer probe are arm64. The only native Helper paths found
+  under `Contents` were
+  `Contents/Resources/cua-helper/AceVra Computer Use.app` and
+  `Contents/Resources/cua-helper/peer-identity-probe`; no repository-relative Helper was found.
+- `find ... -name '.env' -o -name '.env.*' -o -name '*.env'` found no development `.env`.
+  A binary/text scan of the installed bundle found no repository checkout path,
+  `xcrun`, `swiftc`, or `swift-frontend` tokens. A packaged `macos-window-bounds` resource exists
+  at `Contents/Resources/macos-window-bounds`; it is not the CUA product Helper.
+- The product Helper metadata is not clean:
+  `Contents/Resources/cua-helper/helper-build-info.json` contains
+  `appPath=<developer-checkout>/packages/desktop/resources/cua-helper/AceVra Computer Use.app`.
+  This is a packaged developer absolute path and is an acceptance failure.
+- Installed process observation used `ps -axo pid=,ppid=,comm=,args=` and showed the main installed
+  app plus `/Applications/AceVra.app/Contents/Frameworks/...` children. No `pnpm dev`, Vite,
+  webpack, or Electron dev process was found. The observed user-data argument was
+  `~/Library/Application Support/AceVra Local Engineering Alpha`.
+
+### 3. Signatures, Gatekeeper, and notarization
+
+- `codesign --verify --deep --strict --verbose=4 /Applications/AceVra.app` passed mechanically and
+  the app satisfied its own designated requirement, but its signature details are
+  `Signature=adhoc`, `TeamIdentifier=not set`, CDHash
+  `91beec99095cd75169eb620a72f55ed268cb448ab7fc214ac66f513b67098a96`. The release contract
+  requires a stable non-ad-hoc outer identity; this fails.
+- `codesign -d -r-` for the Helper and probe returned stable certificate-root requirements:
+  - Helper: `identifier "dev.acevra.cua-helper" and certificate root = H"e67964f24cb4f07494050839d1653637c06e7a7c"`
+  - Probe: `identifier "dev.acevra.cua-peer-identity.development" and certificate root = H"e67964f24cb4f07494050839d1653637c06e7a7c"`
+- `codesign --verify --strict --verbose=4` passed for the Helper and peer probe. Their `codesign -dv`
+  details reported `Authority=AceVra CUA Dev Signing`, arm64, Helper CDHash
+  `99f751253234a38064b234957ae37f402774b0a981e2fb18b75cdcb6719df6cf`, and probe CDHash
+  `d2aa82b5bc4abf4d4be2a35150b55f2e4033fd08cccd4b18c53a550686ea58bf`.
+- `/usr/sbin/spctl --assess --type execute --verbose=4 /Applications/AceVra.app` returned
+  `rejected`; `spctl --assess --type open --context context:primary-signature -v` also returned
+  `rejected`. `/usr/bin/xcrun stapler validate` returned `AceVra.app does not have a ticket stapled`.
+  This is expected to be non-notarized only as a recorded local-alpha limitation, but it is not a
+  passing distribution gate.
+- The DMG/app had `com.apple.provenance` xattr, not a user-added bypass. The first
+  `/usr/bin/open /Applications/AceVra.app` returned exit 0 and the installed app began running;
+  no expected human Gatekeeper rejection/Open Anyway checkpoint was observed. Gatekeeper evidence
+  is therefore non-fresh and the ordered checkpoint is unresolved.
+
+### 4. Installed first launch, persistence, and deterministic UI
+
+- The two prescribed alpha roots were absent before first launch:
+  `~/Library/Application Support/AceVra Local Engineering Alpha` and
+  `~/.zcode-local-engineering-alpha`. After launch, only those roots were populated; the app's
+  process arguments and created paths used the alpha roots. No production-root path was created by
+  this run. The app created its isolated Electron `session`, `v2` settings/provider state, default
+  workspace, CA files, and runtime directories. File contents were not printed.
+- The exact first launch was `/usr/bin/open /Applications/AceVra.app`, never direct executable
+  spawn. Monotonic measurement: start `161266368891416`, observation end `161271728099291`,
+  elapsed `5359 ms`. `ps` observed GPU/network/renderer children under the installed app.
+- Installed-app CDP observation used a loopback relaunch only:
+  `/usr/bin/open -n /Applications/AceVra.app --args --remote-debugging-port=9222
+--remote-debugging-address=127.0.0.1`, then `npx --yes agent-browser@latest ... connect 9222`.
+  The observed renderer URL was a `file:///Applications/AceVra.app/Contents/Resources/app.asar/...`
+  URL with `initialWorkspacePath=.../.zcode-local-engineering-alpha/...`; no dev URL or dev server
+  was observed. `document.title` was `ZCode`; the visible deterministic first-run body was
+  `Welcome to AceVra` with buttons `Connect to Z.ai Global`, `Connect to BigModel CN`, and
+  `Use API key`. Local/session storage key lists were empty. No account/provider action was taken.
+- Graceful quit completed and all installed-app descendants exited. A relaunch then restored the
+  same first-run UI and alpha workspace URL. Monotonic measurement: relaunch start
+  `161409203773291`, CDP-ready `161409729025666`, elapsed `525 ms`. This is quit/relaunch
+  persistence of the deterministic unauthenticated state, not account or CUA persistence.
+- The app has no CUA state directory after these runs:
+  `~/.zcode-local-engineering-alpha/.zcode/computer-use` is absent, and no
+  `AceVra Computer Use.app` process was observed. `runtime/provider/darwin-aarch64/0.1.0-alpha.1`
+  exists. No CUA Helper launch was therefore exercised from the packaged app.
+
+### 5. Permission, CUA, input, and physical checkpoints
+
+- I ran the installed product Helper binary directly in non-prompting probe mode:
+  `/Applications/AceVra.app/Contents/Resources/cua-helper/AceVra Computer Use.app/Contents/MacOS/AceVraComputerUse
+--expected-identifier dev.acevra.cua-helper`. The output was reduced to identity and permission
+  fields; no app inventory or private content was printed. It reported the exact installed Helper
+  path, `bundleId=dev.acevra.cua-helper`, stable Helper DR, `verified=true`, and
+  `accessibility=true`, `screenCapturePreflight=true`.
+- Those pre-existing grants make the TCC proof **non-fresh**. The required human removal and
+  observed denial before fresh Accessibility/Screen Recording authorization were not performed;
+  no `tccutil` or System Settings mutation was attempted. This blocks fresh-TCC acceptance.
+- No harmless semantic CUA fixture, exclusive foreground lease, software Stop, repeated Stop,
+  held-input cleanup, or exclusive-lock fixture was run: the packaged app never launched its
+  product Helper, and the app was stopped at deterministic unauthenticated onboarding rather than
+  fabricating an authorized host/session. The implementation's native path maps a failed event tap
+  to `input_monitoring_required` at
+  `packages/zcode-cua/native/cua-helper/ForegroundControl.swift:277-292`; that source fact is not
+  an executed experiment.
+- Input Monitoring requirement was not experimentally determined. A real exclusive lease and
+  physical input are required, and the real-mouse/Shift checkpoint is explicitly not substitutable
+  by synthetic events. No synthetic mouse or Shift event was generated.
+- Real physical mouse movement and real Shift press/release were not run. Consequently no
+  interruption latency, defensive key-up, tap-disable, exclusion-release, or no-later-post
+  measurement exists. No real event was synthesized.
+
+### 6. Network, browser, and existing-feature boundaries
+
+- The required fail-closed observer set was not available as a completed runnable acceptance
+  runner: `release/0.1.0-alpha.1/handoff` and `validation` do not exist, and the installed runner
+  only checks that a handoff directory exists and contains five files
+  (`scripts/release/accept-local-alpha-installed.mjs:10-34`).
+- The exact candidate verification command was run and failed as designed:
+  `mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate -- --build-dir
+$PWD/release/0.1.0-alpha.1/candidate --validation-dir $PWD/release/0.1.0-alpha.1/validation --json`.
+  It reported missing exact `AceVra-0.1.0-alpha.1-arm64.dmg/.zip`, unexpected `*-mac-arm64.*`,
+  `app is ad-hoc signed`, and the developer absolute path in `helper-build-info.json`; exit 1.
+- The exact assembly command was run and failed because no validation directory exists:
+  `mise exec -- node scripts/mise-run.mjs pnpm release:assemble:candidate -- --validation-dir
+$PWD/release/0.1.0-alpha.1/validation --handoff-dir $PWD/release/0.1.0-alpha.1/handoff`; exit 1.
+- The exact installed runner command was run against the missing handoff and failed with
+  `handoff and installed app are required`; exit 1. No deliverable boundary exists to accept.
+- During the installed app's idle observation, `lsof -nP -iTCP -sTCP:ESTABLISHED` showed the
+  installed AceVra network child connected externally to `155.102.130.217:443` (an earlier sample
+  showed `47.246.23.189:443`). Reverse DNS returned no name. The requested `nettop` command
+  (`/usr/bin/nettop -L 1 -s 0.1 -j pid,process,state,interface,bytes_in,bytes_out`) was attempted
+  but printed the local `nettop` help instead of a sample on this OS. No redacting capture sink,
+  DNS/network unified log attribution, or complete fail-closed no-inference window was established.
+  This is an acceptance failure, not evidence of provider/account traffic classification.
+- Browser navigation/observation was limited to the installed app's local `file://` first-run
+  renderer. No browser navigation, embedded browser fixture, existing remote feature, provider
+  request, credential prompt, or account state transition was exercised.
+
+### 7. Manual steps still required at the blocked checkpoints
+
+1. A human must start from a fresh macOS TCC state, manually remove any existing
+   `AceVra Computer Use.app` Accessibility/Screen Recording entries, restart the exact Helper, and
+   record observed denial before granting only the exact Helper through System Settings. No
+   `tccutil` is authorized.
+2. A human must perform the first-launch Gatekeeper decision only if a genuinely fresh quarantined
+   copy produces the expected rejection, using Finder/System Settings **Open Anyway**. The current
+   local DMG opened without that fresh rejection, so this candidate cannot supply a fresh Gatekeeper
+   proof.
+3. With fresh TCC and an authorized CUA session, the human must run a harmless semantic fixture and
+   harmless exclusive foreground fixture from the installed app; press the explicit software Stop,
+   press it again, and record the monotonic timestamp at Stop request, Helper release, held-input
+   cleanup, tap disable, and exclusion release. `already_stopped`, disabled tap, released exclusion,
+   and no later post must be observed.
+4. During a real exclusive lease, the human must move the physical mouse and press/release physical
+   Shift. Record monotonic timestamps immediately before and after the physical event and at Helper
+   interruption/cleanup. No synthetic event may satisfy this checkpoint.
+5. Only after those human checkpoints and a rebuilt accepted handoff may browser navigation,
+   existing remote-feature, and full quit/relaunch acceptance be rerun. No backup deletion or
+   release publication is authorized by this worklog.
+
+### 8. Repository checks run after the worklog update
+
+- `mise exec -- node scripts/mise-run.mjs pnpm typecheck` — exit 0.
+- `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0, with `76 warnings and 0 errors` from
+  the pinned run. Warnings are reported as warnings, not suppressed.
+- `git diff --check` — exit 0. `git status --short` showed the pre-existing modified declaration maps,
+  untracked `.zcodeignore`, untracked `release/0.1.0-alpha.1/build.log`, and the intentional
+  worklog modification.
+
+## Final report generation — 2026-09-24
+
+**Final disposition remains BLOCKED / NOT ACCEPTED.** The report is complete, but it does not turn the
+current candidate into an accepted release.
+
+### Release-facing files written
+
+- `release/0.1.0-alpha.1/FINAL_RELEASE_REPORT.md`
+- `release/0.1.0-alpha.1/RELEASE_NOTES.md`
+- `release/0.1.0-alpha.1/build-info.json`
+- `release/0.1.0-alpha.1/SHA256SUMS.txt`
+
+No DMG or ZIP binary was changed, committed, published, pushed, tagged, or merged. These documentation
+and metadata files are not an exact-five-file handoff; `validation/` and `handoff/` remain absent.
+
+### Checks executed for the final report
+
+- `node scripts/check-workspace-freshness.mjs` — exit 0; ahead 7 / behind 0 and no configured
+  upstream.
+- `mise exec -- node scripts/mise-run.mjs pnpm architecture:check --changed` — exit 0; violations 0,
+  baseline 0, new 0.
+- `mise exec -- node scripts/mise-run.mjs pnpm typecheck` — exit 0.
+- `mise exec -- node scripts/mise-run.mjs pnpm lint` — exit 0; 76 warnings and 0 errors.
+- `mise exec -- node scripts/mise-run.mjs pnpm verify:pre-push` — exit 0.
+- `mise exec -- node scripts/mise-run.mjs pnpm build` — exit 0 under pinned Node 24.14.0.
+- `mise exec -- node scripts/mise-run.mjs pnpm fmt:check` — exit 1; 43 repository files reported.
+  This remains a failed full-tree gate, not a pass.
+- Exact CUA/release environment test command from `verification-plan.json` — exit 0; 133 passed,
+  0 failed.
+- Exact lease-authority/isolation test command from `verification-plan.json` — exit 0; 17 passed,
+  0 failed.
+- Exact release-runner test command from `verification-plan.json` — exit 0; 1 passed, 0 failed.
+- `run-foreground-policy-tests.sh` — exit 0; foreground event classification passed.
+- `run-semantic-policy-tests.sh` — exit 0; semantic action policy passed.
+- The exact unguarded E2E plan command exited 1 because its required run ID/build flag was absent.
+  With the required environment it exited 0, but the runner only checked its guards and printed that a
+  renderer runner is still required; the Playwright Stop scenario was not run.
+- `hdiutil verify <current DMG>` — exit 0; checksum valid.
+- `unzip -t <current ZIP>` — exit 0; no compressed-data errors.
+- `pnpm release:verify:candidate` against `candidate/` — exit 1 with the six controlling candidate
+  errors recorded in the final report.
+- `pnpm release:assemble:candidate` — exit 1 because `validation/` is absent.
+- `pnpm release:accept:installed` — exit 1 because `handoff/` is absent.
+- `shasum -a 256 -c SHA256SUMS.txt` from this release directory — exit 0; all six listed candidate
+  files reported `OK`.
+
+### Identity, signing, and installed checkpoint evidence
+
+- Candidate and installed app identities: `AceVra` / `com.acevra.desktop` / `0.1.0-alpha.1`; main
+  executable `AceVra`, arm64.
+- Outer app: ad-hoc, no team identifier, designated requirement is CDHash-based. Helper/probe:
+  strict verification passed with isolated local authority `AceVra CUA Dev Signing` and shared
+  certificate root.
+- Developer ID: no. Notarization: no. Staple: no. Gatekeeper: rejected.
+- Installed alpha user-data/profile roots are present; the CUA state root remains absent.
+- Fresh Helper probe reports pre-existing Accessibility and Screen Capture grants. Fresh-TCC proof is
+  not established.
+- Input Monitoring requirement is not experimentally determined.
+- Software Stop and real physical mouse/Shift interruption are human-blocked. No numeric physical
+  interruption latency exists, and no synthetic event was substituted.
+- Prior unauthenticated quit/relaunch evidence remains supporting material only; Helper, CUA,
+  provider/account, browser, and remote installed regressions were not accepted.
+
+### Final app/archive release-content scan
+
+A temporary read-only extraction/mount of the current ZIP and DMG was scanned with the repository's
+`scanCandidateContents` function, alongside the unpacked candidate app. All three targets reported the
+same finding:
+
+```text
+developer-absolute-path at Contents/Resources/cua-helper/helper-build-info.json
+```
+
+The release metadata files themselves were separately scanned for developer checkout paths, private
+key markers, and common credential-value patterns; that scan printed
+`RELEASE_METADATA_SCAN_CLEAN`. This clean metadata scan does not override the failed app/DMG/ZIP
+content scan.
+
+### Required next step
+
+Fix stable outer-app signing and relative-only Helper provenance, rebuild current `HEAD` into a new
+no-clobber build directory, produce the exact arm64 archive names, rerun candidate validation and the
+app/DMG/ZIP content scan, assemble the exact-five-file handoff, and then complete fresh human
+Gatekeeper/TCC, software Stop, and physical-interruption checkpoints. Do not distribute the current
+candidate.

@@ -861,6 +861,10 @@ async function main() {
   console.log(`[bundle] skipPrepare=${skipPrepare} skipBuild=${skipBuild}`);
 
   // A dry run never needs signing material, so it stays a pure command/parser check.
+  const outputDir = resolve(desktopRoot, process.env.ZCODE_DESKTOP_DIST_DIR || "dist");
+  if (!dryRun && existsSync(outputDir) && readdirSync(outputDir).length > 0) {
+    throw new Error(`[bundle] refusing to overwrite existing build directory: ${outputDir}`);
+  }
   const cuaSigningEnv = dryRun ? {} : resolveCuaSigningEnv(process.env, { os });
   const buildEnv = {
     ZCODE_TARGET_OS: os,

@@ -32,7 +32,16 @@ remain fail-closed when their required directories, arguments, signatures, or hu
 are absent. Architecture checks also require every managed module to expose its declared
 `module.ts` artifact; this release does not change the behavior of those modules.
 
-## Profile and data isolation
+## Review-verdict closure requirements
+
+The current release candidate is rejected until all confirmed blockers are closed: stale-source
+provenance, absolute native provenance, non-alpha default CUA enablement, replaceable physical
+exclusion, disconnected lease authority/Stop, a real renderer/Electron Stop E2E, complete installed
+acceptance, and candidate validator/tooling enforcement of signatures, architectures, inventories,
+and no-clobber build behavior. CUA-3 signing, peer binding, designated requirements, TCC identity,
+data isolation, and compatibility identifiers remain mandatory. Human Gatekeeper, fresh TCC, and
+physical-input evidence cannot be synthesized and remain explicit unresolved checkpoints when not
+performed.
 
 `local-engineering-alpha` has these exact defaults:
 

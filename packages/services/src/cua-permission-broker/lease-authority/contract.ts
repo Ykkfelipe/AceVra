@@ -1,5 +1,6 @@
 // CUA lease authority contract. The service owns admission, generation, and terminal state.
 export type LeaseState = "reserving" | "active" | "releasing" | "released" | "stopped";
+export const ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV = "ZCODE_CUA_LEASE_AUTHORITY_SOCKET";
 
 export interface LeaseRecord {
   readonly leaseId: string;
@@ -16,4 +17,5 @@ export interface LeaseAuthority {
   release(leaseId: string, reason?: string): Promise<LeaseRecord>;
   stop(): Promise<{ status: "released" | "already_stopped"; record?: LeaseRecord }>;
   getStatus(): LeaseRecord | undefined;
+  close(): Promise<void>;
 }

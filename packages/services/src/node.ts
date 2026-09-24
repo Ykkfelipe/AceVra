@@ -9,7 +9,7 @@ import {
   NodeModelSelectionConfigRepository,
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
-import { getAppConfigDir as resolveAppConfigDir, getUserHomeDir } from "./paths.js";
+import { getAppConfigDir as resolveAppConfigDir, getDataBaseDir, getUserHomeDir } from "./paths.js";
 import { IAccountsService } from "./accounts/accounts.js";
 import { createAccountsService } from "./accounts/accountsServiceImpl.js";
 import { CodexAppServerBridge } from "./accounts/codexAppServerBridge.js";
@@ -121,6 +121,7 @@ export {
   setZCodeStdioTapDevEnabled,
 } from "./zcode-agent/zcodeStdioTapDevConfig.js";
 export type { ZCodeStdioTapDevState } from "@zcode/shared";
+export { startLeaseAuthorityServer } from "./cua-permission-broker/lease-authority/server.js";
 export {
   createCuaHelperInstaller,
   requestHelperAccessibilityPermissionViaLaunchServices,
@@ -503,6 +504,7 @@ import {
   type WindowsCuaRuntime,
 } from "#src/cua-permission-broker/windowsCuaDevRuntime.js";
 import { createCanonicalCuaHelperInstaller } from "./cua-permission-broker/cuaHelperInstaller.js";
+import { startLeaseAuthorityServer } from "./cua-permission-broker/lease-authority/server.js";
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
 import { HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import {
@@ -654,6 +656,7 @@ interface ManagedCuaHelperHostDispose {
 // 已授权主体常驻、甚至在 services 重建时再起一个 → 多实例/孤儿/权限主体泄漏。用与 ServiceCollection 绑定
 // 的 WeakMap 侧表登记，dispose 时统一终止（best-effort，不阻断其它资源回收）。
 const managedCuaHelperHosts = new WeakMap<ServiceCollection, ManagedCuaHelperHostDispose>();
+const leaseAuthorityServers = new WeakMap<ServiceCollection, { close(): Promise<void> }>();
 const providerRuntimes = new WeakMap<ServiceCollection, ProviderRuntime>();
 const providerProvisioningSources = new WeakMap<ServiceCollection, ProviderProvisioningSource>();
 const providerProvisioningTriggerDisposers = new WeakMap<
@@ -2683,9 +2686,21 @@ export function createLocalServices(options: {
 
   // 即使初始配置关闭也必须登记 lifecycle disposer：terminal fence 需要早于任意延迟 setting/acquire
   // 恢复，不能把"当前还没有 Helper"误当成"不需要生命周期所有者"。dispose 时串行 stop host。
+  if (options?.serviceAuthorityMode === "desktop-local") {
+    void startLeaseAuthorityServer(join(getDataBaseDir(), ".zcode")).then((server) => {
+      leaseAuthorityServers.set(services, server);
+      process.env.ZCODE_CUA_LEASE_AUTHORITY_SOCKET = server.socketPath;
+      process.env.ZCODE_CUA_LEASE_AUTHORITY_TOKEN = server.token;
+    });
+  }
   registerManagedCuaHelperHostForDispose(services, {
     stop: async () => {
       await defaultCuaProductHelperLifecycle.dispose();
+      const leaseServer = leaseAuthorityServers.get(services);
+      if (leaseServer) {
+        await leaseServer.close();
+        leaseAuthorityServers.delete(services);
+      }
     },
   });
   registerHostApiNetworkTransportForDispose(services, hostApiNetworkTransport);

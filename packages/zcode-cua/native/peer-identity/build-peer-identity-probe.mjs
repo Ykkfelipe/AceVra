@@ -5,8 +5,8 @@
 // process holding the fd (delivered by child_process stdio passthrough) and it compiles the
 // SAME CodeIdentity.swift source as the Helper, so the two code-signature verifications
 // cannot drift (spec, "Why a small Swift sidecar, and not a native Node addon"). Deliberately
-// NOT wired into packaging, exactly like build-dev-helper.mjs — the hardened transport is a
-// dev/host-integration surface until the product host integration lands.
+// The alpha product packaging path embeds this probe beside the product Helper and pins its
+// designated requirement before the hardened transport admits a peer.
 //
 // Signing mirrors the Helper builder: the dev identity is REQUIRED by default (the probe is
 // trusted code in the admission chain — an ad-hoc or substituted probe is a substituted

@@ -9,6 +9,8 @@ import {
   isZCodeCuaMcpCommand,
   isZCodeCuaMcpPackageArg,
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
+  ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY,
+  ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY,
   ZCODE_CUA_NODE_REPL_HOST_ENV_KEY,
   ZCODE_CUA_OFFICIAL_PLUGIN_ID,
   ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY,
@@ -152,6 +154,8 @@ function injectCuaCredentialsIntoNodeRepl(
   // CLI runtime env 会在 bootstrap 前被清理。marker 必须和 socket/token 一样取自私有凭据快照，
   // 否则 SDK 迁移后 broker 虽然存活，权限刷新仍会静默停止。
   const refreshMarker = captured.refreshMarker || process.env[REFRESH_MARKER_ENV]?.trim();
+  const leaseAuthoritySocket = captured.leaseAuthoritySocket;
+  const leaseAuthorityToken = captured.leaseAuthorityToken;
   return {
     ...config,
     env: {
@@ -159,6 +163,8 @@ function injectCuaCredentialsIntoNodeRepl(
       [ZCODE_CUA_BROKER_SOCKET_ENV_KEY]: socketPath,
       ...(refreshMarker ? { [REFRESH_MARKER_ENV]: refreshMarker } : {}),
       ...(pluginAuthority ? { [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: pluginAuthority } : {}),
+      ...(leaseAuthoritySocket ? { [ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY]: leaseAuthoritySocket } : {}),
+      ...(leaseAuthorityToken ? { [ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY]: leaseAuthorityToken } : {}),
       [ZCODE_CUA_NODE_REPL_HOST_ENV_KEY]: "1",
       [ZCODE_PLUGIN_ID_ENV_KEY]: ZCODE_CUA_OFFICIAL_PLUGIN_ID,
     },

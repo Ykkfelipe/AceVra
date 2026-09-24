@@ -55,5 +55,9 @@ export function createLeaseAuthority(): LeaseAuthority {
         return { status: "released" as const, record: current };
       }),
     getStatus: () => current,
+    close: async () => {
+      current = undefined;
+      await operation;
+    },
   };
 }
