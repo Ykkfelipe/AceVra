@@ -58,6 +58,15 @@ export async function applySubmissionExecutionState(
       runtime.setSessionModelSelection(appliedSelection);
       await persistRuntimeModelSelection(runtime, appliedSelection);
       if (!sameModelSelection(previousSelection, appliedSelection)) {
+        // 修复：setModel 记下的 pending model_change 只是意图；本轮提交若换成别的模型，必须按
+        // 实际应用的选择重算（换回起点时清空），否则持久化的分隔线部件会声称一次从未发生的切换。
+        // 没有 pending 时保持原样：纯提交驱动的切换本来就不落部件，冷恢复以 user 消息为准。
+        if (runtime.pendingModelChangeTimeline) {
+          runtime.recordPendingModelChange({
+            toModel: appliedSelection,
+            toModelLabel: `${appliedSelection.providerId}/${appliedSelection.modelId}`,
+          });
+        }
         await runtime.emitModelSelected({
           model,
           modelSelection: appliedSelection,

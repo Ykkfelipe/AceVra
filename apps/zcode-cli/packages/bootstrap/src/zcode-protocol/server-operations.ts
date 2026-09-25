@@ -116,7 +116,10 @@ import {
   paginateEndedSubagents,
   projectSessionSubagents,
 } from "./subagent-session-query.js";
-import { runSessionModelConfigMutation } from "../zcode-protocol-v4/model-config-mutation.js";
+import {
+  applySessionModelSelection,
+  runSessionModelConfigMutation,
+} from "../zcode-protocol-v4/model-config-mutation.js";
 import { runWithSessionResidencyFinalization } from "./session-residency.js";
 
 const PLAN_MODE_GOAL_CONTINUATION_SKIPPED_MESSAGE = "Plan mode 下已记录 goal，但不会自动继续。";
@@ -2675,7 +2678,9 @@ export async function setModel(context: ZCodeProtocolAgentServerContext, rawPara
   assertExpectedRevision(record, params.expectedRevision);
   await runSessionModelConfigMutation(record.app, async () => {
     // 完整 Session 配置命令不能经身份字符串丢掉 reasoning；由共享 setter 原子校验/保存。
-    await record.app.setModel(params.model);
+    // 同时发布 ModelSelected：v4 投影 config 必须跟上 runtime，否则下一轮的模型分隔线会拿
+    // 过期 config 对比而画反（specs/model-change-divider.md）。
+    await applySessionModelSelection(record.app, params.model, record.traceContext);
   });
   return await afterStateMutation(context, record, "model_changed");
 }

@@ -1623,8 +1623,12 @@ export function synthesizeEventsFromMessages(
         : {}),
     });
   };
-  const selectAcceptedTurnModel = (fallback: ModelSelection | null): void => {
-    const selected = pendingTimelineModel ?? (fallback ? { modelSelection: fallback } : null);
+  const selectAcceptedTurnModel = (turnModel: ModelSelection | null): void => {
+    // 修复：本轮消息记录的选择就是本轮实际运行的模型（runtime 在持久化 user 消息前已应用
+    // submission），是权威事实；model_change 部件只在消息缺少选择时（preface 轮、旧数据）补位。
+    // 旧实现反过来优先部件：setModel 记下、却被随后提交推翻的部件（从未运行过的「to」）
+    // 会把整轮归到错误模型，之后每一条分隔线都随之错位或反向（specs/model-change-divider.md）。
+    const selected = turnModel ? { modelSelection: turnModel } : pendingTimelineModel;
     pendingTimelineModel = null;
     selectTurnModel(selected);
   };
@@ -1720,10 +1724,9 @@ export function synthesizeEventsFromMessages(
     }
     const timelineModel = modelChangeToModelOf(message);
     if (timelineModel) {
-      // model_change timeline part 是已接受轮的持久边界事实；
-      // 宿主消息不能完全跳过、只靠后续 user message model 快照碰巧重建：
-      // 快照缺失/滞后时 marker 就会消失，所以先消费显式 toModel，
-      // 下一个 TurnStarted 仅使用该权威选型，不再被滞后快照覆盖。
+      // model_change timeline part 是边界提示：宿主消息不能完全跳过，user message 缺少模型
+      // 快照时（preface 轮、旧数据）由它补位。它记录的是 setModel 时的意图，可能被随后的提交
+      // 推翻，所以下一轮消息自带的选择优先（见 selectAcceptedTurnModel）。
       recordTimelineModel(timelineModel);
       index += 1;
       continue;

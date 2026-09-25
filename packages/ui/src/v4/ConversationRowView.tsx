@@ -96,7 +96,6 @@ import {
   projectAssistantCodeComments,
   type AssistantCodeCommentCard,
 } from "@/lib/assistantCodeComment.js";
-import { resolveProviderLabel } from "@/lib/registryProviderView.js";
 import type { LexicalChatInputHandle } from "@/LexicalChatInput.js";
 import { ChatPromptEditor } from "@/prompt-editor/ChatPromptEditor.js";
 import { resolveToolCallIdentity } from "@/lib/toolIdentity.js";
@@ -123,7 +122,7 @@ import {
   splitUserInputEpilogue,
 } from "@/v4/ConversationUserInputEpilogue.js";
 import { ConversationHookDetailsAction } from "@/v4/ConversationHookDetailsAction.js";
-import { formatModelChangeLabel } from "@/v4/composer/modelTriggerDisplay.js";
+import { formatModelChangeMarkerLabel } from "@/v4/modelChangeMarkerLabel.js";
 import { formatMessageTimeLabel } from "@/v4/messageTimeLabel.js";
 import { parseConversationShareContext } from "@/lib/conversationShareContext.js";
 import { TaskArtifactCard } from "@/v4/TaskArtifactCard.js";
@@ -1831,36 +1830,13 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
           running: false,
         };
       case "modelChange": {
-        // marker 已携带完整 provider/model 元组，旧渲染却只读取 model，
-        // 且没有订阅 provider snapshot，导致同名模型无差异、目录水合后名称不刷新。
-        // 这里保留 provider ID fallback，并让现有 marker 随目录更新。
-        const fromProvider = resolveProviderLabel(marker.fromProvider, modelSelectionView);
-        const toProvider = resolveProviderLabel(marker.toProvider, modelSelectionView);
-        const to = formatModelChangeLabel(marker.toProvider, toProvider, marker.toModel, intl);
-        if (marker.fromProvider === undefined || marker.fromModel === undefined) {
-          return {
-            // source-less 表示首次使用的模型事实，不是模型切换，因此不显示切换箭头。
-            icon: null,
-            label: intl.formatMessage({ id: "chat.modelChange.using" }, { model: to }),
-            running: false,
-          };
-        }
-        return {
-          icon: MARKER_MODEL_ICON,
-          label: intl.formatMessage(
-            { id: "chat.modelChange.switched" },
-            {
-              from: formatModelChangeLabel(
-                marker.fromProvider,
-                fromProvider,
-                marker.fromModel,
-                intl,
-              ),
-              to,
-            },
-          ),
-          running: false,
-        };
+        // marker 已携带完整 provider/model 元组；文案与方向统一由纯函数生成（便于确定性测试）。
+        const { sourceLess, label } = formatModelChangeMarkerLabel(
+          marker,
+          modelSelectionView,
+          intl,
+        );
+        return { icon: sourceLess ? null : MARKER_MODEL_ICON, label, running: false };
       }
       case "goalVerify": {
         const running = marker.outcome === "running";
