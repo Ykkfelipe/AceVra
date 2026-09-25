@@ -339,6 +339,18 @@ export interface ZCodeTaskMeta {
    */
   codexThreadId?: string;
   /**
+   * 后端迁移时间线（phase 11，见 packages/services/specs/backend-migration.md）：只追加，
+   * 记录每一次跨 zcode/codex 边界的迁移结果。同后端内切 provider（Z.ai/Azure/Command Code
+   * 等）不产生记录——那条路径没有迁移，只是换了 modelSelection。
+   */
+  backendTransitions?: import("./backend-migration.js").BackendTransitionRecord[];
+  /**
+   * 迁移进行中的唯一权威标记。出现即代表 executionBackend 尚未变更——提交是
+   * "写 executionBackend + 追加 backendTransitions + 清空本字段" 的同一次 syncTaskMeta 调用。
+   * 重启后若仍存在，一律按失败处理，绝不凭它推断当前后端（见 spec「Restart-during-migration」）。
+   */
+  pendingBackendTransition?: import("./backend-migration.js").PendingBackendTransition;
+  /**
    * Codex thread 级模型选择（executionBackend="codex" 时可选）。
    * `CODEX_MODEL_OPTIONS` 的 id；缺省 = Default 哨兵（Codex 应用自身设置）。
    * 仅记录建任务时的选择，供恢复后快照展示；不参与 mid-session 切换。

@@ -9,7 +9,9 @@ export function rowBase(rowId: number, turnId: string, entityId: string, created
 }
 
 /** 工具行的结构化输入摘要：命令原文 / 文件清单 / server.tool / 查询词。 */
-export function codexToolInputText(item: Extract<CodexServerNotification, { type: "itemStarted" }>["item"]): string {
+export function codexToolInputText(
+  item: Extract<CodexServerNotification, { type: "itemStarted" }>["item"],
+): string {
   switch (item.kind) {
     case "commandExecution":
       return item.command;
@@ -25,14 +27,56 @@ export function codexToolInputText(item: Extract<CodexServerNotification, { type
 }
 
 /** 会不会渲染成 toolCall 行（审批锚点 / 冷恢复的落行判定都用它）。 */
-export function isToolItemKind(kind: Extract<CodexServerNotification, { type: "itemStarted" }>["item"]["kind"]): boolean {
-  return kind === "commandExecution" || kind === "fileChange" || kind === "mcpToolCall" || kind === "webSearch";
+export function isToolItemKind(
+  kind: Extract<CodexServerNotification, { type: "itemStarted" }>["item"]["kind"],
+): boolean {
+  return (
+    kind === "commandExecution" ||
+    kind === "fileChange" ||
+    kind === "mcpToolCall" ||
+    kind === "webSearch"
+  );
 }
 
 export class CodexRowLog {
   readonly #rows: ConversationRow[] = [];
   readonly #rowIdByEntity = new Map<string, number>();
   #nextRowId = 1;
+  /**
+   * 当前轮的 Codex 原生 turn id；append/upsert 时写进行的 sourceTurnId。冷恢复会重排 rowId、把
+   * turnId 换成 "codex-history"，只有它稳定——后端迁移据此把 handoff 轮排除在可见时间线外
+   * （backend-migration.md Amendment 4）。
+   */
+  #sourceTurnId: string | null = null;
+
+  get sourceTurnId(): string | null {
+    return this.#sourceTurnId;
+  }
+
+  setSourceTurnId(sourceTurnId: string | null): void {
+    this.#sourceTurnId = sourceTurnId;
+  }
+
+  /** 绑定当前轮 turn id 并回填已建的行（宿主发起的轮在 turn/start 返回前就已建行）。 */
+  bindSourceTurnId(
+    sourceTurnId: string,
+    rowIds: readonly (number | null)[],
+  ): { op: "row.upserted"; row: ConversationRow }[] {
+    this.#sourceTurnId = sourceTurnId;
+    const deltas: { op: "row.upserted"; row: ConversationRow }[] = [];
+    for (const rowId of rowIds) {
+      const row = rowId === null ? undefined : this.rowAt(rowId);
+      if (row && row.sourceTurnId !== sourceTurnId)
+        deltas.push(this.upsert({ ...row, sourceTurnId }));
+    }
+    return deltas;
+  }
+
+  #tag(row: ConversationRow): ConversationRow {
+    return this.#sourceTurnId && !row.sourceTurnId
+      ? { ...row, sourceTurnId: this.#sourceTurnId }
+      : row;
+  }
 
   allocateRowId(): number {
     return this.#nextRowId++;
@@ -51,7 +95,8 @@ export class CodexRowLog {
   }
 
   /** 追加行并登记 entityId；返回 append delta。 */
-  append(row: ConversationRow): { op: "row.appended"; row: ConversationRow } {
+  append(input: ConversationRow): { op: "row.appended"; row: ConversationRow } {
+    const row = this.#tag(input);
     this.#rows.push(row);
     this.#rowIdByEntity.set(row.entityId ?? `codex-row-${row.rowId}`, row.rowId);
     return { op: "row.appended", row };
@@ -176,6 +221,17 @@ export function buildReplayedHistoryRow(options: {
 }): ConversationRow | null {
   const { item, existing, turnId, allocateRowId, now } = options;
   const failed = item.status != null && /fail|error/i.test(item.status);
+  if (item.kind === "userMessage") {
+    if (existing?.kind === "userInput") return { ...existing, text: item.text };
+    if (!item.text.trim()) return null;
+    const entityId = item.itemId ? `codex-item-${item.itemId}` : `codex-row-${allocateRowId()}`;
+    return {
+      ...rowBase(allocateRowId(), turnId, entityId, now()),
+      kind: "userInput",
+      text: item.text,
+      origin: "realUser",
+    };
+  }
   if (item.kind === "agentMessage" || item.kind === "reasoning") {
     const kind = item.kind === "agentMessage" ? ("assistantText" as const) : ("reasoning" as const);
     if (existing?.kind === kind) return { ...existing, text: item.text, state: "complete" };
@@ -189,7 +245,11 @@ export function buildReplayedHistoryRow(options: {
   }
   if (!isToolItemKind(item.kind)) return null;
   if (existing?.kind === "toolCall") {
-    return { ...existing, status: failed ? ("error" as const) : ("success" as const), endedAt: now() };
+    return {
+      ...existing,
+      status: failed ? ("error" as const) : ("success" as const),
+      endedAt: now(),
+    };
   }
   return buildCodexToolCallRow({
     item,
@@ -198,4 +258,30 @@ export function buildReplayedHistoryRow(options: {
     allocateRowId,
     now,
   });
+}
+
+/** item/completed：已流式建好的行 → 终态行（文本定稿 / 工具按 status 判定成败）；不适用返回 null。 */
+export function buildCompletedStreamedRow(
+  existing: ConversationRow,
+  item: Extract<CodexServerNotification, { type: "itemCompleted" }>["item"],
+  now: () => number,
+): ConversationRow | null {
+  if (existing.kind === "assistantText") {
+    const text = item.kind === "agentMessage" ? item.text : existing.text;
+    return { ...existing, text, state: "complete" };
+  }
+  if (existing.kind === "reasoning") return { ...existing, state: "complete" };
+  if (existing.kind === "toolCall") {
+    const status = item.status ?? null;
+    const failed = status !== null && /fail|error/i.test(status);
+    return {
+      ...existing,
+      status: failed ? "error" : "success",
+      ...(item.kind === "commandExecution" && item.aggregatedOutput !== null
+        ? { output: { text: item.aggregatedOutput } }
+        : {}),
+      endedAt: now(),
+    };
+  }
+  return null;
 }

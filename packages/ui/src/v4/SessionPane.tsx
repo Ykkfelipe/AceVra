@@ -23,6 +23,7 @@ import {
   TID_V4_SESSION_PANE,
   testId,
   ZCODE_AGENT_PROVIDER,
+  type SwitchTaskBackendResult,
   type ZCodeExecutionBackend,
   type CodexEffortOption,
 } from "@zcode/shared";
@@ -190,6 +191,9 @@ import type {
   ConversationFileChangesRequestOptions,
   ConversationRowRenderContext,
 } from "@/v4/conversationRowContext.js";
+import { BackendMigrationSwitchDialog } from "@/v4/BackendMigrationSwitchDialog.js";
+import { formatComposerAgentModelSelection } from "@/v4/composer/composerProviderChoices.js";
+import { useTaskBackendMigration } from "@/v4/useTaskBackendMigration.js";
 import type { AssistantPreviewCardsAutoOpenRequest } from "@/lib/assistantPreviewCards.js";
 import {
   advanceAssistantPreviewPptxAutoOpenGate,
@@ -1312,6 +1316,83 @@ export function SessionPane({
   // 既有会话由 Codex 后端驱动时（snapshot.config.provider=codex），composer 需要：
   // - 放行发送（不依赖 zcode 计划模型选择）；- 渲染 codex 模型/effort 控件。
   const isCodexSession = snapshot?.config.provider === "codex";
+  // 跨后端迁移（Amendment 4）：权威是 Host 持久化 task 行，hook 只读视图 + 发一个写请求。
+  // taskId 用正式 session（草稿态没有可迁移的执行归属）。
+  // 注：此处 isDraft 尚未声明（它等于 sessionId === null），故用同口径局部量。
+  const migrationIsDraft = sessionId === null;
+  const backendMigration = useTaskBackendMigration({
+    taskId: migrationIsDraft ? null : sessionId,
+    workspacePath,
+    ...(workspaceIdentity ? { workspaceIdentity } : {}),
+  });
+  const [migrationDialog, setMigrationDialog] = useState<{
+    to: ZCodeExecutionBackend;
+    from: ZCodeExecutionBackend;
+  } | null>(null);
+  const [migrationResult, setMigrationResult] = useState<SwitchTaskBackendResult | null>(null);
+  // composer 的执行后端显示：正式会话用持久化 executionBackend（提交后才翻转），
+  // 草稿态仍读本地草稿。pending 期间显示目标后端但不算完成——send 仍被 Host 拒绝。
+  const effectiveBackend: ZCodeExecutionBackend = migrationIsDraft
+    ? draftBackend
+    : (backendMigration.view?.executionBackend ?? (isCodexSession ? "codex" : "zcode"));
+  const migrationBusy = backendMigration.switching || backendMigration.pendingPhase !== null;
+  // 切到 Codex 需要一轮真实初始化（有成本），先确认；Codex→Agent 无推理调用，直接执行。
+  const handleSwitchExecutionBackend = useCallback(
+    (to: ZCodeExecutionBackend) => {
+      if (migrationIsDraft) {
+        handleDraftSwitchBackend(to);
+        return;
+      }
+      const from = effectiveBackend;
+      if (to === from || migrationBusy) return;
+      setMigrationResult(null);
+      if (to === "codex") {
+        setMigrationDialog({ to, from });
+        return;
+      }
+      void backendMigration.switchBackend(to).then((result) => {
+        setMigrationResult(result);
+        if (result?.outcome === "committed") setMigrationDialog(null);
+      });
+    },
+    [backendMigration, effectiveBackend, handleDraftSwitchBackend, migrationBusy, migrationIsDraft],
+  );
+  const confirmBackendSwitch = useCallback(() => {
+    if (!migrationDialog) return;
+    void backendMigration.switchBackend(migrationDialog.to).then((result) => {
+      setMigrationResult(result);
+      // committed 依赖事件驱动的后端翻转；只有确定的失败/拒绝留在这个对话框里。
+      if (result?.outcome !== "committed") return;
+      setMigrationDialog(null);
+    });
+  }, [backendMigration, migrationDialog]);
+  // 正式 Codex 会话选 zcode family provider = 迁回 Agent，并指定目标 provider/model。
+  // 迁回 Agent 无推理调用，不经确认对话框；仍在同一个 switchTaskBackend 事务里改归属。
+  const handleMigrateToAgentProvider = useCallback(
+    (providerId: string, modelId: string) => {
+      if (migrationIsDraft || effectiveBackend === "zcode") {
+        handleDraftSelectProvider(providerId, modelId);
+        return;
+      }
+      if (migrationBusy) return;
+      const toModelSelection = formatComposerAgentModelSelection(
+        modelSelectionView,
+        providerId,
+        modelId,
+      );
+      void backendMigration
+        .switchBackend("zcode", toModelSelection)
+        .then((result) => setMigrationResult(result));
+    },
+    [
+      backendMigration,
+      effectiveBackend,
+      handleDraftSelectProvider,
+      migrationBusy,
+      migrationIsDraft,
+      modelSelectionView,
+    ],
+  );
   // Codex 后端首发不需要 zcode 模型选择；就绪态与 submission 构造都放行。
   // 生成的 stub submission 只被 zcode 命令路径消费，Codex 分支不会读取。
   const composerSubmissionReady = useMemo(
@@ -4441,7 +4522,9 @@ export function SessionPane({
         connecting ||
         draftRuntimeRebuilding ||
         queueEditActiveForCurrentComposer ||
-        quotaBanner.state.blocksSubmit
+        quotaBanner.state.blocksSubmit ||
+        // 迁移进行中冻结发送与切换：Host 会拒绝，但 UI 先给出确定性禁用（Amendment 4 §11）。
+        migrationBusy
       }
       workspacePath={workspacePath}
       workspaceIdentity={workspaceIdentity}
@@ -4465,9 +4548,13 @@ export function SessionPane({
       onSelectModel={handleSelectModel}
       onSelectThought={handleSelectThought}
       onSwitchMode={handleSwitchMode}
-      draftBackend={draftBackend}
-      onSwitchBackend={isDraft ? handleDraftSwitchBackend : undefined}
-      onSelectAgentProvider={isDraft ? handleDraftSelectProvider : undefined}
+      draftBackend={effectiveBackend}
+      onSwitchBackend={handleSwitchExecutionBackend}
+      // 已有会话切 zcode family provider（Z.ai/Azure/Command Code 等）复用同一条模型选择
+      // 写路径——和 Models 下拉换模型走的是同一个 handler，本来就不区分草稿态。
+      // 切到 Codex 走迁移事务（先确认成本，再由 Host 提交）；Codex→Agent 由 provider
+      // 选择触发，同样经 switchTaskBackend，不在 UI 直接改 executionBackend。
+      onSelectAgentProvider={isDraft ? handleDraftSelectProvider : handleMigrateToAgentProvider}
       codexModelId={codexModelId}
       onSelectCodexModel={handleDraftSelectCodexModel}
       codexEffort={codexEffort}
@@ -4476,6 +4563,7 @@ export function SessionPane({
       codexActualModel={isCodexSession ? snapshot?.config.model || null : null}
       codexActualEffort={isCodexSession ? snapshot?.config.thought || null : null}
       codexBackendAvailable={codexExecutionService != null}
+      backendMigrationAvailable={!isDraft && backendMigration.available}
       onOpenRunningBackgroundWorks={
         sessionId && runningBackgroundWorkCount > 0 ? handleOpenRunningBackgroundWorks : undefined
       }
@@ -4894,6 +4982,21 @@ export function SessionPane({
           </SessionPluginReferenceIconBoundary>
         )}
       </div>
+      <BackendMigrationSwitchDialog
+        open={migrationDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMigrationDialog(null);
+            setMigrationResult(null);
+          }
+        }}
+        to={migrationDialog?.to ?? "codex"}
+        from={migrationDialog?.from ?? effectiveBackend}
+        switching={backendMigration.switching}
+        pendingPhase={backendMigration.pendingPhase}
+        result={migrationResult}
+        onConfirm={confirmBackendSwitch}
+      />
     </div>
   );
 }

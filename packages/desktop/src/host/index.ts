@@ -42,6 +42,7 @@ import {
   ISettingService,
   IWindowControllerService,
   IConversationShareService,
+  IBackendMigrationService,
   IZCodeAgentService,
   IZCodeTaskService,
   IZCodeSessionService,
@@ -143,6 +144,7 @@ import {
 } from "./remotePromptAttachments.js";
 import { createWindowHostAttachmentRegistry } from "./windowHostAttachmentRegistry.js";
 import { scopeConversationShareServiceForAttachment } from "./conversationShareAttachmentService.js";
+import { scopeBackendMigrationServiceForAttachment } from "./backendMigrationAttachmentService.js";
 import {
   createWindowRemoteConnectionRegistry,
   type WindowRemoteConnectionCloseEvent,
@@ -2024,6 +2026,14 @@ function exposeServicesOnMessagePort(
         clientMode,
         connectionScope?.service,
       ),
+    );
+  }
+  const backendMigrationService = services.getOptional(IBackendMigrationService);
+  if (backendMigrationService) {
+    // 迁移的 zcode 读取/种子写入必须复用本 attachment 的可信 connection scope（同 share 服务）。
+    overrides.set(
+      IBackendMigrationService.channelName,
+      scopeBackendMigrationServiceForAttachment(backendMigrationService, connectionScope?.service),
     );
   }
   services.exposeOnChannelServer(server, overrides);

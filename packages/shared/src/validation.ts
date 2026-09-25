@@ -22,6 +22,10 @@ import {
   zcodeProcessResourceSampleSchema,
 } from "./zcode-protocol/index.js";
 import { zcodeTaskModeSchema } from "./zcode-task-mode-schema.js";
+import {
+  backendTransitionRecordSchema,
+  pendingBackendTransitionSchema,
+} from "./backend-migration.js";
 import { PROTOCOL_V4_LIMITS } from "./zcode-protocol-v4/core.js";
 import { errorAttributionSchema } from "./zcode-protocol-v4/snapshot.js";
 import { sessionWorkflowActivitySchema } from "./zcode-protocol-v4/sessions-index-workflow-activity.js";
@@ -1171,6 +1175,10 @@ export const zcodeTaskMetaSchema = z.object({
   executionBackend: z.enum(["zcode", "codex"]).optional(),
   // Codex thread 绑定：meta_json 单一来源，与 executionBackend 成对出现。
   codexThreadId: nonEmptyStringSchema.optional(),
+  // 后端迁移时间线（phase 11）：只追加，见 backend-migration.md。
+  backendTransitions: z.array(backendTransitionRecordSchema).optional(),
+  // 迁移进行中的唯一权威标记；出现即代表 executionBackend 尚未变更（见 spec「Restart」）。
+  pendingBackendTransition: pendingBackendTransitionSchema.optional(),
   // cron automation 身份：随 meta_json 一起持久化（单一来源），同时在写入时投影到 tasks 表
   // cron_automation_id 索引列，供按 automation 反查 session。runId 属于 automation_runs /
   // 投递 metadata，不属于 task 表。

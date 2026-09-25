@@ -6,11 +6,12 @@
 // - 30s keep-warm：refCount 归零不立即 dispose（防 pane 关/开、布局调整抖动）；
 // - agentService 换代：远程条目保持 layer/transport 身份并单向切换最新 proxy；
 //   本地 __base__ 用新 service 重建条目。
-import type { ICodexExecutionService } from "@zcode/services";
+import type { IBackendMigrationService, ICodexExecutionService } from "@zcode/services";
 import type { IZCodeAgentService } from "@zcode/services";
 import { createAgentConversationTransport } from "@/v4/agentConversationTransport.js";
 import { createCodexConversationTransport } from "@/v4/codexConversationTransport.js";
 import { createBackendRoutingConversationTransport } from "@/v4/backendRoutingConversationTransport.js";
+import { createBackendTimelineConversationTransport } from "@/v4/backendTimelineConversationTransport.js";
 import { remoteAgentServiceGeneration } from "@/lib/remoteAgentServiceGeneration.js";
 import { ReplaceableConversationTransport } from "@/v4/replaceableConversationTransport.js";
 import { SessionDataLayer } from "@/v4/sessionDataLayer.js";
@@ -76,6 +77,10 @@ interface RegistryEntry {
   agentServiceGeneration: number;
   /** 条目创建时的 codex 服务；proxy 换代 replace 时沿用（codex 侧错误由 store retry 兜住）。 */
   codexService?: ICodexExecutionService;
+  /** 后端迁移服务：跨段时间线组合 + 归属变化事件；旧 host 缺省时退回纯路由。 */
+  migrationService?: IBackendMigrationService;
+  /** 当前 transport 的迁移事件订阅；proxy 换代时随 transport 一起替换。 */
+  disposeBackendEvents: () => void;
   transport: ConversationTransport;
   replaceableTransport: ReplaceableConversationTransport | null;
   layer: SessionDataLayer;
@@ -100,6 +105,7 @@ function buildWorkspaceConnectionKey(scope: WorkspaceConnectionScope): string {
 }
 
 function disposeEntry(entry: RegistryEntry): void {
+  entry.disposeBackendEvents();
   if (entry.keepWarmTimer !== null) {
     clearTimeout(entry.keepWarmTimer);
     entry.keepWarmTimer = null;
@@ -156,11 +162,14 @@ function releaseEntry(entry: RegistryEntry): void {
 }
 
 /** registry 内按连接缓存的 Codex 归属判定（taskId → 是否 codex，RPC + 永久缓存）。 */
-const codexTaskBindingCaches = new WeakMap<ICodexExecutionService, (taskId: string) => Promise<boolean>>();
+interface CodexTaskPredicate {
+  (taskId: string): Promise<boolean>;
+  /** 后端迁移提交后失效该 task 的判定。 */
+  invalidate(taskId: string): void;
+}
+const codexTaskBindingCaches = new WeakMap<ICodexExecutionService, CodexTaskPredicate>();
 
-function resolveCodexTaskPredicate(
-  codexService: ICodexExecutionService,
-): (taskId: string) => Promise<boolean> {
+function resolveCodexTaskPredicate(codexService: ICodexExecutionService): CodexTaskPredicate {
   const existing = codexTaskBindingCaches.get(codexService);
   if (existing) return existing;
   const cache = new Map<string, boolean>();
@@ -173,30 +182,69 @@ function resolveCodexTaskPredicate(
     cache.set(taskId, result);
     return result;
   };
-  codexTaskBindingCaches.set(codexService, predicate);
-  return predicate;
+  const withInvalidate = Object.assign(predicate, {
+    invalidate: (taskId: string) => {
+      cache.delete(taskId);
+    },
+  });
+  codexTaskBindingCaches.set(codexService, withInvalidate);
+  return withInvalidate;
 }
 
 /** 组合 agent + codex 两条传输；codexService 缺省时行为与纯 agent 传输一致。 */
+function createRoutedConversationTransport(params: {
+  agentService: WorkspaceConnectionAgentService;
+  workspacePath: string;
+  workspaceIdentity?: string;
+  createLocalMediaPreviewUrl?: (path: string) => string;
+  codexService?: ICodexExecutionService;
+}): ConversationTransport & { invalidateRoute?(sessionId: string): void } {
+  const agentTransport = createAgentConversationTransport(params.agentService, {
+    workspacePath: params.workspacePath,
+    ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+    ...(params.createLocalMediaPreviewUrl
+      ? { createLocalMediaPreviewUrl: params.createLocalMediaPreviewUrl }
+      : {}),
+  });
+  if (!params.codexService) return agentTransport;
+  const codexTransport = createCodexConversationTransport(params.codexService);
+  const isCodexTask = resolveCodexTaskPredicate(params.codexService);
+  return createBackendRoutingConversationTransport({
+    agent: agentTransport,
+    codex: codexTransport,
+    isCodexTask,
+    invalidateCodexTask: (taskId) => isCodexTask.invalidate(taskId),
+  });
+}
+
+/**
+ * 组合 agent + codex 两条传输；有迁移服务时外包跨段时间线组合层并订阅归属变化事件
+ * （backend-migration.md Amendment 4）。codexService/migrationService 缺省时行为与旧版一致。
+ */
 function createWorkspaceConversationTransport(params: {
   agentService: WorkspaceConnectionAgentService;
   workspacePath: string;
   workspaceIdentity?: string;
   createLocalMediaPreviewUrl?: (path: string) => string;
   codexService?: ICodexExecutionService;
-}): ConversationTransport {
-  const agentTransport = createAgentConversationTransport(params.agentService, {
-    workspacePath: params.workspacePath,
-    ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
-    ...(params.createLocalMediaPreviewUrl ? { createLocalMediaPreviewUrl: params.createLocalMediaPreviewUrl } : {}),
+  migrationService?: IBackendMigrationService;
+}): { transport: ConversationTransport; disposeBackendEvents: () => void } {
+  const routed = createRoutedConversationTransport(params);
+  if (!params.migrationService) return { transport: routed, disposeBackendEvents: () => {} };
+  const workspaceKey = params.workspaceIdentity?.trim() || params.workspacePath;
+  const timeline = createBackendTimelineConversationTransport({
+    inner: routed,
+    migration: params.migrationService,
+    workspace: {
+      workspacePath: params.workspacePath,
+      ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+    },
   });
-  if (!params.codexService) return agentTransport;
-  const codexTransport = createCodexConversationTransport(params.codexService);
-  return createBackendRoutingConversationTransport({
-    agent: agentTransport,
-    codex: codexTransport,
-    isCodexTask: resolveCodexTaskPredicate(params.codexService),
+  const subscription = params.migrationService.onDynamicTaskBackendChanged()((event) => {
+    if (event.workspaceKey !== workspaceKey) return;
+    timeline.handleTaskBackendChanged(event);
   });
+  return { transport: timeline, disposeBackendEvents: () => subscription.dispose() };
 }
 
 /**
@@ -210,6 +258,7 @@ export function acquireWorkspaceConnection(
   agentService: WorkspaceConnectionAgentService,
   createLocalMediaPreviewUrl?: (path: string) => string,
   codexService?: ICodexExecutionService,
+  migrationService?: IBackendMigrationService,
 ): WorkspaceConnectionLease {
   const key = buildWorkspaceConnectionKey(scope);
   const existing = registry.get(key);
@@ -244,13 +293,15 @@ export function acquireWorkspaceConnection(
         disposeEntry(existing);
       }
     }
-    const initialTransport = createWorkspaceConversationTransport({
+    const initial = createWorkspaceConversationTransport({
       agentService,
       workspacePath: scope.workspacePath,
       ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
       ...(createLocalMediaPreviewUrl ? { createLocalMediaPreviewUrl } : {}),
       ...(codexService ? { codexService } : {}),
+      ...(migrationService ? { migrationService } : {}),
     });
+    const initialTransport = initial.transport;
     const replaceableTransport = isRemote
       ? new ReplaceableConversationTransport(initialTransport)
       : null;
@@ -260,6 +311,8 @@ export function acquireWorkspaceConnection(
       agentService,
       agentServiceGeneration: incomingServiceGeneration,
       ...(codexService ? { codexService } : {}),
+      ...(migrationService ? { migrationService } : {}),
+      disposeBackendEvents: initial.disposeBackendEvents,
       transport,
       replaceableTransport,
       layer: new SessionDataLayer({ transport }),
@@ -301,14 +354,16 @@ export function acquireWorkspaceConnection(
       }
       entry.agentService = agentService;
       entry.agentServiceGeneration = incomingServiceGeneration;
-      entry.replaceableTransport.replace(
-        createWorkspaceConversationTransport({
-          agentService,
-          workspacePath: scope.workspacePath,
-          ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
-          ...(entry.codexService ? { codexService: entry.codexService } : {}),
-        }),
-      );
+      const next = createWorkspaceConversationTransport({
+        agentService,
+        workspacePath: scope.workspacePath,
+        ...(scope.workspaceIdentity ? { workspaceIdentity: scope.workspaceIdentity } : {}),
+        ...(entry.codexService ? { codexService: entry.codexService } : {}),
+        ...(entry.migrationService ? { migrationService: entry.migrationService } : {}),
+      });
+      entry.disposeBackendEvents();
+      entry.disposeBackendEvents = next.disposeBackendEvents;
+      entry.replaceableTransport.replace(next.transport);
     },
     release: () => {
       if (released) return;

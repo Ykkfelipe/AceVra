@@ -10,25 +10,27 @@ import type {
   ConversationRow,
   TurnHeaderRow,
 } from "@zcode/shared/zcode-protocol-v4";
-import type { CodexServerNotification } from "./codexWire.js";
-import { scrubCodexErrorDetail } from "./codexWire.js";
+import { type CodexServerNotification, scrubCodexErrorDetail } from "./codexWire.js";
 import {
   buildCodexControl,
   buildCodexSnapshot,
   type CodexPhase,
   type CodexProjectionState,
 } from "./codexSnapshot.js";
-import {
-  buildTurnHeaderRow,
-  buildUserInputRow,
-  buildCodexToolCallRow,
-  buildStreamingTextRow,
-  CodexRowLog,
-  isToolItemKind,
-} from "./codexRowLog.js";
+import { buildTurnHeaderRow, buildUserInputRow, CodexRowLog } from "./codexRowLog.js";
 import { buildCodexArtifactRow, CodexTurnDeliveryTracker } from "./codexDelivery.js";
-import { buildReplayedHistoryRow } from "./codexRowLog.js";
-import { CodexApprovalTable, type CodexApprovalRecord, type CodexApprovalResolution } from "./codexApprovals.js";
+import {
+  reduceItemCompleted,
+  reduceItemDelta,
+  reduceItemStarted,
+  replayCompletedItem,
+  type ItemProjectionHost,
+} from "./codexItemProjection.js";
+import {
+  CodexApprovalTable,
+  type CodexApprovalRecord,
+  type CodexApprovalResolution,
+} from "./codexApprovals.js";
 
 export interface CodexProjectionCommit {
   readonly seq: number;
@@ -51,6 +53,7 @@ export class CodexThreadProjection {
   #revision = 0;
   #currentTurnId: string | null = null;
   #currentTurnRowId: number | null = null;
+  #currentUserInputRowId: number | null = null;
   #phase: CodexPhase = "completedSuccess";
   #lastError: CodexProjectionState["lastError"] = null;
   #title = "";
@@ -68,6 +71,11 @@ export class CodexThreadProjection {
 
   get revision(): number {
     return this.#revision;
+  }
+
+  /** 当前行日志（rowId 升序，只读视图）。 */
+  get rows(): readonly ConversationRow[] {
+    return this.#log.rows;
   }
 
   get rowCount(): number {
@@ -113,7 +121,11 @@ export class CodexThreadProjection {
   }
 
   /** 宿主发起用户轮：turnHeader + userInput 行 + control=running。 */
-  beginUserTurn(params: { text: string; turnId: string; commandId: string }): CodexProjectionCommit {
+  beginUserTurn(params: {
+    text: string;
+    turnId: string;
+    commandId: string;
+  }): CodexProjectionCommit {
     const createdAt = this.now();
     const turnId = params.turnId;
     this.#currentTurnId = turnId;
@@ -132,6 +144,7 @@ export class CodexThreadProjection {
       createdAt,
     });
     this.#currentTurnRowId = turnHeader.rowId;
+    this.#currentUserInputRowId = userInput.rowId;
     this.#phase = "running";
     this.#lastError = null;
     return this.#commit([
@@ -141,13 +154,14 @@ export class CodexThreadProjection {
     ]);
   }
 
-  #appendStreamingRow(item: { itemId: string | null; text: string }, kind: "assistantText" | "reasoning"): CodexProjectionCommit {
-    const built = buildStreamingTextRow({
-      item, kind, turnId: this.#currentTurnId ?? "codex-turn-unknown",
-      allocateRowId: () => this.#log.allocateRowId(), now: this.now,
-    });
-    if (item.itemId) this.#streamingRowByItemId.set(item.itemId, built.row.rowId);
-    return this.#commit([this.#log.append(built.row)]);
+  /** 绑定本轮 Codex 原生 turn id 并回填已建的 turnHeader/userInput（sourceTurnId，Amendment 4）。 */
+  bindSourceTurnId(sourceTurnId: string): CodexProjectionCommit | null {
+    if (this.#log.sourceTurnId === sourceTurnId) return null;
+    const deltas = this.#log.bindSourceTurnId(sourceTurnId, [
+      this.#currentTurnRowId,
+      this.#currentUserInputRowId,
+    ]);
+    return deltas.length > 0 ? this.#commit(deltas) : null;
   }
 
   /** 应用一条 Codex 通知；不适用返回 null（调用方丢弃，不产生空帧）。 */
@@ -167,6 +181,7 @@ export class CodexThreadProjection {
       case "turnCompleted":
         return this.#turnCompleted(notification);
       case "turnStarted":
+        return notification.turnId ? this.bindSourceTurnId(notification.turnId) : null;
       case "threadStarted":
         return null;
       case "error": {
@@ -178,77 +193,47 @@ export class CodexThreadProjection {
           source: "provider",
         };
         if (this.#phase === "running") this.#phase = "error";
-        return this.#commit([{ op: "state.updated", patch: { control: buildCodexControl(this.#state()) } }]);
+        return this.#commit([
+          { op: "state.updated", patch: { control: buildCodexControl(this.#state()) } },
+        ]);
       }
       case "unknown":
         return null;
     }
   }
 
-  #itemStarted(notification: Extract<CodexServerNotification, { type: "itemStarted" }>): CodexProjectionCommit | null {
-    const item = notification.item;
-    if (item.kind === "agentMessage" || item.kind === "reasoning") {
-      return this.#appendStreamingRow(item, item.kind === "agentMessage" ? "assistantText" : "reasoning");
-    }
-    if (!isToolItemKind(item.kind)) return null;
-    const turnId = this.#currentTurnId ?? "codex-turn-unknown";
-    const row = buildCodexToolCallRow({
-      item, turnId, status: "running",
-      allocateRowId: () => this.#log.allocateRowId(), now: this.now,
-    });
-    if (item.itemId) this.#streamingRowByItemId.set(item.itemId, row.rowId);
-    return this.#commit([this.#log.append(row)]);
+  #itemStarted(
+    notification: Extract<CodexServerNotification, { type: "itemStarted" }>,
+  ): CodexProjectionCommit | null {
+    return reduceItemStarted(this.#itemHost(), notification);
   }
 
-  #itemDelta(notification: Extract<CodexServerNotification, { type: "itemDelta" }>): CodexProjectionCommit | null {
-    const rowId = notification.itemId ? this.#streamingRowByItemId.get(notification.itemId) : undefined;
-    if (rowId === undefined) return null;
-    const target = this.#log.rowAt(rowId);
-    if (!target) return null;
-    if (notification.deltaKind === "commandOutput" || notification.deltaKind === "fileChangeOutput") {
-      if (target.kind !== "toolCall") return null;
-      return this.#commit([
-        this.#log.upsert({
-          ...target,
-          output: { text: (target.output?.text ?? "") + notification.append },
-        }),
-      ]);
-    }
-    if (target.kind !== "assistantText" && target.kind !== "reasoning") return null;
-    return this.#commit([{ op: "row.delta", rowId, path: "text", append: notification.append }]);
+  #itemDelta(
+    notification: Extract<CodexServerNotification, { type: "itemDelta" }>,
+  ): CodexProjectionCommit | null {
+    return reduceItemDelta(this.#itemHost(), notification);
   }
 
-  #itemCompleted(item: Extract<CodexServerNotification, { type: "itemCompleted" }>["item"]): CodexProjectionCommit | null {
-    const entityId = item.itemId ? `codex-item-${item.itemId}` : null;
-    const rowId = entityId ? this.#log.rowIdOfEntity(entityId) : undefined;
-    if (rowId === undefined) return null;
-    const existing = this.#log.rowAt(rowId);
-    if (!existing) return null;
-    if (existing.kind === "assistantText") {
-      const text = item.kind === "agentMessage" ? item.text : existing.text;
-      return this.#commit([this.#log.upsert({ ...existing, text, state: "complete" })]);
-    }
-    if (existing.kind === "reasoning") {
-      return this.#commit([this.#log.upsert({ ...existing, state: "complete" })]);
-    }
-    if (existing.kind === "toolCall") {
-      const status = item.status ?? null;
-      const failed = status !== null && /fail|error/i.test(status);
-      return this.#commit([
-        this.#log.upsert({
-          ...existing,
-          status: failed ? "error" : "success",
-          ...(item.kind === "commandExecution" && item.aggregatedOutput !== null
-            ? { output: { text: item.aggregatedOutput } }
-            : {}),
-          endedAt: this.now(),
-        }),
-      ]);
-    }
-    return null;
+  #itemCompleted(
+    item: Extract<CodexServerNotification, { type: "itemCompleted" }>["item"],
+  ): CodexProjectionCommit | null {
+    return reduceItemCompleted(this.#itemHost(), item);
   }
 
-  #turnCompleted(notification: Extract<CodexServerNotification, { type: "turnCompleted" }>): CodexProjectionCommit {
+  /** item 归约宿主面：把私有行日志/流式索引/当前轮/时钟/commit 暴露给纯归约模块。 */
+  #itemHost(): ItemProjectionHost {
+    return {
+      log: this.#log,
+      streamingRowByItemId: this.#streamingRowByItemId,
+      currentTurnId: this.#currentTurnId,
+      now: this.now,
+      commit: (deltas) => this.#commit(deltas),
+    };
+  }
+
+  #turnCompleted(
+    notification: Extract<CodexServerNotification, { type: "turnCompleted" }>,
+  ): CodexProjectionCommit {
     const state =
       notification.outcome === "success"
         ? "completedSuccess"
@@ -285,8 +270,14 @@ export class CodexThreadProjection {
     }
     this.#currentTurnRowId = null;
     this.#currentTurnId = null;
+    this.#currentUserInputRowId = null;
+    this.#log.setSourceTurnId(null);
     this.#phase =
-      state === "failed" ? "error" : state === "completedInterrupted" ? "completedInterrupted" : "completedSuccess";
+      state === "failed"
+        ? "error"
+        : state === "completedInterrupted"
+          ? "completedInterrupted"
+          : "completedSuccess";
     if (error) {
       this.#lastError = {
         ...error,
@@ -313,16 +304,31 @@ export class CodexThreadProjection {
     requestedPermissions?: unknown,
   ): { commit: CodexProjectionCommit; record: CodexApprovalRecord } {
     const anchorRowId =
-      info.kind === "commandExecution" || info.kind === "fileChange" ? this.#log.lastToolRowId() : null;
-    const record = this.#approvals.register({ info, rawId, anchorRowId, createdAt: this.now(), requestedPermissions });
+      info.kind === "commandExecution" || info.kind === "fileChange"
+        ? this.#log.lastToolRowId()
+        : null;
+    const record = this.#approvals.register({
+      info,
+      rawId,
+      anchorRowId,
+      createdAt: this.now(),
+      requestedPermissions,
+    });
     const deltas: ConversationDelta[] = [
-      { op: "state.updated", patch: { pendingInteractions: this.#approvals.toPendingInteractions(this.now()) } },
+      {
+        op: "state.updated",
+        patch: { pendingInteractions: this.#approvals.toPendingInteractions(this.now()) },
+      },
     ];
     if (anchorRowId !== null) {
       const anchor = this.#log.rowAt(anchorRowId);
       if (anchor?.kind === "toolCall") {
         deltas.push(
-          this.#log.upsert({ ...anchor, status: "pendingApproval", approvalInteractionId: record.interactionId }),
+          this.#log.upsert({
+            ...anchor,
+            status: "pendingApproval",
+            approvalInteractionId: record.interactionId,
+          }),
         );
       }
     }
@@ -338,7 +344,10 @@ export class CodexThreadProjection {
     const resolution = this.#approvals.resolve(interactionId, decision);
     if (!resolution) return null;
     const deltas: ConversationDelta[] = [
-      { op: "state.updated", patch: { pendingInteractions: this.#approvals.toPendingInteractions(this.now()) } },
+      {
+        op: "state.updated",
+        patch: { pendingInteractions: this.#approvals.toPendingInteractions(this.now()) },
+      },
     ];
     if (resolution.record.anchorRowId !== null) {
       const anchor = this.#log.rowAt(resolution.record.anchorRowId);
@@ -349,32 +358,25 @@ export class CodexThreadProjection {
     return { ...resolution, commit: this.#commit(deltas) };
   }
 
-  /**
-   * 冷恢复回放：把 thread/items/list 的历史条目直接落成终态行。
-   * 与 applyNotification(itemCompleted) 不同：不要求先出现过 itemStarted（恢复时投影为空）。
-   */
-  replayCompletedItem(item: CodexItem): CodexProjectionCommit | null {
-    const entityId = item.itemId ? `codex-item-${item.itemId}` : null;
-    const turnId = "codex-history";
-    const existingRowId = entityId ? this.#log.rowIdOfEntity(entityId) : undefined;
-    const existing = existingRowId !== undefined ? this.#log.rowAt(existingRowId) : undefined;
-    const row = buildReplayedHistoryRow({
-      item,
-      existing,
-      turnId,
-      allocateRowId: () => this.#log.allocateRowId(),
-      now: this.now,
-    });
-    if (!row) return null;
-    return this.#commit([existing ? this.#log.upsert(row) : this.#log.append(row)]);
+  /** 冷恢复回放：历史条目直接落终态行（归约见 codexItemProjection）。 */
+  replayCompletedItem(item: CodexItem, sourceTurnId?: string | null): CodexProjectionCommit | null {
+    return replayCompletedItem(this.#itemHost(), item, sourceTurnId);
   }
 
   /** turn 完成后取走交付候选（输入文本 + fileChange 路径）；每轮一次性。 */
-  takeCompletedTurnDelivery(): { turnId: string; userInputText: string; filePaths: string[] } | null {
-    return this.#deliveryTracker.takeCompleted(); }
+  takeCompletedTurnDelivery(): {
+    turnId: string;
+    userInputText: string;
+    filePaths: string[];
+  } | null {
+    return this.#deliveryTracker.takeCompleted();
+  }
 
   /** 已注册 artifact → 标准 artifact 行（turnId 未知时用冷恢复组）。 */
-  appendArtifactRow(descriptor: TaskArtifactDescriptor, turnId: string | null): CodexProjectionCommit {
+  appendArtifactRow(
+    descriptor: TaskArtifactDescriptor,
+    turnId: string | null,
+  ): CodexProjectionCommit {
     const row = buildCodexArtifactRow({
       descriptor,
       turnId: turnId || "codex-history",

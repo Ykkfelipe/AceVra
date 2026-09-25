@@ -8,6 +8,7 @@ import type { ITerminalService } from "./terminal/terminal.js";
 import type { ISettingService } from "./setting/setting.js";
 import type { IAccountsService } from "./accounts/accounts.js";
 import type { ICodexExecutionService } from "./codex/app/codexExecutionService.js";
+import type { IBackendMigrationService } from "./backend-migration/backendMigrationService.js";
 import type { ITaskArtifactDeliveryService } from "./task-artifacts/app/taskArtifactService.js";
 import type { ICredentialService } from "./credential/credential.js";
 import type { IBroadcastService } from "./broadcast/broadcast.js";
@@ -61,6 +62,8 @@ export interface IServiceAccessor {
    * UI 在缺省时禁用 Codex 后端入口，而不是报错。
    */
   readonly codexExecutionService?: ICodexExecutionService;
+  /** 后端迁移（phase 11）：唯一的切换后端写入口 + 跨段时间线只读查询；旧 host 可不提供。 */
+  readonly backendMigrationService?: IBackendMigrationService;
   /**
    * Task artifacts（phase 11）：清单 + 分块读取；旧 host / 测试 double 可不提供。
    * 注册是宿主内部能力，不在该服务面上。

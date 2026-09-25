@@ -64,6 +64,9 @@ export const SYNTHETIC_USER_MESSAGE_SOURCES = [
   // origin=real_user、kind=user_prompt，与其余「运行时注入的提醒」类来源不同档。
   "workflow_launch",
   "shared_context",
+  // AceVra 后端迁移（Codex → Agent）写入的上下文种子：model-only，给模型看、不进可见转录。
+  // 可见时间线由 host 从原 Codex 段组合，种子不是可见副本（backend-migration.md Amendment 4）。
+  "backend_handoff",
 ] as const;
 export type SyntheticUserMessageSource = (typeof SYNTHETIC_USER_MESSAGE_SOURCES)[number];
 
@@ -86,6 +89,7 @@ export type MessageSemanticsKind =
   | "timeline_event"
   | "compact_summary"
   | "shared_context"
+  | "backend_handoff"
   | "assistant_response";
 
 export interface MessageSemantics {

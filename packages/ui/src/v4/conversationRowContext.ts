@@ -1,3 +1,4 @@
+import type { ConversationRow } from "@zcode/shared/zcode-protocol-v4";
 // v4 行渲染上下文（ai-elements / ToolCallBlocks 回接所需的宿主注入面）。
 // 注入模式对齐 PermissionDialog（store 耦合剥离）：展示组件不自取 store，
 // theme / codePreviewSettings 在宿主（SessionPane）处取，向下走稳定 props。
@@ -74,6 +75,11 @@ export interface ConversationRowRenderContext {
    * 需保持引用稳定（rowContext 的 memo 依赖）。
    */
   onNavigateToRow?: (sessionId: string, rowId: number) => void;
+  /**
+   * 「Show handoff details」：按迁移下标取回 Codex handoff 轮的真实请求/回复
+   * （backend-migration.md Amendment 4）。缺省 = 不提供展开入口。
+   */
+  loadBackendHandoffDetails?: (transitionIndex: number) => Promise<ConversationRow[] | null>;
   /** Assistant Preview Cards：Website 卡片预览入口，由 app shell 注入 side pane 行为。 */
   onOpenBrowserUrl?: (url: string) => void;
   onOpenAutomationsMain?: OpenAutomationsMain;

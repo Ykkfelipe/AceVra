@@ -30,6 +30,8 @@ export const zcodeSyntheticUserMessageSourceSchema = z.enum([
   // SYNTHETIC_USER_MESSAGE_SOURCES 保持同一词表，否则 v3 mapper 收窄该 source 会 tsc 失败。
   "workflow_launch",
   "shared_context",
+  // 后端迁移上下文种子（model-only）；与 contracts 词表同步。
+  "backend_handoff",
 ]);
 export const zcodeWorkspaceRefSchema = z
   .object({
@@ -200,6 +202,7 @@ export const zcodeMessageSemanticsSchema = z
       "timeline_event",
       "compact_summary",
       "shared_context",
+      "backend_handoff",
       "assistant_response",
     ]),
     source: z.string().optional(),

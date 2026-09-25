@@ -1,5 +1,7 @@
+import { completeNewModelSelection } from "@zcode/provider";
 import {
   MODEL_PROVIDER_FAMILY_SPECS,
+  formatModelPickerValue,
   resolveModelProviderFamilyIdByProviderId,
 } from "@zcode/shared";
 import type { ModelSelectionView, ProviderSettingsView } from "@zcode/services";
@@ -15,6 +17,23 @@ export interface ComposerAgentProviderChoice {
 export function resolveComposerProviderChoiceKey(providerId: string): string {
   const familyId = resolveModelProviderFamilyIdByProviderId(providerId);
   return familyId ? `family:${familyId}` : `provider:${providerId}`;
+}
+
+/**
+ * Provider/backend migration and the ordinary composer picker must serialize the same completed
+ * model selection. In particular, providers such as Azure require a reasoning level even when the
+ * user only chose a provider/model pair.
+ */
+export function formatComposerAgentModelSelection(
+  selectionView: ModelSelectionView | null | undefined,
+  providerId: string,
+  modelId: string,
+): string {
+  const selected = { providerId, modelId };
+  const completed = selectionView
+    ? (completeNewModelSelection(selectionView, selected) ?? selected)
+    : selected;
+  return formatModelPickerValue(completed);
 }
 
 export function buildComposerAgentProviderChoices(

@@ -3,11 +3,13 @@ import test from "node:test";
 import type { ModelSelectionView, ProviderSettingsView } from "@zcode/services";
 import {
   buildComposerAgentProviderChoices,
+  formatComposerAgentModelSelection,
   resolveComposerProviderChoiceKey,
 } from "../src/v4/composer/composerProviderChoices.js";
 
 const ZAI_INDIVIDUAL = "account:zai-individual-coding-plan";
 const ZAI_START_PLAN = "account:zai-start-plan";
+const BIGMODEL_INDIVIDUAL = "account:bigmodel-individual-coding-plan";
 
 function providerSettingsView(providers: ProviderSettingsView["providers"]): ProviderSettingsView {
   return {
@@ -116,6 +118,24 @@ test("resolveComposerProviderChoiceKey routes family providers to the shared fam
   assert.equal(resolveComposerProviderChoiceKey(ZAI_INDIVIDUAL), "family:zai");
   assert.equal(resolveComposerProviderChoiceKey(ZAI_START_PLAN), "family:zai");
   assert.equal(resolveComposerProviderChoiceKey("azure-openai"), "provider:azure-openai");
+});
+
+test("Agent migration serializes provider-required reasoning level", () => {
+  const selection = selectionView([
+    {
+      ...selectionProvider("azure-openai", ["gpt-5-mini"]),
+      models: [
+        {
+          modelId: "gpt-5-mini",
+          config: { optionSpecs: { reasoningLevel: { values: ["low", "medium", "high"] } } },
+        },
+      ],
+    } as ModelSelectionView["providers"][number],
+  ]);
+  assert.equal(
+    formatComposerAgentModelSelection(selection, "azure-openai", "gpt-5-mini"),
+    "azure-openai/gpt-5-mini$high",
+  );
 });
 
 test("a provider outside the standard-personal group without a family is not surfaced", () => {

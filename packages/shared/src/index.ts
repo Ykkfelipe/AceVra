@@ -341,6 +341,11 @@ export type {
   CodexExecutionListTasksParams,
   CodexExecutionListTasksResult,
 } from "./codex-execution.js";
+// 后端迁移（phase 11）：契约、跨段时间线组合器与视图辅助。
+export * from "./backend-migration.js";
+export * from "./backend-timeline.js";
+export * from "./backend-timeline-view.js";
+export * from "./backend-timeline-paging.js";
 
 export type {
   TaskArtifactDescriptor,

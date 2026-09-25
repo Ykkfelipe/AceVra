@@ -69,7 +69,18 @@ export interface CodexWebSearchItem extends CodexItemBase {
   readonly query: string;
 }
 
+/**
+ * 用户输入项（thread/items/list 冷恢复用）。原因：过去 parseItem 不认识 userMessage，冷恢复只
+ * 重建出助手/工具行，重启后 Codex 段的用户消息全部消失；迁移后的历史段永远经冷恢复读取，
+ * 这会让可见时间线丢消息（backend-migration.md Amendment 4）。
+ */
+export interface CodexUserMessageItem extends CodexItemBase {
+  readonly kind: "userMessage";
+  readonly text: string;
+}
+
 export type CodexItem =
+  | CodexUserMessageItem
   | CodexAgentMessageItem
   | CodexReasoningItem
   | CodexCommandExecutionItem
@@ -86,7 +97,11 @@ export type CodexServerNotification =
       readonly model: string | null;
       readonly effort: string | null;
     }
-  | { readonly type: "turnStarted"; readonly threadId: string | null; readonly turnId: string | null }
+  | {
+      readonly type: "turnStarted";
+      readonly threadId: string | null;
+      readonly turnId: string | null;
+    }
   | {
       readonly type: "turnCompleted";
       readonly threadId: string | null;
@@ -149,6 +164,18 @@ function parseItem(value: unknown): CodexItem | null {
   const kind = asString(record.type) ?? asString(record.itemType);
   const itemId = asString(record.id) ?? asString(record.itemId);
   switch (kind) {
+    case "userMessage": {
+      // UserInput 变体数组：只取文本项（图片/文件等附件不进时间线文本）。
+      const content = Array.isArray(record.content) ? record.content : [];
+      const text = content
+        .map((entry) => {
+          const part = asRecord(entry);
+          return part && asString(part.type) === "text" ? (asString(part.text) ?? "") : "";
+        })
+        .filter((part) => part.length > 0)
+        .join("\n");
+      return { kind, itemId, text: text || (asString(record.text) ?? "") };
+    }
     case "agentMessage":
       return {
         kind,
@@ -219,7 +246,10 @@ export function parseCodexNotification(method: string, params: unknown): CodexSe
   switch (method) {
     case "thread/started": {
       // E2E 观察：id 嵌套在 params.thread.id，而非顶层 threadId。
-      const thread = typeof record.thread === "object" && record.thread !== null ? (record.thread as Record<string, unknown>) : null;
+      const thread =
+        typeof record.thread === "object" && record.thread !== null
+          ? (record.thread as Record<string, unknown>)
+          : null;
       const id =
         asOptionalString(record.threadId) ??
         asOptionalString(record.thread_id) ??
@@ -236,7 +266,11 @@ export function parseCodexNotification(method: string, params: unknown): CodexSe
         : { type: "unknown", method };
     }
     case "turn/started":
-      return { type: "turnStarted", threadId, turnId: turnId ?? asOptionalString(asRecord(record.turn)?.id) };
+      return {
+        type: "turnStarted",
+        threadId,
+        turnId: turnId ?? asOptionalString(asRecord(record.turn)?.id),
+      };
     case "turn/completed": {
       // 0.155.0-alpha.16.4 的真形：status/error/turnId 嵌套在 params.turn
       // （顶层 status/outcome 是旧形状，保留兼容）。漏读嵌套 status 会把 failed
@@ -264,7 +298,12 @@ export function parseCodexNotification(method: string, params: unknown): CodexSe
     case "item/completed": {
       const item = parseItem(record.item ?? record);
       if (!item) return { type: "unknown", method };
-      return { type: method === "item/started" ? "itemStarted" : "itemCompleted", threadId, turnId, item };
+      return {
+        type: method === "item/started" ? "itemStarted" : "itemCompleted",
+        threadId,
+        turnId,
+        item,
+      };
     }
     case "item/agentMessage/delta":
     case "item/reasoning/summaryTextDelta":
@@ -304,7 +343,10 @@ export function parseCodexServerRequest(
   rawId: number,
 ): CodexServerRequest {
   const record = asRecord(params) ?? {};
-  const approvalMethods: ReadonlyArray<{ method: string; kind: CodexExecutionApprovalRequestInfo["kind"] }> = [
+  const approvalMethods: ReadonlyArray<{
+    method: string;
+    kind: CodexExecutionApprovalRequestInfo["kind"];
+  }> = [
     { method: "item/commandExecution/requestApproval", kind: "commandExecution" },
     { method: "item/fileChange/requestApproval", kind: "fileChange" },
     { method: "item/permissions/requestApproval", kind: "permissions" },
@@ -312,7 +354,8 @@ export function parseCodexServerRequest(
   const matched = approvalMethods.find((entry) => entry.method === method);
   if (!matched) return { type: "unhandled", rawId, method };
   const item = parseItem(record.item ?? record);
-  const command = asString(record.command) ?? (item?.kind === "commandExecution" ? item.command : null);
+  const command =
+    asString(record.command) ?? (item?.kind === "commandExecution" ? item.command : null);
   const toolName =
     matched.kind === "commandExecution"
       ? "codex.commandExecution"
@@ -325,15 +368,14 @@ export function parseCodexServerRequest(
     command ??
     (item?.kind === "fileChange"
       ? item.changes.map((change) => `${change.kind}:${change.path}`).join(", ")
-      : asString(record.reason) ??
-        asString(record.summary) ??
-        asString(record.title) ??
-        method);
+      : (asString(record.reason) ?? asString(record.summary) ?? asString(record.title) ?? method));
   return {
     type: "approval",
     rawId,
     // 权限请求的 profile 原样留存供批准时回传；其余请求不携带该字段。
-    ...(matched.kind === "permissions" && typeof record.permissions === "object" && record.permissions !== null
+    ...(matched.kind === "permissions" &&
+    typeof record.permissions === "object" &&
+    record.permissions !== null
       ? { requestedPermissions: record.permissions }
       : {}),
     info: {
@@ -351,7 +393,5 @@ export function parseCodexServerRequest(
  */
 export function scrubCodexErrorDetail(message: string, maxChars = 200): string {
   const withoutPaths = message.replace(/(\/|\\)[^\s"']+(\/|\\)[^\s"']*/g, "<path>");
-  return withoutPaths.length > maxChars
-    ? `${withoutPaths.slice(0, maxChars)}…`
-    : withoutPaths;
+  return withoutPaths.length > maxChars ? `${withoutPaths.slice(0, maxChars)}…` : withoutPaths;
 }

@@ -77,6 +77,8 @@ import {
   zcodeProcessResourceSampleSchema,
   zcodeSessionCloseResultSchema,
   zcodeSessionCompactResultSchema,
+  zcodeSessionSeedBackendHandoffResultSchema,
+  zcodeSessionRemoveBackendHandoffSeedResultSchema,
   zcodeSessionEventsResultSchema,
   zcodeSessionGoalResultSchema,
   zcodeSessionListResultSchema,
@@ -292,6 +294,7 @@ import { createBackgroundSessionEventCoalescer } from "#src/zcode-agent/zcodeSes
 import { AutomationService } from "#src/session/automationService.js";
 import { AutomationRepo } from "#src/session/automationRepo.js";
 import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
+import { rejectZCodeSendWithoutExecutionOwnership } from "./zcodeExecutionOwnershipFence.js";
 import { ZCodeAgentMcpStatusModeUnsupportedError } from "#src/zcode-agent/zcodeAgentErrors.js";
 import { ZCodeAgentProcessManager } from "./zcodeAgentProcessManager.js";
 import type { ZCodeAgentProcessManagerOptions } from "./zcodeAgentProcessManager.js";
@@ -4463,6 +4466,30 @@ export function createZCodeAgentService(
       }
     },
 
+    async seedBackendHandoff(params) {
+      const client = await getClient(params);
+      logger.info(getSessionTraceId(params), "ZCode Protocol session/seedBackendHandoff", {
+        sessionId: params.sessionId,
+        seedId: params.seedId,
+        textLength: params.text.length,
+        workspaceKey: resolveWorkspaceKey(params),
+      });
+      return client.request(
+        zcodeProtocolMethods.sessionSeedBackendHandoff,
+        { sessionId: params.sessionId, seedId: params.seedId, text: params.text },
+        zcodeSessionSeedBackendHandoffResultSchema,
+      );
+    },
+
+    async removeBackendHandoffSeed(params) {
+      const client = await getClient(params);
+      return client.request(
+        zcodeProtocolMethods.sessionRemoveBackendHandoffSeed,
+        { sessionId: params.sessionId, seedId: params.seedId },
+        zcodeSessionRemoveBackendHandoffSeedResultSchema,
+      );
+    },
+
     async goalSession(params: ZCodeAgentGoalParams) {
       const startedAt = Date.now();
       const client = await getClient(params);
@@ -4953,6 +4980,13 @@ export function createZCodeAgentService(
     },
 
     async sendConversationCommandV4(params: ZCodeAgentConversationCommandParams) {
+      const ownershipRejection = await rejectZCodeSendWithoutExecutionOwnership({
+        envelope: params.envelope,
+        workspacePath: params.workspacePath,
+        ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+        getTaskMeta: (target) => automationTaskIndexRepo.getTaskMeta(target),
+      });
+      if (ownershipRejection) return ownershipRejection;
       const client = await getClient(params);
       const planPayload = params.envelope.payload as {
         planEnabled?: boolean;

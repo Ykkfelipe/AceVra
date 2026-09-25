@@ -161,7 +161,10 @@ import {
 import { V4ComposerBackendSwitch } from "@/v4/composer/V4ComposerBackendControls.js";
 import { V4ComposerCodexModelSelect } from "@/v4/composer/V4ComposerCodexModelSelect.js";
 import { CodexComposerUsage } from "@/v4/composer/CodexComposerUsage.js";
-import { resolveCodexModelControlKind } from "@/v4/composer/composerToolbarPresentation.js";
+import {
+  resolveCodexModelControlKind,
+  shouldShowComposerProviderMenu,
+} from "@/v4/composer/composerToolbarPresentation.js";
 import {
   resolveV4ComposerConfigPickerState,
   type V4ComposerConfigPicker,
@@ -452,6 +455,13 @@ interface ConversationComposerProps {
   codexActualEffort?: string | null;
   /** host 未注册 codex-execution 服务时 false，Codex 菜单项禁用。 */
   codexBackendAvailable?: boolean;
+  /**
+   * 正式会话具备跨后端迁移能力（Host 注册了 backendMigrationService）。开启后：
+   * - Codex 在既有 Agent 会话中可选（走迁移事务 + 成本确认）；
+   * - 既有 Codex 会话保留 provider 菜单作为迁回 Agent 的入口。
+   * 迁移进行中由调用方把控件整体 disabled。
+   */
+  backendMigrationAvailable?: boolean;
   /** 打开当前 session 的 Status panel，并直达 Running 明细。 */
   onOpenRunningBackgroundWorks?: () => void;
   /**
@@ -504,6 +514,9 @@ function formatAttachmentLineCount(attachment: ChatComposerAttachment, locale: s
   return formatter.format(typeof attachment.lineCount === "number" ? attachment.lineCount : 0);
 }
 
+/** 已有会话没有 onSwitchBackend；Codex 项在那里始终 disabled，这里只填满必填 prop。 */
+function noopSwitchBackend(): void {}
+
 function ConversationComposerImpl({
   snapshot,
   sessionId = null,
@@ -552,6 +565,7 @@ function ConversationComposerImpl({
   codexActualModel,
   codexActualEffort,
   codexBackendAvailable = false,
+  backendMigrationAvailable = false,
   onOpenRunningBackgroundWorks,
   backgroundWorkOpenTarget = "panel",
   runningSubagentCount = 0,
@@ -2083,7 +2097,15 @@ function ConversationComposerImpl({
         className={COMPOSER_TOOLBAR_GROUP_CLASS}
       >
         <span className="flex min-w-0 shrink items-center gap-1 overflow-hidden empty:hidden">
-          {draftMode && onSwitchBackend && onSelectAgentProvider ? (
+          {/* 已有会话若已经在 Codex 上，Provider 菜单交给下方 Codex 专属模型/effort 控件；
+              zcode family 的已有会话则复用同一个 Provider 菜单在 Z.ai/Azure/Command Code 等
+              之间切换——这与切模型走同一条草稿写路径，本来就不需要区分草稿态。 */}
+          {onSelectAgentProvider &&
+          shouldShowComposerProviderMenu({
+            draftMode,
+            codexSession: codexSession === true,
+            backendMigrationAvailable,
+          }) ? (
             <V4ComposerBackendSwitch
               backend={draftBackend ?? "zcode"}
               selectedProviderId={draftConfig?.provider ?? null}
@@ -2092,7 +2114,7 @@ function ConversationComposerImpl({
               disabled={disabled}
               activeConfigPicker={activeConfigPicker}
               onConfigPickerOpenChange={handleConfigPickerOpenChange}
-              onSwitchBackend={onSwitchBackend}
+              onSwitchBackend={onSwitchBackend ?? noopSwitchBackend}
               onSelectAgentProvider={onSelectAgentProvider}
             />
           ) : null}
@@ -2191,6 +2213,7 @@ function ConversationComposerImpl({
       composerPhase,
       composerUsage,
       codexBackendAvailable,
+      backendMigrationAvailable,
       disabled,
       draftConfig,
       draftBackend,

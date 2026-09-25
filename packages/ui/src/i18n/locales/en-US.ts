@@ -4473,6 +4473,28 @@ const enUS: Record<string, string> = {
   "chat.contextCompaction.skipped": "Context is up to date; no compression needed",
   "chat.contextCompaction.completed": "Context compressed",
   "chat.modelChange.switched": "Model switched {from} → {to}",
+  "chat.backendSwitch.codexConfirm.title": "Switch to Codex",
+  "chat.backendSwitch.codexConfirm.description":
+    "Codex requires one initialization turn to receive this conversation's context.",
+  "chat.backendSwitch.codexConfirm.action": "Switch",
+  "chat.backendSwitch.inProgress": "Switching to {backend}…",
+  "chat.backendSwitch.failed":
+    "Switch to {backend} failed. The original {origin} session remains active.",
+  "chat.backendSwitch.rejected.turnInProgress":
+    "Wait for the current turn to finish before switching.",
+  "chat.backendSwitch.rejected.concurrent":
+    "A backend switch is already in progress for this task.",
+  "chat.backendSwitch.rejected.unavailable": "{backend} is not available right now.",
+  "chat.backendSwitch.inDoubt":
+    "The switch result could not be confirmed. Reopen the task to see its current backend.",
+  "chat.backendSwitch.agent": "Agent",
+  "chat.backendTransition.switched": "Switched {from} → {to}",
+  "chat.backendTransition.contextTransferred": "Context transferred",
+  "chat.backendTransition.showDetails": "Show handoff details",
+  "chat.backendTransition.hideDetails": "Hide handoff details",
+  "chat.backendTransition.detailsUnavailable": "Handoff details are unavailable",
+  "chat.backendTransition.detailsRequest": "Context sent",
+  "chat.backendTransition.detailsReply": "Codex acknowledgement",
   "chat.modelChange.using": "Using {model}",
   "chat.contextCompaction.completedAuto": "Context automatically compressed",
   "chat.contextCompaction.failed": "Context compression failed",

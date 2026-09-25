@@ -14,6 +14,8 @@ import {
   resolveWorkspaceKey,
   CRON_DEFAULT_GROUP_ID,
   OFF_PEAK_DEFAULT_GROUP_ID,
+  type BackendTransitionRecord,
+  type PendingBackendTransition,
   type ZCodeProvider,
   type ZCodeTaskMeta,
 } from "@zcode/shared";
@@ -479,6 +481,57 @@ function compareGroupTasks(
     return leftOrder - rightOrder;
   }
   return taskNodeKey(left).localeCompare(taskNodeKey(right));
+}
+
+/**
+ * 迁移写入的栅栏（spec Amendment 3）。tasks-index 被多个窗口 Host 共享，进程内 enqueueWrite
+ * 只能串行化本进程；跨进程的互斥依赖 BEGIN IMMEDIATE 写锁 + 这里的比较后写入。
+ */
+export type BackendMigrationWriteFence =
+  | { readonly kind: "begin" }
+  | {
+      readonly kind: "owned";
+      readonly requestedAt: number;
+      /** 旧数据可能没有 owner；恢复这类孤儿时以 undefined 精确匹配。 */
+      readonly ownerInstanceId: string | undefined;
+    };
+
+/** 迁移事务的补丁：只允许迁移拥有的字段，时间线只能在事务内基于库内当前值追加。 */
+export interface BackendMigrationMetaPatch {
+  /** 显式 undefined 表示清空（仅 "owned" 栅栏下的 commit/fail 使用）。 */
+  readonly pendingBackendTransition?: PendingBackendTransition | undefined;
+  readonly appendTransition?: BackendTransitionRecord;
+  readonly executionBackend?: ZCodeTaskMeta["executionBackend"];
+  /** 显式 undefined 表示清空（迁出 Codex 后不再指向任何 thread）。 */
+  readonly codexThreadId?: string | undefined;
+  readonly model?: string;
+}
+
+export class BackendMigrationFenceError extends Error {
+  constructor(
+    readonly taskId: string,
+    readonly fence: BackendMigrationWriteFence,
+    readonly current: PendingBackendTransition | undefined,
+  ) {
+    super(
+      fence.kind === "begin"
+        ? `task ${taskId} 已有进行中的后端迁移（phase=${current?.phase}），拒绝并发发起。`
+        : `task ${taskId} 的迁移已不再归本写入者所有（当前 pending=${current ? current.phase : "none"}），拒绝写入。`,
+    );
+    this.name = "BackendMigrationFenceError";
+  }
+}
+
+function backendMigrationFenceHolds(
+  fence: BackendMigrationWriteFence,
+  current: PendingBackendTransition | undefined,
+): boolean {
+  if (fence.kind === "begin") return current === undefined;
+  return (
+    current !== undefined &&
+    current.requestedAt === fence.requestedAt &&
+    current.ownerInstanceId === fence.ownerInstanceId
+  );
 }
 
 export class TaskIndexRepo {
@@ -1353,6 +1406,15 @@ export class TaskIndexRepo {
           cronAutomationId: params.meta.cronAutomationId ?? existingMeta?.cronAutomationId,
           // off-peak 身份同款兜底：快照不带标记时保全既有归属。
           offPeakTaskId: params.meta.offPeakTaskId ?? existingMeta?.offPeakTaskId,
+          // 原因：zcode 运行态快照（buildMetaFromSnapshot）从不携带执行后端归属；迁移到 Codex 的
+          // task 若仍有 zcode 快照同步，整行覆盖会把 executionBackend 静默回退成 zcode。
+          // 依据：后端归属只由迁移事务（applyBackendMigrationPatch）或 Codex 建任务显式写入。
+          executionBackend: params.meta.executionBackend ?? existingMeta?.executionBackend,
+          codexThreadId: params.meta.codexThreadId ?? existingMeta?.codexThreadId,
+          // 迁移状态与时间线的唯一写入者是 applyBackendMigrationPatch；这里永远沿用库内值，
+          // 调用方传入的副本一律忽略，避免旧快照把在途迁移或时间线记录冲掉（spec Amendment 3）。
+          pendingBackendTransition: existingMeta?.pendingBackendTransition,
+          backendTransitions: existingMeta?.backendTransitions,
           updatedAt,
           unreadAt: params.meta.unreadAt ?? existingMeta?.unreadAt,
         };
@@ -1566,6 +1628,78 @@ export class TaskIndexRepo {
         throw error;
       }
     });
+  }
+
+  /**
+   * 后端迁移字段的唯一写入口（spec Amendment 3）。BEGIN IMMEDIATE 内读取当前行、校验栅栏、
+   * 追加时间线、写回整行——栅栏失败抛 BackendMigrationFenceError 且不写任何东西。
+   */
+  async applyBackendMigrationPatch(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+    taskId: string;
+    fence: BackendMigrationWriteFence;
+    patch: BackendMigrationMetaPatch;
+  }): Promise<ZCodeTaskMeta> {
+    await this.ensureReady();
+    return this.enqueueWrite(params, () => {
+      const database = this.getDatabase();
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        const row = this.getTaskRow(params);
+        if (!row || row.deleted === 1) {
+          throw new Error(`task index 中不存在 task: ${params.taskId}`);
+        }
+        const current = rowToMeta(row);
+        if (!backendMigrationFenceHolds(params.fence, current.pendingBackendTransition)) {
+          throw new BackendMigrationFenceError(
+            params.taskId,
+            params.fence,
+            current.pendingBackendTransition,
+          );
+        }
+        const { patch } = params;
+        const nextMeta: ZCodeTaskMeta = {
+          ...current,
+          ...("pendingBackendTransition" in patch
+            ? { pendingBackendTransition: patch.pendingBackendTransition }
+            : {}),
+          ...(patch.appendTransition
+            ? {
+                backendTransitions: [...(current.backendTransitions ?? []), patch.appendTransition],
+              }
+            : {}),
+          ...(patch.executionBackend ? { executionBackend: patch.executionBackend } : {}),
+          ...("codexThreadId" in patch ? { codexThreadId: patch.codexThreadId } : {}),
+          ...(patch.model ? { model: patch.model } : {}),
+        };
+        const persisted = this.writeRecord({
+          meta: nextMeta,
+          pinned: row.pinned === 1,
+          archived: row.archived === 1,
+          deleted: row.deleted === 1,
+          titleOverridden: row.title_overridden === 1,
+        });
+        database.exec("COMMIT");
+        return persisted;
+      } catch (error) {
+        database.exec("ROLLBACK");
+        throw error;
+      }
+    });
+  }
+
+  /** 重启恢复入口：列出所有带 pendingBackendTransition 的未删除 task。 */
+  async listTasksWithPendingBackendTransition(): Promise<ZCodeTaskMeta[]> {
+    await this.ensureReady();
+    const rows = this.getDatabase()
+      .prepare(
+        `SELECT * FROM tasks
+          WHERE deleted = 0
+            AND json_extract(meta_json, '$.pendingBackendTransition') IS NOT NULL`,
+      )
+      .all() as unknown as TaskIndexRow[];
+    return rows.map(rowToMeta);
   }
 
   async updateTaskState(params: {

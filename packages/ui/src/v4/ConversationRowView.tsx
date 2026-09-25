@@ -1,4 +1,5 @@
 /* oxlint-disable eslint(max-lines) -- v4 逐行 row 渲染分发集中收口（每种 row 一个 memo 叶子 + timelineMarker 分隔线），拆分会打散行类型对照。 */
+import { BackendTransitionMarkerRow } from "@/v4/ConversationBackendTransitionMarker.js";
 import { useIsOfficeMode } from "@/hooks/useInterfaceMode.js";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1903,6 +1904,19 @@ const TimelineMarkerRowView = memo(function TimelineMarkerRowView({
     return () => onNavigate(marker.parentSessionId, marker.parentRowId);
   }, [marker, onNavigate]);
 
+  if (marker.type === "backendTransition") {
+    // 后端迁移 marker 由时间线组合器从持久化 task meta 合成；自带可展开的 handoff 详情。
+    return (
+      <BackendTransitionMarkerRow
+        rowId={row.rowId}
+        marker={marker}
+        modelSelectionView={modelSelectionView}
+        {...(context.loadBackendHandoffDetails
+          ? { loadHandoffDetails: context.loadBackendHandoffDetails }
+          : {})}
+      />
+    );
+  }
   if (!view) {
     return null;
   }

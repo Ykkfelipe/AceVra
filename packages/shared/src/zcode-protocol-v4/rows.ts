@@ -3,6 +3,7 @@
 // 结构变化换整行（row.upserted），文本增长用 append（row.delta）；turn 是 row 上的标签不是容器。
 import { z } from "zod";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
+import { zcodeExecutionBackendSchema } from "../backend-migration.js";
 import { timestampSchema } from "./core.js";
 import { backgroundResultOriginMetaSchema, workflowLaunchMetaSchema } from "./workflow-row-meta.js";
 
@@ -14,6 +15,10 @@ const rowBaseFields = {
   // entityId 定位持久实体，productTurnId 是产品轮次，不得由 UI 重猜。
   entityId: z.string().min(1).optional(),
   productTurnId: z.string().min(1).optional(),
+  // 执行后端原生的轮次身份（如 Codex turn id）。与 UI turnId/rowId 分离：Codex 冷恢复会重排
+  // rowId、把 turnId 统一成 "codex-history"，只有它在重建前后保持不变。后端迁移据此把 handoff
+  // 轮排除在可见时间线之外（backend-migration.md Amendment 4）。additive，旧客户端忽略。
+  sourceTurnId: z.string().min(1).optional(),
   visibility: z.literal("visible").optional(),
   createdAt: timestampSchema,
   createdAtSeq: z.number(),
@@ -388,6 +393,25 @@ export const timelineMarkerPayloadSchema = z.union([
   z.object({
     type: z.literal("checkpointRestored"),
     checkpointId: z.string(),
+  }),
+  /**
+   * 跨 zcode/codex 边界的后端迁移（phase 11，backend-migration.md）。running 对应 Codex
+   * handoff turn 在途，或 zcode 侧 seed 写入 + 就绪确认在途；同后端内切 provider
+   * （Z.ai/Azure/Command Code 等）不产生这个 marker，那条路径用 modelChange。
+   * marker 只由时间线组合器根据持久化的 task meta backendTransitions 合成，从不写进任何后端
+   * 自己的行日志（Amendment 4）。transitionIndex 指向 backendTransitions 下标，供「Show handoff
+   * details」按记录上的稳定 Codex turn id 取回交接行——不引用会在重启后变化的 UI rowId。
+   */
+  z.object({
+    type: z.literal("backendTransition"),
+    status: z.enum(["running", "success", "failed"]),
+    fromBackend: zcodeExecutionBackendSchema,
+    toBackend: zcodeExecutionBackendSchema,
+    fromProviderId: z.string().optional(),
+    toProviderId: z.string().optional(),
+    transcriptCompacted: z.boolean(),
+    transitionIndex: z.number().int().nonnegative().optional(),
+    failureReason: z.string().optional(),
   }),
 ]);
 export type TimelineMarkerPayload = z.infer<typeof timelineMarkerPayloadSchema>;

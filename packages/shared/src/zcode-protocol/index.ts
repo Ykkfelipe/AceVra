@@ -1590,6 +1590,37 @@ export const zcodeSessionCreateParamsSchema = z
   .strict();
 export type ZCodeSessionCreateParams = z.infer<typeof zcodeSessionCreateParamsSchema>;
 
+/**
+ * 后端迁移（Codex → Agent）的上下文种子（backend-migration.md Amendment 4）：host 把归一化
+ * transcript 渲染成一段文本，CLI 以 model-only synthetic user 消息写入既有会话并重新水合
+ * runtime。seedId 决定确定性消息 id：同一 seedId 重复写入是幂等 upsert，回滚按 seedId 删除。
+ */
+export const zcodeSessionSeedBackendHandoffParamsSchema = z
+  .object({
+    sessionId: nonEmptyString,
+    seedId: nonEmptyString,
+    text: z.string().min(1),
+  })
+  .strict();
+export type ZCodeSessionSeedBackendHandoffParams = z.infer<
+  typeof zcodeSessionSeedBackendHandoffParamsSchema
+>;
+export const zcodeSessionSeedBackendHandoffResultSchema = z
+  .object({ messageId: nonEmptyString })
+  .strict();
+export type ZCodeSessionSeedBackendHandoffResult = z.infer<
+  typeof zcodeSessionSeedBackendHandoffResultSchema
+>;
+export const zcodeSessionRemoveBackendHandoffSeedParamsSchema = z
+  .object({ sessionId: nonEmptyString, seedId: nonEmptyString })
+  .strict();
+export type ZCodeSessionRemoveBackendHandoffSeedParams = z.infer<
+  typeof zcodeSessionRemoveBackendHandoffSeedParamsSchema
+>;
+export const zcodeSessionRemoveBackendHandoffSeedResultSchema = z
+  .object({ removed: z.boolean() })
+  .strict();
+
 export const zcodeSessionResumeParamsSchema = z
   .object({
     sessionId: nonEmptyString,
@@ -3602,6 +3633,9 @@ export const zcodeProtocolMethods = {
   sessionCompact: "session/compact",
   sessionGoal: "session/goal",
   sessionClose: "session/close",
+  // 后端迁移上下文种子（Codex → Agent）；旧 CLI method-not-found → host 判定目标端不可用，迁移失败回滚。
+  sessionSeedBackendHandoff: "session/seedBackendHandoff",
+  sessionRemoveBackendHandoffSeed: "session/removeBackendHandoffSeed",
   // setModel 仍被 zcodeSessionService 的 desktop 旧链路消费；replayable
   // switchModelConfig 已直接由目标 Environment Registry 解析 Selection。
   sessionSetModel: "session/setModel",

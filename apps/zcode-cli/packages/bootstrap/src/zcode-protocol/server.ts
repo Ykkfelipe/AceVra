@@ -1,4 +1,5 @@
 import { querySessionDebug } from "./session-debug.js";
+import { removeBackendHandoffSeed, seedBackendHandoff } from "./backend-handoff-seed.js";
 import {
   zcodePluginsCancelOperationParamsSchema,
   zcodeProtocolMethods,
@@ -602,6 +603,10 @@ export class ZCodeProtocolAgentServer {
         return await setMode(this.context, request.params);
       case zcodeProtocolMethods.sessionClose:
         return await closeSession(this.context, request.params);
+      case zcodeProtocolMethods.sessionSeedBackendHandoff:
+        return await seedBackendHandoff(this.context, request.params);
+      case zcodeProtocolMethods.sessionRemoveBackendHandoffSeed:
+        return await removeBackendHandoffSeed(this.context, request.params);
       case zcodeProtocolMethods.workspaceReadPresentation:
         return await readWorkspacePresentation(this.context, request.params);
       case zcodeProtocolMethods.workspaceHookTrustGrant: {

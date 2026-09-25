@@ -28,11 +28,13 @@ interface BackendRoutingOptions {
   readonly codex: ConversationTransport | null;
   /** taskId → 是否 Codex 任务（RPC + 缓存）。 */
   readonly isCodexTask: (taskId: string) => Promise<boolean>;
+  /** 上游判定缓存的失效入口（后端迁移提交后持久化归属已变）。 */
+  readonly invalidateCodexTask?: (taskId: string) => void;
 }
 
 export function createBackendRoutingConversationTransport(
   options: BackendRoutingOptions,
-): ConversationTransport {
+): ConversationTransport & { invalidateRoute(sessionId: string): void } {
   const backendBySubscriptionId = new Map<string, ConversationTransport>();
   const cache = new Map<string, boolean>();
 
@@ -40,8 +42,8 @@ export function createBackendRoutingConversationTransport(
     if (!options.codex) return false;
     const cached = cache.get(sessionId);
     if (cached !== undefined) return cached;
-    // 只缓存成功判定的结果：瞬态 RPC 失败不缓存，下次路由重试（归属本身不可变，
-    // 但连接抖动期间误判会把 Codex 任务永久钉在错误的后端上）。
+    // 只缓存成功判定的结果：瞬态 RPC 失败不缓存，下次路由重试。归属只在后端迁移提交时
+    // 改变，届时由 invalidateRoute 失效（backend-migration.md Amendment 4）。
     const result = await options.isCodexTask(sessionId).catch(() => undefined);
     if (result === undefined) return false;
     cache.set(sessionId, result);
@@ -56,6 +58,10 @@ export function createBackendRoutingConversationTransport(
   }
 
   return {
+    invalidateRoute(sessionId: string): void {
+      cache.delete(sessionId);
+      options.invalidateCodexTask?.(sessionId);
+    },
     async subscribe(params: SubscribeParams): Promise<V4ConversationSubscribeResult> {
       const sessionId = parseConversationTopic(params.topic);
       const backend = await routeBySessionId(sessionId);
@@ -141,7 +147,10 @@ export function createBackendRoutingConversationTransport(
       routeTo(params.sessionId, (b) => b.workflowRunNodeResult(params)),
     fileChanges: (params) => routeTo(params.sessionId, (b) => b.fileChanges(params)),
     fileRewindPreview: (params) => routeTo(params.sessionId, (b) => b.fileRewindPreview(params)),
-    attachmentPut(params: Parameters<ConversationTransport["attachmentPut"]>[0], options?: Parameters<ConversationTransport["attachmentPut"]>[1]) {
+    attachmentPut(
+      params: Parameters<ConversationTransport["attachmentPut"]>[0],
+      options?: Parameters<ConversationTransport["attachmentPut"]>[1],
+    ) {
       return routeBySessionId(params.sessionId).then((backend) =>
         backend.attachmentPut(params, options),
       );
@@ -167,9 +176,7 @@ export function createBackendRoutingConversationTransport(
         offCodex();
       };
     },
-    onAssemblyFault(
-      listener: Parameters<ConversationTransport["onAssemblyFault"]>[0],
-    ): () => void {
+    onAssemblyFault(listener: Parameters<ConversationTransport["onAssemblyFault"]>[0]): () => void {
       const offAgent = options.agent.onAssemblyFault(listener);
       const offCodex = options.codex?.onAssemblyFault(listener) ?? (() => {});
       return () => {

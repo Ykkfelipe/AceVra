@@ -63,7 +63,10 @@ test("approval responses are generation-fenced: a stale rawId cannot satisfy the
   try {
     // 同代正控制：审批 server-request 派发后，respond 必须原样到达 app-server stdin。
     const approvalArrived = new Promise<{ rawId: number }>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("approval server-request never dispatched")), 5_000);
+      const timer = setTimeout(
+        () => reject(new Error("approval server-request never dispatched")),
+        5_000,
+      );
       bridge.onNotification((_method, _params, rawRequest) => {
         if (rawRequest?.method === "item/commandExecution/requestApproval") {
           clearTimeout(timer);
@@ -76,29 +79,37 @@ test("approval responses are generation-fenced: a stale rawId cannot satisfy the
     assert.equal(rawId, 777);
     bridge.respond(rawId, { decision: "accept" });
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const accepts = readLog().split("\n").filter((line) => {
-      try {
-        const msg = JSON.parse(line);
-        return msg.id === 777 && msg.result !== undefined;
-      } catch {
-        return false;
-      }
-    });
-    assert.equal(accepts.length, 1, "same-generation approval response must reach the server exactly once");
+    const accepts = readLog()
+      .split("\n")
+      .filter((line) => {
+        try {
+          const msg = JSON.parse(line);
+          return msg.id === 777 && msg.result !== undefined;
+        } catch {
+          return false;
+        }
+      });
+    assert.equal(
+      accepts.length,
+      1,
+      "same-generation approval response must reach the server exactly once",
+    );
 
     // 换代（stop 杀进程、清登记）：对旧代 rawId 的重放应答绝不进入任何后续进程。
     bridge.stop();
     await bridge.call("initialize", {}); // 触发新进程（generation+1）
     bridge.respond(rawId, { decision: "accept" }); // stale 重放
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const acceptsAfterRestart = readLog().split("\n").filter((line) => {
-      try {
-        const msg = JSON.parse(line);
-        return msg.id === 777 && msg.result !== undefined;
-      } catch {
-        return false;
-      }
-    });
+    const acceptsAfterRestart = readLog()
+      .split("\n")
+      .filter((line) => {
+        try {
+          const msg = JSON.parse(line);
+          return msg.id === 777 && msg.result !== undefined;
+        } catch {
+          return false;
+        }
+      });
     assert.equal(
       acceptsAfterRestart.length,
       1,

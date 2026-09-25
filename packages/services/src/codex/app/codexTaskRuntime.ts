@@ -16,6 +16,7 @@ import type { CodexAppServerPort, CodexTaskIndexPort } from "./codexPorts.js";
 import type { ITaskArtifactRegistry } from "#src/task-artifacts/contract.js";
 import { scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
 import { reanchorRegisteredArtifactsAfterRebuild } from "./codexDeliveryIntegration.js";
+import { MAX_HISTORY_PAGES, unwrapThreadItemsPage } from "./codexThreadItemsPage.js";
 
 interface CodexTaskRuntimeParams {
   readonly taskId: string;
@@ -34,6 +35,11 @@ export class CodexTaskRuntime {
   readonly workspacePath: string;
   readonly workspaceIdentity?: string;
   codexThreadId: string;
+  /**
+   * 创建/冷恢复时 task meta 里的 codexThreadId（持久化绑定）。与 codexThreadId 分开：后者可能被
+   * thread/resume 回报改写，而写权限校验必须对照持久化绑定。
+   */
+  boundThreadId: string;
   /** 创建/重建时的 bridge generation；与 bridge.generation 不等即 stale。 */
   bridgeGeneration: number;
   /** 当前生效模型：Codex 回报值（thread/start 响应或 thread/started 通知）优先于请求值。 */
@@ -55,6 +61,7 @@ export class CodexTaskRuntime {
     this.workspacePath = params.workspacePath;
     this.workspaceIdentity = params.workspaceIdentity;
     this.codexThreadId = params.codexThreadId;
+    this.boundThreadId = params.codexThreadId;
     this.bridgeGeneration = params.bridgeGeneration;
     this.codexModelId = params.codexModelId ?? null;
     this.codexEffort = params.codexEffort ?? null;
@@ -131,7 +138,8 @@ export interface CodexThreadReport {
 function extractCodexThreadReport(result: unknown): CodexThreadReport | null {
   const threadId = extractCodexThreadId(result);
   if (!threadId) return null;
-  const record = typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
+  const record =
+    typeof result === "object" && result !== null ? (result as Record<string, unknown>) : null;
   const thread =
     record && typeof record.thread === "object" && record.thread !== null
       ? (record.thread as Record<string, unknown>)
@@ -189,7 +197,7 @@ export async function resumeCodexThread(
 }
 
 /** 冷恢复分页上限：防病态 cursor 循环；正常线程远小于此。 */
-const MAX_HISTORY_PAGES = 50;
+export { MAX_HISTORY_PAGES, unwrapThreadItemsPage };
 
 /**
  * 从 Codex 分页 items 重建投影（重启后 subscribe 的恢复路径）。
@@ -222,10 +230,11 @@ export async function rebuildProjectionFromCodex(
           ? (record?.data as unknown[])
           : [];
     for (const entry of items) {
-      const item = normalizeHistoryItem(entry);
-      if (!item) continue;
-      // 冷恢复直接落终态行：不要求先出现过 itemStarted。
-      projection.replayCompletedItem(item);
+      const normalized = normalizeHistoryItem(entry);
+      if (!normalized) continue;
+      // 冷恢复直接落终态行：不要求先出现过 itemStarted。Codex 原生 turn id 随行保留
+      // （sourceTurnId），后端迁移据此在重建后仍能识别 handoff 轮。
+      projection.replayCompletedItem(normalized.item, normalized.turnId);
     }
     const next = record?.nextCursor;
     cursor = typeof next === "string" && next.trim() ? next : null;
@@ -233,14 +242,20 @@ export async function rebuildProjectionFromCodex(
   }
 }
 
-function normalizeHistoryItem(entry: unknown): CodexItem | null {
+export function normalizeHistoryItem(
+  entry: unknown,
+): { item: CodexItem; turnId: string | null } | null {
   // E2E 观察：thread/items/list 的条目是 {turnId, item:{type,…}} 包装；容错回退裸 item。
   const record =
     typeof entry === "object" && entry !== null ? (entry as Record<string, unknown>) : null;
   const unwrapped = record?.item ?? entry;
-  const parsed = parseCodexNotification("item/completed", { item: unwrapped });
+  const parsed = parseCodexNotification("item/completed", {
+    item: unwrapped,
+    ...(record?.turnId !== undefined ? { turnId: record.turnId } : {}),
+    ...(record?.turn_id !== undefined ? { turn_id: record.turn_id } : {}),
+  });
   if (parsed.type !== "itemCompleted") return null;
-  return parsed.item;
+  return { item: parsed.item, turnId: parsed.turnId };
 }
 
 /** 解析并路由一条 bridge 通知；返回归约结果供服务层发帧。 */
@@ -277,7 +292,9 @@ export function routeCodexNotification(
   if (notification.type === "turnStarted") {
     // turn/interrupt 需要 Codex 侧 turnId；响应缺失时以通知兜底。
     if (notification.turnId) runtime.codexTurnId = notification.turnId;
-    return null;
+    // 同时把 Codex 原生 turn id 回填到本轮已建的行（sourceTurnId）。
+    const bound = runtime.projection.applyNotification(notification);
+    return bound ? { commit: bound, approval: null } : null;
   }
   if (notification.type === "turnCompleted") {
     runtime.codexTurnId = null;
@@ -308,13 +325,22 @@ export async function ensureRuntimeForTask(options: {
   now: () => number;
 }): Promise<CodexTaskRuntime> {
   const { bridge, taskIndex, policy, taskArtifacts, runtimes, taskId, now } = options;
-  const existing = runtimes.get(taskId);
-  if (existing && !existing.isStale(bridge)) return existing;
+  let existing = runtimes.get(taskId);
   try {
+    // 原因：后端迁移后 executionBackend/codexThreadId 可以变化（Agent → Codex → Agent → Codex
+    // 会换新 thread），缓存的 runtime 不再天然代表写权限。每次都按持久化 task meta 校验：
+    // 已迁出 Codex → 丢弃缓存并拒绝；thread 已换 → 丢弃旧 runtime 按新 thread 冷恢复
+    // （backend-migration.md Amendment 4「Read vs write authority」）。
     const meta = await taskIndex.getTaskMeta({ taskId });
     if (!meta || meta.executionBackend !== "codex" || !meta.codexThreadId) {
+      runtimes.delete(taskId);
       throw new Error("codex_task_not_found");
     }
+    if (existing && existing.boundThreadId !== meta.codexThreadId) {
+      runtimes.delete(taskId);
+      existing = undefined;
+    }
+    if (existing && !existing.isStale(bridge)) return existing;
     if (!bridge.installed) throw new Error("codex_not_installed");
     const generation = bridge.generation;
     const projection = new CodexThreadProjection(`codex-${generation}`, now);
@@ -346,6 +372,7 @@ export async function ensureRuntimeForTask(options: {
     runtime.bridgeGeneration = generation;
     runtime.projection = projection;
     runtime.codexThreadId = resumed.threadId;
+    runtime.boundThreadId = meta.codexThreadId;
     runtime.codexModelId = codexModelId;
     runtime.codexEffort = codexEffort;
     // 旧代进程的 turn 已随进程消失：换代重建后不允许拿旧 turnId 去打断新进程。

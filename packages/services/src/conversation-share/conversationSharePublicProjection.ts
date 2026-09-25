@@ -242,6 +242,24 @@ function projectTimelineMarker(
       return { ...row.marker };
     case "retryNotice":
       return { ...row.marker };
+    case "backendTransition":
+      // detailRowIds 指向源会话内部的行号，公开投影用位置重新分配 rowId（见 projectBase），
+      // 这里没有把任意行号重映射到公开 id 的映射表——和 compact 丢弃 summaryRef 是同一原因，
+      // 不是遗漏。状态/后端/provider/是否压缩都不是敏感信息，可以公开。
+      return {
+        type: "backendTransition",
+        status: row.marker.status,
+        fromBackend: row.marker.fromBackend,
+        toBackend: row.marker.toBackend,
+        transcriptCompacted: row.marker.transcriptCompacted,
+        ...(row.marker.fromProviderId === undefined
+          ? {}
+          : { fromProviderId: row.marker.fromProviderId }),
+        ...(row.marker.toProviderId === undefined ? {} : { toProviderId: row.marker.toProviderId }),
+        ...(row.marker.failureReason === undefined
+          ? {}
+          : { failureReason: row.marker.failureReason }),
+      };
     case "forkNotice":
     case "forkCreated":
     case "checkpointRestored":

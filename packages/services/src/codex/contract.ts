@@ -14,5 +14,14 @@ import { createCodexExecutionService } from "./app/codexExecutionServiceImpl.js"
 // 值导出（interface + 同名 descriptor 常量经声明合并）；类型面在上面单独声明。
 export { ICodexExecutionService } from "./app/codexExecutionService.js";
 export type { CodexAppServerPort, CodexTaskIndexPort } from "./app/codexPorts.js";
-export { resolveCodexExecutionPolicy, DEFAULT_CODEX_EXECUTION_POLICY } from "./domain/codexPolicy.js";
+export {
+  resolveCodexExecutionPolicy,
+  DEFAULT_CODEX_EXECUTION_POLICY,
+} from "./domain/codexPolicy.js";
 export { createCodexExecutionService };
+export {
+  BACKEND_TRANSITION_IN_PROGRESS_REASON,
+  CODEX_HANDOFF_POLICY,
+} from "./app/codexMigrationBridge.js";
+export type { CodexHandoffTurnOutcome, CodexMigrationBridge } from "./app/codexMigrationBridge.js";
+export type { CodexExecutionPolicy } from "./domain/codexPolicy.js";

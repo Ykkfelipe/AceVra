@@ -154,6 +154,11 @@ export const ServiceChannels = {
    */
   CodexExecution: "codex-execution",
   /**
+   * 后端迁移（phase 11，backend-migration.md Amendment 4）：唯一的「切换 task 执行后端」写操作，
+   * 以及跨段时间线的只读查询。executionBackend/providerId/codexThreadId 只由该服务的事务写入。
+   */
+  BackendMigration: "backend-migration",
+  /**
    * Task artifacts（phase 11）：工具/agent 结构化输出的注册与远程投递。
    * 通道只暴露清单与分块读取；注册是宿主内部能力。描述符不含宿主路径。
    */

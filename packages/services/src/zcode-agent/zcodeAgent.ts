@@ -694,6 +694,17 @@ export interface IZCodeAgentService {
    */
   sendPrompt(params: ZCodeAgentSendPromptParams): Promise<ZCodeSessionSendResult>;
   compactSession(params: ZCodeAgentCompactParams): Promise<ZCodeSessionCompactResult>;
+  /**
+   * 后端迁移（Codex → Agent）：把归一化 transcript 作为 model-only 上下文种子写进已加载的会话
+   * （backend-migration.md Amendment 4）。seedId 相同 = 幂等；只由 backend-migration 服务调用。
+   */
+  seedBackendHandoff(
+    params: ZCodeAgentSessionTarget & { seedId: string; text: string },
+  ): Promise<{ messageId: string }>;
+  /** 失败迁移的回滚：删除同一 seedId 的种子并重建 runtime。 */
+  removeBackendHandoffSeed(
+    params: ZCodeAgentSessionTarget & { seedId: string },
+  ): Promise<{ removed: boolean }>;
   goalSession(params: ZCodeAgentGoalParams): Promise<ZCodeSessionGoalResult>;
   closeSession(
     params: ZCodeAgentSessionTarget & { expectedPersistence?: "deferred" | "immediate" },

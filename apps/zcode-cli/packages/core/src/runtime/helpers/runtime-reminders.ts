@@ -98,7 +98,9 @@ export function runtimeMetadataForSyntheticUserMessageSource(
   if (
     source === "background_task" ||
     source === "subagent_message" ||
-    source === "shared_context"
+    source === "shared_context" ||
+    // 迁移种子与分享上下文同档：普通 user 角色上下文，不包成 system-reminder。
+    source === "backend_handoff"
   ) {
     return legacySyntheticRuntimeMetadata();
   }

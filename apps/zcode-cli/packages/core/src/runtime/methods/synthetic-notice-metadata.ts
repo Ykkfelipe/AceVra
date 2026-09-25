@@ -89,5 +89,7 @@ function syntheticUserNoticeKind(source: SyntheticUserMessageSource): MessageSem
       return "user_prompt";
     case "shared_context":
       return "shared_context";
+    case "backend_handoff":
+      return "backend_handoff";
   }
 }

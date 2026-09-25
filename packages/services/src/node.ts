@@ -364,6 +364,12 @@ import { createZCodeTaskServiceAdapter } from "./zcode-agent/zcodeTaskServiceAda
 import { createZCodeSessionService } from "./zcode-session/zcodeSessionService.js";
 import { createZCodeTaskIndexSyncer } from "./zcode-agent/zcodeTaskIndexSyncer.js";
 import { TaskIndexRepo } from "./session/taskIndexRepo.js";
+import { BackendMigrationService } from "./backend-migration/backendMigrationServiceImpl.js";
+import {
+  backendMigrationConnectionScopeFactory,
+  IBackendMigrationService,
+} from "./backend-migration/backendMigrationService.js";
+import { createHostInstanceId } from "./backend-migration/hostInstanceIdentity.js";
 import type { SessionMessageSendRequested } from "#src/session/sessionMailbox.js";
 import { createFileWatcherService } from "./fileWatcher/fileWatcherService.js";
 import { createOAuthService } from "./oauth/oauthService.js";
@@ -552,6 +558,8 @@ export {
   ConversationShareHttpClient,
   conversationShareConnectionScopeFactory,
 };
+// 后端迁移服务依赖 node:crypto / tasks-index sqlite；同样只经 node 入口暴露连接作用域工厂。
+export { backendMigrationConnectionScopeFactory };
 
 interface ServiceWithDisposeAll {
   disposeAll: () => void;
@@ -2481,6 +2489,21 @@ export function createLocalServices(options: {
     policy: codexPolicyResolution.policy,
     taskArtifacts: taskArtifactRegistry,
   });
+  // 后端迁移（backend-migration.md Amendment 3/4）：与 Codex 执行后端共享 bridge 与任务索引；
+  // 启动时把「所有者已不存活」的在途迁移收敛为 failed/restart，executionBackend 一律不动。
+  const backendMigrationService = new BackendMigrationService({
+    taskIndex: taskIndexRepo,
+    codex: codexExecution.migration,
+    isCodexAvailable: () => codexAppServerBridge.installed,
+    codexPolicy: codexPolicyResolution.policy,
+    hostInstanceId: createHostInstanceId(),
+  });
+  void backendMigrationService.recoverOrphanedTransitions().catch((error: unknown) => {
+    createServiceLogger("backend-migration").warn(
+      undefined,
+      `backend transition recovery failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  });
   const oauthService = createOAuthService(credentialService, {
     apiClient,
     onProviderLogout: handleOAuthProviderLogout,
@@ -2595,6 +2618,7 @@ export function createLocalServices(options: {
     .register(IBroadcastService, broadcastService)
     .register(IZCodeTaskService, zcodeTaskService)
     .register(ICodexExecutionService, codexExecution.service)
+    .register(IBackendMigrationService, backendMigrationService)
     .register(ITaskArtifactDeliveryService, {
       // 通道只暴露 delivery facade：远端可列/可读已注册 artifact，但不能注册。
       listTaskArtifacts: (params) => taskArtifactRegistry.listTaskArtifacts(params),

@@ -79,3 +79,30 @@ export async function deliverUserNamedCodexArtifacts(options: {
     }
   }
 }
+
+/** turn/completed 后取走交付候选并旁路注册；失败只记日志，不阻塞通知扇入。 */
+export function deliverCompletedTurnArtifacts(options: {
+  registry?: ITaskArtifactRegistry;
+  runtime: {
+    readonly taskId: string;
+    readonly workspacePath: string;
+    readonly workspaceIdentity?: string;
+    readonly projection: CodexThreadProjection;
+  };
+  emitCommit(taskId: string, commit: CodexProjectionCommit): void;
+}): void {
+  const { registry, runtime } = options;
+  const delivery = runtime.projection.takeCompletedTurnDelivery();
+  if (!delivery || !registry) return;
+  void deliverUserNamedCodexArtifacts({
+    registry,
+    taskId: runtime.taskId,
+    workspacePath: runtime.workspacePath,
+    ...(runtime.workspaceIdentity ? { workspaceIdentity: runtime.workspaceIdentity } : {}),
+    projection: runtime.projection,
+    delivery,
+    emitCommit: options.emitCommit,
+  }).catch((error) => {
+    logger.warn(undefined, `codex artifact delivery failed: ${String(error)}`);
+  });
+}

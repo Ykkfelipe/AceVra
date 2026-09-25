@@ -85,7 +85,42 @@ the internal runtime/product name. This is display copy only; runtime identifier
   parameter as optional and unscoped when omitted). Codex model and effort menus use the same
   clean, borderless option rows; the menus retain a bounded scroll area and selected-state
   indicator.
-  Existing tasks keep their established execution backend and existing model-switch rules.
+- **Existing tasks keep their established execution backend, but not a fixed provider
+  within it** (2026-09-24 correction): "backend" (`zcode` vs `codex`) and "provider" (Z.ai,
+  Azure, Command Code, ...) are different things. Backend is fixed at task creation —
+  crossing into or out of Codex mid-task needs a runtime migration (extracting the visible
+  transcript and re-seeding it on the other side) that does not exist yet, so the Provider
+  menu is hidden entirely for an existing Codex session (`shouldShowComposerProviderMenu`,
+  `packages/ui/src/v4/composer/composerToolbarPresentation.ts`) and its Codex entry is
+  disabled everywhere except a fresh draft. Provider, within the `zcode` backend, is **not**
+  fixed: switching from Command Code to Azure mid-conversation is the same safe operation as
+  switching models — the Agent owns the conversation and resends accumulated history to
+  whichever provider answers the next turn regardless of who answered the last one. The
+  Provider menu therefore stays visible and wired (`onSelectAgentProvider`) on any existing
+  `zcode`-backend session, reusing the exact same draft-model-selection write path the Models
+  dropdown already used for model switching — no new state, no new write path. This was a
+  regression introduced when the Provider menu shipped: it was gated on `draftMode` alone,
+  which hid it for every existing task instead of only existing Codex ones.
+
+```mermaid
+sequenceDiagram
+  participant U as Provider menu (existing task)
+  participant D as Composer draft owner
+  participant R as Agent runtime (zcode backend)
+  Note over U,R: Codex-backend existing task: menu hidden, no path shown
+  U->>D: pick Command Code (was Azure)
+  D->>D: write modelSelection {providerId, modelId} — same path as model switch
+  D-->>R: next turn's request carries the new provider/model
+  R->>R: resend accumulated conversation history to the new provider
+  R-->>U: reply appears in the same conversation, no new task created
+```
+
+Accepted scenarios (continued): (8) an existing `zcode`-backend conversation shows the
+Provider menu and can switch from one saved provider to another mid-conversation, with the
+conversation continuing in place; (9) an existing Codex conversation shows no Provider menu at
+all, only its own model/effort controls; (10) a fresh draft still shows every choice including
+Codex, unaffected by either existing-task rule above.
+
 - Saved personal providers appear immediately in the Provider menu. A provider without an
   eligible model is visible but disabled with an Add model explanation; it cannot be selected
   for chat. A provider that lacks a key or valid endpoint is likewise unavailable until fixed

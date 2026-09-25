@@ -46,3 +46,20 @@ export function resolveCodexModelControlKind(params: {
   if (params.draftMode) return params.backend === "codex" ? "dropdown" : null;
   return params.codexSession ? "dropdown" : null;
 }
+
+/**
+ * Provider 菜单的可见性裁决（纯函数，便于确定性测试）。
+ *
+ * 已有 zcode family 会话（Z.ai/Azure/Command Code 等）复用草稿态同一条模型选择写路径
+ * 切换 provider——和 Models 下拉换模型本来就走同一个 handler，不需要区分草稿态。
+ * 已有 Codex 会话默认让位给下方 Codex 专属模型/effort 控件；但 Host 装了迁移服务后，
+ * 该菜单是迁回 Agent 的唯一入口，必须保留。
+ */
+export function shouldShowComposerProviderMenu(params: {
+  draftMode: boolean;
+  codexSession: boolean;
+  /** 正式会话具备跨后端迁移能力（Host 注册了 backendMigrationService）。 */
+  backendMigrationAvailable?: boolean;
+}): boolean {
+  return params.draftMode || !params.codexSession || params.backendMigrationAvailable === true;
+}

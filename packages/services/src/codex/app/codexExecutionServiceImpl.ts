@@ -18,38 +18,27 @@ import type {
   CodexTaskThreadInfo,
   ZCodeTaskMeta,
 } from "@zcode/shared";
-import type {
-  CommandAck,
-  CommandEnvelope,
-  ConversationResyncParams,
-  ConversationTopicFrame,
-  SubscribeParams,
-  V4ConversationResyncResult,
-  V4ConversationRowsRangeParams,
-  V4ConversationRowsRangeResult,
-  V4ConversationSubscribeResult,
-} from "@zcode/shared/zcode-protocol-v4";
-import { parseConversationTopic } from "@zcode/shared/zcode-protocol-v4";
+import type { ConversationTopicFrame } from "@zcode/shared/zcode-protocol-v4";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
-import { CODEX_METHODS, scrubCodexErrorDetail } from "#src/codex/domain/codexWire.js";
 import { codexUnroutableApprovalResponse } from "#src/codex/domain/codexApprovals.js";
 import type { ITaskArtifactRegistry } from "#src/task-artifacts/contract.js";
-import { deliverUserNamedCodexArtifacts } from "./codexDeliveryIntegration.js";
+import { deliverCompletedTurnArtifacts } from "./codexDeliveryIntegration.js";
 import { toCodexTaskBinding } from "#src/codex/domain/codexBinding.js";
 import type { CodexExecutionPolicy, CodexModelOverride } from "#src/codex/domain/codexPolicy.js";
 import { resolveCodexModelOverride } from "#src/codex/domain/codexPolicy.js";
 import type { CodexProjectionCommit } from "#src/codex/domain/codexProjection.js";
-import {
-  CodexTaskRuntime,
-  ensureRuntimeForTask,
-  extractCodexTurnId,
-  startCodexThread,
-} from "./codexTaskRuntime.js";
+import { CodexTaskRuntime, ensureRuntimeForTask, startCodexThread } from "./codexTaskRuntime.js";
 import type { CodexAppServerPort, CodexTaskIndexPort } from "./codexPorts.js";
 import { createCodexNotificationRouter } from "./codexNotificationRouter.js";
 import { persistCodexStatus, persistCodexTurnOverride } from "./codexTaskPersistence.js";
 import type { ICodexExecutionService } from "./codexExecutionService.js";
-import { handleConversationCommand } from "./codexConversationCommands.js";
+import {
+  assertNoCodexBackendTransition,
+  createCodexMigrationBridge,
+  type CodexMigrationBridge,
+} from "./codexMigrationBridge.js";
+import { startCodexTurn } from "./codexTurnStart.js";
+import { createCodexConversationV4Methods } from "./codexConversationV4.js";
 
 const logger = createServiceLogger("codex-execution");
 
@@ -70,6 +59,7 @@ interface CodexExecutionServiceDeps {
 
 export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   service: ICodexExecutionService;
+  migration: CodexMigrationBridge; // 宿主内部迁移桥，不经 RPC 暴露
   dispose(): void;
 } {
   const now = deps.now ?? (() => Date.now());
@@ -112,7 +102,11 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
     );
   }
 
-  const persistenceContext = { taskIndex: deps.taskIndex, now, warn: (message: string) => logger.warn(undefined, message) };
+  const persistenceContext = {
+    taskIndex: deps.taskIndex,
+    now,
+    warn: (message: string) => logger.warn(undefined, message),
+  };
   const persistStatus = (taskId: string, status: ZCodeTaskMeta["status"]): void => {
     const runtime = runtimes.get(taskId);
     if (runtime) persistCodexStatus(persistenceContext, runtime, status);
@@ -120,6 +114,11 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   const persistTurnOverride = (runtime: CodexTaskRuntime, override: CodexModelOverride): void =>
     persistCodexTurnOverride(persistenceContext, runtime, override);
 
+  const migration = createCodexMigrationBridge({
+    bridge: deps.bridge,
+    now,
+    releaseTaskRuntime: (taskId) => runtimes.delete(taskId),
+  });
 
   // ── bridge 通知扇入：按 threadId 路由到 runtime 并归约成帧 ──
   // 无主通知按 threadId 暂存、runtime 注册时回放：否则 thread/start 窗口期到达的
@@ -131,11 +130,15 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       if (!rawRequest.method.includes("requestApproval")) return;
       // fail closed：无法定位 thread 的审批按 schema 真形回拒（权限类回空授权）。
       deps.bridge.respond(rawRequest.rawId, codexUnroutableApprovalResponse(rawRequest.method));
-      logger.warn(undefined, `codex approval routed to no runtime; denied rawId=${rawRequest.rawId}`);
+      logger.warn(
+        undefined,
+        `codex approval routed to no runtime; denied rawId=${rawRequest.rawId}`,
+      );
     },
   });
   const offNotification = deps.bridge.onNotification((method, params, rawRequest) => {
     try {
+      if (migration.handleNotification(method, params, rawRequest)) return; // handoff thread 归迁移收集器
       const routed = notificationRouter.handle(method, params, rawRequest);
       if (!routed) return;
       if (method === "turn/completed") {
@@ -143,22 +146,7 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
         if (!runtime) return;
         persistStatus(routed.taskId, runtime.projection.phase === "error" ? "error" : "completed");
         // 用户点名交付：turn 完成后旁路注册（不改 turn 语义，不阻塞通知扇入）。
-        const delivery = runtime.projection.takeCompletedTurnDelivery();
-        if (delivery && deps.taskArtifacts) {
-          void deliverUserNamedCodexArtifacts({
-            registry: deps.taskArtifacts,
-            taskId: runtime.taskId,
-            workspacePath: runtime.workspacePath,
-            ...(runtime.workspaceIdentity
-              ? { workspaceIdentity: runtime.workspaceIdentity }
-              : {}),
-            projection: runtime.projection,
-            delivery,
-            emitCommit,
-          }).catch((error) => {
-            logger.warn(undefined, `codex artifact delivery failed: ${String(error)}`);
-          });
-        }
+        deliverCompletedTurnArtifacts({ registry: deps.taskArtifacts, runtime, emitCommit });
       }
     } catch (error) {
       logger.warn(undefined, `codex notification routing failed: ${String(error)}`);
@@ -168,8 +156,13 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   /** 确保 runtime 可用；失败路径绝不污染缓存，错误一律脱敏后再出通道。 */
   const ensureRuntime = async (taskId: string): Promise<CodexTaskRuntime> => {
     const runtime = await ensureRuntimeForTask({
-      bridge: deps.bridge, taskIndex: deps.taskIndex, policy: deps.policy,
-      taskArtifacts: deps.taskArtifacts, runtimes, taskId, now,
+      bridge: deps.bridge,
+      taskIndex: deps.taskIndex,
+      policy: deps.policy,
+      taskArtifacts: deps.taskArtifacts,
+      runtimes,
+      taskId,
+      now,
     });
     // 冷恢复/bridge 换代后回放该 thread 暂存的通知。
     notificationRouter.attachRuntime(runtime);
@@ -177,10 +170,15 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
   };
 
   const service: ICodexExecutionService = {
-    async createTask(params: CodexExecutionCreateTaskParams): Promise<CodexExecutionCreateTaskResult> {
+    async createTask(
+      params: CodexExecutionCreateTaskParams,
+    ): Promise<CodexExecutionCreateTaskResult> {
       if (!deps.bridge.installed) throw new Error("codex_not_installed");
       // allow-list 之外的 id 一律拒绝（fail loud），防止自由文本把任意值透传给 Codex。
-      const override = resolveCodexModelOverride({ modelId: params.modelId, effort: params.effort });
+      const override = resolveCodexModelOverride({
+        modelId: params.modelId,
+        effort: params.effort,
+      });
       const thread = await startCodexThread(deps.bridge, {
         workspacePath: params.workspacePath,
         policy: deps.policy,
@@ -194,10 +192,6 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       // meta 持久化的是 Codex 回报的实际生效读数（thread/start 响应），而不是请求值。
       const effectiveModelId = thread.model ?? override.modelId ?? null;
       const effectiveEffort = thread.effort ?? null;
-      const codexMetaFields = {
-        ...(effectiveModelId ? { codexModelId: effectiveModelId } : {}),
-        ...(effectiveEffort ? { codexEffort: effectiveEffort } : {}),
-      };
       const meta: ZCodeTaskMeta = {
         taskId,
         traceId: `codex-${taskId}`,
@@ -209,7 +203,8 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
         mode: "build",
         executionBackend: "codex",
         codexThreadId: thread.threadId,
-        ...codexMetaFields,
+        ...(effectiveModelId ? { codexModelId: effectiveModelId } : {}),
+        ...(effectiveEffort ? { codexEffort: effectiveEffort } : {}),
       };
       const runtime = new CodexTaskRuntime(
         {
@@ -227,39 +222,34 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       runtimes.set(taskId, runtime);
       notificationRouter.attachRuntime(runtime); // 回放 thread/start 窗口期先到的通知
       await deps.taskIndex.syncTaskMeta({ meta });
-      if (params.firstInput?.trim()) await service.sendTurn({ taskId, content: params.firstInput, ...(override.effort ? { effort: override.effort } : {}) });
+      if (params.firstInput?.trim())
+        await service.sendTurn({
+          taskId,
+          content: params.firstInput,
+          ...(override.effort ? { effort: override.effort } : {}),
+        });
       return { task: toCodexTaskBinding(meta) };
     },
 
-    async sendTurn(params: CodexExecutionSendTurnParams): Promise<{ accepted: boolean; commandId: string }> {
+    async sendTurn(
+      params: CodexExecutionSendTurnParams,
+    ): Promise<{ accepted: boolean; commandId: string }> {
+      await assertNoCodexBackendTransition(deps.taskIndex, params.taskId);
       const runtime = await ensureRuntime(params.taskId);
       // turn 级覆盖同样受 allow-list 约束；Codex schema：覆盖作用于本 turn 及后续 turns。
-      const override = resolveCodexModelOverride({ modelId: params.modelId, effort: params.effort });
-      const commandId = params.commandId || createUuid();
-      const turnId = `codex-turn-${++runtime.turnCounter}-${commandId.slice(0, 8)}`;
-      const commit = runtime.projection.beginUserTurn({ text: params.content, turnId, commandId });
-      emitCommit(params.taskId, commit);
-      try {
-        // turn/start 的 input 形状以 spec 的 E2E checklist 为准；文本项 {type:"text", text}。
-        // 响应携带 {turn:{id}}（schema）：记下 Codex 侧 turn id 供 turn/interrupt 使用。
-        const result = await deps.bridge.call(CODEX_METHODS.turnStart, {
-          threadId: runtime.codexThreadId,
-          input: [{ type: "text", text: params.content }],
-          ...(override.modelId ? { model: override.modelId } : {}),
-          ...(override.effort ? { effort: override.effort } : {}),
-        });
-        runtime.codexTurnId = extractCodexTurnId(result);
-        persistTurnOverride(runtime, override);
-      } catch (error) {
-        // Codex 不会为这次 turn 发 turn/completed；投影必须本地收口成 failed，
-        // 否则 UI 停在幽灵 running 轮上（canStop 永真）。
-        const message = error instanceof Error ? error.message : String(error);
-        emitCommit(params.taskId, runtime.projection.failActiveTurn("codex.turnStartFailed", message));
-        persistStatus(params.taskId, "error");
-        throw new Error(scrubCodexErrorDetail(`codex_turn_start_failed: ${message}`));
-      }
-      persistStatus(params.taskId, "running");
-      return { accepted: true, commandId };
+      const override = resolveCodexModelOverride({
+        modelId: params.modelId,
+        effort: params.effort,
+      });
+      return startCodexTurn({
+        bridge: deps.bridge,
+        runtime,
+        params,
+        override,
+        emitCommit,
+        persistTurnOverride,
+        persistStatus: (taskId, status) => persistStatus(taskId, status),
+      });
     },
 
     async respondApproval(params: CodexExecutionApprovalDecision): Promise<void> {
@@ -287,14 +277,18 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       };
     },
 
-    async listTasks(params: CodexExecutionListTasksParams = {}): Promise<CodexExecutionListTasksResult> {
+    async listTasks(
+      params: CodexExecutionListTasksParams = {},
+    ): Promise<CodexExecutionListTasksResult> {
       const metas = await deps.taskIndex.listTaskMetas({
         ...(params.workspacePath !== undefined ? { workspacePath: params.workspacePath } : {}),
         ...(params.workspaceIdentity !== undefined
           ? { workspaceIdentity: params.workspaceIdentity }
           : {}),
       });
-      return { tasks: metas.filter((meta) => meta.executionBackend === "codex").map(toCodexTaskBinding) };
+      return {
+        tasks: metas.filter((meta) => meta.executionBackend === "codex").map(toCodexTaskBinding),
+      };
     },
 
     async isCodexTask(taskId: string): Promise<boolean> {
@@ -304,83 +298,16 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       return meta?.executionBackend === "codex";
     },
 
-    async subscribeConversationV4(params: SubscribeParams): Promise<V4ConversationSubscribeResult> {
-      const taskId = parseConversationTopic(params.topic);
-      if (!taskId) throw new Error(`codex_unsupported_topic:${params.topic}`);
-      const runtime = await ensureRuntime(taskId);
-      const subscriptionId = createUuid();
-      subscriptions.set(subscriptionId, { subscriptionId, taskId });
-      // 行日志全量快照；不支持 resume 水位（不保留 delta 历史）。
-      // initial frame 在 ACK 之后投递，由 transport 的 activation barrier 保证次序。
-      queueMicrotask(() => emitSnapshot(subscriptionId, taskId));
-      return {
-        ack: { subscriptionId, mode: "snapshot", logEpoch: runtime.projection.logEpoch },
-      };
-    },
-
-    async resyncConversationV4(params: ConversationResyncParams): Promise<V4ConversationResyncResult> {
-      const entry = subscriptions.get(params.subscriptionId);
-      if (!entry) throw new Error("codex_subscription_not_owned");
-      const runtime = await ensureRuntime(entry.taskId);
-      queueMicrotask(() => emitSnapshot(params.subscriptionId, entry.taskId));
-      return {
-        ack: { subscriptionId: params.subscriptionId, mode: "snapshot", logEpoch: runtime.projection.logEpoch },
-      };
-    },
-
-    async unsubscribeConversationV4(params: { subscriptionId: string }): Promise<void> {
-      subscriptions.delete(params.subscriptionId);
-    },
-
-    async conversationRowsRangeV4(params: V4ConversationRowsRangeParams): Promise<V4ConversationRowsRangeResult> {
-      const runtime = await ensureRuntime(params.sessionId);
-      const rows = runtime.projection.rowsRange({
-        ...(params.beforeRowId !== undefined ? { beforeRowId: params.beforeRowId } : {}),
-        limit: params.limit,
-      });
-      return {
-        rows,
-        atSeq: runtime.projection.seq,
-        atRevision: runtime.projection.revision,
-        atLogEpoch: runtime.projection.logEpoch,
-        hasMore: rows.length > 0 && (rows[0]?.rowId ?? 1) > 1,
-      };
-    },
-
-    async sendConversationCommandV4(params: { envelope: CommandEnvelope }): Promise<CommandAck> {
-      const envelope = params.envelope;
-      const taskId = envelope.sessionId;
-      if (!taskId) {
-        return {
-          commandId: envelope.commandId,
-          status: "rejected",
-          revisionAtDecision: 0,
-          reasonCode: "fault.command.unsupportedBackend",
-          message: "Codex backend requires an existing task",
-        };
-      }
-      const runtime = await ensureRuntime(taskId);
-      return handleConversationCommand(
-        {
-          bridge: deps.bridge,
-          taskIndex: deps.taskIndex,
-          emitCommit,
-          sendTurn: async ({ taskId: id, content, commandId, modelId, effort }) => {
-            await service.sendTurn({
-              taskId: id,
-              content,
-              ...(commandId ? { commandId } : {}),
-              ...(modelId ? { modelId } : {}),
-              ...(effort ? { effort } : {}),
-            });
-          },
-          now,
-        },
-        taskId,
-        runtime,
-        envelope,
-      );
-    },
+    ...createCodexConversationV4Methods({
+      bridge: deps.bridge,
+      taskIndex: deps.taskIndex,
+      subscriptions,
+      ensureRuntime,
+      emitSnapshot,
+      emitCommit,
+      now,
+      sendTurn: (params) => service.sendTurn(params),
+    }),
 
     onDynamicConversationFrame() {
       return frames.event;
@@ -389,10 +316,11 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
 
   function dispose(): void {
     offNotification();
+    migration.dispose();
     runtimes.clear();
     subscriptions.clear();
     frames.dispose();
   }
 
-  return { service, dispose };
+  return { service, migration, dispose };
 }

@@ -291,6 +291,7 @@ function ReadyV4PaneConversationProvider({
       agentService,
       scope.remoteSessionId ? undefined : platform.createLocalMediaPreviewUrl,
       services.codexExecutionService,
+      services.backendMigrationService,
     );
     return {
       lease,
