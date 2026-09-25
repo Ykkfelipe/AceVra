@@ -608,16 +608,6 @@ function RootInner({
   useRootStartupGateDiagnostics(
     "initialWorkspaceBootstrap",
     isBootstrappingInitialWorkspace || isCreatingFallbackWorkspace,
-    {
-      hasInitialWorkspacePath: Boolean(initialWorkspaceAbsPath),
-      isBootstrappingInitialWorkspace,
-      isCreatingFallbackWorkspace,
-      canRestoreWorkspaceSession,
-      hasCompletedInitialRestore,
-      isStartupProviderLoginEntryOpen,
-      hasWorkspaceShellPath: Boolean(workspaceShellPath),
-      allowOpenWorkspace,
-    },
   );
 
   const launchReportedRef = useRef(false);
