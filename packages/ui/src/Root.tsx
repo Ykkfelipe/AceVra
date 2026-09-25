@@ -76,6 +76,7 @@ import { setUiPerfArmsReporter } from "@/lib/uiPerfArmsTelemetry.js";
 import { setSessionOpenArmsReporter } from "@/lib/sessionOpenArmsTelemetry.js";
 import { setSendFunnelArmsReporter } from "@/lib/sendFunnelArmsTelemetry.js";
 import { RootStartupLoading } from "@/root/RootStartupLoading.js";
+import { useRootStartupGateDiagnostics } from "@/root/useRootStartupGateDiagnostics.js";
 import { resolveProviderAvailabilityState } from "@/lib/modelProviderAvailability.js";
 import { useProviderAvailabilityLoginEntryGuard } from "@/root/useProviderAvailabilityLoginEntryGuard.js";
 import { ensureProviderFamilyDomainMigration } from "@/lib/providerFamilyDomainMigration.js";
@@ -600,6 +601,14 @@ function RootInner({
     isRestoring,
     isBootstrappingInitialWorkspace: isBootstrappingInitialWorkspace || isCreatingFallbackWorkspace,
   });
+
+  useRootStartupGateDiagnostics("startupAuth", isResolvingStartupAuthState);
+  useRootStartupGateDiagnostics("providerStartup", isResolvingProviderStartupState);
+  useRootStartupGateDiagnostics("tabRestore", isRestoring);
+  useRootStartupGateDiagnostics(
+    "initialWorkspaceBootstrap",
+    isBootstrappingInitialWorkspace || isCreatingFallbackWorkspace,
+  );
 
   const launchReportedRef = useRef(false);
   useEffect(() => {
