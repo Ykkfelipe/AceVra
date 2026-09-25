@@ -57,20 +57,34 @@ the internal runtime/product name. This is display copy only; runtime identifier
 ### Provider-first draft choice (2026-09-24)
 
 - The first new-task selector is labeled **Provider**. It lists **Z.ai** as one family entry,
-  **Codex**, **Claude Code**, and each saved personal API provider by its display name.
-  BigModel-family accounts, when present, likewise form one family entry. The Agent execution
-  backend is an internal route for Z.ai, BigModel, and personal API providers, not a visible
-  catch-all choice. Codex retains its own execution backend and sign-in.
+  **Codex**, **Claude Code**, and each saved personal API provider by its display name. The
+  Agent execution backend is an internal route for Z.ai and personal API providers, not a
+  visible catch-all choice. Codex retains its own execution backend and sign-in.
+- **BigModel-family accounts are excluded from this menu entirely** (2026-09-24 correction):
+  this product line does not route through BigModel, so its accounts must not appear even as
+  a disabled/unavailable entry — showing an unconnected family here is misleading, not merely
+  incomplete. `buildComposerAgentProviderChoices` skips any provider whose resolved family is
+  not `zai`; only the `zai` family is eligible for the family-grouping treatment.
 - The selected provider is derived from the draft's selected model provider id for Agent
   execution, or its Codex execution backend. Choosing a runnable Agent provider selects its
   first eligible model only when the current draft model is outside that provider/family;
   model selection then remains owned by the existing composer draft path. No duplicate
   provider-selection cache or separate execution state is introduced.
-- The model dropdown keeps its existing entries, group labels, badges, and Manage models
-  action. For a draft it shows only models within the selected provider; **Z.ai** keeps
-  Individual and Start Plan as distinct model groups under that one top-level provider.
-  Codex model and effort menus use the same clean, borderless option rows as those Z.ai
-  model groups; the menus retain a bounded scroll area and selected-state indicator.
+- The model dropdown is **scoped to the selected Provider choice only** (2026-09-24
+  correction): it must not also list every other saved provider's models as extra groups or
+  submenus inside the same menu — that duplicates the Provider menu's job and is confusing.
+  `resolveModelSelectScopeProviderIds` maps the current provider id to the set of registry
+  provider ids the model menu may show: the **Z.ai** family expands to its three account ids
+  (so Individual/Start Plan/Team all stay visible as distinct groups under that one top-level
+  provider); any other saved provider (Azure, OpenCode, etc.) maps to just its own id. A
+  single-provider scope always renders as one flat, borderless list (`directItems`), the same
+  visual treatment as Z.ai's Individual/Start Plan groups — never a nested submenu, since
+  there is nothing else in the menu to disambiguate. This scoping applies to the composer's
+  model menu only; Settings' Manage Models, the Subagents picker, and the Workflow run
+  popover keep listing every provider (`buildRegistryModelSelectGroups` treats the new scope
+  parameter as optional and unscoped when omitted). Codex model and effort menus use the same
+  clean, borderless option rows; the menus retain a bounded scroll area and selected-state
+  indicator.
   Existing tasks keep their established execution backend and existing model-switch rules.
 - Saved personal providers appear immediately in the Provider menu. A provider without an
   eligible model is visible but disabled with an Add model explanation; it cannot be selected
@@ -97,7 +111,10 @@ Accepted scenarios: (1) Z.ai selection shows Individual and Start Plan model gro
 (2) adding an Azure or OpenCode provider makes its name appear and its saved models become
 selectable once executable; (3) choosing Codex shows its curated model/effort controls;
 (4) Claude Code and incomplete custom providers are visible but unavailable; (5) opening an
-existing task does not reinterpret its execution backend.
+existing task does not reinterpret its execution backend; (6) BigModel accounts never appear
+in the Provider menu, connected or not; (7) with Azure selected as the Provider, the model
+menu shows only Azure's own models as one flat list — not Z.ai's, Command Code's, or any
+other saved provider's models.
 
 The Agent backend's model picker lists the AceVra plan catalog and selection drives the plan model
 as before. For the Codex backend, the composer renders a dedicated Codex model + effort control

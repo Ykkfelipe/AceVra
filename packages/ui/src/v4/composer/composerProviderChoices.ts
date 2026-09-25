@@ -55,6 +55,9 @@ export function buildComposerAgentProviderChoices(
   for (const provider of settingsView?.providers ?? []) {
     if (provider.effectiveConfig.visibility === "hidden") continue;
     const familyId = resolveModelProviderFamilyIdByProviderId(provider.providerId);
+    // Provider 菜单只启用 Z.ai family；BigModel 等其他 family 账号尚未在本产品线路由，
+    // 不能作为可选/不可选条目出现，否则会跟未接入的账号体系混在一起造成误导。
+    if (familyId && familyId !== "zai") continue;
     if (!familyId && provider.effectiveConfig.group !== "standard-personal") continue;
     include(
       provider.providerId,
@@ -63,6 +66,8 @@ export function buildComposerAgentProviderChoices(
     );
   }
   for (const provider of selectionView?.providers ?? []) {
+    const familyId = resolveModelProviderFamilyIdByProviderId(provider.providerId);
+    if (familyId && familyId !== "zai") continue;
     include(
       provider.providerId,
       provider.providerName?.trim() || provider.providerId,

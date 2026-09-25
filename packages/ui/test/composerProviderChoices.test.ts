@@ -132,6 +132,21 @@ test("a provider outside the standard-personal group without a family is not sur
   );
 });
 
+test("a BigModel-family account never appears in the Provider menu, connected or not", () => {
+  const settings = providerSettingsView([
+    settingsProvider({
+      providerId: BIGMODEL_INDIVIDUAL,
+      models: [{ modelId: "glm-4.6" } as never],
+    }),
+  ]);
+  const selection = selectionView([selectionProvider(BIGMODEL_INDIVIDUAL, ["glm-4.6"])]);
+  const choices = buildComposerAgentProviderChoices(selection, settings);
+  assert.deepEqual(
+    choices.map((choice) => choice.key),
+    ["family:zai"],
+  );
+});
+
 test("a hidden provider is not surfaced even when it is a saved personal provider", () => {
   const settings = providerSettingsView([
     settingsProvider({

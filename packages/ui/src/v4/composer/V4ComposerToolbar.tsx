@@ -78,7 +78,10 @@ import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { logger } from "@/logger.js";
 import { useCodingPlanEntitlements } from "@/settings/model-provider-section/useCodingPlanEntitlements.js";
 import { decodeCustomModelValue, encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
-import { buildRegistryModelSelectGroups } from "@/lib/modelSelectionGroups.js";
+import {
+  buildRegistryModelSelectGroups,
+  resolveModelSelectScopeProviderIds,
+} from "@/lib/modelSelectionGroups.js";
 import {
   buildCodingPlanUsageSources,
   type CodingPlanUsageSource,
@@ -704,33 +707,45 @@ function V4ComposerModelControlsImpl({
     });
   }, [draftMode, effectiveConfig, modelSelectionView?.revision]);
 
+  // Provider 菜单已经决定了这次要走哪个 provider/family；模型菜单只展示那一个
+  // provider（或 Z.ai family 的三个账号分组），不能把其它已保存 provider 的模型
+  // 也混进同一个下拉——那属于 Provider 菜单自己的职责，重复列出会既臃肿又误导。
+  const modelSelectScopeProviderIds = useMemo(
+    () => resolveModelSelectScopeProviderIds(effectiveConfig?.provider),
+    [effectiveConfig?.provider],
+  );
   const modelSelectGroups = useMemo<ModelSelectGroup[]>(() => {
     if (!modelSelectionView) return [];
-    return buildRegistryModelSelectGroups(displayProvider, modelSelectionView, {
-      apiKeyLabel: intl.formatMessage({ id: "settings.modelProvider.apiKey" }),
-      apiKeyBadgeLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.apiKeyBadge",
-      }),
-      codingPlanLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.codingPlan",
-      }),
-      codingPlanBadgeLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.codingPlanBadge",
-      }),
-      startPlanLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.startPlan",
-      }),
-      startPlanBadgeLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.startPlanBadge",
-      }),
-      teamPlanBadgeLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.teamPlanBadge",
-      }),
-      teamPlanFallbackLabel: intl.formatMessage({
-        id: "settings.modelProvider.connectionMode.teamPlan",
-      }),
-    });
-  }, [displayProvider, intl, modelSelectionView]);
+    return buildRegistryModelSelectGroups(
+      displayProvider,
+      modelSelectionView,
+      {
+        apiKeyLabel: intl.formatMessage({ id: "settings.modelProvider.apiKey" }),
+        apiKeyBadgeLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.apiKeyBadge",
+        }),
+        codingPlanLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.codingPlan",
+        }),
+        codingPlanBadgeLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.codingPlanBadge",
+        }),
+        startPlanLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.startPlan",
+        }),
+        startPlanBadgeLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.startPlanBadge",
+        }),
+        teamPlanBadgeLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.teamPlanBadge",
+        }),
+        teamPlanFallbackLabel: intl.formatMessage({
+          id: "settings.modelProvider.connectionMode.teamPlan",
+        }),
+      },
+      modelSelectScopeProviderIds,
+    );
+  }, [displayProvider, intl, modelSelectionView, modelSelectScopeProviderIds]);
 
   // 修复：恢复「管理模型」入口（老版 onManageModels = 打开设置页并定位模型供应商区）。
   const handleOpenModelProviderSettings = useCallback(() => {
