@@ -193,6 +193,7 @@ import type {
 } from "@/v4/conversationRowContext.js";
 import { BackendMigrationSwitchDialog } from "@/v4/BackendMigrationSwitchDialog.js";
 import { formatComposerAgentModelSelection } from "@/v4/composer/composerProviderChoices.js";
+import { resolveComposerCommittedBackend } from "@/v4/composer/composerBackendCommit.js";
 import { useTaskBackendMigration } from "@/v4/useTaskBackendMigration.js";
 import type { AssistantPreviewCardsAutoOpenRequest } from "@/lib/assistantPreviewCards.js";
 import {
@@ -1240,6 +1241,21 @@ export function SessionPane({
     modelSelectionService,
   });
 
+  // 跨后端迁移（Amendment 4）：权威是 Host 持久化 task 行，hook 只读视图 + 发一个写请求。
+  // taskId 用正式 session（草稿态没有可迁移的执行归属）。
+  // 注：此处 isDraft 尚未声明（它等于 sessionId === null），故用同口径局部量。
+  const migrationIsDraft = sessionId === null;
+  const backendMigration = useTaskBackendMigration({
+    taskId: migrationIsDraft ? null : sessionId,
+    workspacePath,
+    ...(workspaceIdentity ? { workspaceIdentity } : {}),
+  });
+  // 已提交布局与打开 live Agent 段的目标选择：草稿 owner 据此在迁移提交后重新投影（Amendment 5）。
+  const committedBackend = useMemo(
+    () => resolveComposerCommittedBackend(backendMigration.view),
+    [backendMigration.view],
+  );
+
   // Composer 保存下一次 Submission 的 renderer intent；prewarm session 仅承载草稿预热。
   const {
     composerDraft,
@@ -1266,6 +1282,7 @@ export function SessionPane({
     sessionConfig: snapshot?.sessionId === sessionId ? snapshot.config : null,
     agentStartupAllowed: draftAgentStartupAllowed,
     modelSelectionService,
+    committedBackend,
   });
   // 执行后端（phase 10）：draft 首发时 ZCode | Codex。回调与首发路径经 ref 读取，
   // 避免逐键重建 dispatchSendTextAfterConfig。
@@ -1316,15 +1333,6 @@ export function SessionPane({
   // 既有会话由 Codex 后端驱动时（snapshot.config.provider=codex），composer 需要：
   // - 放行发送（不依赖 zcode 计划模型选择）；- 渲染 codex 模型/effort 控件。
   const isCodexSession = snapshot?.config.provider === "codex";
-  // 跨后端迁移（Amendment 4）：权威是 Host 持久化 task 行，hook 只读视图 + 发一个写请求。
-  // taskId 用正式 session（草稿态没有可迁移的执行归属）。
-  // 注：此处 isDraft 尚未声明（它等于 sessionId === null），故用同口径局部量。
-  const migrationIsDraft = sessionId === null;
-  const backendMigration = useTaskBackendMigration({
-    taskId: migrationIsDraft ? null : sessionId,
-    workspacePath,
-    ...(workspaceIdentity ? { workspaceIdentity } : {}),
-  });
   const [migrationDialog, setMigrationDialog] = useState<{
     to: ZCodeExecutionBackend;
     from: ZCodeExecutionBackend;

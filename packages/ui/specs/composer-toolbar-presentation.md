@@ -121,6 +121,21 @@ conversation continuing in place; (9) an existing Codex conversation shows no Pr
 all, only its own model/effort controls; (10) a fresh draft still shows every choice including
 Codex, unaffected by either existing-task rule above.
 
+- **A committed backend migration re-projects the existing task's selection** (2026-09-25,
+  [backend-migration.md Amendment 5](../../services/specs/backend-migration.md)): the per-task
+  draft records the committed layout its selection belongs to (`backendLayoutVersion`). When
+  the task's timeline view reports a new committed layout whose live Agent segment was opened
+  with a recorded destination selection, that selection replaces the draft's, once
+  (`applyComposerBackendCommit`, `packages/ui/src/v4/composer/composerBackendCommit.ts`). The
+  Provider label, model label and the next submission all read that one draft selection, so
+  none of them can keep showing or sending the pre-migration provider. Later explicit picks in
+  the same layout stay owned by the draft.
+
+Accepted scenarios (continued): (11) after `Codex → Agent(Azure)` commits, the composer shows
+Azure OpenAI and the committed Azure model without a refresh, even if the draft previously held
+Command Code; (12) that projection survives restart and is not re-applied over a later explicit
+pick.
+
 - Saved personal providers appear immediately in the Provider menu. A provider without an
   eligible model is visible but disabled with an Add model explanation; it cannot be selected
   for chat. A provider that lacks a key or valid endpoint is likewise unavailable until fixed

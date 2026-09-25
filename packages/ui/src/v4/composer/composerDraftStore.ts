@@ -46,6 +46,11 @@ export interface V4ComposerDraft {
   lastPlanTransitionId?: string;
   lastPermissionGrantId?: string;
   modelSelection?: ModelSelection;
+  /**
+   * modelSelection 所属的已提交后端布局（TaskTimelineView.layoutVersion）。布局变化即一次后端迁移
+   * 已提交，草稿按提交的目标选择重新投影一次（backend-migration.md Amendment 5）。
+   */
+  backendLayoutVersion?: number;
   /** 首次分享导入等待公共新任务初始化；不能由空 Session snapshot 抢先填充。 */
   initializeFromNewTask?: true;
   updatedAt: number;
@@ -155,6 +160,11 @@ function readDraft(value: unknown): V4ComposerDraft | null {
       ? { lastPlanTransitionId: value.lastPlanTransitionId }
       : {}),
     ...(modelSelection ? { modelSelection } : {}),
+    ...(typeof value.backendLayoutVersion === "number" &&
+    Number.isInteger(value.backendLayoutVersion) &&
+    value.backendLayoutVersion >= 0
+      ? { backendLayoutVersion: value.backendLayoutVersion }
+      : {}),
     ...(isZCodeExecutionBackend(value.executionBackend)
       ? { executionBackend: value.executionBackend }
       : {}),

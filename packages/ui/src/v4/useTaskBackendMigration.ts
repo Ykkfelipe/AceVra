@@ -23,7 +23,7 @@ export interface TaskBackendMigrationTarget {
 export interface TaskBackendMigrationControl {
   readonly available: boolean;
   readonly view: TaskTimelineView | null;
-  /** 本窗口发起的切换请求在途。 */
+  /** 本窗口发起的切换请求在途，或其已提交结果尚未反映到持久化视图（Amendment 5）。 */
   readonly switching: boolean;
   /** 持久化的在途迁移阶段（任何窗口/设备发起的都算）。 */
   readonly pendingPhase: BackendTransitionPhase | null;
@@ -41,6 +41,11 @@ export function useTaskBackendMigration(
   const service = useBackendMigrationService();
   const [view, setView] = useState<TaskTimelineView | null>(null);
   const [switching, setSwitching] = useState(false);
+  // 本窗口已提交、但视图还没读到的布局版本。按 task 归属，切换会话后自然失效。
+  const [awaitedCommit, setAwaitedCommit] = useState<{
+    readonly taskId: string;
+    readonly layoutVersion: number;
+  } | null>(null);
   const { taskId, workspacePath, workspaceIdentity } = target;
   const requestSeq = useRef(0);
 
@@ -75,13 +80,17 @@ export function useTaskBackendMigration(
       if (!service || !taskId) return null;
       setSwitching(true);
       try {
-        return await service.switchTaskBackend({
+        const result = await service.switchTaskBackend({
           taskId,
           workspacePath,
           ...(workspaceIdentity ? { workspaceIdentity } : {}),
           to,
           ...(toModelSelection ? { toModelSelection } : {}),
         });
+        if (result.outcome === "committed") {
+          setAwaitedCommit({ taskId, layoutVersion: result.layoutVersion });
+        }
+        return result;
       } catch (error) {
         logger.warn(
           `[backend-migration] switch request failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -111,10 +120,18 @@ export function useTaskBackendMigration(
     [service, taskId, workspacePath, workspaceIdentity],
   );
 
+  // 修复：请求返回到视图刷新之间，旧视图既无 pending 也未翻转，composer 会以迁移前的选择短暂解锁。
+  // 提交结果的布局被视图读到之前仍算切换中；视图读取失败（null）不无限锁住 composer。
+  const projectingCommit =
+    awaitedCommit !== null &&
+    awaitedCommit.taskId === taskId &&
+    view !== null &&
+    view.layoutVersion < awaitedCommit.layoutVersion;
+
   return {
     available: Boolean(service && taskId),
     view,
-    switching,
+    switching: switching || projectingCommit,
     pendingPhase: view?.pending?.phase ?? null,
     pendingTo: view?.pending?.to ?? null,
     switchBackend,

@@ -10,23 +10,9 @@ import { TID_V4_ROW, testId } from "@zcode/shared";
 import type { ConversationRow, TimelineMarkerRow } from "@zcode/shared/zcode-protocol-v4";
 import type { ModelSelectionView } from "@zcode/services";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { resolveProviderLabel } from "@/lib/registryProviderView.js";
+import { formatBackendTransitionSwitchedLabel } from "@/v4/backendTransitionMarkerLabel.js";
 
 type BackendTransitionMarker = Extract<TimelineMarkerRow["marker"], { type: "backendTransition" }>;
-
-function useBackendLabel(modelSelectionView: ModelSelectionView | null) {
-  const { intl } = useZCodeIntl();
-  return useCallback(
-    (backend: BackendTransitionMarker["fromBackend"], providerId: string | undefined) => {
-      if (backend === "codex")
-        return intl.formatMessage({ id: "chat.toolbar.backend.codex.label" });
-      const agent = intl.formatMessage({ id: "chat.backendSwitch.agent" });
-      const provider = resolveProviderLabel(providerId, modelSelectionView);
-      return provider ? `${agent} · ${provider}` : agent;
-    },
-    [intl, modelSelectionView],
-  );
-}
 
 function detailText(row: ConversationRow): string | null {
   if (row.kind === "userInput" || row.kind === "assistantText") return row.text;
@@ -45,7 +31,6 @@ export const BackendTransitionMarkerRow = memo(function BackendTransitionMarkerR
   loadHandoffDetails?: (transitionIndex: number) => Promise<ConversationRow[] | null>;
 }) {
   const { intl } = useZCodeIntl();
-  const label = useBackendLabel(modelSelectionView);
   const [expanded, setExpanded] = useState(false);
   const [details, setDetails] = useState<ConversationRow[] | null | "loading">(null);
   const canShowDetails =
@@ -62,13 +47,7 @@ export const BackendTransitionMarkerRow = memo(function BackendTransitionMarkerR
     void loadHandoffDetails(marker.transitionIndex).then((rows) => setDetails(rows ?? []));
   }, [details, expanded, loadHandoffDetails, marker.transitionIndex]);
 
-  const switched = intl.formatMessage(
-    { id: "chat.backendTransition.switched" },
-    {
-      from: label(marker.fromBackend, marker.fromProviderId),
-      to: label(marker.toBackend, marker.toProviderId),
-    },
-  );
+  const switched = formatBackendTransitionSwitchedLabel(marker, modelSelectionView, intl);
 
   return (
     <div

@@ -14,6 +14,10 @@ import {
   type ZCodeExecutionBackend,
 } from "@zcode/shared";
 import { applyComposerPlanTransition } from "@/v4/composer/composerPlanTransition.js";
+import {
+  applyComposerBackendCommit,
+  type ComposerCommittedBackend,
+} from "@/v4/composer/composerBackendCommit.js";
 import type {
   ZCodeConfigOption,
   ModelSelection,
@@ -123,6 +127,11 @@ export function useDraftConfigControl(params: {
   /** provider registry 已通过 renderer readiness 门禁后才允许拉起 Agent。 */
   agentStartupAllowed?: boolean;
   modelSelectionService: IModelSelectionService | null;
+  /**
+   * 已有 task 的已提交后端布局（Host 持久化时间线视图）；null = 未知或不适用。
+   * 布局变化时草稿按提交的目标选择重新投影一次（backend-migration.md Amendment 5）。
+   */
+  committedBackend?: ComposerCommittedBackend | null;
 }): DraftConfigControl {
   const {
     workspacePath,
@@ -132,6 +141,7 @@ export function useDraftConfigControl(params: {
     sessionConfig,
     agentStartupAllowed = true,
     modelSelectionService,
+    committedBackend = null,
   } = params;
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
   const displayProvider = provider ?? ZCODE_AGENT_PROVIDER;
@@ -183,6 +193,8 @@ export function useDraftConfigControl(params: {
     draft = applyComposerPlanTransition(draft, sessionConfig.planTransition);
     draft = applyComposerPermissionGrant(draft, sessionConfig.permissionGrant);
   }
+  // 与工具结果同一模式：已提交迁移是一次性的权威事实，只对已有 task 生效；草稿态没有执行归属。
+  if (sessionId !== null) draft = applyComposerBackendCommit(draft, committedBackend);
   if (draft !== currentState.draft) currentState = { ...currentState, draft };
   if (currentState !== storedState) setStoredState(currentState);
   const stateRef = useRef(currentState);
@@ -308,6 +320,8 @@ export function useDraftConfigControl(params: {
       updateComposerDraft((current) => ({
         ...replacement,
         lastPermissionGrantId: current.lastPermissionGrantId,
+        // 替换的是正文/配置，不是已处理的迁移提交：保留布局，旧快照不能再触发一次重新投影。
+        backendLayoutVersion: current.backendLayoutVersion,
         updatedAt: Date.now(),
       }));
     },
