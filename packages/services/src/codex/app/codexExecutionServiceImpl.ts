@@ -291,10 +291,15 @@ export function createCodexExecutionService(deps: CodexExecutionServiceDeps): {
       };
     },
 
-    async isCodexTask(taskId: string): Promise<boolean> {
-      const runtime = runtimes.get(taskId);
+    async isCodexTask(params: { taskId: string; workspaceIdentity?: string }): Promise<boolean> {
+      const runtime = runtimes.get(params.taskId);
       if (runtime && !runtime.isStale(deps.bridge)) return true;
-      const meta = await deps.taskIndex.getTaskMeta({ taskId });
+      const meta = await deps.taskIndex.getTaskMeta({
+        taskId: params.taskId,
+        ...(params.workspaceIdentity !== undefined
+          ? { workspaceIdentity: params.workspaceIdentity }
+          : {}),
+      });
       return meta?.executionBackend === "codex";
     },
 

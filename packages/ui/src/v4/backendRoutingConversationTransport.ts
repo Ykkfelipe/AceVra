@@ -26,10 +26,11 @@ interface BackendRoutingOptions {
   readonly agent: ConversationTransport;
   /** Codex 执行后端传输；旧 host 未注册时为 null，codex topic 落回 agent 报错。 */
   readonly codex: ConversationTransport | null;
-  /** taskId → 是否 Codex 任务（RPC + 缓存）。 */
-  readonly isCodexTask: (taskId: string) => Promise<boolean>;
+  /** taskId + workspace identity → 是否 Codex 任务（RPC + 缓存）。 */
+  readonly workspaceIdentity?: string;
+  readonly isCodexTask: (params: { taskId: string; workspaceIdentity?: string }) => Promise<boolean>;
   /** 上游判定缓存的失效入口（后端迁移提交后持久化归属已变）。 */
-  readonly invalidateCodexTask?: (taskId: string) => void;
+  readonly invalidateCodexTask?: (params: { taskId: string; workspaceIdentity?: string }) => void;
 }
 
 export function createBackendRoutingConversationTransport(
@@ -40,13 +41,19 @@ export function createBackendRoutingConversationTransport(
 
   async function isCodexSession(sessionId: string): Promise<boolean> {
     if (!options.codex) return false;
-    const cached = cache.get(sessionId);
+    const cacheKey = `${options.workspaceIdentity?.trim() || ""}\u0000${sessionId}`;
+    const cached = cache.get(cacheKey);
     if (cached !== undefined) return cached;
     // 只缓存成功判定的结果：瞬态 RPC 失败不缓存，下次路由重试。归属只在后端迁移提交时
     // 改变，届时由 invalidateRoute 失效（backend-migration.md Amendment 4）。
-    const result = await options.isCodexTask(sessionId).catch(() => undefined);
+    const result = await options.isCodexTask({
+      taskId: sessionId,
+      ...(options.workspaceIdentity !== undefined
+        ? { workspaceIdentity: options.workspaceIdentity }
+        : {}),
+    }).catch(() => undefined);
     if (result === undefined) return false;
-    cache.set(sessionId, result);
+    cache.set(cacheKey, result);
     return result;
   }
 
@@ -59,8 +66,13 @@ export function createBackendRoutingConversationTransport(
 
   return {
     invalidateRoute(sessionId: string): void {
-      cache.delete(sessionId);
-      options.invalidateCodexTask?.(sessionId);
+      cache.delete(`${options.workspaceIdentity?.trim() || ""}\u0000${sessionId}`);
+      options.invalidateCodexTask?.({
+        taskId: sessionId,
+        ...(options.workspaceIdentity !== undefined
+          ? { workspaceIdentity: options.workspaceIdentity }
+          : {}),
+      });
     },
     async subscribe(params: SubscribeParams): Promise<V4ConversationSubscribeResult> {
       const sessionId = parseConversationTopic(params.topic);

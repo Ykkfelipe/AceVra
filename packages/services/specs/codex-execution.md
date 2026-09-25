@@ -49,8 +49,11 @@ SessionPane ── SessionDataLayer ──┐      codex-execution channel
   are stale" and rebuilds them lazily via `thread/resume`.
 - The routing transport lives in the renderer (`packages/ui/src/v4/`), wraps the agent
   transport + codex transport and routes per topic/session. Every routed call is async, so
-  routing resolves codex-ness per call against the codex service (`isCodexTask(taskId)`),
-  with a cache. Frames fan into the existing single `SessionDataLayer` by topic — the data
+  routing resolves codex-ness per scoped task against the codex service
+  (`isCodexTask({ taskId, workspaceIdentity })`), with a cache keyed by that scope. A live
+  Codex runtime remains a fast positive path; after runtime teardown, persisted task metadata
+  is authoritative and must be read with the same workspace identity. Releasing runtime
+  state cannot change backend identity. Frames fan into the existing single `SessionDataLayer` by topic — the data
   layer and stores do not know backends exist.
 - The Codex execution service speaks the v4 conversation contract at its channel boundary:
   `subscribeConversationV4` / `resyncConversationV4` / `unsubscribeConversationV4` /

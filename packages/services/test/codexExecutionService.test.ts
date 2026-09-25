@@ -195,8 +195,8 @@ test("createTask persists the harness task ↔ codex thread binding and starts t
   assert.ok(
     snapshot?.rows.window.some((row) => row.kind === "userInput" && row.text === "fix the bug"),
   );
-  assert.equal(await service.service.isCodexTask(taskId), true);
-  assert.equal(await service.service.isCodexTask("unknown-id"), false);
+  assert.equal(await service.service.isCodexTask({ taskId }), true);
+  assert.equal(await service.service.isCodexTask({ taskId: "unknown-id" }), false);
 });
 
 test("sendText over the v4 envelope maps to turn/start and is acknowledged", async () => {

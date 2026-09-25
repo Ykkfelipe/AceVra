@@ -162,10 +162,14 @@ function releaseEntry(entry: RegistryEntry): void {
 }
 
 /** registry 内按连接缓存的 Codex 归属判定（taskId → 是否 codex，RPC + 永久缓存）。 */
+interface CodexTaskIdentity {
+  taskId: string;
+  workspaceIdentity?: string;
+}
 interface CodexTaskPredicate {
-  (taskId: string): Promise<boolean>;
+  (identity: CodexTaskIdentity): Promise<boolean>;
   /** 后端迁移提交后失效该 task 的判定。 */
-  invalidate(taskId: string): void;
+  invalidate(identity: CodexTaskIdentity): void;
 }
 const codexTaskBindingCaches = new WeakMap<ICodexExecutionService, CodexTaskPredicate>();
 
@@ -173,18 +177,21 @@ function resolveCodexTaskPredicate(codexService: ICodexExecutionService): CodexT
   const existing = codexTaskBindingCaches.get(codexService);
   if (existing) return existing;
   const cache = new Map<string, boolean>();
-  const predicate = async (taskId: string): Promise<boolean> => {
-    const cached = cache.get(taskId);
+  const cacheKey = (identity: CodexTaskIdentity) =>
+    `${identity.workspaceIdentity?.trim() || ""}\u0000${identity.taskId}`;
+  const predicate = async (identity: CodexTaskIdentity): Promise<boolean> => {
+    const key = cacheKey(identity);
+    const cached = cache.get(key);
     if (cached !== undefined) return cached;
     // 只缓存成功判定；瞬态 RPC 失败不缓存，避免把 Codex 任务永久钉在 agent 传输上。
-    const result = await codexService.isCodexTask(taskId).catch(() => undefined);
+    const result = await codexService.isCodexTask(identity).catch(() => undefined);
     if (result === undefined) return false;
-    cache.set(taskId, result);
+    cache.set(key, result);
     return result;
   };
   const withInvalidate = Object.assign(predicate, {
-    invalidate: (taskId: string) => {
-      cache.delete(taskId);
+    invalidate: (identity: CodexTaskIdentity) => {
+      cache.delete(cacheKey(identity));
     },
   });
   codexTaskBindingCaches.set(codexService, withInvalidate);
@@ -212,8 +219,9 @@ function createRoutedConversationTransport(params: {
   return createBackendRoutingConversationTransport({
     agent: agentTransport,
     codex: codexTransport,
+    ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
     isCodexTask,
-    invalidateCodexTask: (taskId) => isCodexTask.invalidate(taskId),
+    invalidateCodexTask: (identity) => isCodexTask.invalidate(identity),
   });
 }
 

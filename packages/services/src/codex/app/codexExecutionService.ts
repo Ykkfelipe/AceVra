@@ -50,8 +50,8 @@ export interface ICodexExecutionService {
   readTask(params: CodexExecutionReadTaskParams): Promise<CodexTaskThreadInfo | null>;
   /** Codex 任务清单（脱敏绑定信息）；携带 workspace 时按 workspaceKey 收敛。 */
   listTasks(params?: CodexExecutionListTasksParams): Promise<CodexExecutionListTasksResult>;
-  /** 路由判定：taskId 是否由 Codex 后端驱动。 */
-  isCodexTask(taskId: string): Promise<boolean>;
+  /** 路由判定：按规范 workspace identity + taskId 查询持久化后端归属。 */
+  isCodexTask(params: { taskId: string; workspaceIdentity?: string }): Promise<boolean>;
   /** v4 订阅；initial frame 在 ACK 之后经 onDynamicConversationFrame 投递。 */
   subscribeConversationV4(params: SubscribeParams): Promise<V4ConversationSubscribeResult>;
   /** 活跃订阅恢复；forceSnapshot 时重新下发全量快照。 */
