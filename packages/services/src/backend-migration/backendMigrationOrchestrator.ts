@@ -81,6 +81,11 @@ export async function migrateBackend(
   let pending = beginBackendTransition({
     to: request.to,
     ...(request.toProviderId === undefined ? {} : { toProviderId: request.toProviderId }),
+    // 修复（Amendment 5）：完整目标选择随记录持久化，composer 在提交后据此重新投影；否则已有
+    // task 的草稿继续持有迁移前 provider，下一轮提交会把 runtime 改回旧 provider。
+    ...(request.toModelSelection === undefined
+      ? {}
+      : { toModelSelection: request.toModelSelection }),
     requestedAt,
     compacted: false,
     ownerInstanceId: deps.ownerInstanceId,

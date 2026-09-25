@@ -76,6 +76,12 @@ export interface BackendTransitionRecord {
   readonly to: ZCodeExecutionBackend;
   readonly fromProviderId?: string;
   readonly toProviderId?: string;
+  /**
+   * 进入 zcode 时：提交写入的完整模型选择（picker 值，含 reasoning level）。composer 在布局变化时
+   * 据此重新投影已有 task 的 Agent 选择（Amendment 5）；不能用 meta.model 代替——同步写入的值会丢掉
+   * reasoning level，而 Azure 等 provider 必须带它。
+   */
+  readonly toModelSelection?: string;
   readonly sourceExecutionRef?: string;
   readonly destinationExecutionRef?: string;
   readonly status: BackendTransitionStatus;
@@ -104,6 +110,7 @@ export const backendTransitionRecordSchema = z.object({
   to: zcodeExecutionBackendSchema,
   fromProviderId: z.string().optional(),
   toProviderId: z.string().optional(),
+  toModelSelection: z.string().optional(),
   sourceExecutionRef: z.string().optional(),
   destinationExecutionRef: z.string().optional(),
   status: backendTransitionStatusSchema,
@@ -125,6 +132,8 @@ export interface PendingBackendTransition {
   readonly phase: BackendTransitionPhase;
   readonly to: ZCodeExecutionBackend;
   readonly toProviderId?: string;
+  /** 与 BackendTransitionRecord.toModelSelection 同义；begin 时写入，commit/fail 时原样进入记录。 */
+  readonly toModelSelection?: string;
   readonly requestedAt: number;
   readonly transcriptRevision?: string;
   readonly compacted?: boolean;
@@ -145,6 +154,7 @@ export const pendingBackendTransitionSchema = z.object({
   phase: backendTransitionPhaseSchema,
   to: zcodeExecutionBackendSchema,
   toProviderId: z.string().optional(),
+  toModelSelection: z.string().optional(),
   requestedAt: z.number().int().nonnegative(),
   transcriptRevision: z.string().optional(),
   compacted: z.boolean().optional(),
@@ -199,6 +209,8 @@ export interface BackendTransitionView {
   readonly to: ZCodeExecutionBackend;
   readonly fromProviderId?: string;
   readonly toProviderId?: string;
+  /** 进入 zcode 时提交的完整模型选择（picker 值）；composer 重新投影的唯一来源。 */
+  readonly toModelSelection?: string;
   readonly status: BackendTransitionStatus;
   readonly failureReason?: string;
   readonly startedAt: number;
@@ -298,6 +310,7 @@ export function toBackendTransitionView(
     to: record.to,
     ...(record.fromProviderId === undefined ? {} : { fromProviderId: record.fromProviderId }),
     ...(record.toProviderId === undefined ? {} : { toProviderId: record.toProviderId }),
+    ...(record.toModelSelection === undefined ? {} : { toModelSelection: record.toModelSelection }),
     status: record.status,
     ...(record.failureReason === undefined ? {} : { failureReason: record.failureReason }),
     startedAt: record.startedAt,

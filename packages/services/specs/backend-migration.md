@@ -673,3 +673,92 @@ draft and re-enables send when the transition resolves.
 - **Marker details.** "Show handoff details" is only offered on a committed Agent→Codex marker
   that recorded a handoff turn, and loads the real handoff request/acknowledgement by Codex turn
   id. It is never keyed by UI row ids.
+
+## Amendment 5 (2026-09-25): the committed destination selection owns the next turn
+
+### Defect and evidence
+
+Live chain `Agent(Command Code) → Codex → Agent(Azure) → Codex` on one task. After the
+`Codex → Agent(Azure)` commit the composer still showed `Command Code / gpt-5.6-sol`, and the
+next `Agent → Codex` marker read `Agent · Command Code → Codex`. The persisted rows show this was
+not only presentation:
+
+- The committed `zcode → codex` record itself stores `fromProviderId: "command-code"`; the marker
+  renders the record faithfully.
+- The CLI's `model_usage` for the only post-commit Agent turn is `command-code/gpt-5.6-sol`, and
+  the session's `runtime/model_selection` entry was rewritten to Command Code at that send. The
+  commit's `setModel(azure)` was overwritten by the turn's own submission selection.
+- The handoff seed message is stamped with the session model current at seed time
+  (Command Code), because seeding precedes `setModel`.
+
+### Root cause (one source, two carriers)
+
+The pre-migration Agent selection outlived the commit in two places, and both flow into
+`meta.model`, which is where the next transition's `fromProviderId` is read:
+
+1. **Composer draft (UI).** An existing task's composer selection is the per-task
+   `V4ComposerDraft.modelSelection`, seeded once from the session and afterwards owned by the
+   draft. No path re-seeded it when a migration committed, so the next submission carried the
+   pre-migration selection. The runtime applies the submission's selection, so the turn ran on
+   the old provider, and the task-meta sync then recorded that provider.
+2. **Seed attribution (CLI).** The seed message carried the pre-migration session model.
+   Task-meta sync prefers the latest message's model, so even with no send the task row could
+   regress to the old provider until a real destination turn existed.
+
+### Decisions
+
+- **The committed record carries the full destination selection.** `PendingBackendTransition`
+  and `BackendTransitionRecord` gain `toModelSelection` (picker string, reasoning level
+  included) for `zcode` destinations, written at `begin` and copied into the record at commit or
+  failure, exactly like `toProviderId`. `BackendTransitionView` exposes it. `meta.model` is not
+  used for this: synced values drop the reasoning level, which Azure requires.
+- **The draft re-projects once per committed layout.** `V4ComposerDraft` gains
+  `backendLayoutVersion`, the committed layout its selection belongs to. When the task's
+  timeline view reports a different `layoutVersion`, the draft owner adopts the new layout: if
+  the live segment is an Agent segment opened by a record with `toModelSelection`, that
+  selection replaces the draft selection; otherwise only the layout is recorded. A draft with no
+  recorded layout adopts the current one without replacing its selection (it was seeded from
+  the current session). Same owner and write path as plan transitions and permission grants: a
+  one-time authoritative fact applied to the draft, keyed so repeated snapshots never re-apply
+  it. No new store, no second backend mutation.
+- **The seed is attributed to the destination.** `session/seedBackendHandoff` accepts an optional
+  `model` (the destination selection); the CLI stamps the seed with it and falls back to the
+  current session model only when absent.
+- **No re-enable on a stale projection.** `switching` stays true until the post-switch timeline
+  view has been read, so the composer never unlocks between a commit and its projection.
+- `fromProviderId` stays sourced from `meta.model` at `begin`. With both carriers fixed,
+  `meta.model` is the destination selection after commit and the provider of the last real turn
+  afterwards.
+
+```mermaid
+sequenceDiagram
+  participant UI as Composer draft owner
+  participant H as Host migration service
+  participant T as tasks-index row
+  participant C as zcode-cli session
+  UI->>H: switchTaskBackend(zcode, "azure-openai/gpt-5-mini$low")
+  H->>T: begin pending{to:zcode, toProviderId, toModelSelection}
+  H->>C: seedBackendHandoff(model = destination selection)
+  H->>C: setModel(destination selection)
+  H->>T: commit: executionBackend=zcode, model, record{toModelSelection}
+  H-->>UI: TaskBackendChanged → timeline view (layoutVersion N+1)
+  UI->>UI: draft.layout N ≠ N+1 → selection := record.toModelSelection
+  Note over UI: switching stays true until this view is read
+  UI->>C: next turn submits the Azure selection (runtime stays Azure)
+  C->>T: task-meta sync: model = Azure (seed and turn both Azure)
+  UI->>H: later switchTaskBackend(codex) → record.fromProviderId = azure-openai
+```
+
+### Acceptance
+
+1. `Agent(Command Code) → Codex → Agent(Azure)`: after commit the record, the view and the
+   composer all resolve `azure-openai/gpt-5-mini$low`; nothing shows Command Code.
+2. A draft deliberately holding Command Code on the migrated task resolves to Azure once the
+   committed view is observed.
+3. Restart after `Codex → Agent(Azure)`: the persisted draft carries the new layout and still
+   shows Azure; repeated snapshots do not re-apply or revert it.
+4. Provider-only switching inside Agent is unchanged: a later explicit pick in the same layout
+   is kept, including across restart.
+5. The seed of a `Codex → Agent(Azure)` migration is attributed to Azure, so a task-meta sync
+   before the first real Azure turn keeps `meta.model` on Azure, and the next `Agent → Codex`
+   record says `fromProviderId: "azure-openai"`.

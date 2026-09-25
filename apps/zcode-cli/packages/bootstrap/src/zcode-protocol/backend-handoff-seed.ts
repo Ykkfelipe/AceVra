@@ -43,14 +43,17 @@ export async function seedBackendHandoff(
   const store = requireSessionStore(context);
   const messageID = seedMessageId(params.sessionId, params.seedId);
   const createdAt = Date.now();
-  const currentModel = optionalModelSelectionFromString(record.app.getModel());
+  // 修复：种子写在 setModel 之前，会话当前模型仍是迁移前的 provider。task meta 同步取最新消息的
+  // 模型，旧标注会让任务行回退成旧 provider（下一次迁移的 fromProviderId 随之错误）。种子属于目标
+  // Agent 段，按 host 给出的目标选择标注；旧 host 不传时才沿用当前模型。
+  const seedModel = params.model ?? optionalModelSelectionFromString(record.app.getModel());
   await store.saveMessage({
     id: messageID,
     sessionID: record.app.sessionId,
     role: "user",
     time: { created: createdAt },
     agent: "zcode-agent",
-    ...(currentModel ? { modelSelection: currentModel } : {}),
+    ...(seedModel ? { modelSelection: seedModel } : {}),
     synthetic: true,
     source: "backend_handoff",
     visibility: "model-only",

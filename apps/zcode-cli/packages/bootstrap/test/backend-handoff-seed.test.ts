@@ -106,6 +106,38 @@ test("seed is a deterministic model-only synthetic message and the runtime is re
   assert.equal(f.resumes, 2, "runtime history rebuilt from the store after each write");
 });
 
+test("the seed is attributed to the migration destination, not the pre-migration session model", async () => {
+  // 种子写在 setModel 之前：会话当前模型仍是迁移前的 Command Code。task meta 同步取最新消息的
+  // 模型，所以种子必须按 host 给出的目标选择标注（backend-migration.md Amendment 5）。
+  const f = createFakeContext();
+  f.record.app.getModel = () => "command-code/gpt-5.6-sol";
+  await seedBackendHandoff(f.context, {
+    sessionId: SESSION_ID,
+    seedId: "rev-1",
+    text: SEED_TEXT,
+    model: {
+      providerId: "azure-openai",
+      modelId: "gpt-5-mini",
+      options: { reasoningLevel: "low" },
+    },
+  });
+  assert.deepEqual(f.stored()[0]!.info.modelSelection, {
+    providerId: "azure-openai",
+    modelId: "gpt-5-mini",
+    options: { reasoningLevel: "low" },
+  });
+
+  // 旧 host 不传目标选择：沿用会话当前模型（兼容路径）。
+  const legacy = createFakeContext();
+  legacy.record.app.getModel = () => "command-code/gpt-5.6-sol";
+  await seedBackendHandoff(legacy.context, {
+    sessionId: SESSION_ID,
+    seedId: "rev-1",
+    text: SEED_TEXT,
+  });
+  assert.equal(legacy.stored()[0]!.info.modelSelection?.providerId, "command-code");
+});
+
 test("the seed is never a visible transcript row (shared projection policy)", async () => {
   const f = createFakeContext();
   await seedBackendHandoff(f.context, { sessionId: SESSION_ID, seedId: "rev-1", text: SEED_TEXT });

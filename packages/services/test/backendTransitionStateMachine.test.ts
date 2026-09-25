@@ -239,3 +239,35 @@ test("recoverPendingBackendTransitionOnLoad treats every resting phase as a fail
     assert.equal(result!.transitionRecord.to, "codex");
   }
 });
+
+test("the full destination selection travels from begin into the committed and failed records", () => {
+  // Amendment 5：composer 在提交后只从记录重新投影，reasoning level 必须原样保留。
+  let pending = beginBackendTransition({
+    to: "zcode",
+    toProviderId: "azure-openai",
+    toModelSelection: "azure-openai/gpt-5-mini$low",
+    requestedAt: 1000,
+    compacted: false,
+  });
+  assert.equal(pending.toModelSelection, "azure-openai/gpt-5-mini$low");
+  pending = advanceBackendTransitionPhase(pending, "destinationCreated", {
+    destinationSeedLastRowId: 9,
+  });
+  pending = advanceBackendTransitionPhase(pending, "handoffRunning");
+  pending = advanceBackendTransitionPhase(pending, "readyToCommit");
+  const { transitionRecord } = commitBackendTransition({
+    pending,
+    from: "codex",
+    committedAt: 2000,
+  });
+  assert.equal(transitionRecord.toProviderId, "azure-openai");
+  assert.equal(transitionRecord.toModelSelection, "azure-openai/gpt-5-mini$low");
+
+  const failed = failBackendTransition({
+    pending,
+    from: "codex",
+    failureReason: "destination_not_ready",
+    failedAt: 2000,
+  }).transitionRecord;
+  assert.equal(failed.toModelSelection, "azure-openai/gpt-5-mini$low");
+});

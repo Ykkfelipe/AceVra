@@ -192,7 +192,14 @@ function createFakeCodexAppServer() {
 function createFakeZCodeAgent() {
   const sessions = new Map<
     string,
-    { rows: ConversationRow[]; seeds: Map<string, string>; model: string | null; nextRowId: number }
+    {
+      rows: ConversationRow[];
+      seeds: Map<string, string>;
+      model: string | null;
+      nextRowId: number;
+      /** 与 CLI 一致：每条持久化消息（真实轮次与种子）都标注模型；task meta 同步取最新一条。 */
+      messageModels: string[];
+    }
   >();
   const faults = { createSession: false, resumeSession: false };
   const session = (id: string) => {
@@ -231,7 +238,13 @@ function createFakeZCodeAgent() {
     },
     async createSession(params) {
       if (faults.createSession) throw new Error("zcode-cli failed to create session");
-      sessions.set(params.sessionId!, { rows: [], seeds: new Map(), model: null, nextRowId: 1 });
+      sessions.set(params.sessionId!, {
+        rows: [],
+        seeds: new Map(),
+        model: null,
+        nextRowId: 1,
+        messageModels: [],
+      });
       return {} as never;
     },
     async setModel(params) {
@@ -239,8 +252,12 @@ function createFakeZCodeAgent() {
       return {} as never;
     },
     async seedBackendHandoff(params) {
-      // 与 CLI 一致：model-only，不产生任何可见行。
-      session(params.sessionId).seeds.set(params.seedId, params.text);
+      // 与 CLI 一致：model-only，不产生任何可见行；种子消息按 host 给出的目标选择标注，
+      // 缺省时才沿用会话当前模型（CLI backend-handoff-seed.ts）。
+      const s = session(params.sessionId);
+      s.seeds.set(params.seedId, params.text);
+      const stamped = params.model ? `${params.model.providerId}/${params.model.modelId}` : s.model;
+      if (stamped) s.messageModels.push(stamped);
       return { messageId: `seed-${params.seedId}` };
     },
     async removeBackendHandoffSeed(params) {
@@ -255,12 +272,18 @@ function createFakeZCodeAgent() {
     sessions,
     faults,
     create(id: string, model: string) {
-      sessions.set(id, { rows: [], seeds: new Map(), model, nextRowId: 1 });
+      sessions.set(id, { rows: [], seeds: new Map(), model, nextRowId: 1, messageModels: [] });
+    },
+    /** zcodeTaskIndexSyncer 的模型口径：最新消息的模型优先，其次会话当前模型。 */
+    snapshotModel(id: string): string | null {
+      const s = session(id);
+      return s.messageModels.at(-1) ?? s.model;
     },
     /** 一次真实 Agent 轮：用户行 + 由上下文（含种子）计算出的助手回复。 */
     userTurn(id: string, text: string): string {
       const s = session(id);
       const at = s.nextRowId;
+      if (s.model) s.messageModels.push(s.model);
       s.rows.push({
         rowId: s.nextRowId++,
         turnId: `z-${at}`,
@@ -337,6 +360,14 @@ async function createWorld(dbPath: string) {
     },
     meta: async (): Promise<ZCodeTaskMeta> =>
       (await host.repo.getTaskMeta({ workspacePath: WORKSPACE, taskId: TASK_ID }))!,
+    /** Host 的 zcode 快照同步（resume/setModel/轮次事件都会触发）：task 行 model 取自快照。 */
+    async syncMetaFromAgentSnapshot(): Promise<void> {
+      const current = (await host.repo.getTaskMeta({ workspacePath: WORKSPACE, taskId: TASK_ID }))!;
+      const model = zcode.snapshotModel(TASK_ID);
+      await host.repo.syncTaskMeta({
+        meta: { ...current, ...(model ? { model } : {}), updatedAt: current.updatedAt + 1 },
+      });
+    },
     async codexUserTurn(text: string): Promise<string> {
       await host.codex.service.sendTurn({ taskId: TASK_ID, content: text });
       await codexServer.settle();
@@ -536,6 +567,95 @@ test("full chain Z.ai → Command Code → Codex → Azure → Codex transfers r
       details!.rows.some(
         (row) => row.kind === "assistantText" && row.text.includes("ACEVRA_HANDOFF_READY"),
       ),
+    );
+  });
+});
+
+test("Agent/Command Code → Codex → Agent/Azure → Codex: the committed Azure selection is the next transition's source", async () => {
+  // 线上缺陷复现（Amendment 5）：Codex → Azure 提交后，种子仍按迁移前的 Command Code 标注，
+  // 快照同步（最新消息模型优先）把任务行冲回 Command Code，下一次迁移记下错误的来源 provider。
+  const AZURE_SELECTION = "azure-openai/gpt-5-mini$low";
+  await withWorld(async (world) => {
+    world.zcode.create(TASK_ID, "command-code/gpt-5.6-sol");
+    await world.host.repo.syncTaskMeta({
+      meta: {
+        taskId: TASK_ID,
+        traceId: "trace-e2e",
+        workspacePath: WORKSPACE,
+        title: "Stale projection proof",
+        mode: "build",
+        createdAt: 1,
+        updatedAt: 1,
+        provider: "glm",
+        model: "command-code/gpt-5.6-sol",
+        status: "completed",
+      },
+    });
+    world.zcode.userTurn(TASK_ID, "The internal migration codename is ORANGE-RAVEN-41.");
+
+    const toCodex = await world.host.scoped.switchTaskBackend({ ...TARGET, to: "codex" });
+    assert.equal(toCodex.outcome, "committed");
+    assert.equal((await world.meta()).backendTransitions?.[0]?.fromProviderId, "command-code");
+    await world.codexUserTurn("Also note the Codex-only marker is CEDAR-19.");
+
+    const toAzure = await world.host.scoped.switchTaskBackend({
+      ...TARGET,
+      to: "zcode",
+      toModelSelection: AZURE_SELECTION,
+    });
+    assert.equal(toAzure.outcome, "committed");
+    assert.equal(
+      toAzure.outcome === "committed" ? toAzure.transition.toModelSelection : undefined,
+      AZURE_SELECTION,
+    );
+    const afterAzure = await world.meta();
+    assert.equal(afterAzure.executionBackend, "zcode", "authoritative backend = Agent");
+    assert.equal(afterAzure.model, AZURE_SELECTION, "task row carries the full Azure selection");
+    assert.equal(afterAzure.backendTransitions?.[1]?.toProviderId, "azure-openai");
+    assert.equal(afterAzure.backendTransitions?.[1]?.toModelSelection, AZURE_SELECTION);
+    assert.equal(world.zcode.sessions.get(TASK_ID)!.model, "azure-openai/gpt-5-mini");
+
+    // UI 读取的持久化视图：live Agent 段由这条提交打开，并带着完整目标选择（composer 的唯一来源）。
+    const view = (await world.host.scoped.getTaskTimeline(TARGET))!;
+    const live = view.segments.find((segment) => segment.live)!;
+    assert.equal(live.backend, "zcode");
+    assert.equal(
+      view.transitions[live.openedByTransitionIndex!]?.toModelSelection,
+      AZURE_SELECTION,
+    );
+
+    // 种子归属 Azure：Azure 首轮之前的快照同步也不会把任务行冲回 Command Code。
+    await world.syncMetaFromAgentSnapshot();
+    assert.equal((await world.meta()).model, "azure-openai/gpt-5-mini");
+    const azureAnswer = world.zcode.userTurn(TASK_ID, "The final validation token is MAPLE-73.");
+    assert.match(azureAnswer, /CEDAR-19/, "Azure answers from the transferred context");
+    await world.syncMetaFromAgentSnapshot();
+
+    // 重启：持久化的提交仍给出 Azure 选择，任务行仍是 Azure。
+    world.restart();
+    const restartedView = (await world.host.scoped.getTaskTimeline(TARGET))!;
+    assert.equal(restartedView.transitions[1]?.toModelSelection, AZURE_SELECTION);
+    assert.equal((await world.meta()).model, "azure-openai/gpt-5-mini");
+
+    const toCodexAgain = await world.host.scoped.switchTaskBackend({ ...TARGET, to: "codex" });
+    assert.equal(toCodexAgain.outcome, "committed");
+    const record = (await world.meta()).backendTransitions?.[2];
+    assert.equal(record?.from, "zcode");
+    assert.equal(
+      record?.fromProviderId,
+      "azure-openai",
+      "source provider is Azure, not Command Code",
+    );
+    const markers = (await world.renderTimeline()).flatMap((row) =>
+      row.kind === "timelineMarker" && row.marker.type === "backendTransition" ? [row.marker] : [],
+    );
+    assert.deepEqual(
+      markers.map((marker) => [marker.fromProviderId ?? null, marker.toBackend]),
+      [
+        ["command-code", "codex"],
+        [null, "zcode"],
+        ["azure-openai", "codex"],
+      ],
     );
   });
 });

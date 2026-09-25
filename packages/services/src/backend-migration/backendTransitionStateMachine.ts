@@ -54,6 +54,8 @@ export function assertCanStartBackendTransition(
 export interface BeginBackendTransitionParams {
   readonly to: ZCodeExecutionBackend;
   readonly toProviderId?: string;
+  /** 迁往 zcode 时的完整目标模型选择（picker 值）；随 pending 落盘并进入时间线记录（Amendment 5）。 */
+  readonly toModelSelection?: string;
   readonly requestedAt: number;
   readonly transcriptRevision?: string;
   readonly compacted: boolean;
@@ -68,6 +70,7 @@ export function beginBackendTransition(
     phase: "prepared",
     to: params.to,
     ...(params.toProviderId === undefined ? {} : { toProviderId: params.toProviderId }),
+    ...(params.toModelSelection === undefined ? {} : { toModelSelection: params.toModelSelection }),
     requestedAt: params.requestedAt,
     ...(params.transcriptRevision === undefined
       ? {}
@@ -79,6 +82,7 @@ export function beginBackendTransition(
 
 /** 随阶段落盘、commit/fail 时原样进入时间线记录的事实字段（不含 phase/owner 等控制字段）。 */
 type PendingTransitionFactKey =
+  | "toModelSelection"
   | "destinationExecutionRef"
   | "handoffTurnId"
   | "sourceFirstRowId"
@@ -86,6 +90,7 @@ type PendingTransitionFactKey =
   | "destinationSeedLastRowId";
 
 const PENDING_TRANSITION_FACT_KEYS: readonly PendingTransitionFactKey[] = [
+  "toModelSelection",
   "destinationExecutionRef",
   "handoffTurnId",
   "sourceFirstRowId",

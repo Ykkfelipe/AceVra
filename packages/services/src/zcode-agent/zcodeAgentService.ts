@@ -4476,7 +4476,12 @@ export function createZCodeAgentService(
       });
       return client.request(
         zcodeProtocolMethods.sessionSeedBackendHandoff,
-        { sessionId: params.sessionId, seedId: params.seedId, text: params.text },
+        {
+          sessionId: params.sessionId,
+          seedId: params.seedId,
+          text: params.text,
+          ...(params.model ? { model: params.model } : {}),
+        },
         zcodeSessionSeedBackendHandoffResultSchema,
       );
     },

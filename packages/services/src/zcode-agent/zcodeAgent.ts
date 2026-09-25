@@ -699,7 +699,12 @@ export interface IZCodeAgentService {
    * （backend-migration.md Amendment 4）。seedId 相同 = 幂等；只由 backend-migration 服务调用。
    */
   seedBackendHandoff(
-    params: ZCodeAgentSessionTarget & { seedId: string; text: string },
+    params: ZCodeAgentSessionTarget & {
+      seedId: string;
+      text: string;
+      /** 迁移目标选择：种子按它标注模型，task meta 同步不会回退成迁移前 provider。 */
+      model?: ModelSelection;
+    },
   ): Promise<{ messageId: string }>;
   /** 失败迁移的回滚：删除同一 seedId 的种子并重建 runtime。 */
   removeBackendHandoffSeed(

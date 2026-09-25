@@ -1600,6 +1600,11 @@ export const zcodeSessionSeedBackendHandoffParamsSchema = z
     sessionId: nonEmptyString,
     seedId: nonEmptyString,
     text: z.string().min(1),
+    /**
+     * 迁移目标的完整模型选择：种子归属目标 Agent 段，按它标注消息模型（Amendment 5）。
+     * 缺省时沿用会话当前模型——那是迁移前的 provider，task meta 同步会据此回退。
+     */
+    model: modelSelectionSchema.optional(),
   })
   .strict();
 export type ZCodeSessionSeedBackendHandoffParams = z.infer<

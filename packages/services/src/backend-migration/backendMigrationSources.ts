@@ -164,6 +164,8 @@ export function createZCodeDestination(params: {
         sessionId: taskId,
         seedId: params.seedId,
         text: renderAgentSeedText(transcript),
+        // 种子写在 setModel 之前：显式按目标选择标注，避免任务行按种子回退成旧 provider（Amendment 5）。
+        model: model(),
       });
       const tail = await params.agent.conversationRowsRangeV4({
         ...base,
