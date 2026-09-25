@@ -15,9 +15,9 @@
 #     extendedKeyUsage = codeSigning, 10 year validity
 #   * a DEDICATED keychain file at $CUA_SIGNING_DIR/acevra-cua-dev.keychain-db
 #   * the keychain password in $CUA_SIGNING_DIR/keychain-password (mode 0600)
-# It does NOT touch the login keychain, does NOT add any system/user trust setting, and
-# does NOT modify any other signing identity. Everything lives inside the isolated
-# AceVra integration CUA namespace and is removed by deleting that directory.
+# It does NOT touch the login keychain or the admin/system trust store. It adds a user-domain
+# codeSign trust setting for this self-signed certificate so macOS recognizes the pair as a
+# usable identity. Everything else lives inside the isolated AceVra integration CUA namespace.
 #
 # Re-running is idempotent: an existing keychain with the identity is reused.
 #
@@ -32,17 +32,29 @@ IDENTITY_CN="AceVra CUA Dev Signing"
 FORCE=0
 [[ "${1:-}" == "--force" ]] && FORCE=1
 
+assert_expected_identity() {
+  local output count
+  output="$(security find-identity -v -p codesigning "$KEYCHAIN")"
+  printf '%s\n' "$output" | sed 's/^/  /'
+  count="$(printf '%s\n' "$output" | sed -nE 's/^[[:space:]]*([0-9]+) valid identities found$/\1/p' | tail -n 1)"
+  # 修复依据：该命令在零个身份时仍返回成功状态，必须检查身份数量和预期名称。
+  if [[ "$count" != "1" ]] || ! printf '%s\n' "$output" | grep -Fq "$IDENTITY_CN"; then
+    echo "error: expected exactly one valid '$IDENTITY_CN' identity in $KEYCHAIN; found ${count:-unknown}" >&2
+    return 1
+  fi
+}
+
 mkdir -p "$SIGNING_DIR"
 chmod 700 "$SIGNING_DIR"
 
-if [[ -f "$KEYCHAIN" && $FORCE -eq 0 ]] && security find-identity -p codesigning "$KEYCHAIN" 2>/dev/null | grep -q "$IDENTITY_CN"; then
+if [[ -f "$KEYCHAIN" && $FORCE -eq 0 ]]; then
   # Unlock on the reuse path too: the keychain auto-locks after 6h or on sleep, and
   # codesign cannot unlock it non-interactively, so a build after a reboot would fail.
   if [[ -f "$PASSWORD_FILE" ]]; then
-    security unlock-keychain -p "$(cat "$PASSWORD_FILE")" "$KEYCHAIN" || true
+    security unlock-keychain -p "$(cat "$PASSWORD_FILE")" "$KEYCHAIN"
   fi
+  assert_expected_identity
   echo "identity already present in $KEYCHAIN; nothing to do"
-  security find-identity -v -p codesigning "$KEYCHAIN" | sed 's/^/  /' || true
   exit 0
 fi
 
@@ -80,6 +92,10 @@ security unlock-keychain -p "$PW" "$KEYCHAIN"
 security import "$TMP/id.p12" -k "$KEYCHAIN" -P "$PW" -T /usr/bin/codesign >/dev/null
 # Required on current macOS so codesign can use the key non-interactively.
 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PW" "$KEYCHAIN" >/dev/null
+# A self-signed certificate is not considered a valid code-signing identity until it is
+# trusted for the codeSign policy. This writes only the current user's trust setting.
+# 修复依据：实测证书与私钥已配对，但缺少此用户级策略信任时 find-identity 返回零。
+security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN" "$TMP/cert.pem" >/dev/null
 
 echo "created: $KEYCHAIN"
-security find-identity -v -p codesigning "$KEYCHAIN" | sed 's/^/  /'
+assert_expected_identity

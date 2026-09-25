@@ -340,9 +340,12 @@ rebuild produces a new cdhash and the grant is lost. Therefore:
 
 - **Development** uses a dedicated self-signed certificate (`AceVra CUA Dev Signing`) created
   by `signing/create-dev-signing-identity.sh` in a dedicated keychain under the isolated CUA
-  namespace. The certificate is deliberately **not** trusted system-wide (no user trust
-  settings are written) — `codesign` signs with it regardless, and TCC honours the resulting
-  requirement. `spctl` will reject the bundle, which affects distribution, not TCC.
+  namespace. The certificate is trusted for the `codeSign` policy in the current user's trust
+  settings (never the admin/system trust store), so `security find-identity -v -p codesigning`
+  reports the intended identity as usable. `codesign` signs with its stable certificate-root
+  requirement, which TCC honours. `spctl` will reject the bundle, which affects distribution,
+  not TCC. Identity creation fails unless the dedicated keychain contains exactly one valid
+  `AceVra CUA Dev Signing` identity after import and trust configuration.
 - **Production** must use a Developer ID, giving a Team-anchored requirement
   (`anchor apple generic and certificate leaf[subject.OU] = "<team>"`) — the same mechanism
   as the shipped product Helper. That specific requirement shape is **not measured here**
