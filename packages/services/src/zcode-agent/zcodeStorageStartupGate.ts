@@ -5,8 +5,40 @@ import {
   type ZCodeStorageStartupState,
   type DatabaseStartupErrorCode,
 } from "@zcode/shared";
+import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
 const FIRST_STATUS_TIMEOUT_MS = 30_000;
+const startupGateLogger = createServiceLogger("zcode-storage-startup-gate");
+
+function monotonicNowMs(): number {
+  return Number(process.hrtime.bigint()) / 1_000_000;
+}
+
+function safeIssueMetadata(error: unknown): Array<{
+  path: Array<string | number>;
+  code: string;
+  expected?: string;
+  receivedType?: string;
+}> {
+  if (!error || typeof error !== "object" || !("issues" in error) || !Array.isArray(error.issues)) {
+    return [];
+  }
+  return error.issues.map((issue: unknown) => {
+    if (!issue || typeof issue !== "object") return { path: [], code: "unknown" };
+    const item = issue as { path?: unknown; code?: unknown; expected?: unknown; input?: unknown };
+    const inputType = item.input === null ? "null" : typeof item.input;
+    return {
+      path: Array.isArray(item.path)
+        ? item.path.filter(
+            (part): part is string | number => typeof part === "string" || typeof part === "number",
+          )
+        : [],
+      code: typeof item.code === "string" ? item.code : "unknown",
+      ...(typeof item.expected === "string" ? { expected: item.expected } : {}),
+      receivedType: inputType,
+    };
+  });
+}
 
 /** 一个 protocol client 对应一个进程代次，状态只来自该连接的合法控制帧。 */
 export class ZCodeStorageStartupGate {
@@ -37,7 +69,24 @@ export class ZCodeStorageStartupGate {
 
   accept(input: unknown): boolean {
     const parsed = zcodeStorageStartupStateSchema.safeParse(input);
-    if (!parsed.success || this.terminalError) return false;
+    if (!parsed.success) {
+      startupGateLogger.warn(undefined, "Storage startup state schema rejected", {
+        monotonicMs: monotonicNowMs(),
+        outcome: "schema_rejected",
+        issues: safeIssueMetadata(parsed.error),
+      });
+      return false;
+    }
+    if (this.terminalError) {
+      startupGateLogger.warn(undefined, "Storage startup state rejected after terminal error", {
+        monotonicMs: monotonicNowMs(),
+        outcome: "terminal_error_already_present",
+        attemptedPhase: parsed.data.phase,
+        currentPhase: this.current?.phase,
+        currentErrorCode: this.current?.errorCode,
+      });
+      return false;
+    }
     const next = parsed.data;
     if (
       this.current &&
@@ -54,6 +103,12 @@ export class ZCodeStorageStartupGate {
     else if (next.phase === "failed") this.fail(next.errorCode ?? "sql_failed");
     else this.ensurePending();
     this.changed.fire(next);
+    startupGateLogger.info(undefined, "Storage startup state accepted", {
+      monotonicMs: monotonicNowMs(),
+      outcome: "schema_accepted",
+      acceptedPhase: next.phase,
+      sequence: next.sequence,
+    });
     return true;
   }
 

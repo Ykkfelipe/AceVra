@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { Emitter } from "@zcode/rpc";
+import type { Event } from "@zcode/rpc";
 import type { ZCodeProtocolMessage } from "@zcode/shared";
 import { zcodeProtocolMessageSchema } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
@@ -33,6 +34,37 @@ const PROCESS_TREE_WINDOWS_EXIT_OBSERVATION_GRACE_MS = 250;
 const processTreeLogger = createServiceLogger("zcode-agent-process-tree");
 const transportLogger = createServiceLogger("zcode-stdio-transport");
 
+function monotonicNowMs(): number {
+  return Number(process.hrtime.bigint()) / 1_000_000;
+}
+
+function safeSchemaIssues(error: unknown): Array<{
+  path: Array<string | number>;
+  code: string;
+  expected?: string;
+  receivedType: string;
+}> {
+  if (!error || typeof error !== "object" || !("issues" in error) || !Array.isArray(error.issues)) {
+    return [];
+  }
+  return error.issues.map((issue: unknown) => {
+    if (!issue || typeof issue !== "object")
+      return { path: [], code: "unknown", receivedType: "unknown" };
+    const item = issue as { path?: unknown; code?: unknown; expected?: unknown; input?: unknown };
+    const receivedType = item.input === null ? "null" : typeof item.input;
+    return {
+      path: Array.isArray(item.path)
+        ? item.path.filter(
+            (part): part is string | number => typeof part === "string" || typeof part === "number",
+          )
+        : [],
+      code: typeof item.code === "string" ? item.code : "unknown",
+      ...(typeof item.expected === "string" ? { expected: item.expected } : {}),
+      receivedType,
+    };
+  });
+}
+
 /** 仅记录帧的路由元数据（method/id），不记录 params，避免日志泄漏用户内容。 */
 function describeProtocolMessage(message: ZCodeProtocolMessage): { method?: string; id?: string } {
   const record = message as { method?: unknown; id?: unknown };
@@ -58,8 +90,26 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
   private cleanupProcessTreeSnapshot: ProcessTreeSnapshot | undefined;
   private cleanupAttemptCount = 0;
   private childExitedAtMs: number | undefined;
+  private messageListenerCount = 0;
 
-  readonly onMessage = this.messageEmitter.event;
+  readonly onMessage: Event<ZCodeProtocolMessage> = (listener) => {
+    const disposable = this.messageEmitter.event(listener);
+    this.messageListenerCount += 1;
+    const subscribedAtMonotonicMs = monotonicNowMs();
+    transportLogger.info(undefined, "ZCode protocol client message listener attached", {
+      workerPid: this.child.pid,
+      monotonicMs: subscribedAtMonotonicMs,
+    });
+    let disposed = false;
+    return {
+      dispose: () => {
+        if (disposed) return;
+        disposed = true;
+        this.messageListenerCount = Math.max(0, this.messageListenerCount - 1);
+        disposable.dispose();
+      },
+    };
+  };
   readonly onClose = this.closeEmitter.event;
 
   constructor(
@@ -71,6 +121,10 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
     // ZCode Protocol stdio 帧边界只认 LF。Node readline 会把 U+2028/U+2029
     // 当作换行，模型文本包含这类字符时会把合法 JSON 字符串切成半帧。
     child.stdout.on("data", this.handleStdoutData);
+    transportLogger.info(undefined, "ZCode stdout listener attached", {
+      workerPid: child.pid,
+      monotonicMs: monotonicNowMs(),
+    });
     child.stdout.once("end", this.handleStdoutEnd);
     child.stdout.once("close", this.handleStdoutEnd);
     child.stdin.on("error", (error) => this.handleStreamError("stdin", error));
@@ -220,8 +274,9 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
     if (this.closed) {
       return;
     }
+    const chunkArrivedAtMonotonicMs = monotonicNowMs();
     this.stdoutBuffer += typeof chunk === "string" ? chunk : this.stdoutDecoder.write(chunk);
-    this.drainStdoutFrames();
+    this.drainStdoutFrames(chunkArrivedAtMonotonicMs);
   };
 
   private readonly handleStdoutEnd = (): void => {
@@ -238,12 +293,12 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
     this.fireClose({ reason: "stdout_closed" });
   };
 
-  private drainStdoutFrames(): void {
+  private drainStdoutFrames(chunkArrivedAtMonotonicMs: number): void {
     let newlineIndex = this.stdoutBuffer.indexOf("\n");
     while (newlineIndex >= 0) {
       const frame = this.stdoutBuffer.slice(0, newlineIndex);
       this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1);
-      this.handleStdoutFrame(frame);
+      this.handleStdoutFrame(frame, chunkArrivedAtMonotonicMs, monotonicNowMs());
       if (this.closed) {
         return;
       }
@@ -251,18 +306,69 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
     }
   }
 
-  private handleStdoutFrame(frame: string): void {
+  private handleStdoutFrame(
+    frame: string,
+    chunkArrivedAtMonotonicMs?: number,
+    frameExtractedAtMonotonicMs = monotonicNowMs(),
+  ): void {
     const line = frame.endsWith("\r") ? frame.slice(0, -1) : frame;
     if (line.trim().length === 0) {
       return;
     }
-    let parsed: ZCodeProtocolMessage;
+    let decoded: unknown;
     try {
-      parsed = zcodeProtocolMessageSchema.parse(JSON.parse(line));
+      decoded = JSON.parse(line);
     } catch (error) {
+      if (/"method"\s*:\s*"startup\/storageState"/u.test(line)) {
+        transportLogger.warn(undefined, "Startup storage frame JSON parse rejected", {
+          workerPid: this.child.pid,
+          chunkArrivedAtMonotonicMs,
+          frameExtractedAtMonotonicMs,
+          jsonParsed: false,
+          protocolSchemaParsed: false,
+          dispatched: false,
+          failureClass: error instanceof SyntaxError ? "SyntaxError" : "JSONParseError",
+        });
+      }
       const reason = error instanceof Error ? error.message : String(error);
       this.fireClose({ reason: `protocol_parse_error: ${reason}` });
       return;
+    }
+    const method =
+      decoded && typeof decoded === "object" && "method" in decoded
+        ? (decoded as { method?: unknown }).method
+        : undefined;
+    let parsed: ZCodeProtocolMessage;
+    try {
+      parsed = zcodeProtocolMessageSchema.parse(decoded);
+    } catch (error) {
+      if (method === "startup/storageState") {
+        transportLogger.warn(undefined, "Startup storage frame protocol schema rejected", {
+          workerPid: this.child.pid,
+          chunkArrivedAtMonotonicMs,
+          frameExtractedAtMonotonicMs,
+          jsonParsed: true,
+          protocolSchemaParsed: false,
+          method,
+          dispatched: false,
+          failureClass: error instanceof Error ? error.name : "SchemaError",
+          issues: safeSchemaIssues(error),
+        });
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      this.fireClose({ reason: `protocol_parse_error: ${reason}` });
+      return;
+    }
+    const parsedMethod = "method" in parsed ? parsed.method : undefined;
+    if (parsedMethod === "startup/storageState") {
+      transportLogger.info(undefined, "Startup storage frame parsed", {
+        workerPid: this.child.pid,
+        chunkArrivedAtMonotonicMs,
+        frameExtractedAtMonotonicMs,
+        jsonParsed: true,
+        protocolSchemaParsed: true,
+        method: parsedMethod,
+      });
     }
     // 修复依据：解析与分发曾共用一个 catch，任何 handler 同步抛错（如 browserList 包装器
     // 缺 list）都被误报为 protocol_parse_error 并关闭整个 agent 连接，真实错误从不落日志。
@@ -273,6 +379,15 @@ export class ZCodeStdioTransport implements ZCodeProtocolTransport {
       // Host event loop 并让 subagent 面板无输出。运行期 data plane 只做解析和转发；
       // 完整进程树查询严格留在 dispose cleanup 边界。
       this.messageEmitter.fire(parsed);
+      if (parsedMethod === "startup/storageState") {
+        transportLogger.info(undefined, "Startup storage frame dispatched", {
+          workerPid: this.child.pid,
+          monotonicMs: monotonicNowMs(),
+          method: parsedMethod,
+          dispatched: true,
+          messageListenerCount: this.messageListenerCount,
+        });
+      }
     } catch (error) {
       transportLogger.warn(undefined, "ZCode protocol message dispatch failed", {
         ...describeProtocolMessage(parsed),

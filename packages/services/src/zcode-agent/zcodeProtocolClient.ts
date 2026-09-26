@@ -15,6 +15,10 @@ import type { ZCodeProtocolTransport } from "./zcodeProtocolTransport.js";
 
 const protocolClientLogger = createServiceLogger("zcode-protocol-client");
 
+function monotonicNowMs(): number {
+  return Number(process.hrtime.bigint()) / 1_000_000;
+}
+
 /** 客户端可发的方法名：旧 zcodeProtocolMethods + v4/*（并存，收敛为 v4）。 */
 type ZCodeProtocolClientMethod = ZCodeProtocolMethod | V4Method;
 
@@ -128,6 +132,10 @@ export class ZCodeProtocolClient implements IDisposable {
         this.closeEmitter.fire();
       }),
     );
+    protocolClientLogger.info(undefined, "ZCode protocol client subscribed to transport", {
+      monotonicMs: monotonicNowMs(),
+      requireStorageStartup: options?.requireStorageStartup ?? false,
+    });
   }
 
   get transportKind() {
@@ -320,20 +328,38 @@ export class ZCodeProtocolClient implements IDisposable {
     }
 
     if ("method" in message) {
-      if (
-        message.method === "startup/storageState" &&
-        this.storageStartup.accept((message as ZCodeProtocolNotification).params)
-      ) {
-        // 自定义/旧部署命令无法事先声明能力；首个请求可能已发出。只有首次合法启动帧
-        // 能暂停这些计时器，ready 后恢复；该进程的终态不能被后续通知重新续期。
-        for (const pending of this.pending.values()) {
-          clearTimeout(pending.timeout);
-          if (this.storageStartup.snapshot?.phase === "ready") pending.resumeTimeout();
-        }
-        if (this.storageStartup.snapshot?.phase === "failed") {
-          this.rejectAll(
-            new Error(`SQLite startup failed: ${this.storageStartup.snapshot.errorCode}`),
-          );
+      if (message.method === "startup/storageState") {
+        const before = this.storageStartup.snapshot;
+        protocolClientLogger.info(undefined, "Protocol client received startup storage state", {
+          monotonicMs: monotonicNowMs(),
+          received: true,
+          gateBefore: before ? { phase: before.phase, sequence: before.sequence } : null,
+        });
+        const accepted = this.storageStartup.accept((message as ZCodeProtocolNotification).params);
+        const after = this.storageStartup.snapshot;
+        protocolClientLogger.info(undefined, "Protocol client startup storage acceptance result", {
+          monotonicMs: monotonicNowMs(),
+          accepted,
+          gateAfter: after
+            ? {
+                phase: after.phase,
+                sequence: after.sequence,
+                ...(after.errorCode ? { errorCode: after.errorCode } : {}),
+              }
+            : null,
+        });
+        if (accepted) {
+          // 自定义/旧部署命令无法事先声明能力；首个请求可能已发出。只有首次合法启动帧
+          // 能暂停这些计时器，ready 后恢复；该进程的终态不能被后续通知重新续期。
+          for (const pending of this.pending.values()) {
+            clearTimeout(pending.timeout);
+            if (this.storageStartup.snapshot?.phase === "ready") pending.resumeTimeout();
+          }
+          if (this.storageStartup.snapshot?.phase === "failed") {
+            this.rejectAll(
+              new Error(`SQLite startup failed: ${this.storageStartup.snapshot.errorCode}`),
+            );
+          }
         }
       }
       const notification = message as ZCodeProtocolNotification;
