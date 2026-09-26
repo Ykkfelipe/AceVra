@@ -26,16 +26,42 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { discoverExecutable } from "#src/accounts/executableDiscovery.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const logger = createServiceLogger("codex-bridge");
 
-/** Common app-bundle locations; user-specific paths are derived from homedir at runtime. */
-const CODEX_BUNDLED_CANDIDATES = [
-  "/Applications/ChatGPT.app/Contents/Resources/codex",
-  "~/Applications/ChatGPT.app/Contents/Resources/codex",
-  "~/.local/bin/codex",
-  "~/.cargo/bin/codex",
-];
+/** Resolve supported ChatGPT bundle and per-user CLI locations without hard-coding a user home. */
+export function getCodexExecutableCandidates(
+  options: {
+    applicationsDirectory?: string;
+    homeDirectory?: string;
+  } = {},
+): string[] {
+  const applicationsDirectory = options.applicationsDirectory ?? "/Applications";
+  const homeDirectory = options.homeDirectory ?? homedir();
+  const chatGptResources = (appDirectory: string) =>
+    join(appDirectory, "ChatGPT.app", "Contents", "Resources");
+
+  return [
+    join(chatGptResources(applicationsDirectory), "codex-cli", "bin", "codex"),
+    join(
+      homeDirectory,
+      "Applications",
+      "ChatGPT.app",
+      "Contents",
+      "Resources",
+      "codex-cli",
+      "bin",
+      "codex",
+    ),
+    // Retain compatibility with older ChatGPT app bundle layouts.
+    join(chatGptResources(applicationsDirectory), "codex"),
+    join(homeDirectory, "Applications", "ChatGPT.app", "Contents", "Resources", "codex"),
+    join(homeDirectory, ".local", "bin", "codex"),
+    join(homeDirectory, ".cargo", "bin", "codex"),
+  ];
+}
 
 const MAX_RESTARTS = 3;
 const RESTART_WINDOW_MS = 60_000;
@@ -76,7 +102,7 @@ export function resolveCodexExecutable(override?: string): string | undefined {
   return discoverExecutable({
     name: "codex",
     configuredPath: override,
-    extraCandidates: CODEX_BUNDLED_CANDIDATES,
+    extraCandidates: getCodexExecutableCandidates(),
   });
 }
 

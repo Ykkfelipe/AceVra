@@ -373,6 +373,15 @@ process PATH, and known macOS app-bundle locations without assuming one Homebrew
 uses the same host PATH lookup and configured-path precedence. Child processes inherit the
 normalized host environment. Never put a user-specific home path into source.
 
+For Codex, the supported ChatGPT macOS bundle currently places its app-server-capable CLI at
+`ChatGPT.app/Contents/Resources/codex-cli/bin/codex`. Check both `/Applications/ChatGPT.app`
+and `~/Applications/ChatGPT.app`, while retaining the previous
+`Contents/Resources/codex` locations for older installations. The CLI candidate order remains
+after PATH lookup, and `~/.local/bin/codex` / `~/.cargo/bin/codex` remain supported. A configured
+executable continues to take precedence over all discovered candidates; an invalid configured
+path remains not-installed rather than silently selecting a different CLI. Discovery checks
+execute permission only and does not inspect account state or credentials.
+
 ### Codex local import boundary
 
 Codex history import reads rollout JSONL session files only. The observed format starts with a
