@@ -14,6 +14,7 @@ import type { ToolRegistry } from "../tool/registry.js";
 import { estimateTokens } from "./utils.js";
 import { buildCliPrefixSection } from "./sections/cli-prefix.js";
 import { buildIdentitySection } from "./sections/identity.js";
+import { buildResponseLanguageSection } from "./sections/response-language.js";
 import { buildWorkflowActorIdentitySection } from "./sections/workflow-actor.js";
 import { buildEnvInfoSection, buildGitSystemContextSection } from "./sections/env-info.js";
 import { buildSkillsSection } from "./sections/skills.js";
@@ -120,6 +121,9 @@ export class ContextBuilder {
     } else {
       sections.push(buildIdentitySection(activeOutputStyle));
     }
+
+    // AGENTS.md 会以 meta_user 注入并被要求遵守，可能让模型跟随说明文本的语言；此处统一声明以最新请求为准。
+    sections.push(buildResponseLanguageSection());
 
     // 3. Dynamic system context
     // custom prompt 不是只替换
