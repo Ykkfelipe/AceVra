@@ -5,10 +5,9 @@ import type { ZCodeImportableSessionCandidate } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 import { getAppConfigDir, getDataBaseDir, getWorkspaceHash } from "#src/paths.js";
 import {
-  extractClaudeNativeSessionHeadInfo,
-  hasClaudeNativeSidechainMarker,
-} from "#src/session/claude-native/claudeNativeSessionHeadParser.js";
-import { readJsonLinesFileHead } from "#src/session/claude-native/sessionHistoryJsonl.js";
+  parseClaudeNativeSessionFile,
+  projectClaudeNativeSessionPreview,
+} from "#src/session/claude-native/claudeNativeSessionImportParser.js";
 
 const logger = createServiceLogger("claude-native-import");
 const CLAUDE_NATIVE_IGNORED_TRANSCRIPT_DIR_NAMES = new Set(["subagents", "worktree", "worktrees"]);
@@ -158,22 +157,23 @@ class ClaudeNativeSessionImportRepo {
       }
 
       try {
-        const headRecords = await readJsonLinesFileHead(filePath, 16);
-        if (hasClaudeNativeSidechainMarker(headRecords)) {
-          continue;
-        }
-        const headInfo = extractClaudeNativeSessionHeadInfo(headRecords);
-        if (!headInfo.workspacePath) {
+        const source = await parseClaudeNativeSessionFile({
+          filePath,
+          workspacePath: "",
+          sessionId: basename(filePath, ".jsonl"),
+        });
+        const preview = projectClaudeNativeSessionPreview(source);
+        if (!source.workspacePath || !source.messages.some((message) => message.role === "user")) {
           continue;
         }
         // Claude 会把临时执行面放到 ~/.claude/worktrees 下。
         // 引导数据导入只应展示真实用户 workspace，避免把这些短生命周期 worktree 当成可迁移项目。
-        if (isClaudeWorktreeWorkspacePath(headInfo.workspacePath)) {
+        if (isClaudeWorktreeWorkspacePath(source.workspacePath)) {
           continue;
         }
         if (
           workspaceKey !== null &&
-          normalizePathForComparison(headInfo.workspacePath) !== workspaceKey
+          normalizePathForComparison(source.workspacePath) !== workspaceKey
         ) {
           continue;
         }
@@ -181,11 +181,12 @@ class ClaudeNativeSessionImportRepo {
         candidates.push({
           provider: "claude",
           sessionId: basename(filePath, ".jsonl"),
-          workspacePath: headInfo.workspacePath,
+          workspacePath: source.workspacePath,
           sourcePath: filePath,
           updatedAt,
-          ...(headInfo.createdAt ? { createdAt: headInfo.createdAt } : {}),
-          ...(headInfo.previewTitle ? { previewTitle: headInfo.previewTitle } : {}),
+          createdAt: source.createdAt,
+          previewTitle: preview.title,
+          previewMessages: preview.previewMessages,
         });
       } catch (error) {
         logger.warn(undefined, `扫描 Claude 原生 session 失败 path=${filePath}`, error);
@@ -222,21 +223,22 @@ class ClaudeNativeSessionImportRepo {
 
       try {
         const fileStat = await stat(filePath);
-        const headRecords = await readJsonLinesFileHead(filePath, 16);
-        if (hasClaudeNativeSidechainMarker(headRecords)) {
-          return null;
-        }
-        const headInfo = extractClaudeNativeSessionHeadInfo(headRecords);
-        if (!headInfo.workspacePath) {
+        const source = await parseClaudeNativeSessionFile({
+          filePath,
+          workspacePath: "",
+          sessionId: params.sessionId,
+        });
+        const preview = projectClaudeNativeSessionPreview(source);
+        if (!source.workspacePath || !source.messages.some((message) => message.role === "user")) {
           continue;
         }
         // 直接按 sessionId 导入也必须复用扫描边界，防止 UI 过滤后仍能导入临时 worktree。
-        if (isClaudeWorktreeWorkspacePath(headInfo.workspacePath)) {
+        if (isClaudeWorktreeWorkspacePath(source.workspacePath)) {
           return null;
         }
         if (
           workspaceKey !== null &&
-          normalizePathForComparison(headInfo.workspacePath) !== workspaceKey
+          normalizePathForComparison(source.workspacePath) !== workspaceKey
         ) {
           continue;
         }
@@ -244,11 +246,12 @@ class ClaudeNativeSessionImportRepo {
         return {
           provider: "claude",
           sessionId: params.sessionId,
-          workspacePath: headInfo.workspacePath,
+          workspacePath: source.workspacePath,
           sourcePath: filePath,
           updatedAt: Math.trunc(fileStat.mtimeMs),
-          ...(headInfo.createdAt ? { createdAt: headInfo.createdAt } : {}),
-          ...(headInfo.previewTitle ? { previewTitle: headInfo.previewTitle } : {}),
+          createdAt: source.createdAt,
+          previewTitle: preview.title,
+          previewMessages: preview.previewMessages,
         };
       } catch (error) {
         logger.warn(

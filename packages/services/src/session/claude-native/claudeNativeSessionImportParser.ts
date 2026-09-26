@@ -1,6 +1,7 @@
 /* oxlint-disable eslint(max-lines) -- Claude 原生日志解析需要集中维护用户轮次、assistant 自愈和 system warning 归因，拆分会让同一日志语义分散。 */
 import { stat } from "node:fs/promises";
 import type { JsonLineRecord } from "#src/session/claude-native/jsonLineRecord.js";
+import type { ZCodeImportableSessionPreviewMessage } from "@zcode/shared";
 import { readJsonLinesFile } from "#src/session/claude-native/sessionHistoryJsonl.js";
 import { deriveSessionTitle } from "#src/session/sessionTitle.js";
 import { isObjectRecord, readTrimmedString } from "#src/session/claude-native/jsonLineRecord.js";
@@ -9,6 +10,8 @@ import type { ClaudeNativeImportedSessionSource } from "#src/session/claude-nati
 const IDE_OPENED_FILE_TAG_RE = /<ide_opened_file>[\s\S]*?<\/ide_opened_file>/gi;
 const COMMAND_TAG_BLOCK_RE =
   /<(?:local-command|command)-[^>]+>[\s\S]*?<\/(?:local-command|command)-[^>]+>/gi;
+const INTERNAL_CONTEXT_BLOCK_RE =
+  /<(?:environment_context|meta_user|system-reminder|INSTRUCTIONS)>[\s\S]*?<\/(?:environment_context|meta_user|system-reminder|INSTRUCTIONS)>/giu;
 
 function toTimestampMs(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -96,6 +99,7 @@ function sanitizeClaudeVisibleText(text: string): string {
   return text
     .replace(IDE_OPENED_FILE_TAG_RE, " ")
     .replace(COMMAND_TAG_BLOCK_RE, " ")
+    .replace(INTERNAL_CONTEXT_BLOCK_RE, " ")
     .replace(/\r\n/g, "\n")
     .trim();
 }
@@ -132,7 +136,7 @@ function extractTextField(value: unknown): string {
 }
 
 function extractClaudeUserText(entry: JsonLineRecord): string | null {
-  if (entry.type !== "user") {
+  if (entry.type !== "user" || isClaudeNativeSidechainEntry(entry)) {
     return null;
   }
 
@@ -148,6 +152,7 @@ function extractClaudeUserText(entry: JsonLineRecord): string | null {
     message?.content ?? (isObjectRecord(entry.request) ? entry.request.prompt : undefined);
   if (typeof content === "string") {
     const normalized = sanitizeClaudeVisibleText(content);
+    if (/^#\s*AGENTS\.md\s+instructions\s+for\b/imu.test(normalized)) return null;
     return normalized.length > 0 ? normalized : null;
   }
 
@@ -159,12 +164,14 @@ function extractClaudeUserText(entry: JsonLineRecord): string | null {
     .flatMap((item) => {
       if (typeof item === "string") {
         const normalized = sanitizeClaudeVisibleText(item);
+        if (/^#\s*AGENTS\.md\s+instructions\s+for\b/imu.test(normalized)) return [];
         return normalized.length > 0 ? [normalized] : [];
       }
       if (!isObjectRecord(item) || item.type === "tool_result") {
         return [];
       }
       const normalized = sanitizeClaudeVisibleText(extractTextField(item));
+      if (/^#\s*AGENTS\.md\s+instructions\s+for\b/imu.test(normalized)) return [];
       return normalized.length > 0 ? [normalized] : [];
     })
     .filter((part) => part.length > 0);
@@ -173,7 +180,7 @@ function extractClaudeUserText(entry: JsonLineRecord): string | null {
 }
 
 function extractClaudeAssistantText(entry: JsonLineRecord): string | null {
-  if (entry.type !== "assistant") {
+  if (entry.type !== "assistant" || isClaudeNativeSidechainEntry(entry)) {
     return null;
   }
 
@@ -366,4 +373,30 @@ export async function parseClaudeNativeSessionFile(params: {
     fallbackCreatedAt: params.fallbackCreatedAt ?? Math.trunc(sourceStat.birthtimeMs),
     fallbackUpdatedAt: params.fallbackUpdatedAt ?? Math.trunc(sourceStat.mtimeMs),
   });
+}
+
+/** Candidate preview derived from the same normalized messages used by task import. */
+export function projectClaudeNativeSessionPreview(source: ClaudeNativeImportedSessionSource): {
+  title: string;
+  previewMessages: ZCodeImportableSessionPreviewMessage[];
+} {
+  const firstUserIndex = source.messages.findIndex((message) => message.role === "user");
+  const firstUser = source.messages[firstUserIndex];
+  const firstAssistant = source.messages
+    .slice(firstUserIndex + 1)
+    .find((message) => message.role === "assistant");
+  const previewMessages: ZCodeImportableSessionPreviewMessage[] = [];
+  for (const message of [firstUser, firstAssistant].filter((item) => item !== undefined)) {
+    const points = Array.from(message.content);
+    const content = points.length > 240 ? `${points.slice(0, 237).join("")}...` : message.content;
+    previewMessages.push({ role: message.role, content });
+  }
+  return {
+    title:
+      deriveSessionTitle(
+        source.messages.find((message) => message.role === "user")?.content ?? "",
+        [],
+      ) || source.sessionId.slice(0, 8),
+    previewMessages,
+  };
 }

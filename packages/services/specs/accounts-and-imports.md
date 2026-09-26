@@ -439,3 +439,51 @@ In a Node test runner process, resolving the Codex sessions directory without an
 or `CODEX_HOME` fails with a clear isolation error. This guard is test-only: normal application
 execution retains the standard `~/.codex` fallback. The regression suite verifies the isolated
 scanner cannot discover or read entries from the user's real Codex sessions directory.
+
+### Canonical visible conversation projection (2026-09-26)
+
+Codex and Claude keep source-specific parsers because their records have different
+semantics, but each source must produce one normalized ordered list of visible user and
+assistant messages. Scan candidates, title/preview, and imported session creation must all
+be derived from that same normalized list. Candidate preview is its bounded first visible
+exchange; the imported timeline begins with precisely those same messages in the same order.
+
+The visibility contract is:
+
+- Include human-authored prompts and follow-ups, and assistant text actually exposed in the
+  source conversation. Preserve their order and source timestamps when present.
+- Ignore tool calls/results, system/developer/project instructions, AGENTS.md content,
+  meta/context attachments, environment context, provider bootstrap, hidden reasoning,
+  compaction summaries, protocol bookkeeping, and handoff/init sentinels as ordinary chat.
+- Retain trustworthy source/session/workspace/model metadata as provenance, not chat text.
+  Never synthesize absent timestamps or model values in the normalized message projection.
+- For Codex, `response_item` message role alone does not prove human authorship: recognized
+  initialization/context payloads are excluded. Tool/action events remain excluded until a
+  matching imported timeline representation exists.
+- For Claude, retain source-specific filtering of `isMeta`, sidechains, tool results,
+  commands, IDE-injected file tags, and synthetic no-response placeholders. Assistant text
+  blocks are aggregated per user turn as already required by its transcript semantics.
+- Sessions with no visible human-authored user message are not import candidates. Malformed
+  or truncated records are skipped without contaminating the remaining ordered projection.
+
+The task index remains the idempotency owner. Import identity remains `(provider,
+workspaceIdentity?.trim() || workspacePath, original source session ID)`. Rescans expose
+that exact source session as already imported; a retry must neither create another task nor
+mix different source sessions. Preview remains local, bounded, escaped plain text and never
+exposes raw records, source paths, tool output, or internal context.
+
+Event flow:
+
+```mermaid
+flowchart LR
+  A[Codex rollout / Claude transcript] --> B[Source-specific parser and visibility filter]
+  B --> C[Normalized visible messages plus provenance]
+  C --> D[Candidate title and bounded preview]
+  C --> E[Imported task history]
+  E --> F[Task index provenance and deterministic identity]
+```
+
+Acceptance scenarios cover internal-context exclusion, first genuine prompt title, multiple
+alternating user/assistant turns, interleaved tool/protocol records, preview/import prefix
+parity, no-user sessions, malformed lines, timestamps/provenance, and repeat-import identity
+for both providers where their formats support each case.

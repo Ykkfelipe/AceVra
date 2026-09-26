@@ -250,8 +250,8 @@ export function MigrationCandidatesCard({
                             <div className="min-w-0 flex-1 text-ui-base font-medium text-foreground">
                               <span className="line-clamp-1 break-all">{sessionLabel}</span>
                             </div>
-                            <Badge variant="outline" className="font-mono">
-                              {candidate.sessionId.slice(0, 8)}
+                            <Badge variant="secondary">
+                              {candidate.provider === "codex" ? "Codex" : "Claude"}
                             </Badge>
                             {alreadyImported ? (
                               <Badge variant="secondary">
@@ -301,6 +301,11 @@ export function MigrationCandidatesCard({
                           )}
                         </div>
                       </div>
+                      {previewMessages[0] ? (
+                        <div className="line-clamp-2 break-words text-ui-xs text-foreground-subtle">
+                          {previewMessages[0].content}
+                        </div>
+                      ) : null}
                       {isExpanded && previewMessages.length > 0 ? (
                         <div
                           id={previewId}

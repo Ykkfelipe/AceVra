@@ -60,16 +60,37 @@ function truncatePreviewText(text: string): string {
   return `${codePoints.slice(0, CODEX_IMPORT_PREVIEW_MAX_CODE_POINTS - 3).join("")}...`;
 }
 
-async function parseCodexRolloutFile(
-  filePath: string,
-  mode: "full" | "preview",
-): Promise<CodexImportedSession | CodexRolloutPreview | null> {
+/** Remove injected context even when Codex batches it with an actual user prompt. */
+function sanitizeCodexUserText(text: string): string {
+  return text
+    .replace(/^#\s*AGENTS\.md\s+instructions\s+for\b[^\n]*\n/imu, "")
+    .replace(
+      /<(?:INSTRUCTIONS|environment_context|meta_user|context)\b[^>]*>[\s\S]*?<\/(?:INSTRUCTIONS|environment_context|meta_user|context)>/giu,
+      "",
+    )
+    .trim();
+}
+
+function buildPreview(
+  messages: readonly CodexImportedMessage[],
+): ZCodeImportableSessionPreviewMessage[] {
+  const firstUserIndex = messages.findIndex((message) => message.role === "user");
+  if (firstUserIndex < 0) return [];
+  const firstUser = messages[firstUserIndex]!;
+  const firstAssistant = messages
+    .slice(firstUserIndex + 1)
+    .find((message) => message.role === "assistant");
+  return [firstUser, ...(firstAssistant ? [firstAssistant] : [])].map((message) => ({
+    role: message.role,
+    content: truncatePreviewText(message.content),
+  }));
+}
+
+async function parseCodexRolloutFile(filePath: string): Promise<CodexImportedSession | null> {
   const input = createReadStream(filePath, { encoding: "utf8" });
   const lines = createInterface({ input, crlfDelay: Infinity });
   let header: Record<string, unknown> | undefined;
   const messages: CodexImportedMessage[] = [];
-  const previewMessages: ZCodeImportableSessionPreviewMessage[] = [];
-  let firstVisibleUserText: string | undefined;
   let updatedAt: number | undefined;
   let model: string | undefined;
   try {
@@ -89,7 +110,7 @@ async function parseCodexRolloutFile(
       }
       const at = timestamp(record.timestamp);
       if (at !== undefined) updatedAt = Math.max(updatedAt ?? at, at);
-      if (mode === "full" && record.type === "turn_context") {
+      if (record.type === "turn_context") {
         const contextModel = object(record.payload)?.model;
         if (typeof contextModel === "string" && /^[A-Za-z0-9._/-]{1,80}$/u.test(contextModel)) {
           model = contextModel;
@@ -100,23 +121,13 @@ async function parseCodexRolloutFile(
       if (payload?.type !== "message") continue;
       const role = payload.role;
       if (role !== "user" && role !== "assistant") continue;
-      const content = textContent(payload.content, role === "user" ? "input_text" : "output_text");
+      const rawContent = textContent(
+        payload.content,
+        role === "user" ? "input_text" : "output_text",
+      );
+      const content = role === "user" ? sanitizeCodexUserText(rawContent) : rawContent;
       if (!content) continue;
-
-      if (mode === "preview") {
-        firstVisibleUserText ??= role === "user" ? content : undefined;
-        if (!previewMessages.some((message) => message.role === role)) {
-          previewMessages.push({ role, content: truncatePreviewText(content) });
-        }
-        if (
-          previewMessages.some((message) => message.role === "user") &&
-          previewMessages.some((message) => message.role === "assistant")
-        ) {
-          break;
-        }
-      } else {
-        messages.push({ role, content, ...(at === undefined ? {} : { timestamp: at }) });
-      }
+      messages.push({ role, content, ...(at === undefined ? {} : { timestamp: at }) });
     }
   } finally {
     lines.close();
@@ -128,17 +139,7 @@ async function parseCodexRolloutFile(
   const createdAt = timestamp(header?.timestamp);
   if (!sessionId || !workspacePath || createdAt === undefined) return null;
 
-  if (mode === "preview") {
-    return {
-      sessionId,
-      workspacePath,
-      createdAt,
-      title: deriveSessionTitle(firstVisibleUserText ?? "", []) || sessionId.slice(0, 8),
-      previewMessages,
-    };
-  }
-
-  if (messages.length === 0) return null;
+  if (!messages.some((message) => message.role === "user")) return null;
   const firstUser = messages.find((message) => message.role === "user");
   const title = firstUser ? deriveSessionTitle(firstUser.content, []) : undefined;
   const headerModel =
@@ -160,12 +161,20 @@ async function parseCodexRolloutFile(
 /** Parse only visible user/assistant text. Tool, reasoning, metadata and credential-shaped
  * fields are intentionally outside the AceVra imported-history contract. */
 export async function parseCodexRollout(filePath: string): Promise<CodexImportedSession | null> {
-  return (await parseCodexRolloutFile(filePath, "full")) as CodexImportedSession | null;
+  return parseCodexRolloutFile(filePath);
 }
 
-/** Scan-time mode that stops after the first visible user and assistant messages. */
+/** Scan-time preview derived from the same complete normalized projection as import. */
 export async function parseCodexRolloutPreview(
   filePath: string,
 ): Promise<CodexRolloutPreview | null> {
-  return (await parseCodexRolloutFile(filePath, "preview")) as CodexRolloutPreview | null;
+  const session = await parseCodexRolloutFile(filePath);
+  if (!session) return null;
+  return {
+    sessionId: session.sessionId,
+    workspacePath: session.workspacePath,
+    createdAt: session.createdAt,
+    title: session.title ?? session.sessionId.slice(0, 8),
+    previewMessages: buildPreview(session.messages),
+  };
 }

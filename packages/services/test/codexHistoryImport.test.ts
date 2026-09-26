@@ -159,6 +159,14 @@ test("Codex scan keeps missing previews bounded and deduplicates fork files by n
         type: "response_item",
         payload: {
           type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "valid after malformed line" }],
+        },
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
           role: "assistant",
           content: [{ type: "output_text", text: "assistant after malformed line" }],
         },
@@ -222,13 +230,13 @@ test("Codex scan keeps missing previews bounded and deduplicates fork files by n
       false,
     );
 
-    const missing = scanned.find((candidate) => candidate.sourcePath === missingPath);
-    assert.ok(missing);
-    assert.equal(missing.previewTitle, missingSessionId.slice(0, 8));
-    assert.deepEqual(missing.previewMessages, []);
-
+    assert.equal(
+      scanned.some((candidate) => candidate.sourcePath === missingPath),
+      false,
+    );
     const malformed = scanned.find((candidate) => candidate.sourcePath === malformedPath);
     assert.deepEqual(malformed?.previewMessages, [
+      { role: "user", content: "valid after malformed line" },
       { role: "assistant", content: "assistant after malformed line" },
     ]);
 
@@ -236,6 +244,100 @@ test("Codex scan keeps missing previews bounded and deduplicates fork files by n
     assert.equal(forks.length, 1);
     assert.equal(forks[0]?.sourcePath, newerForkPath);
     assert.deepEqual(forks[0]?.previewMessages, [{ role: "user", content: "newest fork" }]);
+  } finally {
+    if (previousHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test("Codex excludes injected project/context messages and shares preview with imported projection", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "zcode-codex-context-"));
+  const previousHome = process.env.CODEX_HOME;
+  const sessionId = "00000000-0000-4000-8000-000000000014";
+  const workspacePath = join(temp, "workspace");
+  const sessionsDir = join(temp, "sessions", "2026", "09", "26");
+  const filePath = join(sessionsDir, `${sessionId}.jsonl`);
+  await mkdir(sessionsDir, { recursive: true });
+  await mkdir(workspacePath, { recursive: true });
+  process.env.CODEX_HOME = temp;
+  const records = [
+    {
+      type: "session_meta",
+      payload: { session_id: sessionId, cwd: workspacePath, timestamp: "2026-09-26T12:00:00Z" },
+    },
+    {
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: "# AGENTS.md instructions for /Users/example/AceVra\n<INSTRUCTIONS>private project rules</INSTRUCTIONS>\n<environment_context>private cwd data</environment_context>\nFix the routing issue",
+          },
+        ],
+      },
+    },
+    {
+      type: "response_item",
+      payload: { type: "function_call", name: "shell", arguments: "private tool data" },
+    },
+    {
+      type: "response_item",
+      timestamp: "2026-09-26T12:00:04Z",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "I’ll inspect the routing path." }],
+      },
+    },
+    {
+      type: "response_item",
+      timestamp: "2026-09-26T12:00:05Z",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "Also cover the retry case." }],
+      },
+    },
+    {
+      type: "response_item",
+      timestamp: "2026-09-26T12:00:06Z",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "The retry case is covered." }],
+      },
+    },
+  ];
+  await writeFile(filePath, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  try {
+    const [candidate] = await scanCodexImportableSessions();
+    const imported = await parseCodexRollout(filePath);
+    assert.ok(candidate && imported);
+    assert.equal(candidate.previewTitle, "Fix the routing issue");
+    assert.deepEqual(candidate.previewMessages, [
+      { role: "user", content: "Fix the routing issue" },
+      { role: "assistant", content: "I’ll inspect the routing path." },
+    ]);
+    assert.deepEqual(
+      imported.messages.map(({ role, content }) => ({ role, content })),
+      [
+        { role: "user", content: "Fix the routing issue" },
+        { role: "assistant", content: "I’ll inspect the routing path." },
+        { role: "user", content: "Also cover the retry case." },
+        { role: "assistant", content: "The retry case is covered." },
+      ],
+    );
+    assert.deepEqual(
+      candidate.previewMessages,
+      imported.messages.slice(0, 2).map(({ role, content }) => ({ role, content })),
+    );
+    assert.doesNotMatch(
+      JSON.stringify({ candidate, imported }),
+      /AGENTS\.md|environment_context|private tool data|private project rules/u,
+    );
   } finally {
     if (previousHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = previousHome;
