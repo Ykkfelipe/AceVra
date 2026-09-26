@@ -344,8 +344,11 @@ rebuild produces a new cdhash and the grant is lost. Therefore:
   settings (never the admin/system trust store), so `security find-identity -v -p codesigning`
   reports the intended identity as usable. `codesign` signs with its stable certificate-root
   requirement, which TCC honours. `spctl` will reject the bundle, which affects distribution,
-  not TCC. Identity creation fails unless the dedicated keychain contains exactly one valid
-  `AceVra CUA Dev Signing` identity after import and trust configuration.
+  not TCC. Reuse of an existing keychain must unlock it, restore the certificate's user-domain
+  `codeSign` trust if needed, and only then require exactly one valid `AceVra CUA Dev Signing`
+  identity. A locked keychain or missing user trust entry must never cause replacement key or
+  certificate generation. Identity creation fails unless the dedicated keychain contains exactly
+  one valid identity after import and trust configuration.
 - **Production** must use a Developer ID, giving a Team-anchored requirement
   (`anchor apple generic and certificate leaf[subject.OU] = "<team>"`) — the same mechanism
   as the shipped product Helper. That specific requirement shape is **not measured here**

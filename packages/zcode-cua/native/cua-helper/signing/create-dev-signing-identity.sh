@@ -48,11 +48,19 @@ mkdir -p "$SIGNING_DIR"
 chmod 700 "$SIGNING_DIR"
 
 if [[ -f "$KEYCHAIN" && $FORCE -eq 0 ]]; then
-  # Unlock on the reuse path too: the keychain auto-locks after 6h or on sleep, and
-  # codesign cannot unlock it non-interactively, so a build after a reboot would fail.
-  if [[ -f "$PASSWORD_FILE" ]]; then
-    security unlock-keychain -p "$(cat "$PASSWORD_FILE")" "$KEYCHAIN"
+  if [[ ! -f "$PASSWORD_FILE" ]]; then
+    echo "error: signing keychain exists but its managed password file is missing: $PASSWORD_FILE" >&2
+    exit 1
   fi
+  # 修复依据：锁定的 keychain 和丢失的用户 codeSign 信任都会让既有身份不可用；先恢复这两项，避免误走新建身份路径。
+  PW="$(cat "$PASSWORD_FILE")"
+  security unlock-keychain -p "$PW" "$KEYCHAIN"
+  unset PW
+  TMP="$(mktemp -d)"
+  trap 'rm -rf "$TMP"' EXIT
+  security find-certificate -c "$IDENTITY_CN" -p "$KEYCHAIN" > "$TMP/existing-cert.pem"
+  # 不使用 -d：只在当前用户域恢复 codeSign 信任，不修改 Admin/System trust。
+  security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN" "$TMP/existing-cert.pem" >/dev/null
   assert_expected_identity
   echo "identity already present in $KEYCHAIN; nothing to do"
   exit 0
