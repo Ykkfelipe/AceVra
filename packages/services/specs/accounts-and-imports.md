@@ -487,3 +487,42 @@ Acceptance scenarios cover internal-context exclusion, first genuine prompt titl
 alternating user/assistant turns, interleaved tool/protocol records, preview/import prefix
 parity, no-user sessions, malformed lines, timestamps/provenance, and repeat-import identity
 for both providers where their formats support each case.
+
+### Codex logical-session rollout selection (2026-09-26)
+
+`scanCodexImportableSessions` owns the choice of one physical rollout for each Codex
+`session_meta.session_id`. The header's physical `id` and `source.subagent`/`thread_source`
+describe the rollout, while `session_id` is the logical import identity. A guardian review
+rollout that refers to its parent session is not a standalone conversation candidate, even if
+its `response_item` records contain user/assistant text. It must not replace the parent or
+create a task under the parent's identity. A normal rollout with no visible user prompt is
+also ineligible.
+
+For eligible rollouts sharing a logical ID, prefer a physical rollout whose header `id`
+matches `session_id`; otherwise prefer the projection with both visible roles and greater
+visible-message coverage. Break remaining ties by latest visible-message timestamp, then
+header creation time, filesystem mtime, and source path. This is one deterministic choice,
+not a transcript merge. The selected path supplies both the bounded preview and the full
+imported projection. Import re-scans with the same rule and the task index continues to own
+`(provider, workspace key, logical session ID)` idempotency.
+
+Candidate `updatedAt`, activity-range filtering, and sorting use the latest timestamp on a
+normalized visible message when available, falling back to the header creation time. File
+mtime is only a final selection tie-breaker; copying or rewriting a rollout must not change
+its displayed conversation activity. The scanner applies the result limit after grouping and
+sorting. No source file is modified.
+
+```mermaid
+flowchart LR
+  A[Physical rollout files] --> B[Header and visible projection]
+  B --> C[Exclude guardian review and no-user rollouts]
+  C --> D[Choose one physical path per logical session ID]
+  D --> E[Sort by visible activity and apply limit]
+  E --> F[Candidate preview]
+  D --> G[Import re-scan chooses the same path]
+  G --> H[Task index checks logical session ID]
+```
+
+Regression coverage includes a multi-turn parent and a newer-mtime guardian review with
+the same `session_id`, preview/import parity, one candidate and one task, and activity order
+when file mtime disagrees with visible-message time.

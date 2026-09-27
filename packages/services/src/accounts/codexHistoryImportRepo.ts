@@ -62,9 +62,45 @@ export interface CodexHistoryScanOptions {
   readonly codexHome?: string;
   /** Only return sessions whose recorded cwd equals this path. */
   readonly workspacePath?: string;
-  /** Only return sessions modified at or after this epoch-ms. */
+  /** Only return sessions with visible conversation activity at or after this epoch-ms. */
   readonly modifiedSince?: number;
   readonly limit?: number;
+}
+
+interface ScannedCodexCandidate {
+  candidate: ZCodeImportableSessionCandidate;
+  isCanonical: boolean;
+  hasAssistant: boolean;
+  visibleMessageCount: number;
+  mtimeMs: number;
+}
+
+function compareRolloutQuality(left: ScannedCodexCandidate, right: ScannedCodexCandidate): number {
+  const leftRank = [
+    Number(left.isCanonical),
+    Number(left.hasAssistant),
+    left.visibleMessageCount,
+    left.candidate.updatedAt,
+    left.candidate.createdAt,
+    left.mtimeMs,
+  ];
+  const rightRank = [
+    Number(right.isCanonical),
+    Number(right.hasAssistant),
+    right.visibleMessageCount,
+    right.candidate.updatedAt,
+    right.candidate.createdAt,
+    right.mtimeMs,
+  ];
+  for (let index = 0; index < leftRank.length; index += 1) {
+    const difference = leftRank[index]! - rightRank[index]!;
+    if (difference !== 0) return difference;
+  }
+  return left.candidate.sourcePath < right.candidate.sourcePath
+    ? 1
+    : left.candidate.sourcePath > right.candidate.sourcePath
+      ? -1
+      : 0;
 }
 
 export async function scanCodexImportableSessions(
@@ -72,46 +108,48 @@ export async function scanCodexImportableSessions(
 ): Promise<readonly ZCodeImportableSessionCandidate[]> {
   const dir = resolveCodexSessionsDir(options.codexHome);
   const files = await collectRolloutFiles(dir);
-  const candidates: ZCodeImportableSessionCandidate[] = [];
+  const selectedBySessionId = new Map<string, ScannedCodexCandidate>();
 
   for (const file of files) {
-    let updatedAt: number;
+    let mtimeMs: number;
     try {
-      updatedAt = (await stat(file)).mtimeMs;
+      mtimeMs = (await stat(file)).mtimeMs;
     } catch {
       continue;
     }
-    if (options.modifiedSince !== undefined && updatedAt < options.modifiedSince) continue;
 
     const preview = await parseCodexRolloutPreview(file).catch(() => null);
-    if (!preview) continue;
+    if (!preview || preview.isReviewWrapper) continue;
     if (options.workspacePath && preview.workspacePath !== options.workspacePath) continue;
+    if (options.modifiedSince !== undefined && preview.activityAt < options.modifiedSince) continue;
 
-    candidates.push({
+    const candidate: ZCodeImportableSessionCandidate = {
       provider: "codex",
       sessionId: preview.sessionId,
       workspacePath: preview.workspacePath,
       sourcePath: file,
-      updatedAt,
+      updatedAt: preview.activityAt,
       createdAt: preview.createdAt,
       previewTitle: preview.title,
       previewMessages: preview.previewMessages,
-    });
-  }
-
-  candidates.sort((a, b) => b.updatedAt - a.updatedAt);
-  // Codex may write multiple rollout files for a fork while retaining the same source id.
-  // Keep the newest transcript so the picker and stable task identity expose one candidate.
-  const newestBySessionId = new Map<string, ZCodeImportableSessionCandidate>();
-  for (const candidate of candidates) {
-    const existing = newestBySessionId.get(candidate.sessionId);
-    if (!existing || candidate.updatedAt > existing.updatedAt) {
-      newestBySessionId.set(candidate.sessionId, candidate);
+    };
+    const scanned = {
+      candidate,
+      isCanonical: preview.physicalSessionId === preview.sessionId,
+      hasAssistant: preview.hasAssistant,
+      visibleMessageCount: preview.visibleMessageCount,
+      mtimeMs,
+    };
+    const existing = selectedBySessionId.get(preview.sessionId);
+    // 原因：guardian 复用父 session_id，mtime 更晚时会覆盖真实会话；按来源和可见对话质量选唯一物理文件。
+    if (!existing || compareRolloutQuality(scanned, existing) > 0) {
+      selectedBySessionId.set(preview.sessionId, scanned);
     }
   }
-  const uniqueCandidates = [...newestBySessionId.values()].sort(
-    (a, b) => b.updatedAt - a.updatedAt,
-  );
+
+  const uniqueCandidates = [...selectedBySessionId.values()]
+    .map(({ candidate }) => candidate)
+    .sort((a, b) => b.updatedAt - a.updatedAt || a.sessionId.localeCompare(b.sessionId));
   const limited = options.limit ? uniqueCandidates.slice(0, options.limit) : uniqueCandidates;
   logger.info(
     undefined,

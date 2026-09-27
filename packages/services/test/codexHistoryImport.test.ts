@@ -251,6 +251,158 @@ test("Codex scan keeps missing previews bounded and deduplicates fork files by n
   }
 });
 
+test("Codex selects the parent conversation over a newer guardian rollout and orders by visible activity", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "zcode-codex-guardian-"));
+  const previousHome = process.env.CODEX_HOME;
+  const workspacePath = join(temp, "workspace");
+  const sessionId = "00000000-0000-4000-8000-000000000021";
+  const guardianId = "00000000-0000-4000-8000-000000000022";
+  const otherId = "00000000-0000-4000-8000-000000000023";
+  const sessionsDir = join(temp, "sessions", "2026", "09", "26");
+  const parentPath = join(sessionsDir, "parent.jsonl");
+  const guardianPath = join(sessionsDir, "guardian.jsonl");
+  const otherPath = join(sessionsDir, "other.jsonl");
+  await mkdir(sessionsDir, { recursive: true });
+  await mkdir(workspacePath, { recursive: true });
+  process.env.CODEX_HOME = temp;
+
+  const message = (role: "user" | "assistant", text: string, timestamp: string) => ({
+    type: "response_item",
+    timestamp,
+    payload: {
+      type: "message",
+      role,
+      content: [{ type: role === "user" ? "input_text" : "output_text", text }],
+    },
+  });
+  const writeRollout = async (path: string, records: unknown[]) => {
+    await writeFile(path, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  };
+  await writeRollout(parentPath, [
+    {
+      type: "session_meta",
+      payload: {
+        id: sessionId,
+        session_id: sessionId,
+        cwd: workspacePath,
+        timestamp: "2026-09-26T12:00:00Z",
+        source: "vscode",
+        thread_source: "user",
+      },
+    },
+    message("user", "Design a mall game", "2026-09-26T12:00:01Z"),
+    message("assistant", "Start with the player loop.", "2026-09-26T12:00:02Z"),
+    message("user", "Add social spaces.", "2026-09-26T12:05:00Z"),
+    message("assistant", "Add a central plaza.", "2026-09-26T12:06:00Z"),
+  ]);
+  await writeRollout(guardianPath, [
+    {
+      type: "session_meta",
+      payload: {
+        id: guardianId,
+        session_id: sessionId,
+        parent_thread_id: sessionId,
+        cwd: workspacePath,
+        timestamp: "2026-09-26T12:07:00Z",
+        source: { subagent: { other: "guardian" } },
+        thread_source: "guardian_review",
+      },
+    },
+    message("user", "Review the parent agent history.", "2026-09-26T12:08:00Z"),
+    message("assistant", "Review complete.", "2026-09-26T12:09:00Z"),
+  ]);
+  await writeRollout(otherPath, [
+    {
+      type: "session_meta",
+      payload: {
+        id: otherId,
+        session_id: otherId,
+        cwd: workspacePath,
+        timestamp: "2026-09-26T12:20:00Z",
+      },
+    },
+    message("user", "A later conversation", "2026-09-26T12:30:00Z"),
+  ]);
+  await utimes(parentPath, new Date("2026-09-26T14:00:00Z"), new Date("2026-09-26T14:00:00Z"));
+  await utimes(guardianPath, new Date("2026-09-26T15:00:00Z"), new Date("2026-09-26T15:00:00Z"));
+  await utimes(otherPath, new Date("2026-09-26T10:00:00Z"), new Date("2026-09-26T10:00:00Z"));
+
+  try {
+    const candidates = await scanCodexImportableSessions({ codexHome: temp });
+    assert.equal(candidates.length, 2);
+    assert.deepEqual(
+      candidates.map((candidate) => candidate.sessionId),
+      [otherId, sessionId],
+    );
+    const candidate = candidates[1];
+    assert.equal(candidate?.sourcePath, parentPath);
+    assert.equal(candidate?.previewTitle, "Design a mall game");
+    assert.deepEqual(candidate?.previewMessages, [
+      { role: "user", content: "Design a mall game" },
+      { role: "assistant", content: "Start with the player loop." },
+    ]);
+    assert.equal(candidate?.updatedAt, Date.parse("2026-09-26T12:06:00Z"));
+    assert.deepEqual(
+      (await scanCodexImportableSessions({ codexHome: temp, limit: 1 })).map(
+        (item) => item.sessionId,
+      ),
+      [otherId],
+    );
+    assert.deepEqual(
+      (
+        await scanCodexImportableSessions({
+          codexHome: temp,
+          modifiedSince: Date.parse("2026-09-26T12:20:00Z"),
+        })
+      ).map((item) => item.sessionId),
+      [otherId],
+    );
+
+    const tasks = new Map<
+      string,
+      { taskId: string; workspacePath: string; migrationSourceSessionId: string }
+    >();
+    let created = 0;
+    const importOnce = () =>
+      importCodexNativeSessions({
+        taskIndexRepo: {
+          getTaskMeta: async ({ taskId }: { taskId: string }) => tasks.get(taskId) ?? null,
+        } as never,
+        workspacePath,
+        codexHome: temp,
+        sessionIds: [sessionId],
+        createImportedSession: async (source) => {
+          created += 1;
+          assert.equal(source.sessionId, sessionId);
+          assert.deepEqual(
+            source.messages.map(({ role, content }) => ({ role, content })),
+            [
+              { role: "user", content: "Design a mall game" },
+              { role: "assistant", content: "Start with the player loop." },
+              { role: "user", content: "Add social spaces." },
+              { role: "assistant", content: "Add a central plaza." },
+            ],
+          );
+          const taskId = buildImportedCodexTaskId(workspacePath, source.sessionId);
+          const meta = { taskId, workspacePath, migrationSourceSessionId: sessionId };
+          tasks.set(taskId, meta);
+          return meta as never;
+        },
+        onTaskImported() {},
+      });
+    const first = await importOnce();
+    const second = await importOnce();
+    assert.equal(first.imported.length, 1);
+    assert.equal(first.imported[0]?.taskId, buildImportedCodexTaskId(workspacePath, sessionId));
+    assert.equal(second.skipped[0]?.reason, "already_imported");
+    assert.equal(created, 1);
+  } finally {
+    if (previousHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
 test("Codex excludes injected project/context messages and shares preview with imported projection", async () => {
   const temp = await mkdtemp(join(tmpdir(), "zcode-codex-context-"));
   const previousHome = process.env.CODEX_HOME;
