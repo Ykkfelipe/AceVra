@@ -239,10 +239,6 @@ interface ZCodeAgentSpawnPreflight {
 
 const serviceLog = createServiceLogger("zcode-agent");
 
-function monotonicNowMs(): number {
-  return Number(process.hrtime.bigint()) / 1_000_000;
-}
-
 const log = (...args: unknown[]) => serviceLog.info(undefined, ...args);
 const warnLog = (...args: unknown[]) => serviceLog.warn(undefined, ...args);
 const errorLog = (...args: unknown[]) => serviceLog.error(undefined, ...args);
@@ -1020,7 +1016,6 @@ export class ZCodeAgentProcessManager {
       spawnPreflight,
     });
     const spawnRequestedAt = Date.now();
-    const spawnMonotonicMs = monotonicNowMs();
     const child = spawn(effectiveCommand.command, spawnPreflight.args, {
       cwd: spawnPreflight.cwd,
       // agent 可能再派生实际 runtime/MCP 子进程。POSIX 下让 wrapper 进入独立进程组，
@@ -1037,22 +1032,8 @@ export class ZCodeAgentProcessManager {
       },
       stdio: ["pipe", "pipe", "pipe"],
     });
-    const spawnCallReturnedAtMonotonicMs = monotonicNowMs();
-    let childSpawnedAtMonotonicMs: number | undefined;
-    child.once("spawn", () => {
-      childSpawnedAtMonotonicMs = monotonicNowMs();
-      serviceLog.info(undefined, "ZCode worker spawn event", {
-        workerPid: child.pid,
-        workspaceKey,
-        workspacePath: params.workspacePath,
-        spawnMonotonicMs,
-        childSpawnedAtMonotonicMs,
-        requireStorageStartup: effectiveCommand.supportsStorageStartup,
-      });
-    });
     const startedAt = Date.now();
     const stderrTail = createAgentStderrTail();
-    const transportConstructedAtMonotonicMs = monotonicNowMs();
     const transport = new ZCodeStdioTransport(child, {
       onStderrLine: (line) => {
         const diagnostic = parseZCodeProcessDiagnostic(line);
@@ -1099,21 +1080,9 @@ export class ZCodeAgentProcessManager {
       // 拥有的独立 PGID；异常 root exit 后 cleanup 仍可按组回收同组后代。
       ...(process.platform !== "win32" && child.pid ? { ownedProcessGroupId: child.pid } : {}),
     });
-    const protocolClientConstructedAtMonotonicMs = monotonicNowMs();
     const client = new ZCodeProtocolClient(transport, {
       requireStorageStartup: effectiveCommand.supportsStorageStartup,
       requestTimeoutMs: this.requestTimeoutMs,
-    });
-    serviceLog.info(undefined, "ZCode worker startup boundary timestamps", {
-      workerPid: child.pid,
-      workspaceKey,
-      workspacePath: params.workspacePath,
-      spawnMonotonicMs,
-      spawnCallReturnedAtMonotonicMs,
-      ...(childSpawnedAtMonotonicMs === undefined ? {} : { childSpawnedAtMonotonicMs }),
-      transportConstructedAtMonotonicMs,
-      protocolClientConstructedAtMonotonicMs,
-      requireStorageStartup: effectiveCommand.supportsStorageStartup,
     });
     // Agent 进程重启后，Host 仍需要 runtime identity 区分新旧订阅和运行命令。
     // Provider Registry 由新 Worker 从所属 Environment 的 Config 重建，不再由 UI 重新下发。
