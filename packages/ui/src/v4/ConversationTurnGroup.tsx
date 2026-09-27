@@ -83,6 +83,7 @@ import type {
   ConversationTurnRenderUnit,
   ConversationTurnWorkSegment,
 } from "@/v4/conversationTurnRenderUnits.js";
+import { isConversationWorkSegmentExpandable } from "@/v4/conversationTurnWorkSegments.js";
 import { formatConversationWorkDuration } from "@/v4/conversationWorkDuration.js";
 import { ConversationTurnRow, resolveAssistantCopyText } from "@/v4/ConversationTurnRow.js";
 import { ConversationHookDetailsAction } from "@/v4/ConversationHookDetailsAction.js";
@@ -583,6 +584,18 @@ function AssistantHistoryStatus({
         : durationLabel
           ? intl.formatMessage({ id: "chat.history.workedFor" }, { duration: durationLabel })
           : intl.formatMessage({ id: "chat.history.worked" });
+
+  // 修复：此前只要有 workStatus 就渲染展开按钮；没有可折叠 history 的回合（导入正文、纯文本回复）
+  // 展开后为空。此时只显示同位置的真实时长，不渲染触发器，也不为填充而伪造或暴露推理内容。
+  if (!isConversationWorkSegmentExpandable(segment)) {
+    return (
+      <div className="flex w-full border-b border-[var(--color-border)]/50 pb-2">
+        <span className="max-w-full truncate text-left text-ui-base text-foreground-subtle">
+          {label}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full border-b border-[var(--color-border)]/50 pb-2">

@@ -568,3 +568,35 @@ first visible exchange. Cover commentary-only turns, missing/equal/out-of-order 
 repeat import, ordinary non-imported folding, and Claude regression. Packaged acceptance:
 open a clean imported fixture on desktop and mobile, verify all segments before any expand
 click, reload/reconnect, and verify the same order. No real task is mutated by automated tests.
+
+Imported turns whose only content is visible text show their duration as a plain status
+label, not an empty expander; see `packages/ui/specs/conversation-work-status-header.md`.
+
+### Codex question-reply envelope (2026-09-27)
+
+When the assistant calls Codex's `request_user_input_async` tool, Codex records the user's
+answer as a `response_item` user `message` whose entire `input_text` is a transport envelope:
+
+```text
+<send_user_message_question_reply>
+[{"questionItemId":"[\"request_user_input_async\",\"<call_id>\",<index>]","answer":"…","question":"…"}]
+</send_user_message_question_reply>
+```
+
+The human-visible content is the `answer`. The Codex parser (single owner, shared by scan
+preview and import) replaces a user message with its answer text only when all hold:
+
+- after existing context sanitization, the whole message is exactly one envelope (opening tag,
+  JSON, closing tag, whitespace only between);
+- the JSON is a non-empty array whose every item is an object with a string `answer` and a
+  string `questionItemId` that JSON-decodes to an array starting with
+  `request_user_input_async`;
+- at least one answer is non-empty. Multiple answers are joined by a blank line in order.
+
+Anything else (partial or unclosed tags, extra text, invalid JSON, other tool names, missing
+fields) is preserved verbatim. No generic XML/HTML stripping; ordinary user prompts containing
+angle brackets, markup or code are unchanged. Roles, order, timestamps, guardian exclusion and
+re-import idempotency are unchanged. The question text is not injected into the user message.
+
+Persistence stays the owner of imported text: already imported tasks keep their stored text
+until an intentional re-import; no migration or read-time rewrite is added.

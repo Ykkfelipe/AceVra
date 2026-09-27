@@ -27,6 +27,16 @@ export interface ConversationTurnWorkSegment {
   workStatus?: ConversationTurnWorkStatus;
 }
 
+/**
+ * 工时行只有在存在可折叠 assistant history 时才是展开控件。workStatus 只说明“做过工作、用了多久”；
+ * 导入回合与纯文本回合的正文都在折叠区外，展开会是空的，此时只保留真实时长标签。
+ */
+export function isConversationWorkSegmentExpandable(
+  segment: Pick<ConversationTurnWorkSegment, "assistantHistoryRows">,
+): boolean {
+  return segment.assistantHistoryRows.length > 0;
+}
+
 export function resolveConversationTurnWorkStatus(
   header: TurnHeaderRow | undefined,
   workRows: readonly AssistantWorkRow[],

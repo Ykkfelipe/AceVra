@@ -694,3 +694,115 @@ test("Codex rollout scan parses visible messages and import retries are idempote
     await rm(temp, { recursive: true, force: true });
   }
 });
+
+test("Codex question-reply envelope imports only the answer; other markup is preserved", async () => {
+  const temp = await mkdtemp(join(tmpdir(), "zcode-codex-question-reply-"));
+  const previousHome = process.env.CODEX_HOME;
+  const sessionId = "00000000-0000-4000-8000-000000000021";
+  const workspacePath = join(temp, "workspace");
+  const sessionsDir = join(temp, "sessions", "2026", "09", "27");
+  const filePath = join(sessionsDir, `${sessionId}.jsonl`);
+  await mkdir(sessionsDir, { recursive: true });
+  await mkdir(workspacePath, { recursive: true });
+  process.env.CODEX_HOME = temp;
+  const itemId = (tool: string, index = 0) => JSON.stringify([tool, "call_fixture", index]);
+  const envelope = (inner: string, tail = "") =>
+    `<send_user_message_question_reply>\n${inner}\n</send_user_message_question_reply>${tail}`;
+  const reply = (items: unknown[]) => envelope(JSON.stringify(items));
+  const valid = [
+    {
+      questionItemId: itemId("request_user_input_async"),
+      answer: "Yes, update Mall game.rbxl",
+      question: "Confirm the place?",
+    },
+  ];
+  const markup =
+    'Keep <div class="note">literal</div> and <send_user_message_question_reply>x</send_user_message_question_reply> as typed';
+  // 每条都是用户可见原文，除第一个合法 envelope 与多答案 envelope 外都必须逐字保留。
+  const preserved = [
+    markup,
+    "<task>Refactor the mall</task>",
+    `<send_user_message_question_reply>\n${JSON.stringify(valid)}`,
+    reply(valid).concat("\nextra words"),
+    envelope("[{not json"),
+    reply([{ ...valid[0], questionItemId: itemId("request_user_input") }]),
+    reply([{ questionItemId: itemId("request_user_input_async"), question: "No answer" }]),
+    reply([{ ...valid[0], answer: "   " }]),
+    reply([]),
+  ];
+  const multi = reply([
+    {
+      questionItemId: itemId("request_user_input_async", 0),
+      answer: "First answer",
+      question: "Q1",
+    },
+    {
+      questionItemId: itemId("request_user_input_async", 1),
+      answer: "Second answer",
+      question: "Q2",
+    },
+  ]);
+  const user = (text: string) => ({
+    type: "response_item",
+    payload: { type: "message", role: "user", content: [{ type: "input_text", text }] },
+  });
+  const assistant = (text: string) => ({
+    type: "response_item",
+    payload: { type: "message", role: "assistant", content: [{ type: "output_text", text }] },
+  });
+  const records = [
+    {
+      type: "session_meta",
+      payload: { session_id: sessionId, cwd: workspacePath, timestamp: "2026-09-27T12:00:00Z" },
+    },
+    user("Update the Roblox place"),
+    assistant("I’ll confirm the target place first."),
+    {
+      type: "response_item",
+      payload: {
+        type: "function_call",
+        name: "request_user_input_async",
+        call_id: "call_fixture",
+        arguments: "{}",
+      },
+    },
+    {
+      type: "response_item",
+      payload: {
+        type: "function_call_output",
+        call_id: "call_fixture",
+        output: '{"accepted":true}',
+      },
+    },
+    user(reply(valid)),
+    assistant(`Quoted verbatim: ${reply(valid)}`),
+    user(multi),
+    ...preserved.map(user),
+  ];
+  await writeFile(filePath, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  try {
+    const [candidate] = await scanCodexImportableSessions();
+    const imported = await parseCodexRollout(filePath);
+    assert.ok(candidate && imported);
+    assert.deepEqual(
+      imported.messages.map(({ role, content }) => ({ role, content })),
+      [
+        { role: "user", content: "Update the Roblox place" },
+        { role: "assistant", content: "I’ll confirm the target place first." },
+        { role: "user", content: "Yes, update Mall game.rbxl" },
+        { role: "assistant", content: `Quoted verbatim: ${reply(valid)}` },
+        { role: "user", content: "First answer\n\nSecond answer" },
+        ...preserved.map((content) => ({ role: "user", content })),
+      ],
+    );
+    assert.equal(candidate.previewTitle, "Update the Roblox place");
+    assert.deepEqual(
+      candidate.previewMessages,
+      imported.messages.slice(0, 2).map(({ role, content }) => ({ role, content })),
+    );
+  } finally {
+    if (previousHome === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previousHome;
+    await rm(temp, { recursive: true, force: true });
+  }
+});

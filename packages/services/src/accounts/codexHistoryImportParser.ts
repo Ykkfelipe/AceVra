@@ -83,6 +83,46 @@ function sanitizeCodexUserText(text: string): string {
     .trim();
 }
 
+const CODEX_QUESTION_REPLY_ENVELOPE =
+  /^<send_user_message_question_reply>\s*([\s\S]*?)\s*<\/send_user_message_question_reply>$/u;
+
+function isRequestUserInputAsyncItemId(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  try {
+    const id: unknown = JSON.parse(value);
+    return Array.isArray(id) && id[0] === "request_user_input_async";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 修复依据：Codex 把用户对 `request_user_input_async` 问题的回答整条包成
+ * `<send_user_message_question_reply>[{questionItemId, answer, question}]</…>` 协议信封写成
+ * user message，导入后信封原样显示。只有整条消息恰好是这一已验证形状时才取出 answer；
+ * 任何偏差（缺闭合、夹杂文本、非 JSON、其他工具、缺 answer）都原样保留，不做通用标签剥离。
+ */
+function unwrapCodexQuestionReply(text: string): string {
+  const match = CODEX_QUESTION_REPLY_ENVELOPE.exec(text);
+  if (!match) return text;
+  let items: unknown;
+  try {
+    items = JSON.parse(match[1]!);
+  } catch {
+    return text;
+  }
+  if (!Array.isArray(items) || items.length === 0) return text;
+  const answers: string[] = [];
+  for (const entry of items) {
+    const item = object(entry);
+    if (!item || typeof item.answer !== "string") return text;
+    if (!isRequestUserInputAsyncItemId(item.questionItemId)) return text;
+    const answer = item.answer.trim();
+    if (answer) answers.push(answer);
+  }
+  return answers.length > 0 ? answers.join("\n\n") : text;
+}
+
 function buildPreview(
   messages: readonly CodexImportedMessage[],
 ): ZCodeImportableSessionPreviewMessage[] {
@@ -137,7 +177,8 @@ async function parseCodexRolloutFile(filePath: string): Promise<ParsedCodexRollo
         payload.content,
         role === "user" ? "input_text" : "output_text",
       );
-      const content = role === "user" ? sanitizeCodexUserText(rawContent) : rawContent;
+      const content =
+        role === "user" ? unwrapCodexQuestionReply(sanitizeCodexUserText(rawContent)) : rawContent;
       if (!content) continue;
       messages.push({ role, content, ...(at === undefined ? {} : { timestamp: at }) });
     }
