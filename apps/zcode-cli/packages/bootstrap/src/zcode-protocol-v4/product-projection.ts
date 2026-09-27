@@ -1981,7 +1981,7 @@ export class ProductProjection {
             `model-change:${turnId}:${this.lastTurnModel.provider}/${this.lastTurnModel.model}->${config.provider}/${config.model}`,
           ),
           kind: "timelineMarker",
-        // lane 由投影裁决（UI 不得按 marker type 自行推断落位语义）。
+          // lane 由投影裁决（UI 不得按 marker type 自行推断落位语义）。
           lane: "lightBoundary",
           marker: {
             type: "modelChange",
@@ -2582,6 +2582,9 @@ export class ProductProjection {
     const row: AssistantTextRow = {
       ...this.rowBase(event, this.turnIdOf(event), fact.entityId),
       kind: "assistantText",
+      ...((event.payload as ModelStreamingPayload).importedHistory === true
+        ? { importedHistory: true as const }
+        : {}),
       ...(fact.stream.assistantResponseId
         ? { assistantResponseId: fact.stream.assistantResponseId }
         : {}),

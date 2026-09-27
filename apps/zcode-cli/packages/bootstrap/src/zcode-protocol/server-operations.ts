@@ -996,7 +996,7 @@ async function removePreviousImportedSessionHistory(params: {
   return removedCount;
 }
 
-async function persistImportedSessionHistory(params: {
+export async function persistImportedSessionHistory(params: {
   context: ZCodeProtocolAgentServerContext;
   record: ZCodeProtocolSessionRecord;
   sessionId: SessionId;
@@ -3430,7 +3430,7 @@ async function createRecord(
   return record;
 }
 
-async function readPersistedSessionMessages(
+export async function readPersistedSessionMessages(
   context: ZCodeProtocolAgentServerContext,
   sessionId: string,
 ): Promise<MessageWithParts[]> {

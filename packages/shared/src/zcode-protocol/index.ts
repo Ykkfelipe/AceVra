@@ -1012,6 +1012,7 @@ export const zcodeModelStreamingKindSchema = z.enum([
 ]);
 export const zcodeModelStreamingEventPayloadSchema = z
   .object({
+    importedHistory: z.literal(true).optional(),
     assistantMessageId: z.string().optional(),
     delta: z.string().optional(),
     done: z.boolean().optional(),

@@ -622,6 +622,11 @@ function synthesizeTextPart(
     SessionEventType.ModelStreaming,
     {
       kind: "text_start",
+      // 导入文本原先被 UI 当作中间工作历史折叠；以已落盘来源保留其默认可见性。
+      ...(part.metadata?.migrationSource === "codex" ||
+      part.metadata?.migrationSource === "claudeCode"
+        ? { importedHistory: true as const }
+        : {}),
       delta: "",
       done: false,
       assistantMessageId,

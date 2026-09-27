@@ -164,13 +164,18 @@ export function buildConversationTurnWorkSegments(options: {
     const visibleAssistantIndex = visibleAssistantTextRow
       ? segmentFlowRows.findIndex((row) => row.rowId === visibleAssistantTextRow.rowId)
       : -1;
+    // 导入的每段正文都曾对用户可见，不能因同轮后续正文出现就收进折叠历史。
+    const isCollapsibleWork = (row: AssistantWorkRow) =>
+      !isAssistantTextRow(row) || row.importedHistory !== true;
     const segmentHistoryRows = options.timelineOnly
       ? []
       : visibleAssistantIndex < 0
-        ? segmentFlowRows
-        : segmentFlowRows.slice(0, visibleAssistantIndex);
+        ? segmentFlowRows.filter(isCollapsibleWork)
+        : segmentFlowRows.slice(0, visibleAssistantIndex).filter(isCollapsibleWork);
     const segmentFollowingRows =
-      visibleAssistantIndex < 0 ? [] : segmentFlowRows.slice(visibleAssistantIndex + 1);
+      visibleAssistantIndex < 0
+        ? []
+        : segmentFlowRows.slice(visibleAssistantIndex + 1).filter(isCollapsibleWork);
     const segmentRunning = segmentIndex === visualDrafts.length - 1 && options.isRunning;
     const segmentDurationMs = resolveSegmentDurationMs({
       header: options.header,

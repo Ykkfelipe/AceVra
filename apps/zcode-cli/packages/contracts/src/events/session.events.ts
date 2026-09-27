@@ -705,6 +705,8 @@ export type ModelStreamingKind =
   | "error";
 
 export interface ModelStreamingPayload {
+  /** Visible imported text; derived from persisted text-part provenance during hydration. */
+  importedHistory?: true;
   delta: string;
   done: boolean;
   kind?: ModelStreamingKind;

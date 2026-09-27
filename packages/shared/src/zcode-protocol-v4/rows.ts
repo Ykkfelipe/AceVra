@@ -161,6 +161,8 @@ export type UserInputRow = z.infer<typeof userInputRowSchema>;
 export const assistantTextRowSchema = z.object({
   ...rowBaseFields,
   kind: z.literal("assistantText"),
+  // 导入的可见文本不是可折叠的运行时工作历史；缺省兼容普通/旧 snapshot。
+  importedHistory: z.literal(true).optional(),
   // 同一模型 response 的正文与工具共享此 ID；optional 兼容旧 snapshot。
   assistantResponseId: z.string().min(1).optional(),
   text: z.string(),

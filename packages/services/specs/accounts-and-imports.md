@@ -526,3 +526,45 @@ flowchart LR
 Regression coverage includes a multi-turn parent and a newer-mtime guardian review with
 the same `session_id`, preview/import parity, one candidate and one task, and activity order
 when file mtime disagrees with visible-message time.
+
+### Imported assistant segments remain visible (2026-09-27)
+
+An imported user turn can contain multiple visible assistant messages. They are ordered
+segments, not competing answers. Preserve each segment as its own V4 `assistantText` row
+within the same product turn; show all imported segments by default. Only the existing
+terminal action target receives turn actions. Do not concatenate unrelated messages, infer
+source phases, or change preview selection. Ordinary runtime work-history folding is unchanged.
+
+The session store remains the durable owner. Existing text-part `metadata.migrationSource`
+(`codex` or `claudeCode`) is the provenance authority, including already imported sessions.
+Transcript hydration derives an optional literal `importedHistory: true` on text-start events;
+ProductProjection carries it into the validated assistant row. UI work segmentation excludes
+those rows from collapsed history and following-work groups. No new database field or repair
+write is needed. Absent provenance keeps the existing behavior; no ID-prefix guessing.
+
+```mermaid
+sequenceDiagram
+  participant P as Source parser
+  participant S as Session store (owner)
+  participant H as Transcript hydration
+  participant V as V4 projection
+  participant U as Shared desktop/mobile UI
+  P->>S: Ordered importedHistory messages
+  S->>S: Distinct message/part IDs, common user parent, monotonic time
+  S->>H: Read persisted messages and migrationSource
+  H->>V: Ordered text events with importedHistory provenance
+  V->>U: Separate assistantText rows, importedHistory=true
+  U->>U: Render every imported segment outside collapsed work history
+```
+
+Desktop continuous subscriptions and mobile replayable snapshots use the same derived rows;
+this change does not affect command admission, owner/lease, stale-run guards, or delivery order.
+Repeated hydration must produce the same row order and visibility without changing persistence.
+
+Acceptance: normalized U1/A1-progress/A2-final/U2/B1-progress/B2-final passes through the
+real imported-history writer, isolated SQLite, normal readback, hydration, V4 schema and UI
+render-unit builder. All six texts remain separately visible in order; preview matches the
+first visible exchange. Cover commentary-only turns, missing/equal/out-of-order timestamps,
+repeat import, ordinary non-imported folding, and Claude regression. Packaged acceptance:
+open a clean imported fixture on desktop and mobile, verify all segments before any expand
+click, reload/reconnect, and verify the same order. No real task is mutated by automated tests.
