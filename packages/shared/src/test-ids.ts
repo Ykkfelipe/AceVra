@@ -535,6 +535,14 @@ export const TID_V4_COMPOSER_INPUT = "v4-composer-input";
 export const TID_V4_COMPOSER_BACKGROUND_WORK_TRIGGER = "v4-composer-background-work-trigger";
 /** v4 composer 电脑操作（CUA）常驻入口按钮 */
 export const TID_V4_COMPOSER_CUA_ENTRY = "v4-composer-cua-entry";
+/** CUA-4 会话控制条（CUA 活动期间出现在 composer 上方） */
+export const TID_V4_COMPUTER_USE_BAR = "v4-computer-use-bar";
+/** CUA-4 会话控制条：暂停/恢复按钮 */
+export const TID_V4_COMPUTER_USE_BAR_PAUSE = "v4-computer-use-bar-pause";
+/** CUA-4 会话控制条：停止按钮 */
+export const TID_V4_COMPUTER_USE_BAR_STOP = "v4-computer-use-bar-stop";
+/** CUA-4 会话控制条：最近快照预览 */
+export const TID_V4_COMPUTER_USE_BAR_PREVIEW = "v4-computer-use-bar-preview";
 /** v4 composer 发送按钮 */
 export const TID_V4_COMPOSER_SEND = "v4-composer-send";
 /** v4 暂停队列发送确认：清空队列并发送 */

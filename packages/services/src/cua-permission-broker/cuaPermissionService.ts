@@ -29,6 +29,14 @@ import type {
   CuaComputerControlState,
   CuaComputerControlStatus,
   CuaComputerControlStopResult,
+  CuaComputerUseSessionView,
+  CuaSessionActivityView,
+  CuaSessionObservationView,
+  CuaSessionTargetView,
+  CuaSessionLeaseView,
+  CuaPauseComputerUseResult,
+  CuaResumeComputerUseResult,
+  CuaObservationFrameResult,
   ICuaPermissionService as BrokerICuaPermissionService,
 } from "@zcode/zcode-cua/broker";
 
@@ -44,6 +52,14 @@ export type {
   CuaComputerControlState,
   CuaComputerControlStatus,
   CuaComputerControlStopResult,
+  CuaComputerUseSessionView,
+  CuaSessionActivityView,
+  CuaSessionObservationView,
+  CuaSessionTargetView,
+  CuaSessionLeaseView,
+  CuaPauseComputerUseResult,
+  CuaResumeComputerUseResult,
+  CuaObservationFrameResult,
 };
 
 // 只从 producer 的纯 ports subpath 复用值谓词。这里不能从 Node-only broker barrel

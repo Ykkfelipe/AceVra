@@ -504,6 +504,9 @@ import {
   type CuaPermissionStatusResult,
   type CuaComputerControlStatus,
   type CuaComputerControlStopResult,
+  type CuaObservationFrameResult,
+  type CuaPauseComputerUseResult,
+  type CuaResumeComputerUseResult,
 } from "#src/cua-permission-broker/index.js";
 import {
   resolveWindowsCuaRuntime,
@@ -512,6 +515,10 @@ import {
 } from "#src/cua-permission-broker/windowsCuaDevRuntime.js";
 import { createCanonicalCuaHelperInstaller } from "./cua-permission-broker/cuaHelperInstaller.js";
 import { projectAvailableCuaPermissionReport } from "./cua-permission-broker/cuaPermissionProjection.js";
+import {
+  describeComputerUseSession,
+  readComputerUseObservationFrame,
+} from "./cua-permission-broker/cuaSessionView.js";
 import { startLeaseAuthorityServer } from "./cua-permission-broker/lease-authority/server.js";
 import type { LeaseAuthority } from "./cua-permission-broker/lease-authority/contract.js";
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
@@ -2109,6 +2116,64 @@ export function createLocalServices(options: {
             }
           : {}),
       };
+    },
+    // CUA-4：会话读模型只投影 lease authority 的事实，并在 active 时用一次有界的只读
+    // control_status 查询对账 Helper 真相（物理输入让出在一个轮询内可见）。pause/resume/stop
+    // 都不是 sideband 方法，模型无法自行调用；这里只服务拥有会话的 UI。
+    async getComputerUseSession(sessionId: string) {
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
+      const host =
+        helper && isDefaultCuaProductHelperCurrent(helper) ? helper.macPermissionHost : undefined;
+      return await describeComputerUseSession({ authority, host }, sessionId);
+    },
+    async pauseComputerUse(): Promise<CuaPauseComputerUseResult> {
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      if (!authority) {
+        return { ok: false, status: "unavailable", released: false, error: "not_desktop_local" };
+      }
+      try {
+        const result = await authority.pause();
+        return {
+          ok: true,
+          status: result.status,
+          released: result.released,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          status: "unavailable",
+          released: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+    async resumeComputerUse(): Promise<CuaResumeComputerUseResult> {
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      if (!authority) {
+        return { ok: false, status: "unavailable", error: "not_desktop_local" };
+      }
+      try {
+        const result = await authority.resume();
+        return { ok: true, status: result.status };
+      } catch (error) {
+        return {
+          ok: false,
+          status: "unavailable",
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+    async getComputerUseObservationFrame(
+      sessionId: string,
+      observationId: string,
+    ): Promise<CuaObservationFrameResult> {
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      return await readComputerUseObservationFrame(
+        { authority, env: process.env },
+        sessionId,
+        observationId,
+      );
     },
     async restartHelper(
       workspacePath: string,

@@ -155,6 +155,14 @@ export interface CuaHelperHost extends CuaProductHelperHost {
     owner_session: string;
     owner_task: string;
   }): Promise<{ lease_state?: string; [key: string]: unknown }>;
+  /**
+   * CUA-4: read-only Helper lease status beside the verified release transport. Reports `active`,
+   * the termination code for a bounded window after the lease ended, or `unknown`. Never mutates
+   * the lease and never opens a new trust path.
+   */
+  queryControlStatus(params: {
+    lease_id: string;
+  }): Promise<{ lease_state?: string; effect?: string; [key: string]: unknown }>;
   queryScreenCaptureProbe(): Promise<{ ok: boolean; reason?: string }>;
   queryScreenRecordingPreflight(): Promise<"granted" | "denied" | "unknown" | undefined>;
   queryPermissionStatus(): Promise<CuaPermissionStatusQueryReport>;

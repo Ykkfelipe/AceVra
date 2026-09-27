@@ -283,6 +283,11 @@ export function createProductCuaHelperHost(options = {}) {
       if (!transport) throw new CuaHelperError(UNAVAILABLE);
       return await transport.callMethod("release_control", params, { timeoutMs: 2_000 });
     },
+    // CUA-4：与 releaseControl 同一条已验证传输上的只读查询；不改租约状态，超时有上限。
+    queryControlStatus: async (params) => {
+      if (!transport) throw new CuaHelperError(UNAVAILABLE);
+      return await transport.callMethod("control_status", params, { timeoutMs: 2_000 });
+    },
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
     queryPermissionStatus: async () => await queryProductHelperPermissionStatus(transport),
@@ -309,6 +314,7 @@ function createUnavailableCuaHelperHost() {
     waitForTransport: unavailableReject,
     checkHealth: unavailableReject,
     releaseControl: unavailableReject,
+    queryControlStatus: unavailableReject,
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
     queryPermissionStatus: unavailableReject,

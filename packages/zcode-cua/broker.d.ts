@@ -228,6 +228,102 @@ export interface CuaComputerControlStopResult {
   record?: CuaComputerControlStatus;
 }
 
+// ---------------------------------------------------------------------------
+// CUA-4: renderer-facing Computer Use session read model.
+//
+// Everything here is a projection of the service lease authority (the single
+// owner of session control state). The view is filtered by owner session on the
+// service side: another session's activity, observation or lease is never
+// returned. Host frame paths never cross this boundary — frames are fetched by
+// observation id through `getComputerUseObservationFrame`.
+// ---------------------------------------------------------------------------
+
+/** Target identity positively resolved by the Helper in this runtime session. */
+export interface CuaSessionTargetView {
+  pid?: number;
+  windowId?: number;
+  app?: string;
+  bundleId?: string;
+  window?: string;
+}
+
+export interface CuaSessionActivityView {
+  callId: string;
+  task: string;
+  method: string;
+  phase: "started" | "completed";
+  startedAt: number;
+  completedAt?: number;
+  effect?: string;
+  route?: string;
+  code?: string;
+  inputDelivery?: string;
+  applicationEffect?: string;
+}
+
+export interface CuaSessionObservationView {
+  id: string;
+  capturedAt: number;
+  width?: number;
+  height?: number;
+  blank?: boolean;
+  target?: CuaSessionTargetView;
+}
+
+export interface CuaSessionLeaseView {
+  state: "inactive" | "reserving" | "active" | "releasing" | "released" | "stopped";
+  leaseId?: string;
+  generation?: number;
+  /** Why the most recent lease ended (`released`, `interrupted`, `stopped`, `paused`, Helper code). */
+  termination?: {
+    leaseId: string;
+    reason: string;
+    at: number;
+  };
+}
+
+/** `present: false` means the owning session has no Computer Use activity on record. */
+export type CuaComputerUseSessionView =
+  | { present: false }
+  | {
+      present: true;
+      sessionId: string;
+      lease: CuaSessionLeaseView;
+      paused: boolean;
+      pausedAt?: number;
+      activity?: CuaSessionActivityView;
+      observation?: CuaSessionObservationView;
+      /** True while a Stop is expected to change something (lease held or action in flight). */
+      stopMeaningful: boolean;
+    };
+
+export interface CuaPauseComputerUseResult {
+  ok: boolean;
+  status: "paused" | "already_paused" | "unavailable";
+  /** Whether an active exclusive lease was released through the Helper. */
+  released: boolean;
+  error?: string;
+}
+
+export interface CuaResumeComputerUseResult {
+  ok: boolean;
+  status: "resumed" | "not_paused" | "unavailable";
+  error?: string;
+}
+
+/**
+ * Confined observation frame read. Only the owning session's latest observation can be resolved,
+ * and only under the accepted Helper observation roots. Missing or pruned frames return
+ * `unavailable` (never an exception dump) so the UI can show a stale snapshot instead.
+ */
+export interface CuaObservationFrameResult {
+  status: "available" | "unavailable";
+  code?: "not_found" | "stale" | "forbidden" | "too_large" | "unavailable";
+  mimeType?: "image/png";
+  bytesBase64?: string;
+  byteLength?: number;
+}
+
 export interface ICuaPermissionService {
   getStatus(
     workspacePath: string,
@@ -241,4 +337,15 @@ export interface ICuaPermissionService {
     workspaceIdentity?: string,
     options?: CuaPermissionRestartOptions,
   ): Promise<CuaPermissionRestartResult>;
+  /** Owner-session-filtered Computer Use session projection (CUA-4). */
+  getComputerUseSession(sessionId: string): Promise<CuaComputerUseSessionView>;
+  /** Gates admission and releases an active exclusive lease through the Helper. */
+  pauseComputerUse(): Promise<CuaPauseComputerUseResult>;
+  /** Lifts the pause gate only; foreground work re-enters through normal admission. */
+  resumeComputerUse(): Promise<CuaResumeComputerUseResult>;
+  /** Fetches the session's own latest observation frame as confined PNG bytes. */
+  getComputerUseObservationFrame(
+    sessionId: string,
+    observationId: string,
+  ): Promise<CuaObservationFrameResult>;
 }

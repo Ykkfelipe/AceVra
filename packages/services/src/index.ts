@@ -259,6 +259,14 @@ export {
   type CuaComputerControlState,
   type CuaComputerControlStatus,
   type CuaComputerControlStopResult,
+  type CuaComputerUseSessionView,
+  type CuaSessionActivityView,
+  type CuaSessionObservationView,
+  type CuaSessionTargetView,
+  type CuaSessionLeaseView,
+  type CuaPauseComputerUseResult,
+  type CuaResumeComputerUseResult,
+  type CuaObservationFrameResult,
   isCuaPermissionStatusAvailable,
 } from "./cua-permission-broker/cuaPermissionService.js";
 export {

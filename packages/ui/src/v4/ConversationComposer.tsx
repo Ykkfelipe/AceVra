@@ -153,6 +153,7 @@ import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { useConversationSelectionReferences } from "@/v4/composer/useConversationSelectionReferences.js";
 import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBackgroundWorkTrigger.js";
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
+import { ComputerUseBar } from "@/v4/composer/ComputerUseBar.js";
 import {
   V4ComposerModeSwitch,
   V4ComposerModelControls,
@@ -2334,6 +2335,8 @@ function ConversationComposerImpl({
         className="hidden"
         onChange={attachmentsApi.handleAttachmentInputChange}
       />
+      {/* CUA-4 会话控制条：CUA 活动期间出现在 composer 上方；纯闲聊时不渲染、不轮询。 */}
+      <ComputerUseBar sessionId={sessionId ?? null} turnRunning={canStop} onStop={onStop} />
       {visibleError ? (
         // 仅展示附件错误会漏掉会话级 lastError，任务失败后也应在输入框上方显示原因。
         // 这里复用旧 ChatErrorBanner 壳，只接收 SessionPane 已归一化后的当前错误。
