@@ -16,10 +16,21 @@ export function createLeaseAuthorityClient(env = process.env) {
   const token = env[TOKEN_ENV]?.trim();
   if (!socketPath || !token) return undefined;
   return {
-    async request(method, params = {}) {
+    async request(method, params = {}, requestOptions = {}) {
       return await new Promise((resolve, reject) => {
         const socket = net.createConnection(socketPath);
         let buffer = "";
+        // CUA-4 的 admission/活动上报位于每次 Computer Use 调用路径上：必须有上限，
+        // sideband 卡住时只能失败而不能让动作无限等待。既有方法不传 timeoutMs，行为不变。
+        const timeoutMs = requestOptions.timeoutMs;
+        if (typeof timeoutMs === "number" && timeoutMs > 0) {
+          socket.setTimeout(timeoutMs, () => {
+            socket.destroy();
+            reject(
+              Object.assign(new Error("lease authority request timed out"), { code: "timeout" }),
+            );
+          });
+        }
         socket.setEncoding("utf8");
         socket.once("connect", () =>
           socket.write(`${JSON.stringify({ token, id: randomUUID(), method, params })}\n`),
@@ -51,6 +62,12 @@ export function createLeaseAuthorityClient(env = process.env) {
     },
     stop() {
       return this.request("stop");
+    },
+    admission() {
+      return this.request("admission", {}, { timeoutMs: 1500 });
+    },
+    reportActivity(report) {
+      return this.request("report_activity", report, { timeoutMs: 1500 });
     },
   };
 }

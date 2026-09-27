@@ -6,6 +6,7 @@ import {
   validForegroundInput,
   COMPUTER_USE_FOREGROUND_METHODS,
 } from "./capability-contract.js";
+import { createSessionIdentityRegistry, identityText } from "./session-identity.js";
 
 /**
  * Model-facing provider-independent tool name to broker method.
@@ -17,6 +18,11 @@ const MODEL_TOOL_HINT =
   "supported tools: list_apps, list_windows, get_app_state, screenshot, request_access, computer.press, computer.set_value, computer.control_status, computer.acquire_control, computer.release_control, computer.activate_target, computer.move_pointer, computer.click, computer.type_text, computer.key_press, computer.scroll, computer.drag.";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+
+/** CUA-4: methods that stay available while the user has paused Computer Use. */
+const PAUSE_EXEMPT_METHODS = new Set(["permission_status", "control_status"]);
+const PAUSED_TEXT =
+  "Computer Use is paused by the user. Do not retry Computer Use; tell the user you are waiting and continue only after they resume it.";
 
 function unavailable(text, code = "unavailable", effect = "refused") {
   return {
@@ -40,6 +46,22 @@ export function createComputerUseRuntime(options = {}) {
     typeof options.brokerSocketPath === "string" ? options.brokerSocketPath.trim() : "";
   const activeLeases = new Map();
   const leaseAuthority = options.leaseAuthority;
+  // CUA-4：只记录 Helper 在本运行时会话中实际列出的 pid/窗口，用于把观察目标命名；
+  // 未被列出的目标只保留已知部分，绝不猜测名称。
+  const identities = createSessionIdentityRegistry();
+  let callSequence = 0;
+
+  function reportActivity(report) {
+    if (!report.session || !leaseAuthority || typeof leaseAuthority.reportActivity !== "function") {
+      return;
+    }
+    try {
+      // 投影上报只能尽力而为：不 await、不影响动作结果，sideband 故障不能改变 Computer Use 行为。
+      void Promise.resolve(leaseAuthority.reportActivity(report)).catch(() => undefined);
+    } catch {
+      // Same rule as above.
+    }
+  }
 
   async function resolveSocketPath() {
     if (explicitSocketPath) return explicitSocketPath;
@@ -61,7 +83,7 @@ export function createComputerUseRuntime(options = {}) {
     }
   }
 
-  async function releaseKnownLease(sessionId) {
+  async function releaseKnownLease(sessionId, reason = "runtime_cleanup") {
     const current = activeLeases.get(sessionId);
     if (!current) return;
     try {
@@ -80,7 +102,7 @@ export function createComputerUseRuntime(options = {}) {
     } catch {
       // The Helper also releases on disconnect and at its bounded deadline.
     } finally {
-      await releaseAuthorityLease(sessionId, "runtime_cleanup");
+      await releaseAuthorityLease(sessionId, reason);
     }
   }
 
@@ -133,6 +155,38 @@ export function createComputerUseRuntime(options = {}) {
           return unavailable(`${method} arguments are invalid`, "bad_request");
         }
       }
+
+      const sessionId =
+        typeof input?.context?.sessionId === "string" ? input.context.sessionId : "";
+      const task =
+        typeof input?.context?.turnId === "string" && input.context.turnId
+          ? input.context.turnId
+          : sessionId;
+      const mutating = method === "press" || method === "set_value" || foreground;
+      if (
+        leaseAuthority &&
+        typeof leaseAuthority.admission === "function" &&
+        !PAUSE_EXEMPT_METHODS.has(method)
+      ) {
+        let admission;
+        try {
+          admission = await leaseAuthority.admission();
+        } catch {
+          admission = undefined;
+        }
+        // CUA-4 暂停是真实边界：暂停期间除状态查询外一律拒绝，不能只隐藏 UI 更新。
+        if (admission?.paused === true) return unavailable(PAUSED_TEXT, "paused");
+        if (!admission && mutating) {
+          return unavailable(
+            "Computer Use control state could not be verified",
+            "lease_authority_unavailable",
+          );
+        }
+      }
+      callSequence += 1;
+      const callId = `${Date.now().toString(36)}-${callSequence}`;
+      const activityBase = { session: sessionId, task, callId, method };
+      reportActivity({ ...activityBase, phase: "started", at: Date.now() });
 
       try {
         if (typeof options.ensureBrokerAvailable === "function") {
@@ -268,8 +322,41 @@ export function createComputerUseRuntime(options = {}) {
           await releaseAuthorityLease(input.context.sessionId, "model_release");
         }
         if (foreground && normalized.code === "interrupted") {
-          await releaseKnownLease(input.context.sessionId);
+          await releaseKnownLease(input.context.sessionId, "interrupted");
         }
+        identities.remember(sessionId, method, result);
+        const image =
+          method === "observe" && result && typeof result === "object" ? result.image : null;
+        const observationId =
+          image && typeof image === "object" ? identityText(image.observation_id) : undefined;
+        reportActivity({
+          ...activityBase,
+          phase: "completed",
+          at: Date.now(),
+          ...(typeof normalized.effect === "string" ? { effect: normalized.effect } : {}),
+          ...(typeof normalized.route === "string" ? { route: normalized.route } : {}),
+          ...(typeof normalized.code === "string" ? { code: normalized.code } : {}),
+          ...(typeof normalized.input_delivery === "string"
+            ? { inputDelivery: normalized.input_delivery }
+            : {}),
+          ...(typeof normalized.application_effect === "string"
+            ? { applicationEffect: normalized.application_effect }
+            : {}),
+          ...(method === "observe"
+            ? { target: identities.target(sessionId, input?.arguments) }
+            : {}),
+          ...(observationId
+            ? {
+                observation: {
+                  id: observationId,
+                  ...(Number.isFinite(image.width) ? { width: image.width } : {}),
+                  ...(Number.isFinite(image.height) ? { height: image.height } : {}),
+                  ...(typeof image.blank === "boolean" ? { blank: image.blank } : {}),
+                  ...(typeof image.path === "string" ? { framePath: image.path } : {}),
+                },
+              }
+            : {}),
+        });
         return {
           content: [{ type: "text", text: JSON.stringify(normalized) }],
           ...(action
@@ -287,6 +374,13 @@ export function createComputerUseRuntime(options = {}) {
         // like any other model-facing string — a `connect_failed` message carries the socket path,
         // and "no Helper running yet" is the ordinary first-use case, not an edge case.
         const code = error && typeof error.code === "string" ? error.code : "unknown";
+        reportActivity({
+          ...activityBase,
+          phase: "completed",
+          at: Date.now(),
+          effect: "failed",
+          code,
+        });
         const message = error instanceof Error ? error.message : String(error);
         const { redactHostPaths } = await import("./observe-result.js");
         return unavailable(
@@ -297,7 +391,10 @@ export function createComputerUseRuntime(options = {}) {
       }
     },
     async closeSession(context) {
-      if (context?.sessionId) await releaseKnownLease(context.sessionId);
+      if (context?.sessionId) {
+        identities.forget(context.sessionId);
+        await releaseKnownLease(context.sessionId);
+      }
     },
     async dispose() {
       for (const sessionId of activeLeases.keys()) await releaseKnownLease(sessionId);

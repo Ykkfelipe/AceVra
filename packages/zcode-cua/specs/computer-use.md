@@ -1610,3 +1610,114 @@ admitted Helper identity" of the required property.
 Deterministic tests cover the policy half (codes above, contract equality, pid consistency) and
 the no-legacy-fallback boundary; `native/peer-identity/run-cua175-verification.mjs` drives the
 live matrix on macOS with the real probe and real Helper.
+
+# CUA-4 — live Computer Use session presentation and control
+
+CUA-4 makes the existing CUA-3 execution understandable and controllable from the conversation.
+It adds no automation route, no new capture, and no second state machine in the renderer.
+
+## Sources of truth (inspected before implementation)
+
+- **Lease and terminal state:** the service lease authority (`cua-lease-authority`). The node_repl
+  runtime reports `begin_acquire`/`commit_acquire`/`release` over the authenticated sideband.
+- **Helper-side lease truth:** the signed Helper; `control_status(lease_id)` reports `active`, the
+  termination code for 30 s after it ended (for example `interrupted`), or `unknown`.
+- **What the agent is doing:** native AceVra Computer Use runs inside `node_repl` JavaScript through
+  the official plugin client, so individual `computer.*` calls are _not_ conversation tool rows.
+  The only truthful live source is `createComputerUseRuntime().execute()` itself.
+- **Frames:** the Helper writes `<observations>/<observation_id>.png` (0600, pruned by the Helper).
+  They are not artifacts and never reach a model.
+
+Before CUA-4 the authority dropped the `release` reason, so a physical-input yield looked like any
+release; the record stayed `active` until the model's next foreground call returned `interrupted`;
+and there was no pause admission and no activity record.
+
+## Owner and contract
+
+The lease authority is the single owner of the Computer Use session control projection:
+
+- lease record (unchanged shape), plus the last termination `{leaseId, reason, at}`;
+- desktop-level admission `{paused, pausedAt}`;
+- per-session latest runtime activity and latest observation (bounded LRU, 16 sessions).
+
+The runtime reports activity best-effort over the existing sideband (`report_activity`, bounded
+1.5 s timeout, never gating the action). It reads admission (`admission`) before every method
+except `permission_status` and `control_status`. Pause, resume and Stop are not sideband methods:
+a model cannot pause, resume or stop itself; only the owning UI calls them through the services API.
+
+`ICuaPermissionService` gains `getComputerUseSession(sessionId)`, `pauseComputerUse()`,
+`resumeComputerUse()` and `getComputerUseObservationFrame(sessionId, observationId)`. The session
+view is filtered by owner session server-side: another session's activity, observation or lease
+is never returned. Remote/mobile hosts have no `cuaPermissionService`, so no preview leaves the
+desktop (remote control is CUA-5).
+
+## Event order
+
+```text
+model → node_repl js → plugin client → runtime.execute(method, context)
+  ├─ admission() — paused → refused {code: "paused"}; unreachable → refuse mutating/foreground
+  ├─ report_activity(started) ──────────────────────────────┐ best-effort, bounded
+  ├─ existing CUA-2.5/CUA-3 path (unchanged)                │
+  ├─ code "interrupted" → release(lease, "interrupted")     │
+  └─ report_activity(completed, effect/route/code/delivery, target, observation{id, frame})
+UI (owning session) → getComputerUseSession(sessionId), polled 1 s only while relevant
+  services: active record → Helper control_status(helperLeaseId)
+            not active → authority.release(leaseId, <helper code>)   (fenced, idempotent)
+UI Pause  → pauseComputerUse(): gate on, active lease released through releaseHelper ("paused")
+UI Resume → resumeComputerUse(): gate off; foreground again requires acquire_control
+UI Stop   → existing turn `stop` command (if running) + stopComputerControl(); STOPPING until both
+            the lease is not active and the turn is not running
+```
+
+## Semantics
+
+- **Pause** is a real boundary: while paused every method except `permission_status` and
+  `control_status` is refused with `effect: "refused", route: "none", code: "paused"` and a
+  model-facing instruction to wait for the user. An active exclusive lease is released through
+  the Helper (held input cleaned, desktop lock released) and its termination reason is `paused`.
+  `begin_acquire` also refuses while paused. An in-flight Helper action is not cancelled by the
+  gate; the Helper's own interruption rules still apply.
+- **Resume** only lifts the gate. Foreground work re-enters through `acquire_control` and the
+  normal admission; nothing is re-acquired automatically.
+- **Stop** reuses two existing owners: the session turn `stop` command and the authority Stop.
+  "Stopped" is shown only after the service confirms the lease is not active and the turn has
+  stopped; a failed service Stop is shown as a failure, never as stopped.
+- **Yield:** the runtime releases with reason `interrupted`; services reconcile an `active` record
+  against the Helper so a physical-input yield is visible within one poll. The UI shows "Control
+  returned to you" and never re-acquires.
+
+## UI projection
+
+A pure function derives one view from the session state (above), the session's turn running
+flag, and a transient pending command (`pausing`/`resuming`/`stopping`). States: `idle`,
+`observing`, `backgroundAction`, `waitingForForeground`, `exclusiveActive`, `yieldedToUser`,
+`paused`, `stopping`, `stopped`, `failed`. Operational state is separate from assistant prose;
+no model reasoning is shown.
+
+- **Mode:** read methods → observe only; `press`/`set_value` → background, best effort (never
+  "background-safe"); foreground methods → foreground required, or exclusive foreground while the
+  session owns an active lease. `acquire_control` in flight → waiting for foreground.
+- **Target:** app name/bundle and window title only when the Helper listed that exact pid/window
+  in this runtime session; otherwise only what is known (or nothing). A target is marked stale
+  when the observation is older than 30 s, an action completed after it, or control ended.
+- **Results:** `unknown` effect or application effect → "Could not verify"; never success.
+  Actionable codes map to Accessibility, Input Monitoring, Screen Recording (blank capture),
+  target gone, focus changed, secure field, stale geometry, Helper unavailable, busy, paused.
+- **Preview:** the latest observation frame of this session only, fetched once per
+  `observation_id`, labelled as a snapshot with its capture time, and marked stale by the same
+  rules. No extra capture, no animation, no stream.
+- **Visibility:** the bar is absent unless the session has Computer Use activity and the turn is
+  running, the session owns an active lease, Computer Use is paused, or the last outcome is a
+  yield/stop/failure of the current turn.
+
+Frame reads accept only `<observation_id>.png` whose real path is inside a Helper observations
+root, a regular file of at most 8 MiB with a PNG signature, and only for the session's own latest
+observation.
+
+## Acceptance
+
+Deterministic tests (fakes only, no TCC): authority pause/resume/admission/termination/activity
+fencing; runtime pause gate, activity reports, interrupted reason; frame path confinement; the UI
+projection for every state, stale preview, target change, no cross-session leakage; the bar
+render. Live acceptance on a harmless target: observe → semantic action → foreground request →
+exclusive action → physical interruption → pause → resume → Stop, comparing the bar to runtime.

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { createLeaseAuthority, type LeaseAuthorityOptions } from "./authority.js";
-import type { LeaseAuthority } from "./contract.js";
+import type { ComputerUseActivityReport, LeaseAuthority } from "./contract.js";
 
 export interface LeaseAuthorityServer {
   readonly authority: LeaseAuthority;
@@ -72,6 +72,15 @@ export async function startLeaseAuthorityServer(
           break;
         case "status":
           result = authority.getStatus() ?? null;
+          break;
+        // CUA-4：运行时只能读取 admission 并上报活动；pause/resume/stop 只属于拥有会话的 UI，
+        // 不经 sideband 暴露，模型无法自行暂停、恢复或停止。
+        case "admission":
+          result = authority.getAdmission();
+          break;
+        case "report_activity":
+          authority.reportActivity(params as unknown as ComputerUseActivityReport);
+          result = { accepted: true };
           break;
         default:
           throw Object.assign(new Error("unknown method"), { code: "bad_request" });

@@ -42,6 +42,12 @@ export interface ComputerUseRuntimeOptions {
     beginAcquire(owner: { session: string; task: string }): Promise<{ leaseId: string }>;
     commitAcquire(leaseId: string, helperRequirement: string): Promise<unknown>;
     stop(): Promise<unknown>;
+    /** CUA-4: pause admission; when present, it gates every method except status reads. */
+    admission?(): Promise<{ paused: boolean; pausedAt?: number }>;
+    /** CUA-4: best-effort activity projection; never awaited by the action path. */
+    reportActivity?(
+      report: import("./lease-authority-client.js").ComputerUseActivityReport,
+    ): Promise<unknown>;
   };
 }
 
