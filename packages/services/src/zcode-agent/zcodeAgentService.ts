@@ -937,6 +937,26 @@ interface CreateZCodeAgentServiceOptions extends Omit<
     workspace: CuaOperationWorkspaceTarget,
     event: Exclude<PipSessionEvent, { kind: "focus-changed" }>,
   ) => void;
+  /**
+   * 模型执行需求边界（sendPrompt / session create 等经 getClient 复用既有 runtime 的入口）
+   * 的 stale runtime 回收裁决。返回 true 时 service 先回收该 workspace 的当前 runtime，
+   * 再按正常流程重新 spawn（重新执行 resolveSpawnEnv）。
+   *
+   * 背景：resolveSpawnEnv 在 Helper 未就绪时 fail-closed（spawn env 不含 broker 凭据），
+   * 而 Helper 恢复按设计只影响后续 spawn——已运行的 Agent 会一直带着“无凭据”状态服务会话。
+   * 该回调是恢复的裁决方（如 CUA：Helper 已恢复且本 runtime 缺凭据）；service 负责安全边界：
+   * 只在复用既有 runtime 的需求边界调用，且已确认无在飞 RPC、无活跃 CUA turn、无并发启动。
+   *
+   * 裁决必须 peek-only（绝不拉起 Helper / 不产生副作用），只依据 spawnEnvKeys 键名与
+   * 外部就绪事实。缺省不传 = 永不回收。
+   */
+  shouldRecycleRuntimeBeforeModelExecutionDemand?: (context: {
+    workspaceKey: string;
+    workspacePath: string;
+    workspaceIdentity?: string;
+    /** 当前 runtime 被 spawn 时 resolveSpawnEnv 返回的 env 键集合（只有键名，没有值）。 */
+    spawnEnvKeys: ReadonlySet<string>;
+  }) => Promise<boolean> | boolean;
 }
 
 function toProtocolAutomation(automation: ZCodeAutomation) {
@@ -1176,6 +1196,8 @@ export function createZCodeAgentService(
   /** 动态工作流灰度门的进程内单次判定；见 resolveDynamicWorkflowGate 的注释。 */
   let dynamicWorkflowGate: Promise<boolean> | undefined;
   const waitingWorkspaceStartups = new Map<string, WaitingWorkspaceStartup>();
+  /** 需求边界 stale runtime 回收的在飞标记（按 workspaceKey），防并发重复回收。 */
+  const recyclingStaleRuntimeByWorkspaceKey = new Set<string>();
   function cancelWaitingWorkspaceStartup(workspaceKey: string): void {
     const waiting = waitingWorkspaceStartups.get(workspaceKey);
     if (waiting) {
@@ -2955,10 +2977,103 @@ export function createZCodeAgentService(
     return entry;
   }
 
+  /**
+   * 需求边界的 stale runtime 回收（Helper 恢复后 CUA 预授权 Agent 的恢复载体；本函数
+   * 保持领域无关，裁决权在注入的 shouldRecycleRuntimeBeforeModelExecutionDemand）。
+   *
+   * resolveSpawnEnv 在 Helper 未就绪时 fail-closed（spawn env 无 broker 凭据），该 Agent
+   * 之后一直服务会话却没有 CUA；Helper 恢复按设计只影响后续 spawn、绝不回收已有 Agent。
+   * 这里在下一个模型执行需求边界、且 runtime 可证明空闲时回收一次，让重新 spawn 拿到
+   * 已恢复的凭据。
+   *
+   * 安全边界（任一不满足即不回收，失败方向永远是“维持现状”）：
+   * - 未注入 policy / policy 抛错：不回收。
+   * - 有在飞 RPC、storage startup 未结清：绝不回收（不打断任何请求）。
+   * - 有活跃 CUA turn：绝不回收。
+   * - 同 workspace 有并发启动在途、或已有一次回收在途：本次跳过。
+   * - policy 只读 spawnEnvKeys 键名与外部就绪事实（peek-only），不得有副作用。
+   */
+  /**
+   * 回收单个 workspace 的当前 runtime（service 级唯一实现；public disposeWorkspace 与
+   * 需求边界的 stale runtime 回收共用）。含已排队的 provider-ready continuation 失效、
+   * v4 订阅路由清理与 CUA turn 记账清理。
+   */
+  async function recycleWorkspaceRuntime(params: ZCodeAgentWorkspaceTarget): Promise<void> {
+    const workspaceKey = resolveWorkspaceKey(params);
+    // 释放不仅要终止当前进程，还要让已排队的 provider-ready continuation 失效；
+    // 否则它会在 dispose 完成后把同一个 workspace 的 Agent 再次启动。
+    cancelWaitingWorkspaceStartup(workspaceKey);
+    clearV4SubscriptionRoutes(workspaceKey);
+    cuaOperationTurnTracker?.clearWorkspaceKey(workspaceKey);
+    const active = activeClientsByWorkspaceKey.get(workspaceKey);
+    if (active) {
+      invalidateWorkspaceClient(workspaceKey, active.client);
+    } else {
+      interactionPreferenceSyncByWorkspaceKey.delete(workspaceKey);
+    }
+    // 该入口被 restartWorkspaceProcess 用作 runtime invalidation，并非
+    // workspace/service 真 teardown。销毁 workspace emitter 会让既有 UI/task-index
+    // listener 永久绑在死对象上；emitters 只由 disposeLocalState/disposeAll 释放。
+    await processManager.disposeWorkspace(params);
+  }
+
+  async function maybeRecycleStaleRuntimeForDemand(
+    workspaceKey: string,
+    params: ZCodeAgentWorkspaceTarget,
+    active: ActiveWorkspaceClient,
+  ): Promise<boolean> {
+    const policy = options?.shouldRecycleRuntimeBeforeModelExecutionDemand;
+    if (!policy) return false;
+    if (recyclingStaleRuntimeByWorkspaceKey.has(workspaceKey)) return false;
+    if (waitingWorkspaceStartups.has(workspaceKey)) return false;
+    if (
+      active.client.isDisposed ||
+      active.client.pendingOperationRequestCount > 0 ||
+      active.client.storageStartup.isWaiting
+    ) {
+      return false;
+    }
+    if (cuaOperationTurnTracker?.hasActiveTurn()) return false;
+    const spawnEnvKeys = processManager.getResolvedSpawnEnvKeys(params);
+    if (!spawnEnvKeys) return false;
+    let shouldRecycle: boolean;
+    try {
+      shouldRecycle = await policy({
+        workspaceKey,
+        workspacePath: params.workspacePath,
+        ...(params.workspaceIdentity ? { workspaceIdentity: params.workspaceIdentity } : {}),
+        spawnEnvKeys,
+      });
+    } catch (error) {
+      logger.warn(undefined, "stale runtime 回收裁决失败，维持现有 runtime", {
+        workspaceKey,
+        workspacePath: params.workspacePath,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+    if (!shouldRecycle) return false;
+    recyclingStaleRuntimeByWorkspaceKey.add(workspaceKey);
+    try {
+      logger.info(undefined, "需求边界回收缺少注入凭据的 Agent runtime", {
+        workspaceKey,
+        workspacePath: params.workspacePath,
+      });
+      await recycleWorkspaceRuntime(params);
+    } finally {
+      recyclingStaleRuntimeByWorkspaceKey.delete(workspaceKey);
+    }
+    return true;
+  }
+
   async function getClient(params: ZCodeAgentWorkspaceTarget) {
     const workspaceKey = resolveWorkspaceKey(params);
     const active = activeClientsByWorkspaceKey.get(workspaceKey);
     if (active?.modelExecutionEnabled && isReusableActiveClientEntry(params, active)) {
+      if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, params, active)) {
+        // 回收后 entry 已失效；重入一次走全新 spawn 路径（重新执行 resolveSpawnEnv）。
+        return getClient(params);
+      }
       active.workspace = params;
       return active.client;
     }
@@ -5571,22 +5686,7 @@ export function createZCodeAgentService(
     },
 
     async disposeWorkspace(params): Promise<void> {
-      const workspaceKey = resolveWorkspaceKey(params);
-      // 释放不仅要终止当前进程，还要让已排队的 provider-ready continuation 失效；
-      // 否则它会在 dispose 完成后把同一个 workspace 的 Agent 再次启动。
-      cancelWaitingWorkspaceStartup(workspaceKey);
-      clearV4SubscriptionRoutes(workspaceKey);
-      cuaOperationTurnTracker?.clearWorkspaceKey(workspaceKey);
-      const active = activeClientsByWorkspaceKey.get(workspaceKey);
-      if (active) {
-        invalidateWorkspaceClient(workspaceKey, active.client);
-      } else {
-        interactionPreferenceSyncByWorkspaceKey.delete(workspaceKey);
-      }
-      // 该入口被 restartWorkspaceProcess 用作 runtime invalidation，并非
-      // workspace/service 真 teardown。销毁 workspace emitter 会让既有 UI/task-index
-      // listener 永久绑在死对象上；emitters 只由 disposeLocalState/disposeAll 释放。
-      await processManager.disposeWorkspace(params);
+      await recycleWorkspaceRuntime(params);
     },
 
     disposeAll(): void {

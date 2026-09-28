@@ -110,6 +110,13 @@ interface ManagedZCodeAgentProcess {
   child: ChildProcessWithoutNullStreams;
   cleanupPromise?: Promise<void>;
   exited: boolean;
+  /**
+   * 本次 spawn 时 resolveSpawnEnv 返回的 env 键集合（不含值）。
+   *
+   * 只记录键、不记录值：消费方（CUA stale-agent 回收等）只需要回答“这个 runtime
+   * 被 spawn 时有没有拿到某类注入”，永远不需要读回注入内容。值仍只存在于子进程 env。
+   */
+  resolvedSpawnEnvKeys: ReadonlySet<string>;
   firstCleanupReason?: AgentProcessCleanupReason;
   idleTimer?: ReturnType<typeof setTimeout>;
   readyAt?: number;
@@ -897,6 +904,21 @@ export class ZCodeAgentProcessManager {
     return managed && !managed.child.killed ? managed.client : undefined;
   }
 
+  /**
+   * 当前活跃 runtime 被 spawn 时 resolveSpawnEnv 返回的 env 键集合；无活跃 runtime 时 undefined。
+   *
+   * 供需求边界（如 CUA stale-agent 回收）判断“这个进程当年 spawn 时是否拿到了某类注入”，
+   * 只暴露键名，绝不回读注入值。
+   */
+  getResolvedSpawnEnvKeys(params: {
+    workspacePath: string;
+    workspaceIdentity?: string;
+  }): ReadonlySet<string> | undefined {
+    const managed = this.processesByWorkspaceKey.get(resolveWorkspaceKey(params));
+    if (!managed || managed.exited || managed.child.killed) return undefined;
+    return managed.resolvedSpawnEnvKeys;
+  }
+
   /** 资源管理器：当前仍存活的受管 runtime（pid + workspace + client） */
   listManagedProcesses(): Array<{
     pid: number;
@@ -982,6 +1004,7 @@ export class ZCodeAgentProcessManager {
     // 设置页代理等运行时 env 在 process.env 之后合入（覆盖继承的同名 shell 变量），
     // 但仍让 command.env（部署特定）保持最高优先级。
     const spawnEnv = (await this.resolveSpawnEnv?.({ ...params, workspaceKey })) ?? {};
+    const resolvedSpawnEnvKeys: ReadonlySet<string> = new Set(Object.keys(spawnEnv));
     if (this.disposed) {
       // app 正在关闭时，启动中的 warmup 可能刚完成 command/env resolve。
       // 这时继续 spawn 会绕过 disposeAllAndWait 的快照，重新制造一个无人托管的 agent 进程。
@@ -1104,6 +1127,7 @@ export class ZCodeAgentProcessManager {
       client,
       exited: false,
       readyReported: false,
+      resolvedSpawnEnvKeys,
       runtimeIdentity,
       runtimeInstanceId,
       spawned: false,

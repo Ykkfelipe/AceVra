@@ -2429,6 +2429,29 @@ export function createLocalServices(options: {
         }),
       };
     },
+    // CUA stale-agent 回收裁决：resolveSpawnEnv 在 Helper 未就绪时 fail-closed（返回
+    // BROKER_UNAVAILABLE、spawn env 不含 broker 凭据），而 Helper 恢复按设计只收敛后续
+    // spawn admission、绝不回收已有 Agent——packaged 实测（0.1.0-alpha.1）：Helper ready
+    // 前预 spawn 的 runtime 在 Helper ready 后仍报 "Computer Use is unavailable for this
+    // node_repl session"，且该状态永不自愈。这里在模型执行需求边界、runtime 证明空闲时
+    // 同意回收一次，让重新 spawn 拿到已恢复的凭据。
+    // 裁决必须与 resolveSpawnEnv 的取值源完全同源且 peek-only：绝不在此拉起 Helper，
+    // 也绝不复用 stale socket 以外的凭据（本回调不产出凭据，凭据仍只经 resolveSpawnEnv
+    // → CLI 私有捕获 → node_repl 定向注入这条链发放）。
+    shouldRecycleRuntimeBeforeModelExecutionDemand: (context) => {
+      // runtime 已持有 broker socket：无 stale 可言（键名判断，永不读回值）。
+      if (context.spawnEnvKeys.has(BROKER_SOCKET_ENV)) return false;
+      if (!isCuaEnabledForContext(context)) return false;
+      const peekedHelper = defaultCuaProductHelperLifecycle.peek()?.helper;
+      if (peekedHelper && isDefaultCuaProductHelperCurrent(peekedHelper)) {
+        // 与 resolveSpawnEnv 的 peek 语义一致：托管 host 在且 Helper 已连接才会拿到
+        // live tuple；未连接时不尝试启动（保守不回收，spawn 边界自己会 fail-closed）。
+        return peekedHelper.host.running;
+      }
+      // darwin 懒启动路径与 resolveSpawnEnv 相同：只认已建立的 hardened session；
+      // 没有会话绝不回收（否则回收后的 spawn 仍然拿不到凭据，白白打断会话进程）。
+      return peekHardenedCuaHelperSession() !== null;
+    },
     ...(isDesktopAttachedRemote
       ? { sessionRuntimePreferencesAuthority: "external" as const }
       : {
