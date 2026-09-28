@@ -1,0 +1,59 @@
+
+> zcode@0.1.0-alpha.1 release:verify:candidate /Users/felipemore/Projects/AceVra
+> node scripts/release/verify-local-alpha-candidate.mjs -- --build-dir /Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build --validation-dir /Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/validation-cua-513b84d --json
+
+{
+  "ok": true,
+  "errors": [],
+  "warnings": [],
+  "appPath": "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build/mac-arm64/AceVra.app",
+  "archives": [
+    "AceVra-0.1.0-alpha.1-arm64.dmg",
+    "AceVra-0.1.0-alpha.1-arm64.zip"
+  ],
+  "helperReport": {
+    "resourcePath": "AceVra Computer Use.app",
+    "bundleId": "dev.acevra.cua-helper",
+    "executableName": "AceVraComputerUse",
+    "version": "0.1.0-alpha.1",
+    "buildNumber": "1",
+    "arch": "arm64",
+    "signature": "AceVra CUA Dev Signing",
+    "designatedRequirement": "designated => identifier \"dev.acevra.cua-helper\" and certificate root = H\"bf8f0f5130e10950f5a723ee77b8cad93951b56a\"",
+    "cdhash": "CandidateCDHashFull sha256=64cc57135cd6c60fde0ba7de30baa493ab4b2133061cee3dd0fc78904048f29e"
+  },
+  "bundleId": "com.acevra.desktop",
+  "shortVersion": "0.1.0-alpha.1",
+  "bundleVersion": "0.1.0-alpha.1",
+  "rawInventory": [
+    {
+      "name": "AceVra-0.1.0-alpha.1-arm64.dmg",
+      "kind": "file"
+    },
+    {
+      "name": "AceVra-0.1.0-alpha.1-arm64.dmg.blockmap",
+      "kind": "file"
+    },
+    {
+      "name": "AceVra-0.1.0-alpha.1-arm64.zip",
+      "kind": "file"
+    },
+    {
+      "name": "AceVra-0.1.0-alpha.1-arm64.zip.blockmap",
+      "kind": "file"
+    },
+    {
+      "name": "builder-debug.yml",
+      "kind": "file"
+    },
+    {
+      "name": "latest-mac.yml",
+      "kind": "file"
+    },
+    {
+      "name": "mac-arm64",
+      "kind": "directory"
+    }
+  ]
+}
+[candidate] OK: /Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build/mac-arm64/AceVra.app

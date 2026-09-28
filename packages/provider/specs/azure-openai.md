@@ -56,7 +56,7 @@ Probe (no inference): `GET {resource}/openai/v1/models` returns **200** with bot
 needed. The legacy `/openai/deployments?api-version=` surface also answers 200 and lists
 the `gpt-5-mini` deployment, but v1 is what is used. The Foundry `/models` inference
 surface returns 404 and is not used. Note the configured endpoint was an AI Foundry
-*project* URL (`…/api/projects/<project>`); the OpenAI-compatible surface lives on the
+_project_ URL (`…/api/projects/<project>`); the OpenAI-compatible surface lives on the
 **resource root**, so the base URL is derived by stripping the project path.
 
 Provider written to `~/.zcode/v2/provider_config.json` (mode 0600, outside the repo):
@@ -65,7 +65,7 @@ Provider written to `~/.zcode/v2/provider_config.json` (mode 0600, outside the r
 - `baseUrl: https://<resource>.services.ai.azure.com/openai/v1`
 - `personalModelIds: ["gpt-5-mini"]` — the deployment name is the model id
 - properties: `contextWindow 272000`, `supportsToolCall true`, `supportsJsonSchemaOutput
-  true`, `supportsImage false` (Azure publishes no vision flag, so it is not claimed)
+true`, `supportsImage false` (Azure publishes no vision flag, so it is not claimed)
 - `reasoningLevel: { values: ["low"] }` — one level only; no GLM-style ladder invented,
   because Azure's metadata publishes no reasoning ladder. The UI consequently renders a
   fixed "Low" chip instead of a selector.
@@ -92,11 +92,11 @@ runtime.
 
 A second validation exercised an actual tool call end to end, with no code change:
 
-| Turn | finishReason | Azure emitted | Result |
-| --- | --- | --- | --- |
-| 0 | `tool-calls` | `Write{file_path: …/ws/azure-tool-test.txt, content: "AZURE_TOOL_OK"}` | intercepted by ZCode's permission prompt, approved once, executed |
-| 1 | `tool-calls` | `Read{file_path: …/ws/azure-tool-test.txt}` | executed; proves the Write result was returned to the model |
-| 2 | `stop` | — | model reported the contents back |
+| Turn | finishReason | Azure emitted                                                          | Result                                                            |
+| ---- | ------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 0    | `tool-calls` | `Write{file_path: …/ws/azure-tool-test.txt, content: "AZURE_TOOL_OK"}` | intercepted by ZCode's permission prompt, approved once, executed |
+| 1    | `tool-calls` | `Read{file_path: …/ws/azure-tool-test.txt}`                            | executed; proves the Write result was returned to the model       |
+| 2    | `stop`       | —                                                                      | model reported the contents back                                  |
 
 The file on disk is 13 bytes, `AZURE_TOOL_OK`, no trailing newline. Only `Write` and
 `Read` were used, matching the prompt's constraint. All three turns ran with
@@ -116,6 +116,19 @@ value was `key1` on the `obsy-resource` account (matched by hash, never printed)
 Propagation is not instant: the old key still authenticated for roughly 20 seconds before
 returning 401. Verify a rotation by polling rather than checking once.
 
+## Borrowing verified specs across providers for the same model name (2026-09-24)
+
+Azure's `/models` endpoint (see "Verified result" above) never publishes `contextWindow` or
+`maxOutputTokens` for any deployment — every Azure model's numbers in this catalog are either
+conservative estimates (`gpt-5.4-nano`, see below) or, where the same model is also offered by
+a provider that _does_ publish real numbers, borrowed from that provider's verified data. A
+user who deploys `gpt-6-luna` on their own Azure resource is running the same underlying model
+Command Code serves under that name — Command Code's `GET /provider/v1/models` reports its real
+`context_length` (1,050,000), and the shared `modelMatch` rule for that model family (see
+[Command Code](./command-code.md#gpt-6-family-coverage-gap-fixed-2026-09-24)) applies regardless
+of which provider id the deployment is configured under, so an Azure `gpt-6-luna` deployment
+gets the same, real, verified numbers instead of the generic 200000/32000 fallback.
+
 ## Which harness capabilities should follow automatically
 
 The load-bearing observation: `apps/zcode-cli/packages/core/src/{tool,mcp,subagent}`
@@ -127,14 +140,14 @@ declared capability in `validateRequestProperties`
 
 Expected to work with no Azure-specific code, given correct declared metadata:
 
-| Capability | Expectation | Why |
-| --- | --- | --- |
-| Terminal / filesystem tools | automatic | ordinary tools over the same tool-call channel; needs only `supportsToolCall: true` |
-| MCP | automatic | MCP servers are surfaced as tools; the MCP layer never inspects the provider |
-| Subagents | automatic | subagents re-enter the same runtime and inherit model selection |
-| Skills | automatic | skills are prompt/instruction payloads, not a provider feature |
-| Plugins | mostly automatic | plugin tools ride the tool channel; any plugin that hardcodes a model id is the exception |
-| Browser use | automatic **if** the flow is text+tool-call; the vision path additionally needs `inputFormat.supportsImage: true` on the Azure model |
+| Capability                  | Expectation                                                                                                                          | Why                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Terminal / filesystem tools | automatic                                                                                                                            | ordinary tools over the same tool-call channel; needs only `supportsToolCall: true`       |
+| MCP                         | automatic                                                                                                                            | MCP servers are surfaced as tools; the MCP layer never inspects the provider              |
+| Subagents                   | automatic                                                                                                                            | subagents re-enter the same runtime and inherit model selection                           |
+| Skills                      | automatic                                                                                                                            | skills are prompt/instruction payloads, not a provider feature                            |
+| Plugins                     | mostly automatic                                                                                                                     | plugin tools ride the tool channel; any plugin that hardcodes a model id is the exception |
+| Browser use                 | automatic **if** the flow is text+tool-call; the vision path additionally needs `inputFormat.supportsImage: true` on the Azure model |
 
 Genuine risks, all metadata rather than architecture:
 
@@ -145,7 +158,6 @@ Genuine risks, all metadata rather than architecture:
 - Declaring a capability the deployment lacks fails at request time, not at config time.
 
 None of this requires touching MCP, plugins, subagents or the agent runtime.
-
 
 ## Single-value `"default"` means provider-managed effort
 
@@ -162,7 +174,7 @@ reasoning parameter at all. Concretely:
 - The empty map writes nothing: no `reasoning_effort`, no `thinking`, no `output_config`.
   Verified per-entry against the live personal config — 183/183 assertions, 60
   `["default"]` entries emitting zero reasoning paths.
-- `gpt-5-mini` is *not* one of these: its ladder is a genuinely single `"low"`, so it keeps a
+- `gpt-5-mini` is _not_ one of these: its ladder is a genuinely single `"low"`, so it keeps a
   fixed "Low" chip. Do not collapse the two cases into one.
 
 Because the value is now shown outside the composer too (subagent labels, `list_models`
@@ -206,15 +218,15 @@ all behaved correctly.
 
 ### Behavioural differences worth noting
 
-| | gpt-5-mini | gpt-5.4-nano |
-| --- | --- | --- |
-| tool-call shape | one call per turn, sequential | `Write` + `Read` emitted together in one turn |
-| filename accuracy | correct | wrong — reused a file already in context |
-| content accuracy | exact, no trailing newline | added a trailing newline |
-| agent-loop calls | 3 | 2 (then denied) |
-| agent-loop latency | 7569 ms | 6250 ms |
-| reasoning tokens | 64 | 0 (no `reasoning_effort` sent) |
-| prompt-cache reads | 30080 on turn 1 | 0 on turn 0, 31872 on turn 1 |
+|                    | gpt-5-mini                    | gpt-5.4-nano                                  |
+| ------------------ | ----------------------------- | --------------------------------------------- |
+| tool-call shape    | one call per turn, sequential | `Write` + `Read` emitted together in one turn |
+| filename accuracy  | correct                       | wrong — reused a file already in context      |
+| content accuracy   | exact, no trailing newline    | added a trailing newline                      |
+| agent-loop calls   | 3                             | 2 (then denied)                               |
+| agent-loop latency | 7569 ms                       | 6250 ms                                       |
+| reasoning tokens   | 64                            | 0 (no `reasoning_effort` sent)                |
+| prompt-cache reads | 30080 on turn 1               | 0 on turn 0, 31872 on turn 1                  |
 
 Emitting both tool calls in a single turn is legal parallel tool calling and the runtime
 handled it; it simply gives the model no chance to see the first result before choosing the
@@ -223,7 +235,6 @@ second target.
 Permission interception behaved **identically** for both models: the same prompt, the same
 four options, the same one-time grant semantics, and Deny correctly aborted the write while
 still returning the Read result to the model.
-
 
 ### gpt-5.4-nano retry in a clean workspace — PASSED
 
@@ -239,20 +250,20 @@ Result: **task completed correctly.**
 - Content: `b'NANO_TOOL_OK'`, 12 bytes, **no trailing newline** — exact. Verified in the tool
   call before approval and again on disk by hexdump.
 - Tool calls: **sequential**, not parallel. Call 0 emitted `Write` alone; call 1 emitted
-  `Read` only after the Write had executed, against the *same* path; call 2 was the final
+  `Read` only after the Write had executed, against the _same_ path; call 2 was the final
   answer. No path outside the target file was touched, and no other file was created.
 - Write result was incorporated before Read — the ordering proves it, unlike the first
   attempt where both calls were emitted in the same turn before any result existed.
 
-| | agent loop | ancillary (title) |
-| --- | --- | --- |
-| calls | 3 | 1 |
-| latency | 8687 ms (4169 / 2935 / 1583) | 1597 ms |
-| input tokens | 96015 | 263 |
-| output tokens | 222 | 14 |
-| reasoning tokens | 0 | 0 |
-| tool calls | 2 (`Write`, `Read`) | 0 |
-| streaming | true on all 3 | non-streaming |
+|                  | agent loop                   | ancillary (title) |
+| ---------------- | ---------------------------- | ----------------- |
+| calls            | 3                            | 1                 |
+| latency          | 8687 ms (4169 / 2935 / 1583) | 1597 ms           |
+| input tokens     | 96015                        | 263               |
+| output tokens    | 222                          | 14                |
+| reasoning tokens | 0                            | 0                 |
+| tool calls       | 2 (`Write`, `Read`)          | 0                 |
+| streaming        | true on all 3                | non-streaming     |
 
 `reasoning_effort` was absent from every request and `max_tokens` never appeared, confirming
 the empty reasoning map and the GPT-5 output-parameter rewrite held.

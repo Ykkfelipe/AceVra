@@ -22,7 +22,12 @@ import { normalizeStreamError } from "../helpers/index.js";
 import { auxiliaryModelOptions } from "../../model/auxiliary-model-options.js";
 
 const WORKSPACE_GENERATE_TEXT_TIMEOUT_MS = 60_000;
-const CONNECTIVITY_PROBE_MAX_OUTPUT_TOKENS = 1;
+// bug 原因：探测请求曾把预算压到 1 token；部分 provider（如 Azure OpenAI 的 Responses API）
+// 服务端会直接拒绝这类请求（"Invalid 'max_output_tokens': ... Expected a value >= 16, but got
+// 1 instead"），导致真正能正常对话的 provider 在设置页连通性测试里被误判成"连接失败"。
+// 推理型模型的输出预算还要先扣掉推理 token，1 token 对它们来说无论如何都不够留出正文空间。
+// 64 留出足够余量覆盖已知的服务端下限，同时仍然远低于任何模型的正常输出上限，探测成本可忽略。
+export const CONNECTIVITY_PROBE_MAX_OUTPUT_TOKENS = 64;
 // 探测请求使用固定最小 prompt，避免多余推理开销；不可改写角色、文本或混入会话历史。
 const CONNECTIVITY_PROBE_SYSTEM = "You are ZCode connectivity probe.";
 const CONNECTIVITY_PROBE_USER = "hi";

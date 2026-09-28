@@ -250,4 +250,3 @@ export function useResolvedServiceAccessor(
   );
   return workspacePath?.trim() ? resolution.services : contextServices;
 }
-

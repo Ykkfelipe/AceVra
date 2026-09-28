@@ -39,7 +39,7 @@ The stale `mock-cdn/releases/3.14.0` runtime cache was also removed (~571 MB). T
 
 ## Human checkpoint after installation
 
-1. Confirm the new-task placeholder says **agent** and the mode/Computer Use/Agent controls no longer overlap.
+1. Confirm the new-task placeholder is the approved desktop copy `Ask the agent anything, @ to add context, / for commands or capabilities` and the mode/Computer Use/Agent controls no longer overlap.
 2. Confirm the built-in backend is labeled **Agent** and the controls show the shared outline/focus treatment.
 3. Confirm the composer no longer shows the enablement-failure tooltip while Computer Use is enabled.
 4. Enable Computer Use in **Settings → Computer Use** and confirm the alpha reminder disappears.

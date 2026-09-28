@@ -1,0 +1,96 @@
+✔ A/B: Z.ai → Command Code → Azure renders each divider in its real direction (6.76025ms)
+✔ E: a reasoning-bearing destination keeps provider, model and thought (0.601ms)
+✔ D/F: migration seed + legacy setModel renders the same divider live and after restart (1.547083ms)
+✔ F: the seed alone never creates or moves a divider (0.3375ms)
+✔ C: Azure → Z.ai through a submission renders Azure → Z.ai live and cold (0.4685ms)
+✔ historical contradicting parts render from each turn's recorded selection (0.591417ms)
+✔ the observed live regression: bad history + migration setModel + Azure turn (8.429375ms)
+✔ Claude preview and imported transcript share visible user/assistant projection (9.014ms)
+✔ Claude files with only internal records fail visible import classification (4.74825ms)
+[2026-09-27 13:06:34.951] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-preview-v7W7cu/sessions files=1 candidates=1
+✔ Codex scan derives bounded previews only from sanitized visible messages (33.113ms)
+[2026-09-27 13:06:34.971] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-preview-fork-g0yaeE/sessions files=5 candidates=2
+✔ Codex scan keeps missing previews bounded and deduplicates fork files by newest activity (12.099959ms)
+[2026-09-27 13:06:34.980] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-guardian-JfYNxz/sessions files=3 candidates=2
+[2026-09-27 13:06:34.982] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-guardian-JfYNxz/sessions files=3 candidates=1
+[2026-09-27 13:06:34.983] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-guardian-JfYNxz/sessions files=3 candidates=1
+[2026-09-27 13:06:34.985] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-guardian-JfYNxz/sessions files=3 candidates=2
+[2026-09-27 13:06:34.989] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-guardian-JfYNxz/sessions files=3 candidates=2
+✔ Codex selects the parent conversation over a newer guardian rollout and orders by visible activity (17.004209ms)
+[2026-09-27 13:06:34.996] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-context-peVThL/sessions files=1 candidates=1
+✔ Codex excludes injected project/context messages and shares preview with imported projection (6.867875ms)
+[2026-09-27 13:06:35.006] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-history-L4aOg3/sessions files=2 candidates=1
+[2026-09-27 13:06:35.015] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-history-L4aOg3/sessions files=2 candidates=1
+[2026-09-27 13:06:35.018] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-history-L4aOg3/sessions files=2 candidates=1
+[2026-09-27 13:06:35.019] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-history-L4aOg3/sessions files=2 candidates=1
+[2026-09-27 13:06:35.021] [pid:46634] [codex-history-import] codex history scan dir=/var/folders/hv/23q7q4v91254pq425s_gvsdh0000gn/T/zcode-codex-history-L4aOg3/sessions files=2 candidates=1
+✔ Codex rollout scan parses visible messages and import retries are idempotent (26.674375ms)
+(node:46635) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[2026-09-27 13:06:35.182] [pid:46635] [zcode-task-service] [zcode-task-service] 历史快照读取完成 {
+  clientMode: 'desktop-continuous',
+  durationMs: 10,
+  indexDurationMs: 0,
+  messageLimit: null,
+  projectionDurationMs: 1,
+  resumeDurationMs: 9,
+  snapshotKind: 'session',
+  stats: {
+    assistantMessages: 0,
+    bodyRefs: 0,
+    contentChars: 0,
+    fileChanges: 0,
+    historyTotalMessages: 0,
+    messages: 0,
+    slashCommands: 0,
+    thoughtChars: 0,
+    toolCalls: 0,
+    toolSliceMessages: 0,
+    truncatedBefore: false,
+    userMessages: 0
+  },
+  taskId: 'claude-import-example',
+  workspaceIdentity: 'example-remote-workspace',
+  workspacePath: '/example/workspace'
+}
+✔ previously imported Claude history becomes a real session for desktop-continuous (55.914208ms)
+[2026-09-27 13:06:35.207] [pid:46635] [zcode-task-service] [zcode-task-service] 历史快照读取完成 {
+  clientMode: 'web-remote-replayable',
+  durationMs: 6,
+  indexDurationMs: 1,
+  messageLimit: null,
+  projectionDurationMs: 0,
+  resumeDurationMs: 5,
+  snapshotKind: 'session',
+  stats: {
+    assistantMessages: 0,
+    bodyRefs: 0,
+    contentChars: 0,
+    fileChanges: 0,
+    historyTotalMessages: 0,
+    messages: 0,
+    slashCommands: 0,
+    thoughtChars: 0,
+    toolCalls: 0,
+    toolSliceMessages: 0,
+    truncatedBefore: false,
+    userMessages: 0
+  },
+  taskId: 'claude-import-example',
+  workspaceIdentity: 'example-remote-workspace',
+  workspacePath: '/example/workspace'
+}
+✔ previously imported Claude history becomes a real session for web-remote-replayable (24.235375ms)
+(node:46636) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ codex: normalized import → SQLite → readback → visible UI preserves ordered segments (59.085791ms)
+✔ codex commentary-only: normalized import → SQLite → readback → visible UI preserves ordered segments (29.336708ms)
+✔ claudeCode: normalized import → SQLite → readback → visible UI preserves ordered segments (60.952167ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3413.812333

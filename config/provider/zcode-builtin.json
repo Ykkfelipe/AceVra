@@ -1420,7 +1420,7 @@
           }
         },
         {
-          "modelMatch": ".*gpt-6-astra(?:[.\\-:/\\[].*)?",
+          "modelMatch": ".*gpt-6-(?:astra|sol|luna)(?:[.\\-:/\\[].*)?",
           "config": {
             "properties": {
               "contextWindow": 1050000,
@@ -3141,7 +3141,7 @@
           }
         },
         {
-          "modelMatch": ".*gpt-6-astra(?:[.\\-:/\\[].*)?",
+          "modelMatch": ".*gpt-6-(?:astra|sol|luna)(?:[.\\-:/\\[].*)?",
           "apiTypeMatch": "openai-responses",
           "config": {
             "optionSpecs": {
@@ -4188,7 +4188,7 @@
           }
         },
         {
-          "modelMatch": ".*gpt-6-astra(?:[.\\-:/\\[].*)?",
+          "modelMatch": ".*gpt-6-(?:astra|sol|luna)(?:[.\\-:/\\[].*)?",
           "apiTypeMatch": "anthropic-messages",
           "baseUrlMatch": "https://openrouter\\.ai/api(?:/v1)?/?",
           "config": {
@@ -5827,8 +5827,36 @@
           }
         },
         {
+          "templateId": "openai",
+          "modelId": "gpt-6-sol",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "openai",
+          "modelId": "gpt-6-luna",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
           "templateId": "opencode-zen-responses",
           "modelId": "gpt-6-astra",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-responses",
+          "modelId": "gpt-6-sol",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "opencode-zen-responses",
+          "modelId": "gpt-6-luna",
           "config": {
             "enabled": true
           }
@@ -5850,6 +5878,20 @@
         {
           "templateId": "openrouter",
           "modelId": "openai/gpt-6-astra",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "openrouter",
+          "modelId": "openai/gpt-6-sol",
+          "config": {
+            "enabled": true
+          }
+        },
+        {
+          "templateId": "openrouter",
+          "modelId": "openai/gpt-6-luna",
           "config": {
             "enabled": true
           }

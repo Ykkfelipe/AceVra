@@ -155,7 +155,8 @@ Checksums are recorded in that handoff’s `SHA256SUMS.txt`.
 Only these local UI checks are requested now:
 
 1. In the newly opened AceVra, confirm the built-in backend control says **Agent**, the new-task
-   placeholder says **agent**, and the mode/Computer Use/Agent controls no longer overlap.
+   placeholder is the approved desktop copy `Ask the agent anything, @ to add context, / for commands or capabilities`,
+   and the mode/Computer Use/Agent controls no longer overlap.
 2. Confirm the Computer Use composer control no longer shows the enablement-failure tooltip while
    Computer Use is enabled.
 3. Open **Settings → Computer Use**, enable Computer Use if needed, and confirm the local-alpha

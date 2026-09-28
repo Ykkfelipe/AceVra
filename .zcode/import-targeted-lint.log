@@ -1,0 +1,13 @@
+
+  ! eslint(no-unused-vars): Identifier 'mergeColdConversationEvents' is imported but never used.
+    ,-[packages/ui/test/importedHistoryProjection.test.ts:16:10]
+ 15 | } from "../../../apps/zcode-cli/packages/bootstrap/src/zcode-protocol/server-operations.js";
+ 16 | import { mergeColdConversationEvents } from "../../../apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/cold-event-merge.js";
+    :          ^^^^^^^^^^^^^|^^^^^^^^^^^^^
+    :                       `-- 'mergeColdConversationEvents' is imported here
+ 17 | import { ProductProjection } from "../../../apps/zcode-cli/packages/bootstrap/src/zcode-protocol-v4/product-projection.js";
+    `----
+  help: Consider removing this import.
+
+Found 1 warning and 0 errors.
+Finished in 27ms on 4 files with 94 rules using 8 threads.

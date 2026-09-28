@@ -1,0 +1,4 @@
+
+> @zcode/bootstrap@0.1.0 typecheck /Users/felipemore/Projects/AceVra/apps/zcode-cli/packages/bootstrap
+> tsc --noEmit
+

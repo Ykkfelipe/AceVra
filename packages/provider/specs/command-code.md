@@ -75,6 +75,31 @@ verified unmodified afterwards: mtime still 2026-09-20 18:01:35, mode 0600, all 
 (`apiKey`, `userId`, `userName`, `keyName`, `authenticatedAt`) intact. Command Code's own
 login is untouched. A dedicated Studio key can be swapped in later without code changes.
 
+## gpt-6 family coverage gap (fixed 2026-09-24)
+
+`config/provider/zcode-builtin.json` had a `modelMatch` rule for `gpt-6-astra`
+(`contextWindow: 1050000`, `maxOutputTokens.max: 128000`) but none for its siblings
+`gpt-6-sol` and `gpt-6-luna`. Both are present in Command Code's live `GET /provider/v1/models`
+response with the same `context_length: 1050000` as `gpt-6-astra` — verified directly against
+the API, not guessed, per this doc's own rule above. Unmatched, they fell through to the
+generic `.*` catch-all (`contextWindow: 200000`, `maxOutputTokens.max: 32000`), silently
+under-provisioning any model added under this name regardless of which provider (Command
+Code, or a user's own Azure deployment sharing the same model name) it was configured under.
+
+Fix: the `gpt-6-astra` `modelMatch` pattern (and its two `apiTypeMatch`-scoped reasoning-map
+siblings, and the `templateModelRules` "enabled by default" entries for the `openai`,
+`opencode-zen-responses` and `openrouter` templates) were extended from matching only `astra`
+to matching `astra|sol|luna`, so all three resolve identically. This is a `modelMatch`-only
+rule with no `providerId` scoping, so it applies uniformly to every provider a user configures
+these model ids under — see the [Azure OpenAI](./azure-openai.md) note on why that cross-provider
+reuse is intentional. Regression test:
+`packages/provider-node/test/zcodeBuiltinModelCatalogCoverage.test.ts`.
+
+The lesson for future catalog updates: when a model family gets a new sibling (a vendor ships
+`-sol`/`-luna`/etc. alongside an already-catalogued model), grep the catalog for the existing
+sibling's `modelMatch` pattern and extend the alternation rather than assuming the generic
+fallback is "close enough" — a 5x context-window and 4x output-token gap is not close enough.
+
 ## Verification
 
 Registry went from `providerCount: 3` to `4`. The picker lists Z.ai (GLM-5.3,
