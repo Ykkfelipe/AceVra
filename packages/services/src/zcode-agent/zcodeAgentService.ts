@@ -3112,6 +3112,22 @@ export function createZCodeAgentService(
       throw createProviderNotReadyError({ snapshot: readinessSnapshot, workspace: params });
     }
 
+    // 预热/只读路径创建的 entry（modelExecutionEnabled=false）在首次模型执行需求边界被
+    // 提升时同样要过一次 stale 回收裁决——packaged 实测：启动预热 spawn 的 Agent 缺
+    // broker 凭据，首个对话需求走的就是这条 upgrade 路径；只放在上面 enabled 快路径
+    // 会让这种最常见形态永远不回收。放在 readiness 门之后：admission 失败的需求绝不
+    // 触发回收，只读观察者路径（getReadOnlyClient）也绝不回收。
+    if (active && isReusableActiveClientEntry(params, active)) {
+      // 先撤销本 demand 自己的 waiting 标记：回收判定把「同 workspace 有并发启动」
+      // 视为不安全，而这里在途的正是本次调用自己；回收如发生，重入会重建新标记。
+      waitingWorkspaceStartups.delete(workspaceKey);
+      if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, params, active)) {
+        // 回收后 entry 已失效；重入一次走全新 spawn 路径（重新执行 resolveSpawnEnv）。
+        return getClient(params);
+      }
+      waitingWorkspaceStartups.set(workspaceKey, waiting);
+    }
+
     const entry = await getOrStartReadOnlyClient(params);
     if (waiting.cancelled) {
       throw createRuntimeUnavailableError(params);

@@ -27,11 +27,21 @@ import { ZCodeAgentProcessManager } from "../src/zcode-agent/zcodeAgentProcessMa
 import type { RuntimeProcessLifecycleReporter } from "../src/process/runtimeProcessLifecycle.js";
 import type { ZCodeAgentCommand } from "../src/zcode-agent/zcodeAgentProcessManager.js";
 
-/** 永不应答的长驻占位进程：只验证进程生命周期与 spawn env 记录，不涉及协议。 */
+/** 长驻占位 Agent：只应答 session/list（预热线程用它创建只读 entry），其余请求不回。 */
 function createSleeperCommand(): ZCodeAgentCommand {
   return {
     command: process.execPath,
-    args: ["-e", "setInterval(() => {}, 1 << 30)"],
+    args: [
+      "-e",
+      [
+        "let buf='';",
+        "process.stdin.on('data',(c)=>{buf+=c;let i;while((i=buf.indexOf('\\n'))>=0){",
+        "const line=buf.slice(0,i);buf=buf.slice(i+1);",
+        "try{const m=JSON.parse(line);if(m.id!==undefined&&m.method==='session/list'){",
+        "process.stdout.write(JSON.stringify({id:m.id,result:{sessions:[]}})+'\\n')}}catch{}}});",
+        "setInterval(()=>{},1<<30);",
+      ].join(" "),
+    ],
     supportsStorageStartup: false,
   };
 }
@@ -114,19 +124,22 @@ test("stale pre-credential runtime is recycled at the next demand only after hel
   });
   const params = { workspacePath };
   try {
-    // 1. Agent 需求先于 Helper：fail-closed spawn，无 broker 凭据键。
-    const first = await service.initialize(params);
-    assert.equal(first.available, true, `first initialize failed: ${first.reason}`);
-    await waitFor(() => spawns.size >= 1, "first agent spawn");
+    // 1. 预热（packaged 实况）：只读 read 路径先 spawn Agent（fail-closed，无凭据键），
+    //    entry 的 modelExecutionEnabled=false——这是 packaged 首个对话需求的真实起点。
+    const sessions = await service.listSessions({ ...params, runtimePolicy: "start-if-needed" });
+    assert.deepEqual(sessions, []);
+    await waitFor(() => spawns.size >= 1, "prewarm agent spawn");
     assert.equal(spawnEnvSeen[0]?.has(BROKER_SOCKET_ENV), false);
+    assert.equal(policyCalls.length, 0, "只读预热路径绝不触发回收裁决");
 
-    // 2. Helper 未恢复：同一需求边界绝不回收（不产生新 spawn，不扰动既有 runtime）。
+    // 2. Helper 未恢复：首个模型执行需求（upgrade 路径）评估裁决但绝不回收。
     const second = await service.initialize(params);
     assert.equal(second.available, true, `second initialize failed: ${second.reason}`);
     assert.equal(spawns.size, 1, "helper 未恢复时不得回收/重建 runtime");
-    assert.equal(policyCalls.length, 1, "每次需求边界恰好裁决一次");
+    assert.equal(policyCalls.length, 1, "预热 entry 的 upgrade 需求边界必须评估裁决");
 
-    // 3. Helper 恢复后的下一个需求边界：回收一次，重新 spawn 拿到凭据键。
+    // 3. Helper 恢复后的下一个需求边界（此刻 entry 已 enabled，走快路径）：回收一次，
+    //    重新 spawn 拿到凭据键。
     helperReady = true;
     const third = await service.initialize(params);
     assert.equal(third.available, true, `post-recovery initialize failed: ${third.reason}`);
@@ -140,8 +153,8 @@ test("stale pre-credential runtime is recycled at the next demand only after hel
     // 4. 回收后的 runtime 已持凭据：不再反复回收。
     const fourth = await service.initialize(params);
     assert.equal(fourth.available, true, `fourth initialize failed: ${fourth.reason}`);
-    // 三次裁决：t2（未恢复→不回收）、t3（已恢复→回收）、t4（已持凭据→不回收）。
-    // t1 走首次启动路径，不进入复用裁决。
+    // 三次裁决：t2 upgrade 路径（未恢复→不回收）、t3 快路径（已恢复→回收）、
+    // t4 快路径（已持凭据→不回收）。
     await waitFor(() => policyCalls.length >= 3, "fourth demand policy call");
     assert.equal(policyCalls[2]?.has(BROKER_SOCKET_ENV), true);
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -218,7 +231,13 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
   assert.match(serviceSource, /storageStartup\.isWaiting/);
   assert.match(serviceSource, /if \(cuaOperationTurnTracker\?\.hasActiveTurn\(\)\) return false;/);
   assert.match(serviceSource, /waitingWorkspaceStartups\.has\(workspaceKey\)/);
+  // 预热 entry 的 upgrade 路径（modelExecutionEnabled=false → 首个模型执行需求）也必须
+  // 过裁决，且放在 provider/model readiness 门之后（admission 失败绝不回收）。
   // 回收后重入必须走全新 spawn 路径（重新执行 resolveSpawnEnv）。
+  assert.match(
+    serviceSource,
+    /createProviderNotReadyError\(\{ snapshot: readinessSnapshot, workspace: params \}\);[^]*?maybeRecycleStaleRuntimeForDemand/,
+  );
   assert.match(
     serviceSource,
     /maybeRecycleStaleRuntimeForDemand\(workspaceKey, params, active\)[^]*?return getClient\(params\)/,
