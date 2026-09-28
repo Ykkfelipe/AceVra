@@ -12,6 +12,17 @@ export const ZCODE_TOOL_ENV_PASSTHROUGH_ENV_KEY = "ZCODE_TOOL_ENV_PASSTHROUGH_JS
 export const ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV = "ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED";
 export const ZCODE_CUA_PRODUCT_HELPER_ENV_KEY = "ZCODE_CUA_PRODUCT_HELPER";
 export const ZCODE_CUA_BROKER_SOCKET_ENV_KEY = "ZCODE_CUA_PERMISSION_BROKER_SOCKET";
+/**
+ * CUA-1.5 launch-scoped session capability (`BROKER_TOKEN_ENV` in @zcode/zcode-cua/broker).
+ *
+ * Hardened（host-owned transport）Helper 的 relay 对每个 client 请求做常量时间 token
+ * 校验，缺失即 `missing_session_capability`；broker client 从本进程 env 读取它并写入
+ * `request.token`。它不是通用 bearer 凭据：只经私有快照 + 定向注入交给官方 node_repl 宿主。
+ */
+export const ZCODE_CUA_BROKER_TOKEN_ENV_KEY = "ZCODE_CUA_PERMISSION_BROKER_TOKEN";
+// Exported so services/node.ts can inject the Helper's plugin authority into the agent spawn env
+// (mirrors feat; the agent-side plugin host verifies the broker authority via this env var).
+export const ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY = "ZCODE_CUA_PLUGIN_AUTHORITY";
 /** Shared node_repl host marker; unlike the broker bearer values it is not a secret. */
 export const ZCODE_CUA_NODE_REPL_HOST_ENV_KEY = "ZCODE_CUA_NODE_REPL_HOST";
 export const ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY = "ZCODE_CUA_LEASE_AUTHORITY_SOCKET";
@@ -66,11 +77,12 @@ const SANITIZED_RUNTIME_ENV_KEYS = [
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
   ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY,
   ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY,
-  // 遗留 bearer token：当前 broker 是 identity 模式（socket + authority，无口令，见
-  // captureZCodeCuaBrokerCredentials），本进程不再产生也不再消费它。仍然剔除，因为用户机上
-  // 可能装着旧版 Helper —— 那些版本认 bearer token，一旦这个变量随 agent 全局 env 漏给别的
-  // MCP server / Bash 子进程，同一个 confused-deputy 又成立。剔除一个已不用的键是零成本的。
-  "ZCODE_CUA_PERMISSION_BROKER_TOKEN",
+  // CUA-1.5 launch-scoped session capability：hardened（host-owned transport）链路上，
+  // Helper 的 relay 要求每个 client 请求携带本次 launch 的 token，缺失即
+  // missing_session_capability。它和 socket 一样只该由定向注入交给官方 node_repl 宿主，
+  // 所以同样从所有子进程公共 env 剔除；sanitize 前捕获进本进程私有快照，由 bootstrap 的
+  // 定向注入与 plugin-host 恢复交回受信任的 node_repl 宿主（见 capture 注释）。
+  ZCODE_CUA_BROKER_TOKEN_ENV_KEY,
   "ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER",
   "ZCODE_CUA_PLUGIN_AUTHORITY",
   // Agent OTLP Endpoint/Auth/Identity 只属于 CLI telemetry bootstrap，不能继续泄漏给
@@ -102,10 +114,11 @@ const NON_TOOL_PASSTHROUGH_RUNTIME_ENV_KEYS = [
   "NODE_NO_WARNINGS",
   // CUA broker 凭据不得经 tool-env-passthrough 恢复到 Bash/tool 子进程（否则等于绕过上面的剔除）。
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
+  ZCODE_CUA_BROKER_TOKEN_ENV_KEY,
   ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY,
   ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY,
   "ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER",
-  "ZCODE_CUA_PLUGIN_AUTHORITY",
+  ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY,
   ZCODE_REMOTE_RUNTIME_NETWORK_AUTHORITY_ENV_KEY,
   ZCODE_REMOTE_HTTP_PROXY_ENV_KEY,
   ZCODE_REMOTE_NO_PROXY_ENV_KEY,
@@ -129,13 +142,11 @@ export function resolveZCodeRuntimeEnv(
   return normalizeZCodeRuntimeEnv(env[ZCODE_RUNTIME_ENV_KEY]) ?? fallback;
 }
 
-// Exported so services/node.ts can inject the Helper's plugin authority into the agent spawn env
-// (mirrors feat; the agent-side plugin host verifies the broker authority via this env var).
-export const ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY = "ZCODE_CUA_PLUGIN_AUTHORITY";
-
 interface CapturedCuaBrokerCredentials {
   socket: string;
   pluginAuthority: string;
+  /** CUA-1.5 launch-scoped session capability；hardened launch 才有，legacy 链路可以缺省。 */
+  capabilityToken?: string;
   refreshMarker?: string;
   leaseAuthoritySocket?: string;
   leaseAuthorityToken?: string;
@@ -151,9 +162,14 @@ const capturedZCodeAgentTelemetryEnv: Record<string, string> = {};
 // （fail-open，违反 "Python/uvx must never become the implicit permission owner"）。因此在剔除前把
 // 凭据捕获进本进程私有存储，只经 getCapturedZCodeCuaBrokerCredentials() 暴露给 bootstrap 的定向
 // 注入路径，绝不写回任何子进程 env。
+//
+// tuple = socket + authority（config-provenance 随机数）+ capabilityToken（hardened 链路的
+// launch token，可选）。socket/authority 仍必须成对出现才构成有效凭据组；capabilityToken 随
+// 成对组一起快照，是否注入由定向注入方按 node_repl 宿主身份决定。
 function captureZCodeCuaBrokerCredentials(env: Record<string, string | undefined>): void {
   const socket = env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY]?.trim();
   const pluginAuthority = env[ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]?.trim();
+  const capabilityToken = env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY]?.trim();
   const refreshMarker = env["ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER"]?.trim();
   const leaseAuthoritySocket = env[ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY]?.trim();
   const leaseAuthorityToken = env[ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY]?.trim();
@@ -163,6 +179,7 @@ function captureZCodeCuaBrokerCredentials(env: Record<string, string | undefined
     capturedCuaBrokerCredentials = Object.freeze({
       socket,
       pluginAuthority,
+      ...(capabilityToken ? { capabilityToken } : {}),
       ...(refreshMarker ? { refreshMarker } : {}),
       ...(leaseAuthoritySocket ? { leaseAuthoritySocket } : {}),
       ...(leaseAuthorityToken ? { leaseAuthorityToken } : {}),
@@ -202,6 +219,7 @@ export function getCapturedZCodeAgentTelemetryEnv(): Record<string, string> {
 export function getCapturedZCodeCuaBrokerCredentials(): {
   socket: string | undefined;
   pluginAuthority: string | undefined;
+  capabilityToken?: string | undefined;
   refreshMarker?: string;
   leaseAuthoritySocket?: string;
   leaseAuthorityToken?: string;
@@ -211,6 +229,7 @@ export function getCapturedZCodeCuaBrokerCredentials(): {
     : {
         socket: undefined,
         pluginAuthority: undefined,
+        capabilityToken: undefined,
         refreshMarker: undefined,
         leaseAuthoritySocket: undefined,
         leaseAuthorityToken: undefined,

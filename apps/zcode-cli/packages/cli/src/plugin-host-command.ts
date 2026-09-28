@@ -5,6 +5,7 @@ import { ZCODE_PLUGIN_HOST_COMMAND } from "@zcode/contracts/plugins";
 import {
   getCapturedZCodeCuaBrokerCredentials,
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
+  ZCODE_CUA_BROKER_TOKEN_ENV_KEY,
   ZCODE_CUA_NODE_REPL_HOST_ENV_KEY,
 } from "@zcode/shared/runtime-env";
 import { ZCODE_CUA_OFFICIAL_PLUGIN_ID, ZCODE_PLUGIN_ID_ENV_KEY } from "@zcode/shared/mcp";
@@ -53,11 +54,18 @@ export async function runPluginHostCommand(ctx: RunContext, argv: string[]): Pro
 
     const originalArgv = process.argv;
     const originalBrokerSocket = process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY];
-    // shared node_repl 把同一凭据组恢复到环境，由 broker bridge 读取；旧的独立 CUA
-    // MCP 不再拥有执行入口。
+    const originalCapabilityToken = process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY];
+    // shared node_repl 把同一凭据组（socket + launch-scoped capability token）恢复到环境，
+    // 由 broker bridge 读取；旧的独立 CUA MCP 不再拥有执行入口。
+    // token 是 hardened transport 的 session capability：relay 对每个 client 请求做常量时间
+    // 校验（缺失即 missing_session_capability），broker client 从本进程 env 读取并写入
+    // request.token；不恢复它会让所有真实 Computer Use 调用被拒。
     process.argv = [process.execPath, serverPath, ...serverArgs];
     if (capturedBrokerCredentials.socket && process.env[ZCODE_CUA_NODE_REPL_HOST_ENV_KEY] === "1") {
       process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY] = capturedBrokerCredentials.socket;
+      if (capturedBrokerCredentials.capabilityToken) {
+        process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY] = capturedBrokerCredentials.capabilityToken;
+      }
     }
     try {
       await module.main();
@@ -67,6 +75,11 @@ export async function runPluginHostCommand(ctx: RunContext, argv: string[]): Pro
         delete process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY];
       } else {
         process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY] = originalBrokerSocket;
+      }
+      if (originalCapabilityToken === undefined) {
+        delete process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY];
+      } else {
+        process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY] = originalCapabilityToken;
       }
     }
 
@@ -85,14 +98,11 @@ function assertCapturedBrokerLaunchIsAuthorized(credentials: CapturedBrokerCrede
   if (!hasCapturedCredentials) return;
 
   const pluginId = process.env[ZCODE_PLUGIN_ID_ENV_KEY]?.trim().toLowerCase();
-  // 凭据组里已经没有 token 了：broker 全平台改为身份模式（Helper 按对端代码签名裁决连接），
-  // shared/runtimeEnv.ts 的 CapturedCuaBrokerCredentials 只有 socket + pluginAuthority
-  // (+ refreshMarker)。这里不能再读 `credentials.token`；token 已从凭据组移除，
-  // 残留读取方只能靠 CLI 自己的 typecheck 发现（根 `pnpm typecheck` 不含 apps/zcode-cli）。
+  // 权限组 = socket + pluginAuthority（+ hardened launch 的 capabilityToken，可选）。
   // socket + pluginAuthority 必须成对（authority 是 bootstrap 写入 node_repl 配置的 provenance
   // 随机数，core 据此认官方 server）；捕获侧本就只在成对时落快照，半组会清空并 fail-closed。
-  // 校验也不能要求 token 齐全——身份模式凭据没有 token，强校验会让 node_repl 宿主启动即
-  // 退出（"connection closed during the server/discover probe"），工具面为空。
+  // token 是 launch-scoped session capability：hardened 链路必有，legacy 链路可以缺省，
+  // 因此这里不能要求 token 齐全——强校验会让无 token 的合法宿主启动即退出。
   if (
     credentials.socket === undefined ||
     credentials.pluginAuthority === undefined ||

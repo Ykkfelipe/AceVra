@@ -9,6 +9,7 @@ import {
   isZCodeCuaMcpCommand,
   isZCodeCuaMcpPackageArg,
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
+  ZCODE_CUA_BROKER_TOKEN_ENV_KEY,
   ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY,
   ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY,
   ZCODE_CUA_NODE_REPL_HOST_ENV_KEY,
@@ -25,10 +26,6 @@ function resolveZCodeCuaBrokerSocket(): string | undefined {
     getCapturedZCodeCuaBrokerCredentials().socket ||
     process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY]?.trim()
   );
-}
-
-function resolveZCodeCuaBrokerToken(): string | undefined {
-  return undefined;
 }
 
 const NODE_REPL_SERVER_NAME = "node_repl";
@@ -102,7 +99,6 @@ export function omitMcpServers(
   return injectZCodeCuaBrokerMcpServers(
     kept,
     resolveZCodeCuaBrokerSocket(),
-    resolveZCodeCuaBrokerToken(),
     trustedOfficialCuaServerNames,
   );
 }
@@ -110,11 +106,9 @@ export function omitMcpServers(
 function injectZCodeCuaBrokerMcpServers(
   servers: Record<string, McpServerConfig>,
   socketPath: string | undefined,
-  token: string | undefined = undefined,
   trustedOfficialCuaServerNames: ReadonlySet<string> = new Set(),
 ): Record<string, McpServerConfig> {
   const normalizedSocketPath = socketPath?.trim();
-  const normalizedToken = token?.trim();
 
   let changed = false;
   const next: Record<string, McpServerConfig> = {};
@@ -131,11 +125,7 @@ function injectZCodeCuaBrokerMcpServers(
       next[name] = config;
       continue;
     }
-    const injected = injectCuaCredentialsIntoNodeRepl(
-      config,
-      normalizedSocketPath,
-      normalizedToken,
-    );
+    const injected = injectCuaCredentialsIntoNodeRepl(config, normalizedSocketPath);
     next[name] = injected;
     changed ||= injected !== config;
   }
@@ -146,11 +136,14 @@ function injectZCodeCuaBrokerMcpServers(
 function injectCuaCredentialsIntoNodeRepl(
   config: McpServerConfig,
   socketPath: string,
-  token: string | undefined,
 ): McpServerConfig {
   if (config.type !== "stdio") return config;
   const captured = getCapturedZCodeCuaBrokerCredentials();
   const pluginAuthority = captured.pluginAuthority;
+  // hardened（host-owned transport）链路上 broker client 会把该 launch token 写入
+  // request.token，relay 常量时间校验，缺失即 missing_session_capability。与 socket 一样
+  // 只取自私有快照、只定向交给官方 node_repl 宿主，绝不进入公共 env。
+  const capabilityToken = captured.capabilityToken;
   // CLI runtime env 会在 bootstrap 前被清理。marker 必须和 socket/token 一样取自私有凭据快照，
   // 否则 SDK 迁移后 broker 虽然存活，权限刷新仍会静默停止。
   const refreshMarker = captured.refreshMarker || process.env[REFRESH_MARKER_ENV]?.trim();
@@ -161,6 +154,7 @@ function injectCuaCredentialsIntoNodeRepl(
     env: {
       ...config.env,
       [ZCODE_CUA_BROKER_SOCKET_ENV_KEY]: socketPath,
+      ...(capabilityToken ? { [ZCODE_CUA_BROKER_TOKEN_ENV_KEY]: capabilityToken } : {}),
       ...(refreshMarker ? { [REFRESH_MARKER_ENV]: refreshMarker } : {}),
       ...(pluginAuthority ? { [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: pluginAuthority } : {}),
       ...(leaseAuthoritySocket ? { [ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY]: leaseAuthoritySocket } : {}),
