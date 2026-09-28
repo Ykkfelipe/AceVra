@@ -17,6 +17,21 @@ export interface ComputerUseRuntimeBridge {
     assertAvailable(): void;
     documentationRoot: string;
 }
+/**
+ * Install the host-provided `agent.computerUse` facade for the next cell.
+ *
+ * The computer-use skill's contract is that the shared node_repl host installs the client before
+ * every cell ("start with the host-provided facade"), and the plugin's
+ * `scripts/computer-use-client.mjs` is only the *compatibility* bootstrap for hosts that expose the
+ * session bridge. Before this existed the bridge was reachable only through its symbol, so a model
+ * following the skill saw `agent.computerUse === undefined` and — correctly, per the skill — stopped
+ * with "Computer Use is unavailable", even though the broker session was fully provisioned.
+ *
+ * Mirrors `prepareBrowserRuntimeGlobals`: merge into the existing `agent` object instead of
+ * replacing it, and stay a no-op when no bridge was captured, so a subagent or a session without
+ * the CUA transport keeps exactly today's behaviour.
+ */
+export declare function prepareComputerUseRuntimeGlobals(globals: Record<PropertyKey, unknown>): void;
 export declare function createComputerUseBridgeGlobals(input: {
     broker?: NodeReplCuaBrokerConnection;
     generation: number;

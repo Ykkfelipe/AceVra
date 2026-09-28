@@ -23,7 +23,7 @@ export const ZCODE_CUA_BROKER_TOKEN_ENV_KEY = "ZCODE_CUA_PERMISSION_BROKER_TOKEN
 // Exported so services/node.ts can inject the Helper's plugin authority into the agent spawn env
 // (mirrors feat; the agent-side plugin host verifies the broker authority via this env var).
 export const ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY = "ZCODE_CUA_PLUGIN_AUTHORITY";
-/** Shared node_repl host marker; unlike the broker bearer values it is not a secret. */
+/** Shared node_repl host marker; unlike the CUA session capability values it is not a secret. */
 export const ZCODE_CUA_NODE_REPL_HOST_ENV_KEY = "ZCODE_CUA_NODE_REPL_HOST";
 export const ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY = "ZCODE_CUA_LEASE_AUTHORITY_SOCKET";
 export const ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY = "ZCODE_CUA_LEASE_AUTHORITY_TOKEN";

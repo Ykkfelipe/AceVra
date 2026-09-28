@@ -588,6 +588,17 @@ const CUA_HELPER_HEALTH_TIMEOUT_MS = 30_000;
 // 已有 Agent。绝不照搬 feat 的 10s caller wait。
 const CUA_PRODUCT_HELPER_SPAWN_READY_DEADLINE_MS = 1_000;
 
+/**
+ * Bounded wait for the hardened session at the Agent spawn boundary.
+ *
+ * Runtime credentials are fixed at spawn, so a prewarm runtime spawned while the session is still
+ * starting can never use Computer Use afterwards without a runtime swap. Waiting here is what makes
+ * the first request of a freshly launched app work; the budget matches the Helper's own launch +
+ * hello admission, and a timeout keeps the existing fail-closed shape (the recovery sweep then
+ * upgrades any runtime spawned without credentials).
+ */
+const CUA_HARDENED_SESSION_SPAWN_WAIT_MS = 12_000;
+
 type DefaultCuaProductHelper = {
   host: ManagedCuaProductHelperHost;
   macPermissionHost?: CuaHelperHost;
@@ -757,6 +768,36 @@ export function shouldEnableDefaultCuaProductHelper(
  * - 已显式注入 resolver 时不重复创建。
  * 平台/环境层面的启用与否另由 shouldEnableDefaultCuaProductHelper 决定。
  */
+/**
+ * Whether a workspace runtime must be recycled because its CUA credentials can no longer serve.
+ *
+ * Pure so the stale/usable distinction is reviewable without spinning a process graph:
+ *
+ * - a runtime *without* the broker socket key was spawned before a transport existed (fail-closed);
+ * - a runtime *with* the key can still be stale on the hardened path, because the Helper exits after
+ *   its 15s idle window while the socket name and capability stay valid. That case is recoverable by
+ *   reconnecting the Helper into the SAME session, so it must be reported usable while the transport
+ *   is live and recyclable once the transport is dead — never the other way round.
+ *
+ * `hardenedLive` means "the hardened session exists AND its Helper is connected"; a session object
+ * whose Helper is gone is not a usable transport.
+ */
+export function shouldRecycleCuaStaleRuntime(opts: {
+  hasBrokerSocketKey: boolean;
+  cuaEnabled: boolean;
+  /** Managed product host exists and reports running (Windows / non-hardened path). */
+  managedHelperReady: boolean;
+  hardenedLive: boolean;
+}): boolean {
+  if (!opts.cuaEnabled) return false;
+  if (opts.managedHelperReady) {
+    // 托管路径保持既有语义：已持有 broker socket 的 runtime 不回收。
+    return !opts.hasBrokerSocketKey;
+  }
+  if (opts.hasBrokerSocketKey) return !opts.hardenedLive;
+  return opts.hardenedLive;
+}
+
 export function shouldCreateDefaultCuaProductHelper(opts: {
   serviceAuthorityMode?: ServiceAuthorityMode;
   hasRemoteWorkspaceIdentity?: boolean;
@@ -858,10 +899,34 @@ export function createDynamicCuaProductMcpServerResolver(options: {
     resolver: CuaProductMcpServerResolver,
     context?: CuaProductMcpServerResolverContext,
   ) => boolean;
+  /**
+   * CUA demand boundary: called before resolving the computer-use MCP servers for a session that
+   * has the plugin enabled, so a missing/recovered hardened session can be established by the
+   * demand itself. Optional. Throwing is tolerated — the caller fails safe toward session
+   * resolution and leaves credential decisions to the spawn boundary.
+   */
+  ensureTransport?: (context?: CuaProductMcpServerResolverContext) => Promise<void> | void;
 }): CuaProductMcpServerResolver {
   return {
     async resolveMcpServers(servers, context) {
       if (!options.isPluginEnabled(context)) return servers;
+      // Establishing the transport belongs here rather than in Settings: this call is the moment
+      // the product decides the session needs Computer Use credentials. Without it a runtime
+      // spawned before the session existed stays fail-closed forever, because nothing else in the
+      // ordinary conversation flow ever starts the Helper.
+      //
+      // Fail-safe in one direction only: a Helper that cannot start must never fail session
+      // creation. Credentials stay fail-closed at the spawn boundary, which is where the product
+      // decides what a runtime without them may do.
+      try {
+        await options.ensureTransport?.(context);
+      } catch (error) {
+        createServiceLogger("cua-product-helper").warn(
+          undefined,
+          "Computer Use transport could not be established at the demand boundary",
+          { errorMessage: error instanceof Error ? error.message : String(error) },
+        );
+      }
       const resolver = await options.getResolver(context);
       if (!resolver) return servers;
       const resolved = await resolver.resolveMcpServers(servers, context);
@@ -1169,6 +1234,58 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The credentials one Agent spawn receives for the CUA transport, resolved from a single live
+ * transport handle.
+ *
+ * They are one tuple, not three independent values: the hardened relay authenticates every client
+ * request against the launch capability minted for the session that owns the socket. A socket
+ * without its capability — or a capability from another transport generation — is unusable, so this
+ * helper is the only place that turns a handle into spawn env and it fails closed on anything
+ * incomplete. Nothing here mints credentials: `socket`, `pluginAuthority` and the capability are
+ * read from the same handle in one expression, so parts cannot be mixed across generations.
+ *
+ * Terminology, because two different mechanisms meet here:
+ * - peer/code identity decides **process trust** (which process may connect at all),
+ * - the session capability decides **launch/session authorization** (which launch this transport
+ *   serves). It is not a generic bearer token: it is scoped to one transport generation and is only
+ *   ever handed to the Agent spawn env resolved from that same transport.
+ */
+function resolveCuaTransportSpawnEnv(
+  handle: CuaHelperTransportHandle | undefined,
+): { ok: true; env: Record<string, string> } | { ok: false; reason: string } {
+  const socketPath = handle?.socketPath?.trim();
+  const pluginAuthority = handle?.pluginAuthority?.trim();
+  const capability = handle?.sessionCapabilityToken?.trim();
+  if (!socketPath) return { ok: false, reason: "transport tuple has no socket" };
+  if (!pluginAuthority) return { ok: false, reason: "transport tuple has no plugin authority" };
+  if (handle?.sessionCapabilityRequired === true) {
+    if (!capability) {
+      return { ok: false, reason: "hardened transport tuple has no session capability" };
+    }
+    return {
+      ok: true,
+      env: {
+        [BROKER_SOCKET_ENV]: socketPath,
+        [BROKER_TOKEN_ENV]: capability,
+        [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: pluginAuthority,
+      },
+    };
+  }
+  if (capability) {
+    // A capability on a transport that does not declare it is an unlabelled credential. Refuse it
+    // rather than ship a token whose transport generation nothing vouches for.
+    return { ok: false, reason: "transport tuple carries an unlabelled session capability" };
+  }
+  return {
+    ok: true,
+    env: {
+      [BROKER_SOCKET_ENV]: socketPath,
+      [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: pluginAuthority,
+    },
+  };
+}
+
 export async function buildCuaProductHelperAgentEnv(
   host:
     | (Pick<CuaHelperHost, "start"> &
@@ -1181,6 +1298,20 @@ export async function buildCuaProductHelperAgentEnv(
   logger = createServiceLogger("cua-product-helper"),
 ): Promise<Record<string, string>> {
   if (!host) return {};
+  // Every successful return below hands the Agent a transport, so all of them go through one
+  // resolver: a half tuple (socket without its session capability, or a capability whose transport
+  // generation nothing vouches for) must never reach a spawn. A refusal marks the host unavailable
+  // so the next spawn re-probes instead of inheriting this decision.
+  const fromTransport = (handle: CuaHelperTransportHandle | undefined): Record<string, string> => {
+    const resolved = resolveCuaTransportSpawnEnv(handle);
+    if (resolved.ok) return resolved.env;
+    markCuaProductHelperAgentEnvUnavailable(host);
+    logger.warn(
+      undefined,
+      `Computer Use transport tuple is incomplete; failing this Agent spawn closed (${resolved.reason})`,
+    );
+    return { [BROKER_UNAVAILABLE_ENV]: `broker_unavailable: ${resolved.reason}` };
+  };
   if (hasCuaProductHelperAgentEnvUnavailable(host)) {
     // marker 可能已过时：权限授予或后台冷启动完成后，Helper 已恢复，但内置插件尚未加载，
     // 没有新的 resolver 调用来清理 marker。历史上这会让第二次打开应用仍显示 0 tools。
@@ -1250,10 +1381,7 @@ export async function buildCuaProductHelperAgentEnv(
       }
       cuaProductHelperTransportSpawns.add(host);
       cuaProductHelperAgentEnvRetryAt.delete(host);
-      return {
-        [BROKER_SOCKET_ENV]: transport.socketPath,
-        [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: transport.pluginAuthority,
-      };
+      return fromTransport(transport);
     }
     // 原来只在 1s 超时后读取预留 tuple，Host 已安全占住 socket 时也会白等。
     // 复用原准入条件提前返回；完整 startup 的失败仍由上面的 tracker 收敛。
@@ -1261,12 +1389,10 @@ export async function buildCuaProductHelperAgentEnv(
     if (reserved && !hasCuaProductHelperAgentEnvUnavailable(host)) {
       cuaProductHelperReservedSpawns.add(host);
       cuaProductHelperAgentEnvRetryAt.delete(host);
-      // 这条 reserved 分支不再下发 BROKER_TOKEN_ENV：broker
-      // token 鉴权已整体删除（连接门是代码签名身份）。凭据只剩 socket + authority。
-      return {
-        [BROKER_SOCKET_ENV]: reserved.socketPath,
-        [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: reserved.pluginAuthority,
-      };
+      // 预留 tuple 与真实 tuple 同源同代际，因此同样必须整组下发：代码签名身份裁决的是“哪个
+      // 进程可以连接”，host-owned transport 仍然按 launch capability 裁决每个请求；只给
+      // socket + authority 会让 relay 以 missing_session_capability 拒绝全部真实调用。
+      return fromTransport(reserved);
     }
     // 有界 deadline race：cold launch 没在 1s 内 ready 且无预留才 fail-closed。waitForCuaHelperStartup
     // 超时抛 caller_timeout（被下面 catch 当作"后台仍在跑"，不额外设 retryAt）。
@@ -1283,10 +1409,7 @@ export async function buildCuaProductHelperAgentEnv(
       };
     }
     cuaProductHelperAgentEnvRetryAt.delete(host);
-    return {
-      [BROKER_SOCKET_ENV]: handle.socketPath,
-      [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: handle.pluginAuthority,
-    };
+    return fromTransport(handle);
   } catch (error) {
     // caller_timeout 仅表示共享的 30s startup 仍在后台运行；trackCuaProductHelperStartup 会在其
     // 真正失败时建立 backoff。这里提前退避会让已经 ready 的 Helper 仍被后续 Agent 错误禁用。
@@ -1304,10 +1427,7 @@ export async function buildCuaProductHelperAgentEnv(
         // 上面的 unavailable marker 检查优先：未完成 admission 收敛时不放出 tuple。
         cuaProductHelperReservedSpawns.add(host);
         cuaProductHelperAgentEnvRetryAt.delete(host);
-        return {
-          [BROKER_SOCKET_ENV]: reserved.socketPath,
-          [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: reserved.pluginAuthority,
-        };
+        return fromTransport(reserved);
       }
     }
     markCuaProductHelperAgentEnvUnavailable(host);
@@ -1850,6 +1970,99 @@ export function createLocalServices(options: {
   // 读取器：`hardenedCuaHelperSession` 由上方闭包写入，直接读会被 TS 控制流收窄成 never。
   const peekHardenedCuaHelperSession = (): HardenedCuaHelperSession | null =>
     hardenedCuaHelperSession;
+  /**
+   * Bounded establishment for the spawn boundary. `ensureHardenedCuaHelperSession` is already
+   * single-flight, so concurrent spawns share one start; this bounds only how long a spawn waits.
+   * A timeout is not an error: the spawn keeps its fail-closed shape and the session may still
+   * finish in the background (its success schedules the stale-runtime recovery sweep).
+   */
+  const waitForCuaHardenedSessionStart = async (): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      ensureHardenedCuaHelperSession().then(
+        () => undefined,
+        () => undefined,
+      ),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, CUA_HARDENED_SESSION_SPAWN_WAIT_MS);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  };
+
+  // Helper 因 idle/EOF 退出后 session 对象仍在（socket 名与 capability 未变），但 relay 背后
+  // 没有 Helper，凭据不可用。重连走 session.relaunch()（同一 socket/capability/requirements），
+  // 单飞以免每个 spawn 各拉一次。
+  let hardenedCuaHelperRelaunchInFlight: Promise<void> | null = null;
+  /** Single-flight relaunch with a bounded wait; resolves either way (never rejects). */
+  const waitForHardenedCuaHelperRelaunch = async (
+    session: HardenedCuaHelperSession,
+    timeoutMs: number,
+  ): Promise<void> => {
+    if (session.host.helperConnected) return;
+    const inFlight =
+      hardenedCuaHelperRelaunchInFlight ??
+      (hardenedCuaHelperRelaunchInFlight = session
+        .relaunch()
+        .then((reconnected) => {
+          // 重连成功才是 Helper 恢复边界：回收 Helper 缺席期间 fail-closed spawn 的 runtime。
+          if (reconnected) scheduleCuaStaleRuntimeRecoverySweep();
+        })
+        .catch((error) => {
+          createServiceLogger("cua-host-transport").warn(
+            undefined,
+            "[cua-host-transport] hardened helper relaunch failed",
+            { errorMessage: error instanceof Error ? error.message : String(error) },
+          );
+        })
+        .finally(() => {
+          hardenedCuaHelperRelaunchInFlight = null;
+        }));
+    // 有界：spawn 绝不等待一次完整 Helper 冷启动；超时按 fail-closed 处理，后台重连继续收敛。
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      inFlight,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  };
+  /**
+   * CUA 需求边界（spawn env 解析）上的传输恢复。
+   *
+   * 凭据必须在 Agent spawn 时就已可用——进程无法在 spawn 后获得 env，所以“先发一轮失败的
+   * Computer Use、再等它自己好”不成立。这里在不阻塞 spawn 的前提下把恢复推进下去：
+   * session 不存在则建立，存在但 Helper 未连接则重连；两种情况下本次 spawn 都按 fail-closed
+   * 处理，恢复完成后由既有的 stale runtime 回收扫描把已运行的 runtime 升到带凭据的代际。
+   *
+   * 只在插件启用（isCuaEnabledForContext）时调用：未启用 Computer Use 的工作区不会被拉起 Helper。
+   */
+  const requestHardenedCuaTransportRecovery = (session: HardenedCuaHelperSession | null): void => {
+    if (session?.host.helperConnected) return;
+    if (session) {
+      hardenedCuaHelperRelaunchInFlight ??= session
+        .relaunch()
+        .then((reconnected) => {
+          // 重连成功才是 Helper 恢复边界：此时回收 Helper 缺席期间 fail-closed spawn 的 runtime。
+          if (reconnected) scheduleCuaStaleRuntimeRecoverySweep();
+        })
+        .catch((error) => {
+          createServiceLogger("cua-host-transport").warn(
+            undefined,
+            "[cua-host-transport] hardened helper relaunch failed",
+            { errorMessage: error instanceof Error ? error.message : String(error) },
+          );
+        })
+        .finally(() => {
+          hardenedCuaHelperRelaunchInFlight = null;
+        });
+      return;
+    }
+    void ensureHardenedCuaHelperSession().catch(() => undefined);
+  };
   const createManagedDefaultCuaProductHelper = (
     context?: CuaProductMcpServerResolverContext,
   ): ManagedDefaultCuaProductHelper | undefined => {
@@ -2382,14 +2595,47 @@ export function createLocalServices(options: {
         // CUA-1 socket，避免 SDK 首调重新启动 legacy standalone Helper。pluginAuthority 是
         // agent 进程内的 config-provenance 随机数（bootstrap 捕获后写进 node_repl 配置 env，
         // core 比对两者证明该配置出自本 bootstrap 而非用户配置文件）。
-        const hardened = peekHardenedCuaHelperSession();
-        cuaProductHelperEnv = hardened
-          ? {
-              [BROKER_SOCKET_ENV]: hardened.socketPath,
-              [BROKER_TOKEN_ENV]: hardened.token,
-              [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: randomBytes(16).toString("hex"),
-            }
-          : { [BROKER_UNAVAILABLE_ENV]: "broker_unavailable: hardened CUA session not started" };
+        let hardened = peekHardenedCuaHelperSession();
+        // CUA 需求边界自建立/自恢复：这是产品决定“该会话需要 Computer Use 凭据”的时刻，不能要求
+        // 用户先打开设置页。macOS 的 Helper 会按 --idle-ms（15s）自行退出，session socket 名与
+        // capability 不变，所以“session 存在但 Helper 未连接”只需要重连，不需要换凭据。
+        if (cuaPluginEnabled && hardened && !hardened.host.helperConnected) {
+          await waitForHardenedCuaHelperRelaunch(
+            hardened,
+            CUA_PRODUCT_HELPER_SPAWN_READY_DEADLINE_MS,
+          );
+        } else if (cuaPluginEnabled && !hardened) {
+          // 首次 spawn（packaged 实测：app 启动预 spawn）常常早于任何会话建立。凭据在 spawn 时
+          // 定型、进程之后拿不到 env，所以这里等待一次有界建立，让**这一代** runtime 直接带上完整
+          // tuple，而不是先发一代无凭据的 runtime 再靠回收升级。
+          await waitForCuaHardenedSessionStart();
+        }
+        // 建立/重连都在上面发生过了：必须重新 peek，否则会把“刚刚才建立好”的会话当成不存在，
+        // 继续下发 BROKER_UNAVAILABLE（packaged 实测：预 spawn 那一代 runtime 就是这样丢掉凭据的）。
+        hardened = peekHardenedCuaHelperSession();
+        // 只有“session 存在且 Helper 已连接”才构成可用传输：Helper 因 idle 退出后 socket 名还在，
+        // 但 relay 后面没有 Helper，凭据不可用。
+        const hardenedUsable = hardened && hardened.host.helperConnected ? hardened : null;
+        if (cuaPluginEnabled && hardened && !hardenedUsable) {
+          requestHardenedCuaTransportRecovery(hardened);
+        }
+        // 与托管路径同一套整组校验：socket、authority、launch capability 缺一即 fail-closed，
+        // 绝不下发半个 tuple。
+        const hardenedTuple = hardenedUsable
+          ? resolveCuaTransportSpawnEnv({
+              socketPath: hardenedUsable.socketPath,
+              pluginAuthority: randomBytes(16).toString("hex"),
+              sessionCapabilityRequired: true,
+              sessionCapabilityToken: hardenedUsable.token,
+            })
+          : undefined;
+        cuaProductHelperEnv = hardenedTuple?.ok
+          ? hardenedTuple.env
+          : {
+              [BROKER_UNAVAILABLE_ENV]: hardenedTuple
+                ? `broker_unavailable: ${hardenedTuple.reason}`
+                : "broker_unavailable: hardened CUA session not started",
+            };
         cuaProductHelperWorkspaceRegistry.setEnabled(context, false);
       } else if (cuaProductHelperHost && helper) {
         const candidateEnv = await buildCuaProductHelperAgentEnv(
@@ -2464,18 +2710,32 @@ export function createLocalServices(options: {
     // 也绝不复用 stale socket 以外的凭据（本回调不产出凭据，凭据仍只经 resolveSpawnEnv
     // → CLI 私有捕获 → node_repl 定向注入这条链发放）。
     shouldRecycleStaleProvisionedRuntime: (context) => {
-      // runtime 已持有 broker socket：无 stale 可言（键名判断，永不读回值）。
-      if (context.spawnEnvKeys.has(BROKER_SOCKET_ENV)) return false;
-      if (!isCuaEnabledForContext(context)) return false;
+      const hardenedSession = peekHardenedCuaHelperSession();
+      // 只有 Helper 已连接的 hardened session 才算“可用传输”：Helper 按 15s idle 退出后
+      // socket 名与 capability 都还在，但 relay 背后没有 Helper——那种状态下凭据不可用，
+      // 而一旦重连就立刻再次可用（凭据未换代），所以不能把“session 对象存在”当作可用。
+      const hardenedLive = hardenedSession?.host.helperConnected === true;
       const peekedHelper = defaultCuaProductHelperLifecycle.peek()?.helper;
-      if (peekedHelper && isDefaultCuaProductHelperCurrent(peekedHelper)) {
-        // 与 resolveSpawnEnv 的 peek 语义一致：托管 host 在且 Helper 已连接才会拿到
-        // live tuple；未连接时不尝试启动（保守不回收，spawn 边界自己会 fail-closed）。
-        return peekedHelper.host.running;
-      }
-      // darwin 懒启动路径与 resolveSpawnEnv 相同：只认已建立的 hardened session；
-      // 没有会话绝不回收（否则回收后的 spawn 仍然拿不到凭据，白白打断会话进程）。
-      return peekHardenedCuaHelperSession() !== null;
+      const managedHelperReady =
+        // 与 resolveSpawnEnv 的 peek 语义一致：托管 host 在且 Helper 已连接才会拿到 live tuple。
+        peekedHelper && isDefaultCuaProductHelperCurrent(peekedHelper)
+          ? peekedHelper.host.running
+          : false;
+      return shouldRecycleCuaStaleRuntime({
+        hasBrokerSocketKey: context.spawnEnvKeys.has(BROKER_SOCKET_ENV),
+        cuaEnabled: isCuaEnabledForContext(context),
+        managedHelperReady,
+        hardenedLive,
+      });
+    },
+    // 执行需求边界：Helper 退出后由真实需求把它重新拉起，不依赖设置页，也不回收 Agent。
+    onCuaExecutionDemand: () => {
+      if (!isCuaEnabledForContext(undefined)) return;
+      // 传输不可用 → 让它重连（Helper 按 15s idle 退出后 socket/capability 不变，重连即复用）。
+      requestHardenedCuaTransportRecovery(peekHardenedCuaHelperSession());
+      // 幂等扫描：把因会话晚于 spawn 而缺凭据的 runtime 在真实执行需求边界升到带凭据代际。
+      // service 侧安全门（CLI turn 真相 / 活跃 CUA turn / 并发启动 / storage 空闲）不变。
+      scheduleCuaStaleRuntimeRecoverySweep();
     },
     ...(isDesktopAttachedRemote
       ? { sessionRuntimePreferencesAuthority: "external" as const }
@@ -2521,6 +2781,18 @@ export function createLocalServices(options: {
   // 避免开发场景下 resolver pass-through 而 helper 已建的割裂。
   const defaultCuaProductMcpServerResolver = createDynamicCuaProductMcpServerResolver({
     isPluginEnabled: (context) => isCuaEnabledForContext(context),
+    // CUA 需求边界建立传输：优先级与 resolveSpawnEnv 完全一致——已有托管 host 就交给它，
+    // 否则在 darwin 上建立 hardened session。幂等且单飞（ensureHardenedCuaHelperSession 内部
+    // 复用 in-flight start），失败只记录不抛出：凭据仍由 spawn 边界按 fail-closed 决定。
+    ensureTransport: async () => {
+      const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
+      if (helper && isDefaultCuaProductHelperCurrent(helper)) {
+        await buildCuaProductHelperAgentEnv(helper.host, createServiceLogger("cua-product-helper"));
+        return;
+      }
+      if (process.platform !== "darwin") return;
+      await ensureHardenedCuaHelperSession();
+    },
     getResolver: async () => {
       // peek-only——resolver 属托管 host 体系，host 未建时返回 undefined（懒启动下
       // CUA 经 node_repl + 稳定 socket，不依赖此 resolver）；绝不在此 acquire。

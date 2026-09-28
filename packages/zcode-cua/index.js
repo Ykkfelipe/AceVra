@@ -42,6 +42,18 @@ function unavailable(text, code = "unavailable", effect = "refused") {
 export function createComputerUseRuntime(options = {}) {
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
+  // CUA-1.5 launch-scoped session capability. It must be captured *here*, together with the socket
+  // and for the same reason: the trusted plugin host restores the Helper credentials for exactly the
+  // window in which the stdio MCP server process is created and clears them from its environment as
+  // soon as that creation returns, while `callBrokerMethod` reads the token from the environment at
+  // *call* time. Reading it later therefore produced `missing_session_capability` on every real
+  // request even though the same process had just captured a healthy socket. Key intentionally
+  // spelled here instead of importing broker.js at module scope, which would pull node builtins into
+  // a consumer that only reads types.
+  const brokerToken =
+    typeof options.brokerToken === "string" && options.brokerToken.trim()
+      ? options.brokerToken.trim()
+      : env?.ZCODE_CUA_PERMISSION_BROKER_TOKEN?.trim();
   const explicitSocketPath =
     typeof options.brokerSocketPath === "string" ? options.brokerSocketPath.trim() : "";
   const activeLeases = new Map();
@@ -69,6 +81,20 @@ export function createComputerUseRuntime(options = {}) {
     return broker.resolveBrokerSocketPath({ env });
   }
 
+  /**
+   * One relay call with the captured session capability.
+   *
+   * The socket is resolved (and the broker module imported) lazily; the token is not — it is part of
+   * the runtime's captured transport identity, so every call carries the capability of the transport
+   * this runtime was constructed against, never whatever the environment happens to say later.
+   */
+  async function callBroker(broker, request) {
+    return await broker.callBrokerMethod({
+      ...request,
+      ...(brokerToken ? { token: brokerToken } : {}),
+    });
+  }
+
   async function releaseAuthorityLease(sessionId, reason) {
     const current = activeLeases.get(sessionId);
     if (!current) return;
@@ -88,7 +114,7 @@ export function createComputerUseRuntime(options = {}) {
     if (!current) return;
     try {
       const broker = await import("./broker.js");
-      await broker.callBrokerMethod({
+      await callBroker(broker, {
         socketPath: await resolveSocketPath(),
         method: "release_control",
         params: {
@@ -220,7 +246,7 @@ export function createComputerUseRuntime(options = {}) {
               })
             : null;
         try {
-          result = await broker.callBrokerMethod({
+          result = await callBroker(broker, {
             socketPath: await resolveSocketPath(),
             method,
             params,
@@ -234,19 +260,17 @@ export function createComputerUseRuntime(options = {}) {
           ) {
             const requirement = result?.helper_identity?.requirement;
             if (typeof requirement !== "string" || requirement.length === 0) {
-              await broker
-                .callBrokerMethod({
-                  socketPath: await resolveSocketPath(),
-                  method: "release_control",
-                  params: {
-                    lease_id: result.lease_id,
-                    owner_session: input.context.sessionId,
-                    owner_task: params.owner_task,
-                  },
-                  timeoutMs: 2000,
-                  expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-                })
-                .catch(() => undefined);
+              await callBroker(broker, {
+                socketPath: await resolveSocketPath(),
+                method: "release_control",
+                params: {
+                  lease_id: result.lease_id,
+                  owner_session: input.context.sessionId,
+                  owner_task: params.owner_task,
+                },
+                timeoutMs: 2000,
+                expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+              }).catch(() => undefined);
               throw Object.assign(new Error("verified Helper requirement is unavailable"), {
                 code: "lease_authority_unavailable",
               });
@@ -260,19 +284,17 @@ export function createComputerUseRuntime(options = {}) {
           } else if (reservation) {
             await leaseAuthority.stop().catch(() => undefined);
             if (result?.lease_id)
-              await broker
-                .callBrokerMethod({
-                  socketPath: await resolveSocketPath(),
-                  method: "release_control",
-                  params: {
-                    lease_id: result.lease_id,
-                    owner_session: input.context.sessionId,
-                    owner_task: params.owner_task,
-                  },
-                  timeoutMs: 2000,
-                  expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-                })
-                .catch(() => undefined);
+              await callBroker(broker, {
+                socketPath: await resolveSocketPath(),
+                method: "release_control",
+                params: {
+                  lease_id: result.lease_id,
+                  owner_session: input.context.sessionId,
+                  owner_task: params.owner_task,
+                },
+                timeoutMs: 2000,
+                expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+              }).catch(() => undefined);
           }
         } catch (error) {
           if (reservation) await leaseAuthority.stop().catch(() => undefined);

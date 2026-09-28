@@ -36,7 +36,10 @@ const mintRandomAuthority = (): string => randomBytes(16).toString("hex");
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 1_000;
 
-type CuaHelperTransportHandle = Pick<CuaHelperHandle, "socketPath" | "pluginAuthority">;
+type CuaHelperTransportHandle = Pick<
+  CuaHelperHandle,
+  "socketPath" | "pluginAuthority" | "sessionCapabilityRequired"
+>;
 
 export type ManagedCuaProductHelperHost = CuaProductHelperHost & {
   stop(): Promise<void>;
@@ -404,6 +407,9 @@ export class WindowsCuaHelperHost implements ManagedCuaProductHelperHost {
         this.resolveTransportReady({
           socketPath,
           pluginAuthority: this.authority,
+          // Windows 走独立的 per-launch pipe + token 传输，不消费 macOS 的 host-owned
+          // session capability；显式声明 false，缺 token 是这条 transport 的事实而非遗漏。
+          sessionCapabilityRequired: false,
         });
         if (ready.type === "transport_ready") return;
         void this.healthProbe(socketPath, this.startupTimeoutMs).then(
@@ -425,6 +431,8 @@ export class WindowsCuaHelperHost implements ManagedCuaProductHelperHost {
               // 没有 rename 让渡语义）。Helper 直接 bind 这个 pipe 名，两者恒等。
               launchSocketPath: socketPath,
               pluginAuthority: this.authority,
+              // 见 resolveTransportReady：Windows 不消费 host-owned session capability。
+              sessionCapabilityRequired: false,
               helperAppPath: this.options.runtime.entryPath,
               bundleId: health.bundleId,
               pid: health.pid,

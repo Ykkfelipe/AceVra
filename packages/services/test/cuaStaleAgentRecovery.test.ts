@@ -211,7 +211,9 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
   const nodeSource = await readFile(new URL("../src/node.ts", import.meta.url), "utf8");
   const policyStart = nodeSource.indexOf("shouldRecycleStaleProvisionedRuntime");
   assert.ok(policyStart > 0, "node.ts 必须注入 Helper 恢复扫描的回收裁决");
-  const policyEnd = nodeSource.indexOf("sessionRuntimePreferencesAuthority", policyStart);
+  // 只取裁决函数本身：紧随其后的 onCuaExecutionDemand 是需求边界的恢复入口（允许调用恢复），
+  // 不属于裁决体，混进来会让 peek-only 断言失去意义。
+  const policyEnd = nodeSource.indexOf("// 执行需求边界", policyStart);
   const policy = nodeSource.slice(policyStart, policyEnd);
   // 扫描只在 Helper 恢复边界触发；绝不挂在 send/getClient 路径上（packaged 实测：
   // 发送边界回收会冲掉 UI 草稿绑定，turn 静默丢失）。
@@ -227,14 +229,36 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
   const serviceSlice = nodeSource.slice(0, policyStart);
   assert.doesNotMatch(serviceSlice, /getClient[^]*?recycleStaleProvisionedRuntimes/);
 
-  // 已持凭据的 runtime 永不回收。
-  assert.match(policy, /spawnEnvKeys\.has\(BROKER_SOCKET_ENV\)\) return false/);
-  // CUA 关闭时永不回收（插件门控与 resolveSpawnEnv 同源）。
-  assert.match(policy, /isCuaEnabledForContext\(context\)/);
-  // 裁决 peek-only：绝不拉起 Helper / 绝不 acquire。
-  assert.match(policy, /peekHardenedCuaHelperSession\(\) !== null/);
+  // 裁决仍以键名 + 插件门控为输入，并显式把“该传输是否可用”作为独立事实传入：Helper 按
+  // 15s idle 退出后 socket 名与 capability 都还在，只有 helperConnected 能区分可用/已失效。
+  assert.match(policy, /hasBrokerSocketKey: context\.spawnEnvKeys\.has\(BROKER_SOCKET_ENV\)/);
+  assert.match(policy, /cuaEnabled: isCuaEnabledForContext\(context\)/);
+  assert.match(policy, /hardenedLive = hardenedSession\?\.host\.helperConnected === true/);
+  assert.match(policy, /shouldRecycleCuaStaleRuntime\(\{/);
+  // 裁决 peek-only：绝不拉起 Helper / 绝不 acquire / 绝不 start。
   assert.doesNotMatch(policy, /getOrCreateDefaultCuaProductHelper|ensureHardenedCuaHelperSession/);
   assert.doesNotMatch(policy, /\.start\(\)/);
+  assert.doesNotMatch(policy, /requestHardenedCuaTransportRecovery/);
+  // 纯函数的语义不变量：已持凭据且传输可用时永不回收；传输失效时绝不当作可用。
+  const { shouldRecycleCuaStaleRuntime } = await import("../src/node.js");
+  assert.equal(
+    shouldRecycleCuaStaleRuntime({
+      hasBrokerSocketKey: true,
+      cuaEnabled: true,
+      managedHelperReady: false,
+      hardenedLive: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldRecycleCuaStaleRuntime({
+      hasBrokerSocketKey: true,
+      cuaEnabled: true,
+      managedHelperReady: false,
+      hardenedLive: false,
+    }),
+    true,
+  );
 
   // service 侧安全边界：有在飞 RPC / 活跃 CUA turn / 并发启动时绝不回收。
   const serviceSource = await readFile(

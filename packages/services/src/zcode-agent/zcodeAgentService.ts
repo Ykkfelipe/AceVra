@@ -957,6 +957,15 @@ interface CreateZCodeAgentServiceOptions extends Omit<
     /** 当前 runtime 被 spawn 时 resolveSpawnEnv 返回的 env 键集合（只有键名，没有值）。 */
     spawnEnvKeys: ReadonlySet<string>;
   }) => Promise<boolean> | boolean;
+
+  /**
+   * CUA 需求边界（v4 sendText：一次真实模型执行需求即将开始）。
+   *
+   * 只用于把**已经不可用**的 hardened 传输恢复起来（Helper 按 15s idle 自行退出后 socket 名与
+   * capability 不变，重连即可复用），不建立无关传输、不回收任何 Agent：插件未启用时上游不会
+   * 调用它。必须非阻塞——恢复在后台收敛，凭据仍由 spawn 边界按 fail-closed 决定。
+   */
+  onCuaExecutionDemand?: () => void;
 }
 
 function toProtocolAutomation(automation: ZCodeAutomation) {
@@ -3372,6 +3381,15 @@ export function createZCodeAgentService(
       };
     }
     if (envelope.type !== "sendText") return envelope;
+
+    // 真实执行需求边界：模型即将开始本轮。若 Computer Use 已启用而 hardened 传输不可用
+    // （典型：Helper 已按 15s idle 退出），在这里让它重连，而不是等用户在设置页或下一次
+    // spawn 才恢复。非阻塞、幂等，且不触碰任何 Agent/runtime。
+    try {
+      options?.onCuaExecutionDemand?.();
+    } catch {
+      // 需求边界只做推进，绝不因为它改变命令语义。
+    }
 
     const payload = commandPayloadSchemas.sendText.parse(envelope.payload);
     // 读取持久化 cronAutomationId 后不能把整个绑定会话永久视为 automation

@@ -27,6 +27,13 @@ export interface ComputerUseRuntime {
 export interface ComputerUseRuntimeOptions {
   /** Runtime platform; injectable for deterministic capability tests. */
   platform?: string;
+  /**
+   * Hardened host-owned transport only: the per-launch session capability for the socket above.
+   * Captured with the socket because the trusted plugin host clears it from the environment once
+   * the stdio MCP server process has been created, while the broker client would otherwise read
+   * it at call time and send every request without a capability.
+   */
+  brokerToken?: string;
   brokerSocketPath?: string;
   refreshMarkerPath?: string;
   ensureBrokerAvailable?: () => Promise<void>;

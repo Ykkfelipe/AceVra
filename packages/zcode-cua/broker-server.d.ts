@@ -100,8 +100,35 @@ export interface CuaProductMcpServerResolverContext {
 export interface CuaHelperTransportHandle {
   socketPath: string;
   pluginAuthority: string;
+  /**
+   * Whether this transport authenticates its clients with {@link sessionCapabilityToken}.
+   *
+   * Hardened host-owned transports (the macOS product Helper) require it: the relay compares the
+   * capability on every client request and refuses with `missing_session_capability` otherwise.
+   * The legacy Windows dev host has its own per-launch pipe transport and declares `false`, so a
+   * missing capability is an explicit fact of that transport rather than an omission.
+   */
+  sessionCapabilityRequired?: boolean;
+  /**
+   * Hardened host-owned transport only: the per-launch session capability the relay expects as
+   * `request.token`. Not a generic bearer credential — it authorizes exactly the session this
+   * transport minted, belongs to that transport's generation, and is only ever delivered to an
+   * Agent spawn env resolved from the same live transport.
+   */
+  sessionCapabilityToken?: string;
   [key: string]: unknown;
 }
+
+/**
+ * Build one managed-host transport tuple from a live transport object.
+ *
+ * Exported for the managed-path regression: it asserts the real hand-out shape (socket + authority +
+ * session capability) rather than a hand-built stub that could drift from the producer.
+ */
+export declare function buildProductCuaTransportTuple(live: {
+  socketPath: string | null;
+  token: string;
+}): CuaHelperTransportHandle;
 
 export interface CuaPermissionStatusQueryReport {
   /** Verified signing identifier of the Helper (from its code signature), or null. */
@@ -185,6 +212,10 @@ export interface CuaHelperHandle {
   helperAppPath?: string;
   bundleId?: string | null;
   pid?: number | null;
+  /** See {@link CuaHelperTransportHandle.sessionCapabilityRequired}. */
+  sessionCapabilityRequired?: boolean;
+  /** See {@link CuaHelperTransportHandle.sessionCapabilityToken}. */
+  sessionCapabilityToken?: string;
   [key: string]: unknown;
 }
 

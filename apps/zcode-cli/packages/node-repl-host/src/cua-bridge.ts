@@ -26,6 +26,53 @@ export interface ComputerUseRuntimeBridge {
   documentationRoot: string;
 }
 
+
+/**
+ * Install the host-provided `agent.computerUse` facade for the next cell.
+ *
+ * The computer-use skill's contract is that the shared node_repl host installs the client before
+ * every cell ("start with the host-provided facade"), and the plugin's
+ * `scripts/computer-use-client.mjs` is only the *compatibility* bootstrap for hosts that expose the
+ * session bridge. Before this existed the bridge was reachable only through its symbol, so a model
+ * following the skill saw `agent.computerUse === undefined` and — correctly, per the skill — stopped
+ * with "Computer Use is unavailable", even though the broker session was fully provisioned.
+ *
+ * Mirrors `prepareBrowserRuntimeGlobals`: merge into the existing `agent` object instead of
+ * replacing it, and stay a no-op when no bridge was captured, so a subagent or a session without
+ * the CUA transport keeps exactly today's behaviour.
+ */
+export function prepareComputerUseRuntimeGlobals(globals: Record<PropertyKey, unknown>): void {
+  const bridge = readNodeReplCuaRuntimeBridge(globals);
+  if (!bridge) return;
+  const agent = ((globals as Record<string, unknown>).agent ??= {}) as Record<string, unknown>;
+  agent.computerUse = createComputerUseFacade(bridge);
+}
+
+function readNodeReplCuaRuntimeBridge(
+  globals: Record<PropertyKey, unknown>,
+): ComputerUseRuntimeBridge | undefined {
+  const candidate = globals[NODE_REPL_CUA_BRIDGE_SYMBOL] as ComputerUseRuntimeBridge | undefined;
+  if (!candidate || typeof candidate.call !== "function") return undefined;
+  return candidate;
+}
+
+/** Same shape the plugin's compatibility bootstrap builds from the bridge. */
+function createComputerUseFacade(bridge: ComputerUseRuntimeBridge): Record<string, unknown> {
+  return new Proxy(
+    {},
+    {
+      get(_target, property) {
+        if (typeof property !== "string") return undefined;
+        if (property === "documentationRoot") return bridge.documentationRoot;
+        return async (input?: unknown) => {
+          bridge.assertAvailable?.();
+          return await bridge.call(property, input);
+        };
+      },
+    },
+  ) as Record<string, unknown>;
+}
+
 export function createComputerUseBridgeGlobals(input: {
   broker?: NodeReplCuaBrokerConnection;
   generation: number;

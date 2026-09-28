@@ -171,16 +171,37 @@ export class CuaHelperLifecycleManager {
 export class CuaProductHelperWorkspaceRegistry {
   setEnabled(_context, _enabled) {}
 }
+/**
+ * One transport hand-out from the managed product host.
+ *
+ * The socket, the config-provenance authority and the per-launch session capability must travel
+ * together: the hardened relay refuses every client request whose `request.token` does not match the
+ * launch token this very transport minted, so a tuple without the capability is unusable rather than
+ * merely weaker. Every field is read from the same live transport object in one expression, so parts
+ * cannot be mixed across transport generations.
+ *
+ * Exported so the managed-path regression can assert the real shape instead of a hand-built stub.
+ */
+export function buildProductCuaTransportTuple(live) {
+  return {
+    socketPath: live.socketPath,
+    pluginAuthority: "packaged-cua",
+    sessionCapabilityRequired: true,
+    sessionCapabilityToken: live.token,
+  };
+}
+
 export function createProductCuaHelperHost(options = {}) {
   const appPath =
     typeof options.bundledHelperAppPath === "string" ? options.bundledHelperAppPath.trim() : "";
   if (!appPath) return createUnavailableCuaHelperHost();
   let transport = null;
   let startup = null;
+  const transportTuple = buildProductCuaTransportTuple;
   const start = async () => {
     if (transport) {
       await waitForProductHelperAdmission(transport);
-      return { socketPath: transport.socketPath, pluginAuthority: "packaged-cua" };
+      return transportTuple(transport);
     }
     startup ??= (async () => {
       const env = options.env ?? process.env;
@@ -234,7 +255,7 @@ export function createProductCuaHelperHost(options = {}) {
         transport = null;
         throw error;
       }
-      return { socketPath: next.socketPath, pluginAuthority: "packaged-cua" };
+      return transportTuple(next);
     })().catch((error) => {
       startup = null;
       throw error;
@@ -261,9 +282,7 @@ export function createProductCuaHelperHost(options = {}) {
       return transport ? "packaged-cua" : null;
     },
     get reservedTransport() {
-      return transport
-        ? { socketPath: transport.socketPath, pluginAuthority: "packaged-cua" }
-        : undefined;
+      return transport ? transportTuple(transport) : undefined;
     },
     start,
     stop,

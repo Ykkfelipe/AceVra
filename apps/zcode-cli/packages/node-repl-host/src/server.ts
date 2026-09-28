@@ -24,6 +24,7 @@ import {
 } from "./browser-bridge.js";
 import {
   createComputerUseBridgeGlobals,
+  prepareComputerUseRuntimeGlobals,
   type ActiveCuaNodeReplCall,
   type NodeReplCuaBrokerConnection,
 } from "./cua-bridge.js";
@@ -40,6 +41,9 @@ import {
   NODE_REPL_SERVER_INSTRUCTIONS,
   NODE_REPL_SERVER_VERSION,
 } from "./tool-contract.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 
 const MAX_SYNC_TIMEOUT_MS = 120_000;
 const UNTRUSTED_SESSION_KEY = "__unscoped__";
@@ -149,6 +153,11 @@ export function createInProcessNodeReplExecutor(): NodeReplExecutor {
         // 子代理没有 Browser 权限；不能让 eager setup 的可用性检查阻断其余 node_repl 能力。
         if (process.env.ZCODE_PLUGIN_ROOT && input.requestMeta.runtime_scope !== "subagent") {
           prepareBrowserRuntimeGlobals(globals);
+        }
+        // Computer Use 同构：宿主负责安装 agent.computerUse（skill 的契约就是直接用宿主 facade）。
+        // 没有捕获到 bridge（未启用 CUA / 无凭据）时它是 no-op，不能凭据缺失就凭空造客户端。
+        if (input.requestMeta.runtime_scope !== "subagent") {
+          prepareComputerUseRuntimeGlobals(globals);
         }
         return globals;
       },
@@ -374,6 +383,7 @@ if (!isMainThread && isWorkerCallData(workerData)) {
     });
 }
 
+
 export function captureComputerUseRuntimeFromEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): ComputerUseRuntime | undefined {
@@ -381,6 +391,13 @@ export function captureComputerUseRuntimeFromEnvironment(
   if (!socketPath) return undefined;
   return createComputerUseRuntime({
     brokerSocketPath: socketPath,
+    // Captured here for the same reason as the socket: this function is the plugin host's only
+    // window in which the restored credentials are still in `process.env`. The broker client reads
+    // the capability at call time, so passing it late is the difference between a working session
+    // and `missing_session_capability` on every request.
+    ...(env.ZCODE_CUA_PERMISSION_BROKER_TOKEN?.trim()
+      ? { brokerToken: env.ZCODE_CUA_PERMISSION_BROKER_TOKEN.trim() }
+      : {}),
     refreshMarkerPath: env.ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER?.trim(),
     // This process is the authenticated stdio host. Request metadata remains routing data only.
     allowForegroundControl: () => true,
