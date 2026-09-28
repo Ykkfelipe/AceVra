@@ -2978,22 +2978,6 @@ export function createZCodeAgentService(
   }
 
   /**
-   * 需求边界的 stale runtime 回收（Helper 恢复后 CUA 预授权 Agent 的恢复载体；本函数
-   * 保持领域无关，裁决权在注入的 shouldRecycleRuntimeBeforeModelExecutionDemand）。
-   *
-   * resolveSpawnEnv 在 Helper 未就绪时 fail-closed（spawn env 无 broker 凭据），该 Agent
-   * 之后一直服务会话却没有 CUA；Helper 恢复按设计只影响后续 spawn、绝不回收已有 Agent。
-   * 这里在下一个模型执行需求边界、且 runtime 可证明空闲时回收一次，让重新 spawn 拿到
-   * 已恢复的凭据。
-   *
-   * 安全边界（任一不满足即不回收，失败方向永远是“维持现状”）：
-   * - 未注入 policy / policy 抛错：不回收。
-   * - 有在飞 RPC、storage startup 未结清：绝不回收（不打断任何请求）。
-   * - 有活跃 CUA turn：绝不回收。
-   * - 同 workspace 有并发启动在途、或已有一次回收在途：本次跳过。
-   * - policy 只读 spawnEnvKeys 键名与外部就绪事实（peek-only），不得有副作用。
-   */
-  /**
    * 回收单个 workspace 的当前 runtime（service 级唯一实现；public disposeWorkspace 与
    * 需求边界的 stale runtime 回收共用）。含已排队的 provider-ready continuation 失效、
    * v4 订阅路由清理与 CUA turn 记账清理。
@@ -3017,6 +3001,57 @@ export function createZCodeAgentService(
     await processManager.disposeWorkspace(params);
   }
 
+  /**
+   * 向 CLI 本尊询问「这个 workspace 是否还有正在执行/等待中的会话 turn」。
+   *
+   * 这是回收安全性的权威信号：turn 真相属于 CLI（v4 turn ACK 后经通知流式推进，
+   * host 侧 pending RPC 计数既看不到它，又会把打开会话时的并发 UI 读误判成忙）。
+   * 观察级 lifecycle：不计入 runtime 空闲记账，也不被它阻断。查询失败按“可能有
+   * turn 在跑”处理（fail-closed，不回收）。
+   */
+  /**
+   * 需求边界的 stale runtime 回收（Helper 恢复后 CUA 预授权 Agent 的恢复载体；本函数
+   * 保持领域无关，裁决权在注入的 shouldRecycleRuntimeBeforeModelExecutionDemand）。
+   *
+   * resolveSpawnEnv 在 Helper 未就绪时 fail-closed（spawn env 无 broker 凭据），该 Agent
+   * 之后一直服务会话却没有 CUA；Helper 恢复按设计只影响后续 spawn、绝不回收已有 Agent。
+   * 这里在下一个模型执行需求边界、且 runtime 可证明空闲时回收一次，让重新 spawn 拿到
+   * 已恢复的凭据。
+   *
+   * 安全边界（任一不满足即不回收，失败方向永远是“维持现状”）：
+   * - 未注入 policy / policy 抛错：不回收。
+   * - CLI 报告有 running/waiting 会话（turn 真相属 CLI）、storage startup 未结清：
+   *   绝不回收。
+   * - 有活跃 CUA turn：绝不回收。
+   * - 同 workspace 有并发启动在途、或已有一次回收在途：本次跳过。
+   * - policy 只读 spawnEnvKeys 键名与外部就绪事实（peek-only），不得有副作用。
+   */
+  async function hasRunningSessionTurn(
+    client: ZCodeProtocolClient,
+    params: ZCodeAgentWorkspaceTarget,
+  ): Promise<boolean> {
+    try {
+      const result = await client.request(
+        zcodeProtocolMethods.sessionList,
+        {
+          workspace: buildWorkspaceRef(params),
+          includeArchived: false,
+        },
+        zcodeSessionListResultSchema,
+        { lifecycle: "observation", timeoutMs: 5_000 },
+      );
+      return result.sessions.some(
+        (session) => session.status === "running" || session.status === "waiting",
+      );
+    } catch (error) {
+      logger.warn(undefined, "stale runtime 回收前的 turn 查询失败，按有 turn 处理", {
+        workspaceKey: resolveWorkspaceKey(params),
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      return true;
+    }
+  }
+
   async function maybeRecycleStaleRuntimeForDemand(
     workspaceKey: string,
     params: ZCodeAgentWorkspaceTarget,
@@ -3026,14 +3061,13 @@ export function createZCodeAgentService(
     if (!policy) return false;
     if (recyclingStaleRuntimeByWorkspaceKey.has(workspaceKey)) return false;
     if (waitingWorkspaceStartups.has(workspaceKey)) return false;
-    if (
-      active.client.isDisposed ||
-      active.client.pendingOperationRequestCount > 0 ||
-      active.client.storageStartup.isWaiting
-    ) {
+    if (active.client.isDisposed || active.client.storageStartup.isWaiting) {
       return false;
     }
     if (cuaOperationTurnTracker?.hasActiveTurn()) return false;
+    // turn 真相以 CLI 为准：有 running/waiting 会话（含被 CommandInbox 排队的后续
+    // 输入）一律不回收；并发 UI 读请求不构成“忙”，不再据此阻断。
+    if (await hasRunningSessionTurn(active.client, params)) return false;
     const spawnEnvKeys = processManager.getResolvedSpawnEnvKeys(params);
     if (!spawnEnvKeys) return false;
     let shouldRecycle: boolean;

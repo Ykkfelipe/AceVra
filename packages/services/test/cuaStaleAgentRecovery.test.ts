@@ -227,7 +227,14 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
     "utf8",
   );
   assert.match(serviceSource, /async function maybeRecycleStaleRuntimeForDemand/);
-  assert.match(serviceSource, /pendingOperationRequestCount > 0/);
+  // turn 真相以 CLI 为准：running/waiting 会话绝不回收；并发 UI 读不构成忙。
+  assert.match(serviceSource, /async function hasRunningSessionTurn/);
+  assert.match(serviceSource, /session\.status === "running" \|\| session\.status === "waiting"/);
+  assert.match(serviceSource, /lifecycle: "observation", timeoutMs: 5_000/);
+  assert.doesNotMatch(
+    serviceSource,
+    /pendingOperationRequestCount > 0[\s\S]{0,80}return false;\n\s*}\n\s*if \(cuaOperationTurnTracker/,
+  );
   assert.match(serviceSource, /storageStartup\.isWaiting/);
   assert.match(serviceSource, /if \(cuaOperationTurnTracker\?\.hasActiveTurn\(\)\) return false;/);
   assert.match(serviceSource, /waitingWorkspaceStartups\.has\(workspaceKey\)/);
