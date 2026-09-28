@@ -88,7 +88,7 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
   }
 }
 
-test("stale pre-credential runtime is recycled at the next demand only after helper recovery", async () => {
+test("stale pre-credential runtime is recycled by the helper-recovery sweep only", async () => {
   const workspacePath = await mkdtemp(join(tmpdir(), "cua-stale-agent-"));
   const sleeper = createSleeperCommand();
   const { spawns, reporter } = createLifecycleRecorder();
@@ -115,7 +115,7 @@ test("stale pre-credential runtime is recycled at the next demand only after hel
     modelSelectionReadinessSource: {
       getView: async () => createReadySelectionView() as never,
     },
-    shouldRecycleRuntimeBeforeModelExecutionDemand: ({ spawnEnvKeys }) => {
+    shouldRecycleStaleProvisionedRuntime: ({ spawnEnvKeys }) => {
       policyCalls.push(spawnEnvKeys);
       if (spawnEnvKeys.has(BROKER_SOCKET_ENV)) return false;
       return helperReady;
@@ -124,39 +124,41 @@ test("stale pre-credential runtime is recycled at the next demand only after hel
   });
   const params = { workspacePath };
   try {
-    // 1. 预热（packaged 实况）：只读 read 路径先 spawn Agent（fail-closed，无凭据键），
-    //    entry 的 modelExecutionEnabled=false——这是 packaged 首个对话需求的真实起点。
+    // 1. 预热（packaged 实况）：只读 read 路径先 spawn Agent（fail-closed，无凭据键）。
     const sessions = await service.listSessions({ ...params, runtimePolicy: "start-if-needed" });
     assert.deepEqual(sessions, []);
     await waitFor(() => spawns.size >= 1, "prewarm agent spawn");
     assert.equal(spawnEnvSeen[0]?.has(BROKER_SOCKET_ENV), false);
-    assert.equal(policyCalls.length, 0, "只读预热路径绝不触发回收裁决");
 
-    // 2. Helper 未恢复：首个模型执行需求（upgrade 路径）评估裁决但绝不回收。
-    const second = await service.initialize(params);
-    assert.equal(second.available, true, `second initialize failed: ${second.reason}`);
+    // 2. Helper 未恢复：恢复扫描评估裁决但绝不回收（fake agent 无 running 会话）。
+    assert.equal(await service.recycleStaleProvisionedRuntimes(), 0);
     assert.equal(spawns.size, 1, "helper 未恢复时不得回收/重建 runtime");
-    assert.equal(policyCalls.length, 1, "预热 entry 的 upgrade 需求边界必须评估裁决");
+    assert.equal(policyCalls.length, 1, "恢复扫描必须评估裁决");
 
-    // 3. Helper 恢复后的下一个需求边界（此刻 entry 已 enabled，走快路径）：回收一次，
-    //    重新 spawn 拿到凭据键。
+    // 3. Helper 恢复后的下一次扫描：回收一次。扫描本身不 respawn——新 runtime 由
+    // 下一个自然需求（这里是只读 listSessions）按全新 spawn 路径拉起，拿到凭据键。
     helperReady = true;
-    const third = await service.initialize(params);
-    assert.equal(third.available, true, `post-recovery initialize failed: ${third.reason}`);
+    assert.equal(await service.recycleStaleProvisionedRuntimes(), 1);
+    await waitFor(
+      () => spawns.get([...spawns.keys()][0])?.exited === true,
+      "stale runtime termination",
+    );
+    const [oldPid] = [...spawns.keys()];
+    const followup = await service.listSessions({ ...params, runtimePolicy: "start-if-needed" });
+    assert.deepEqual(followup, []);
     await waitFor(() => spawns.size >= 2, "post-recovery respawn");
     assert.equal(spawnEnvSeen[1]?.has(BROKER_SOCKET_ENV), true);
     assert.equal(spawnEnvSeen[1]?.has(ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY), true);
-    const [oldPid, newPid] = [...spawns.keys()];
-    assert.notEqual(oldPid, newPid);
-    await waitFor(() => spawns.get(oldPid)?.exited === true, "stale runtime termination");
+    const newPid = [...spawns.keys()].find((pid) => pid !== oldPid);
+    assert.ok(newPid, "replacement runtime must have a new pid");
 
-    // 4. 回收后的 runtime 已持凭据：不再反复回收。
-    const fourth = await service.initialize(params);
-    assert.equal(fourth.available, true, `fourth initialize failed: ${fourth.reason}`);
-    // 三次裁决：t2 upgrade 路径（未恢复→不回收）、t3 快路径（已恢复→回收）、
-    // t4 快路径（已持凭据→不回收）。
-    await waitFor(() => policyCalls.length >= 3, "fourth demand policy call");
+    // 4. 回收后的 runtime 已持凭据：后续扫描不再回收（无循环）。
+    // sweep#2 的裁决（policyCalls[1]）作用于旧 runtime（无凭据键）→ 回收；
+    // sweep#3 的裁决（policyCalls[2]）作用于新 runtime（有凭据键）→ false。
+    assert.equal(await service.recycleStaleProvisionedRuntimes(), 0);
+    assert.equal(policyCalls[1]?.has(BROKER_SOCKET_ENV), false);
     assert.equal(policyCalls[2]?.has(BROKER_SOCKET_ENV), true);
+    assert.equal(policyCalls.length, 3, "每次扫描对每个活跃 runtime 恰好裁决一次");
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(spawns.size, 2, "已持凭据的 runtime 不得再回收");
   } finally {
@@ -207,10 +209,23 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
   // 这里锁定装配源里与安全相关的裁决不变量。
   const { readFile } = await import("node:fs/promises");
   const nodeSource = await readFile(new URL("../src/node.ts", import.meta.url), "utf8");
-  const policyStart = nodeSource.indexOf("shouldRecycleRuntimeBeforeModelExecutionDemand");
-  assert.ok(policyStart > 0, "node.ts 必须注入需求边界回收裁决");
+  const policyStart = nodeSource.indexOf("shouldRecycleStaleProvisionedRuntime");
+  assert.ok(policyStart > 0, "node.ts 必须注入 Helper 恢复扫描的回收裁决");
   const policyEnd = nodeSource.indexOf("sessionRuntimePreferencesAuthority", policyStart);
   const policy = nodeSource.slice(policyStart, policyEnd);
+  // 扫描只在 Helper 恢复边界触发；绝不挂在 send/getClient 路径上（packaged 实测：
+  // 发送边界回收会冲掉 UI 草稿绑定，turn 静默丢失）。
+  assert.match(nodeSource, /scheduleCuaStaleRuntimeRecoverySweep\(\)/);
+  assert.match(
+    nodeSource,
+    /hardenedCuaHelperSession = started\.session;[^]*?scheduleCuaStaleRuntimeRecoverySweep\(\)/,
+  );
+  assert.match(
+    nodeSource,
+    /recycleStaleProvisionedRuntimesRef = \(\) => zcodeAgentService\.recycleStaleProvisionedRuntimes\(\)/,
+  );
+  const serviceSlice = nodeSource.slice(0, policyStart);
+  assert.doesNotMatch(serviceSlice, /getClient[^]*?recycleStaleProvisionedRuntimes/);
 
   // 已持凭据的 runtime 永不回收。
   assert.match(policy, /spawnEnvKeys\.has\(BROKER_SOCKET_ENV\)\) return false/);
@@ -238,15 +253,16 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
   assert.match(serviceSource, /storageStartup\.isWaiting/);
   assert.match(serviceSource, /if \(cuaOperationTurnTracker\?\.hasActiveTurn\(\)\) return false;/);
   assert.match(serviceSource, /waitingWorkspaceStartups\.has\(workspaceKey\)/);
-  // 预热 entry 的 upgrade 路径（modelExecutionEnabled=false → 首个模型执行需求）也必须
-  // 过裁决，且放在 provider/model readiness 门之后（admission 失败绝不回收）。
-  // 回收后重入必须走全新 spawn 路径（重新执行 resolveSpawnEnv）。
+  // 扫描入口是唯一回收触发点；send/getClient 路径绝不回收。
+  assert.match(serviceSource, /async recycleStaleProvisionedRuntimes\(\): Promise<number>/);
   assert.match(
     serviceSource,
-    /createProviderNotReadyError\(\{ snapshot: readinessSnapshot, workspace: params \}\);[^]*?maybeRecycleStaleRuntimeForDemand/,
+    /for \(const \[workspaceKey, active\] of \[\.\.\.activeClientsByWorkspaceKey\]\)/,
   );
-  assert.match(
-    serviceSource,
-    /maybeRecycleStaleRuntimeForDemand\(workspaceKey, params, active\)[^]*?return getClient\(params\)/,
+  const getClientBody = serviceSource.slice(
+    serviceSource.indexOf("async function getClient("),
+    serviceSource.indexOf("async function getReadOnlyClient("),
   );
+  assert.ok(getClientBody.length > 0);
+  assert.doesNotMatch(getClientBody, /maybeRecycleStaleRuntimeForDemand/);
 });

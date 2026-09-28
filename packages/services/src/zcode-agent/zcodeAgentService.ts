@@ -938,19 +938,19 @@ interface CreateZCodeAgentServiceOptions extends Omit<
     event: Exclude<PipSessionEvent, { kind: "focus-changed" }>,
   ) => void;
   /**
-   * 模型执行需求边界（sendPrompt / session create 等经 getClient 复用既有 runtime 的入口）
-   * 的 stale runtime 回收裁决。返回 true 时 service 先回收该 workspace 的当前 runtime，
-   * 再按正常流程重新 spawn（重新执行 resolveSpawnEnv）。
+   * Helper 恢复边界（recycleStaleProvisionedRuntimes 扫描）的 stale runtime 回收裁决。
+   * 返回 true 且安全门全部通过时，service 回收该 workspace 的当前 runtime，
+   * 下一次自然需求按正常流程重新 spawn（重新执行 resolveSpawnEnv）。
    *
    * 背景：resolveSpawnEnv 在 Helper 未就绪时 fail-closed（spawn env 不含 broker 凭据），
    * 而 Helper 恢复按设计只影响后续 spawn——已运行的 Agent 会一直带着“无凭据”状态服务会话。
    * 该回调是恢复的裁决方（如 CUA：Helper 已恢复且本 runtime 缺凭据）；service 负责安全边界：
-   * 只在复用既有 runtime 的需求边界调用，且已确认无在飞 RPC、无活跃 CUA turn、无并发启动。
-   *
-   * 裁决必须 peek-only（绝不拉起 Helper / 不产生副作用），只依据 spawnEnvKeys 键名与
-   * 外部就绪事实。缺省不传 = 永不回收。
+   * CLI turn 真相、活跃 CUA turn、并发启动、storage 空闲。裁决必须 peek-only（绝不拉起
+   * Helper / 不产生副作用），只依据 spawnEnvKeys 键名与外部就绪事实。缺省不传 = 永不回收。
+   * 绝不在 send 路径上回收——packaged 实测会冲掉 UI 草稿绑定（sessionNotFound，turn 丢失）；
+   * 开放中的会话视图按 runtimeRestart 重建草稿（useDraftRuntimeRebuildGate）。
    */
-  shouldRecycleRuntimeBeforeModelExecutionDemand?: (context: {
+  shouldRecycleStaleProvisionedRuntime?: (context: {
     workspaceKey: string;
     workspacePath: string;
     workspaceIdentity?: string;
@@ -3011,7 +3011,7 @@ export function createZCodeAgentService(
    */
   /**
    * 需求边界的 stale runtime 回收（Helper 恢复后 CUA 预授权 Agent 的恢复载体；本函数
-   * 保持领域无关，裁决权在注入的 shouldRecycleRuntimeBeforeModelExecutionDemand）。
+   * 保持领域无关，裁决权在注入的 shouldRecycleStaleProvisionedRuntime）。
    *
    * resolveSpawnEnv 在 Helper 未就绪时 fail-closed（spawn env 无 broker 凭据），该 Agent
    * 之后一直服务会话却没有 CUA；Helper 恢复按设计只影响后续 spawn、绝不回收已有 Agent。
@@ -3057,7 +3057,7 @@ export function createZCodeAgentService(
     params: ZCodeAgentWorkspaceTarget,
     active: ActiveWorkspaceClient,
   ): Promise<boolean> {
-    const policy = options?.shouldRecycleRuntimeBeforeModelExecutionDemand;
+    const policy = options?.shouldRecycleStaleProvisionedRuntime;
     if (!policy) return false;
     if (recyclingStaleRuntimeByWorkspaceKey.has(workspaceKey)) return false;
     if (waitingWorkspaceStartups.has(workspaceKey)) return false;
@@ -3065,9 +3065,6 @@ export function createZCodeAgentService(
       return false;
     }
     if (cuaOperationTurnTracker?.hasActiveTurn()) return false;
-    // turn 真相以 CLI 为准：有 running/waiting 会话（含被 CommandInbox 排队的后续
-    // 输入）一律不回收；并发 UI 读请求不构成“忙”，不再据此阻断。
-    if (await hasRunningSessionTurn(active.client, params)) return false;
     const spawnEnvKeys = processManager.getResolvedSpawnEnvKeys(params);
     if (!spawnEnvKeys) return false;
     let shouldRecycle: boolean;
@@ -3087,6 +3084,9 @@ export function createZCodeAgentService(
       return false;
     }
     if (!shouldRecycle) return false;
+    // turn 真相以 CLI 为准：有 running/waiting 会话（含被 CommandInbox 排队的后续
+    // 输入）一律不回收；并发 UI 读请求不构成“忙”，不再据此阻断。
+    if (await hasRunningSessionTurn(active.client, params)) return false;
     recyclingStaleRuntimeByWorkspaceKey.add(workspaceKey);
     try {
       logger.info(undefined, "需求边界回收缺少注入凭据的 Agent runtime", {
@@ -3102,12 +3102,13 @@ export function createZCodeAgentService(
 
   async function getClient(params: ZCodeAgentWorkspaceTarget) {
     const workspaceKey = resolveWorkspaceKey(params);
+    // 有意不在 send/getClient 路径上回收：packaged 实测（f080495 acceptance）在发送
+    // 边界回收会冲掉 UI 草稿绑定，createSession 带着 draftSessionId 撞上
+    // fault.subscribe.sessionNotFound，turn 静默丢失。stale runtime 的回收由
+    // Helper 恢复边界的 recycleStaleProvisionedRuntimes() 扫描承担；开放中的会话
+    // 视图按 runtimeRestart 重建草稿（useDraftRuntimeRebuildGate 发送门禁）。
     const active = activeClientsByWorkspaceKey.get(workspaceKey);
     if (active?.modelExecutionEnabled && isReusableActiveClientEntry(params, active)) {
-      if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, params, active)) {
-        // 回收后 entry 已失效；重入一次走全新 spawn 路径（重新执行 resolveSpawnEnv）。
-        return getClient(params);
-      }
       active.workspace = params;
       return active.client;
     }
@@ -3144,22 +3145,6 @@ export function createZCodeAgentService(
         );
       }
       throw createProviderNotReadyError({ snapshot: readinessSnapshot, workspace: params });
-    }
-
-    // 预热/只读路径创建的 entry（modelExecutionEnabled=false）在首次模型执行需求边界被
-    // 提升时同样要过一次 stale 回收裁决——packaged 实测：启动预热 spawn 的 Agent 缺
-    // broker 凭据，首个对话需求走的就是这条 upgrade 路径；只放在上面 enabled 快路径
-    // 会让这种最常见形态永远不回收。放在 readiness 门之后：admission 失败的需求绝不
-    // 触发回收，只读观察者路径（getReadOnlyClient）也绝不回收。
-    if (active && isReusableActiveClientEntry(params, active)) {
-      // 先撤销本 demand 自己的 waiting 标记：回收判定把「同 workspace 有并发启动」
-      // 视为不安全，而这里在途的正是本次调用自己；回收如发生，重入会重建新标记。
-      waitingWorkspaceStartups.delete(workspaceKey);
-      if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, params, active)) {
-        // 回收后 entry 已失效；重入一次走全新 spawn 路径（重新执行 resolveSpawnEnv）。
-        return getClient(params);
-      }
-      waitingWorkspaceStartups.set(workspaceKey, waiting);
     }
 
     const entry = await getOrStartReadOnlyClient(params);
@@ -5737,6 +5722,26 @@ export function createZCodeAgentService(
 
     async disposeWorkspace(params): Promise<void> {
       await recycleWorkspaceRuntime(params);
+    },
+
+    /**
+     * Helper 恢复边界（hardened session 就绪 / 权限页确认可用）调用的一次性扫描：
+     * 对每个活跃 runtime 依次应用注入裁决（CUA：spawn env 缺 broker socket 键 &&
+     * 插件启用 && Helper 已就绪，peek-only）与安全门（CLI turn 真相、CUA turn、
+     * 并发启动、storage），全部通过才回收该 workspace 的 runtime——新 spawn 在
+     * 下一次自然需求时拿到已恢复的凭据。
+     *
+     * 开放中的会话视图按 runtimeRestart 事件重建草稿（useDraftRuntimeRebuildGate
+     * 在重建窗口内禁止发送），因此不在 send 路径上回收。
+     */
+    async recycleStaleProvisionedRuntimes(): Promise<number> {
+      let recycled = 0;
+      for (const [workspaceKey, active] of [...activeClientsByWorkspaceKey]) {
+        if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, active.workspace, active)) {
+          recycled += 1;
+        }
+      }
+      return recycled;
     },
 
     disposeAll(): void {

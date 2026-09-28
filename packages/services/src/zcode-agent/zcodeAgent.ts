@@ -871,6 +871,12 @@ export interface IZCodeAgentService {
   /** 当前 desktop-local CUA turn 是否仍在执行，用于 Helper recovery 避免中途回收 Agent。 */
   hasActiveCuaOperationTurn(): boolean;
   disposeWorkspace(params: ZCodeAgentWorkspaceTarget): Promise<void>;
+  /**
+   * Helper 恢复边界的 stale runtime 扫描：对每个活跃 runtime 应用注入裁决与安全门
+   * （CLI turn 真相 / CUA turn / 并发启动），全部通过才回收一次。返回回收数。
+   * 绝不在 send 路径上调用——开放中的会话视图按 runtimeRestart 重建草稿。
+   */
+  recycleStaleProvisionedRuntimes(): Promise<number>;
   disposeAll(): void;
 }
 

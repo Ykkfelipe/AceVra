@@ -1786,6 +1786,20 @@ export function createLocalServices(options: {
   // 先用前向引用连接 agent service 的 CUA turn tracker，避免在活跃 CUA 请求中途重启 Helper；
   // service 创建完成后再赋值。Helper recovery 始终不能回收 Agent。
   let hasActiveTurnRef: (() => boolean) | undefined;
+  // Helper 恢复边界（hardened session 就绪 / 权限页确认可用 / 授权后重启成功）触发的
+  // stale runtime 回收扫描。zcodeAgentService 在本图靠后装配，用前向引用连接；
+  // 真正调用发生在 RPC/边界回调里，那时赋值早已完成。
+  let recycleStaleProvisionedRuntimesRef: (() => Promise<number>) | undefined;
+  const scheduleCuaStaleRuntimeRecoverySweep = (): void => {
+    const sweep = recycleStaleProvisionedRuntimesRef;
+    if (!sweep) return;
+    void sweep().catch((error) => {
+      createServiceLogger("cua-product-helper").warn(
+        undefined,
+        `CUA stale runtime recovery sweep failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  };
   const isCuaEnabledForContext = (context?: CuaProductMcpServerResolverContext): boolean =>
     isOfficialCuaPluginEnabledForWorkspace({
       env: process.env,
@@ -1822,6 +1836,9 @@ export function createLocalServices(options: {
           return null;
         }
         hardenedCuaHelperSession = started.session;
+        // Helper 传输就绪：回收 Helper 就绪前 fail-closed spawn 的 stale runtime。
+        // 开放中的会话视图按 runtimeRestart 重建草稿（useDraftRuntimeRebuildGate）。
+        scheduleCuaStaleRuntimeRecoverySweep();
         return hardenedCuaHelperSession;
       })
       .catch(() => {
@@ -1971,6 +1988,9 @@ export function createLocalServices(options: {
             undefined,
             { timeoutMs: 3_000 },
           );
+          // hardened Helper 确认可用：Helper 恢复边界之一，回收就绪前 fail-closed
+          // spawn 的 stale runtime（幂等扫描，安全门见 service 侧）。
+          scheduleCuaStaleRuntimeRecoverySweep();
           return mapStandaloneReport(report);
         } catch {
           return {
@@ -2021,6 +2041,9 @@ export function createLocalServices(options: {
         const verifiedReport = { ...report, grant_owner: report.grant_owner };
         const reportedOwnerDisplayName =
           typeof report.owner?.display_name === "string" ? report.owner.display_name : undefined;
+        // 权限页/入口按钮确认 Helper 可用：Helper 恢复边界之一，回收就绪前
+        // fail-closed spawn 的 stale runtime（幂等扫描，安全门见 service 侧）。
+        scheduleCuaStaleRuntimeRecoverySweep();
         return {
           ...projectAvailableCuaPermissionReport(verifiedReport),
           grantOwnerDisplayName: reportedOwnerDisplayName ?? report.grant_owner,
@@ -2433,12 +2456,14 @@ export function createLocalServices(options: {
     // BROKER_UNAVAILABLE、spawn env 不含 broker 凭据），而 Helper 恢复按设计只收敛后续
     // spawn admission、绝不回收已有 Agent——packaged 实测（0.1.0-alpha.1）：Helper ready
     // 前预 spawn 的 runtime 在 Helper ready 后仍报 "Computer Use is unavailable for this
-    // node_repl session"，且该状态永不自愈。这里在模型执行需求边界、runtime 证明空闲时
-    // 同意回收一次，让重新 spawn 拿到已恢复的凭据。
+    // node_repl session"，且该状态永不自愈。回收由 Helper 恢复边界的
+    // recycleStaleProvisionedRuntimes() 扫描执行（见上方 scheduleCuaStaleRuntimeRecoverySweep），
+    // 不在 send 路径上回收（packaged 实测 f080495：发送边界回收会冲掉 UI 草稿绑定，
+    // turn 静默丢失；开放中的会话视图按 runtimeRestart 重建草稿）。
     // 裁决必须与 resolveSpawnEnv 的取值源完全同源且 peek-only：绝不在此拉起 Helper，
     // 也绝不复用 stale socket 以外的凭据（本回调不产出凭据，凭据仍只经 resolveSpawnEnv
     // → CLI 私有捕获 → node_repl 定向注入这条链发放）。
-    shouldRecycleRuntimeBeforeModelExecutionDemand: (context) => {
+    shouldRecycleStaleProvisionedRuntime: (context) => {
       // runtime 已持有 broker socket：无 stale 可言（键名判断，永不读回值）。
       if (context.spawnEnvKeys.has(BROKER_SOCKET_ENV)) return false;
       if (!isCuaEnabledForContext(context)) return false;
@@ -2476,6 +2501,8 @@ export function createLocalServices(options: {
         }),
   });
   providerConnectivityAgentService = zcodeAgentService;
+  // 连接 Helper 恢复边界与 service 的 stale runtime 回收扫描（前向引用收口）。
+  recycleStaleProvisionedRuntimesRef = () => zcodeAgentService.recycleStaleProvisionedRuntimes();
   // Helper health probe 短暂超时不应在 Computer Use turn 中途回收 Agent。resolver 会把 restart
   // 推迟到下一个 request/turn 边界；若 broker 确实已失效，当前 turn 会自然失败并由下一次请求恢复。
   hasActiveTurnRef = () => zcodeAgentService.hasActiveCuaOperationTurn();

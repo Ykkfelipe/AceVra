@@ -1737,24 +1737,33 @@ process captured nothing. The defect is not in the credential chain (capture →
 injection → `captureComputerUseRuntimeFromEnvironment` all hold); it is that no boundary ever
 re-provisions a runtime that was spawned fail-closed.
 
-**Accepted behavior.** At the next model-execution demand boundary (`getClient` — sendPrompt,
-session create/resume, model/mode changes), when all of the following hold, the service recycles
-the workspace runtime once and lets the normal spawn path run again:
+**Accepted behavior.** The recovery runs as a one-shot sweep
+(`recycleStaleProvisionedRuntimes`) that the host triggers at **Helper-recovery boundaries** —
+the hardened transport session becoming ready, and the settings/permission surface confirming the
+Helper available. Packaged acceptance (0.1.0-alpha.1, commits 576c7a6/f080495) proved the recycle
+must NOT run on the send path: disposing the runtime inside the send's client acquisition orphans
+the composer's unpersisted draft session, the next createSession faults with
+`fault.subscribe.sessionNotFound`, and the turn is silently lost. The renderer already owns a
+contract for Helper-readiness disposals (`useDraftRuntimeRebuildGate`): open conversation views
+catch the `runtimeRestart` event, block sends, and rebuild their draft on the fresh runtime.
 
-1. an active runtime exists and would otherwise be reused;
-2. the runtime is provably idle: no in-flight protocol operations, no waiting storage startup,
-   no active Computer Use turn, no concurrent startup for that workspace, and no recovery already
-   in flight — any uncertainty resolves to "do not recycle";
-3. the injected decision callback (`shouldRecycleRuntimeBeforeModelExecutionDemand`) approves.
-   The services layer owns the safety gates above; the callback owns the domain verdict. For CUA
-   the verdict mirrors `resolveSpawnEnv` exactly and is **peek-only**: never recycle a runtime
-   whose recorded spawn env keys contain the broker socket key, never recycle when the CUA plugin
-   is disabled for the workspace, and never start the Helper from the callback (peeked managed
-   host `running`, or an already-established hardened session, are the only readiness sources).
+For each workspace with an active runtime, the sweep recycles once when all of the following hold:
 
-The recycle reuses `disposeWorkspace` (generation fence, v4 route reset, CUA turn bookkeeping),
-so the fresh Agent replays `resolveSpawnEnv` and receives the recovered tuple through the
-unchanged chain: spawn env → CLI private capture → directed node_repl injection →
+1. the injected verdict (`shouldRecycleStaleProvisionedRuntime`) approves. The services layer owns
+   the safety gates; the callback owns the domain verdict. For CUA the verdict mirrors
+   `resolveSpawnEnv` exactly and is **peek-only**: never recycle a runtime whose recorded spawn env
+   keys contain the broker socket key, never recycle when the CUA plugin is disabled for the
+   workspace, and never start the Helper from the callback (a peeked managed host `running`, or an
+   already-established hardened session, are the only readiness sources);
+2. the CLI itself reports no `running`/`waiting` session on that workspace (`session/list`,
+   observation lifecycle, 5 s timeout; query failure counts as "turn possibly running");
+   concurrent UI read RPCs do not count as busy;
+3. no active Computer Use turn, no waiting storage startup, no concurrent workspace startup, and
+   no recovery already in flight — any uncertainty resolves to "do not recycle".
+
+The sweep never respawns anything itself; the fresh Agent appears on the workspace's next natural
+demand and replays `resolveSpawnEnv`, receiving the recovered tuple through the unchanged chain:
+spawn env → CLI private capture → directed node_repl injection →
 `captureComputerUseRuntimeFromEnvironment`.
 
 **Security invariants preserved.** Broker credentials are still only ever distributed by
@@ -1766,7 +1775,8 @@ the Helper is unavailable: recovery only ever happens after the Helper is actual
 Agent whose spawn already carried the broker socket key is never recycled.
 
 **Regression coverage.** `packages/services/test/cuaStaleAgentRecovery.test.ts` drives the real
-manager/service assembly with fake agent processes: fail-closed spawn → no recycle while the
-Helper is down → one recycle at the first demand after recovery with the provisioned spawn env →
-no repeated recycling afterwards; spawn env keys expose key names only; and the integrated
-assembly source keeps the policy peek-only and gated.
+manager/service assembly with fake agent processes: fail-closed prewarm spawn → no recycle while
+the Helper is down → one sweep recycle after recovery → the next natural demand respawns with the
+provisioned spawn env → later sweeps never recycle again (no loop); spawn env keys expose key
+names only; the send/getClient path contains no recycle; and the integrated assembly source keeps
+the verdict peek-only, gated, and triggered only from Helper-recovery boundaries.
