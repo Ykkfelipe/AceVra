@@ -38,6 +38,42 @@ async function writePluginConfig(root, enabled, { legacy = false, suppressed = f
   return zcodeHome;
 }
 
+test("the documented bootstrap path resolves to the sanctioned packaged module", async () => {
+  // The skill and docs name the bootstrap relative to the *plugin package root*. The model resolves
+  // a skill's relative paths from the skill directory, so a document that leaves the base implicit
+  // sends it looking under `skills/computer-use/scripts/` — which does not exist — and it then has to
+  // search for an alternative (observed in packaged acceptance). Lock the three facts that make the
+  // documented path unambiguous and satisfiable only by this package.
+  const bootstrapRelativePath = "scripts/computer-use-client.mjs";
+  const skill = await readFile(join(pluginRoot, "skills", "computer-use", "SKILL.md"), "utf8");
+  const docs = await readFile(join(pluginRoot, "docs", "computer-use.md"), "utf8");
+  const packageJson = JSON.parse(await readFile(join(pluginRoot, "package.json"), "utf8"));
+
+  for (const [label, text] of [
+    ["skill", skill],
+    ["docs", docs],
+  ]) {
+    assert.ok(text.includes(bootstrapRelativePath), `${label} must name ${bootstrapRelativePath}`);
+    assert.ok(
+      text.includes("plugin package root"),
+      `${label} must state the bootstrap's base directory`,
+    );
+    assert.equal(
+      text.includes("skills/computer-use/scripts/"),
+      false,
+      `${label} must not send the model to a skill-relative scripts path`,
+    );
+  }
+
+  // The documented path is the package's own entry point, so it is the sanctioned module and it is
+  // resolvable from the packaged root.
+  assert.equal(packageJson.main, `./${bootstrapRelativePath}`);
+  assert.equal(packageJson.exports["."], `./${bootstrapRelativePath}`);
+  const module = await import(join(pluginRoot, bootstrapRelativePath));
+  assert.equal(typeof module.setupComputerUseRuntime, "function");
+  assert.equal(typeof module.getComputerUseClient, "function");
+});
+
 test("official Computer Use package contains the complete seed contract", async () => {
   for (const relativePath of requiredAssets) {
     await assert.doesNotReject(readFile(join(pluginRoot, relativePath), "utf8"));

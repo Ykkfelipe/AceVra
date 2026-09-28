@@ -8,7 +8,8 @@ Helper, open a broker socket, acquire a lease, or provide an alternate native ac
 ## Bootstrap
 
 The shared `node_repl` host installs the Computer Use client as `agent.computerUse` before every
-fresh JavaScript cell. The package's `scripts/computer-use-client.mjs` is the official compatibility
+fresh JavaScript cell. The package's `scripts/computer-use-client.mjs` — at the plugin package root,
+the directory containing the `skills/` folder, and declared as the package `main` — is the official compatibility
 bootstrap for hosts that expose the session bridge; it only adapts that host bridge and never
 constructs a runtime.
 

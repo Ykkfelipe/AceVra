@@ -16,10 +16,13 @@ each cell, so start with the host-provided facade:
 const computerUse = agent.computerUse;
 ```
 
-The package's `scripts/computer-use-client.mjs` is the compatibility bootstrap for hosts that expose
-the session bridge; it adapts that bridge and never constructs a second runtime. If the host did
-not provide `agent.computerUse`, report unavailable and stop. Never construct a second CUA runtime,
-launch a Helper, open a broker socket, or synthesize native input outside this SDK.
+The compatibility bootstrap for hosts that expose the session bridge is
+`scripts/computer-use-client.mjs` **at the plugin package root** — the directory that contains the
+`skills/` folder this skill lives in. It is not under `skills/computer-use/`, and the plugin's
+`package.json` declares it as the package `main`; import that path and nothing else. The module only
+adapts the host bridge and never constructs a second runtime. If the host did not provide
+`agent.computerUse`, report unavailable and stop. Never construct a second CUA runtime, launch a
+Helper, open a broker socket, or synthesize native input outside this SDK.
 
 ## Observation-first workflow
 
