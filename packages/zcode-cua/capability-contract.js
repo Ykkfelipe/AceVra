@@ -220,7 +220,9 @@ export function validForegroundInput(method, input) {
   const actual = Object.keys(input).sort();
   if (wanted.length !== actual.length || wanted.some((key, index) => key !== actual[index]))
     return false;
-  const id = (key) => typeof input[key] === "string" && /^[0-9a-f-]{36}$/u.test(input[key]);
+  // Helper 签发的 observation/lease id 是大写 UUID（如 A40170B2-…）；这里必须按
+  // 大小写不敏感校验，且不得归一化 —— Helper 侧观察登记表按原样字符串精确匹配。
+  const id = (key) => typeof input[key] === "string" && /^[0-9a-f-]{36}$/iu.test(input[key]);
   if (common.some((key) => !id(key))) return false;
   const point = (value) =>
     value &&

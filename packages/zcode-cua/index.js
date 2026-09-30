@@ -159,7 +159,9 @@ export function createComputerUseRuntime(options = {}) {
         method === "control_status" &&
         (!input?.arguments ||
           Object.keys(input.arguments).length !== 1 ||
-          !/^[0-9a-f-]{36}$/u.test(input.arguments.lease_id ?? ""))
+          // Helper 签发的 lease id 是大写 UUID；大小写不敏感校验，原样透传（Helper 侧
+          // 租约登记按原样字符串精确匹配，归一化反而会破坏后续 release/中断匹配）。
+          !/^[0-9a-f-]{36}$/iu.test(input.arguments.lease_id ?? ""))
       ) {
         return unavailable("control_status requires a lease_id", "bad_request");
       }
