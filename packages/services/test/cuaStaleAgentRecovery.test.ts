@@ -466,6 +466,17 @@ test("recovery policy stays peek-only and fail-closed in the integrated assembly
     nodeSource,
     /setCuaProductHelperReadyListener\(\(\) => scheduleCuaStaleRuntimeRecoverySweep\(\)\)/,
   );
+  // live 实况（2026-09-30 fault-injected run）锁定的真实所有权链：预 spawn 先按有界预算等待
+  // hardened session（12s），超时即 fail-closed 成 keyless 代际；随后 session admission 真正
+  // 完成才是权威 READY，并由同一处调度恢复扫描。两个到达顺序都必须有触发。
+  assert.match(nodeSource, /const CUA_HARDENED_SESSION_SPAWN_WAIT_MS = 12_000;/);
+  assert.match(nodeSource, /await waitForCuaHardenedSessionStart\(\);/);
+  assert.match(nodeSource, /broker_unavailable: hardened CUA session not started/);
+  // 权限状态边界同样是确认可用后的恢复入口（helperConnected 二次确认之后才扫描）。
+  assert.match(
+    nodeSource,
+    /await session\.relaunch\(\);[^]*?scheduleCuaStaleRuntimeRecoverySweep\(\);[^]*?mapStandaloneReport\(report\)/,
+  );
   assert.match(nodeSource, /cuaProductHelperReadyListener\?\.\(\)/);
   assert.match(
     nodeSource,
