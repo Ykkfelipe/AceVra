@@ -368,12 +368,15 @@ let helperSelfIdentity: CodeIdentityReport = {
 /// designated requirement) is carried by `permission_status`, which is where a caller looks
 /// when it needs to explain *why* the helper is trusted. `bundle_validated` travels in the
 /// short form too: CUA-1.5's sealed-bundle check must be visible to every caller, not only to
-/// the ones that read the full report.
+/// the ones that read the full report. `requirement` 也必须在短形态里：前台 acquire 确认后，
+/// runtime 用它向 lease authority 提交（helper-confirmed lease 的锚点），缺失会强制释放
+/// 已确认的租约（commit 侧 fail-closed）。它是签名推导出的既证事实，不是新凭据。
 func shortIdentityJSON(_ report: CodeIdentityReport) -> [String: Any] {
     [
         "verified": report.verified,
         "identifier": report.identifier,
         "cd_hash": report.cdHash,
+        "requirement": report.requirement,
         "ad_hoc": report.adHoc,
         "pid": report.pid,
         "bundle_validated": report.bundleValidated,
