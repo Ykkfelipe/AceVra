@@ -7,15 +7,19 @@
 //   - 固定工作区 release/0.1.0-alpha.1/{build,validation,handoff}/，打包前清空重建；
 //   - 不再创建 build-<sha>/、candidate-<sha>/、validation-<sha>/、handoff-<sha>/ 等派生目录；
 //   - /Applications 最多保留 AceVra.app 加一份上一代已知可用回滚副本；
-//   - DMG/ZIP 只保留当前候选最新产物，不在多个目录堆积同名副本。
+//   - DMG/ZIP 只保留当前候选最新产物，不在多个目录堆积同名副本；
+//   - 固定目录只防历史堆积，同代际仍须压实：handoff 是最终分发包的唯一持久所有者，
+//     校验/安装完成后 build/ 与 validation/ 不留 .app/DMG/ZIP 副本
+//     （pnpm release:compact:candidate）。
 //
 // 本脚本在打包前运行：报告固定工作区、陈旧代次目录、DMG/ZIP 与已安装回滚副本的体积，
-// 对陈旧代次打印警告。判定不了的只列出、不推断。永远退出 0 —— node_modules 偏大等
-// 普通开发开销绝不构成失败；清理由人按报告路径执行，脚本本身不删任何东西。
+// 对陈旧代次与**同代际重复物理副本**打印警告。判定不了的只列出、不推断。永远退出 0 ——
+// node_modules 偏大等普通开发开销绝不构成失败；清理由人按报告路径执行，脚本本身不删任何东西。
 //
 // 用法：node scripts/release/artifact-report.mjs [--apps-dir /Applications]
 
 import { execFile as execFileCallback } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -89,7 +93,9 @@ function info(message) {
 
 async function reportReleaseTree() {
   const versionDirs = (await listDir(releaseRoot)) ?? [];
-  const versionNames = versionDirs.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  const versionNames = versionDirs
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
   if (versionNames.length === 0) {
     info(`release/ 下没有版本目录（${releaseRoot}）`);
     return;
@@ -120,7 +126,11 @@ async function reportReleaseTree() {
 
     for (const entry of entries) {
       if (entry.isFile() && ARCHIVE_RE.test(entry.name)) {
-        archiveRows.push({ path: join(versionDir, entry.name), name: entry.name, home: `release/${name}` });
+        archiveRows.push({
+          path: join(versionDir, entry.name),
+          name: entry.name,
+          home: `release/${name}`,
+        });
       }
     }
   }
@@ -165,7 +175,9 @@ async function reportReleaseTree() {
   }
   for (const path of otherDirs) {
     const sizes = await measurePaths([path]);
-    info(`  其他目录（不确定，请人工判断，本脚本不做结论）: ${path} (${formatKiB(sizes.get(path))})`);
+    info(
+      `  其他目录（不确定，请人工判断，本脚本不做结论）: ${path} (${formatKiB(sizes.get(path))})`,
+    );
   }
 
   // 版本目录根部散落的 DMG/ZIP（不在固定工作区内，home 形如 release/<version>）
@@ -187,6 +199,55 @@ async function reportReleaseTree() {
     if (rows.length > 1 && drift > GENERATION_DRIFT_MS) {
       warn(`同名归档 ${name} 的 mtime 跨度超过 24 小时，可能混有上一代产物，请核对后清理旧份。`);
     }
+  }
+
+  // 同代际重复检测（B 类）：handoff 是最终分发包的唯一持久所有者。硬链接共享同一
+  // inode，不算重复存储；其余每多一份物理拷贝都告警。
+  const archiveStats = await Promise.all(
+    archiveRows.map(async (row) => ({ row, stat: await stat(row.path).catch(() => null) })),
+  );
+  for (const [name] of byName) {
+    const inodes = new Map();
+    let names = 0;
+    for (const { row, stat: fileStat } of archiveStats) {
+      if (row.name !== name || !fileStat) continue;
+      names += 1;
+      const key = `${fileStat.dev}:${fileStat.ino}`;
+      const homes = inodes.get(key) ?? [];
+      homes.push(row.home);
+      inodes.set(key, homes);
+    }
+    if (inodes.size > 1) {
+      warn(
+        `同代际重复：同名归档 ${name} 存在 ${inodes.size} 份物理拷贝（策略要求只保留 handoff 一份）：` +
+          [...inodes.values()].map((homes) => homes.join(" + ")).join(" / ") +
+          ` —— 安装校验后运行 pnpm release:compact:candidate`,
+      );
+    } else if (names > 1) {
+      info(`归档 ${name}: ${names} 个目录名共享同一 inode（hardlink，无重复存储）。`);
+    }
+  }
+
+  // 工作区内的 .app 副本：macOS Storage 会把它们当作额外的 AceVra 应用。
+  const appBundleCandidates = [];
+  for (const name of versionNames) {
+    const versionDir = join(releaseRoot, name);
+    for (const rel of [
+      ["build", "mac-arm64", "AceVra.app"],
+      ["validation", "AceVra.app"],
+      ["candidate", "AceVra.app"],
+      ["handoff", "AceVra.app"],
+    ]) {
+      const candidate = join(versionDir, ...rel);
+      if (existsSync(candidate)) appBundleCandidates.push(candidate);
+    }
+  }
+  for (const candidate of appBundleCandidates) {
+    const sizes = await measurePaths([candidate]);
+    warn(
+      `工作区残留同代际 .app 副本（handoff 之外不保留应用包；验证/安装后运行 pnpm release:compact:candidate）: ` +
+        `${candidate} (${formatKiB(sizes.get(candidate))})`,
+    );
   }
 }
 
@@ -215,16 +276,26 @@ async function reportInstalledApps() {
   }
 
   const stats = await Promise.all(
-    backupPaths.map(async (path) => ({ path, mtimeMs: (await stat(path).catch(() => null))?.mtimeMs ?? 0 })),
+    backupPaths.map(async (path) => ({
+      path,
+      mtimeMs: (await stat(path).catch(() => null))?.mtimeMs ?? 0,
+    })),
   );
   stats.sort((a, b) => b.mtimeMs - a.mtimeMs);
   info(`回滚副本共 ${stats.length} 份（策略：最多保留最近一份）：`);
   for (const [index, entry] of stats.entries()) {
-    const label = index === 0 ? "KEEP ONE ROLLBACK（最近一份）" : "SAFE STALE ARTIFACT（超过一代，验证通过后可删）";
-    console.log(`  - ${entry.path} (${formatKiB(sizes.get(entry.path))}, ${new Date(entry.mtimeMs).toISOString()}) [${label}]`);
+    const label =
+      index === 0
+        ? "KEEP ONE ROLLBACK（最近一份）"
+        : "SAFE STALE ARTIFACT（超过一代，验证通过后可删）";
+    console.log(
+      `  - ${entry.path} (${formatKiB(sizes.get(entry.path))}, ${new Date(entry.mtimeMs).toISOString()}) [${label}]`,
+    );
   }
   if (stats.length > 1) {
-    warn(`存在 ${stats.length} 份回滚副本；策略要求只保留最近一份，其余合计约 ${formatKiB(stats.slice(1).reduce((sum, entry) => sum + (sizes.get(entry.path) ?? 0), 0))}。`);
+    warn(
+      `存在 ${stats.length} 份回滚副本；策略要求只保留最近一份，其余合计约 ${formatKiB(stats.slice(1).reduce((sum, entry) => sum + (sizes.get(entry.path) ?? 0), 0))}。`,
+    );
   }
 }
 
@@ -235,7 +306,9 @@ async function main() {
   console.log(
     "[artifacts] 永不纳入产物清理：源码、.git、node_modules、userData/会话数据、本地 profile、签名证书与 keychain、TCC 状态、已接受的测试证据/报告、.spike/。",
   );
-  console.log("[artifacts] 本脚本只报告；清理由人按路径执行，判定不了的项目保持 UNKNOWN —— 不要删除。");
+  console.log(
+    "[artifacts] 本脚本只报告；清理由人按路径执行，判定不了的项目保持 UNKNOWN —— 不要删除。",
+  );
   process.exitCode = 0;
 }
 

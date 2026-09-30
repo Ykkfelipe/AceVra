@@ -43,6 +43,7 @@
 - Clean-before-build：每次打包前先清空/重建上述三个固定目录，再把新候选构建进同一路径；不得以腾空间为由删除源码、`node_modules`、缓存或签名资产。
 - 已安装应用最多保留 `/Applications/AceVra.app` 加一份上一代已知可用回滚副本（`/Applications/.AceVra.app.backup-*`）；新候选验证通过后删除其余回滚副本，只保留最近一代，不得无限累积。
 - 本地 DMG/ZIP 只保留当前候选所需的最新产物；新候选通过验证后删除或复用旧产物，不得在多个目录堆积同名副本。
+- 固定目录只消除历史堆积，**同代际也必须压实**：`handoff/` 是本地最终分发包（DMG/ZIP）的唯一持久所有者；`build/` 只留中间产物，`validation/` 只留报告与校验和。校验/安装完成后运行 `pnpm release:compact:candidate` 清除工作区内同代际的 `.app`/DMG/ZIP 副本（校验原地进行，不复制 500–600 MB 的 .app）。
 - 临时插桩/诊断构建在取证完成、诊断改动还原并重建干净候选后必须删除；无活跃调查时不得同时保留诊断树与多份干净候选树。
 - 自动清理必须路径限定且保守。源码、`.git`、`node_modules`、userData/会话数据、本地 profile、签名证书与 keychain、TCC 状态、已接受的测试证据/报告、`.spike` 永不在产物清理中删除。
 - 打包前运行 `pnpm artifacts:report` 盘点产物体积与陈旧代次；脚本只报告、不删除，普通源码开发不因其失败。

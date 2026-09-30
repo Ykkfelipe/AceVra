@@ -32,9 +32,18 @@ release/0.1.0-alpha.1/handoff/
   arm64 DMG, plus the arm64 ZIP when the pipeline produces both). Delete or reuse previous
   outputs once the replacement candidate has passed validation; do not accumulate same-named
   copies in alternate directories.
+- Same-generation ownership: **`handoff/` is the sole persistent owner of the final local
+  distribution archives.** `build/` may hold intermediate build products only, and
+  `validation/` holds reports, manifests, and checksums only — never a persistent `.app`, DMG,
+  or ZIP copy. Validation runs in place against the build output (archives are checked in a
+  self-cleaning temp dir); after `[candidate] OK`, a verified installation, and verified
+  handoff checksums, compact the redundant build/validation copies with
+  `pnpm release:compact:candidate` (step 11). Fixed directories prevent historical
+  accumulation; compaction removes same-generation duplication.
 - Diagnostic builds: temporary instrumented trees must be deleted after evidence is collected,
   diagnostics are reverted, and a clean candidate has been rebuilt.
-- Before each packaging run, inventory sizes and stale generations with:
+- Before each packaging run, inventory sizes, stale generations, and same-generation duplicate
+  copies with:
 
 ```bash
 pnpm artifacts:report
@@ -134,6 +143,10 @@ The final line must say:
 [candidate] OK
 ```
 
+`validation/` now receives reports only (`build-info.json`, `RELEASE_NOTES.md`,
+`SHA256SUMS.txt`). The `.app`, DMG, and ZIP are validated in place from `build/` (archives are
+unpacked/mounted in a self-cleaning temp dir), so no same-generation copy is created.
+
 ## 6. Record the exact embedded revision
 
 Read the build metadata:
@@ -173,9 +186,14 @@ Make sure these fields exist at the top and match `build-meta.json`:
 rm -rf "release/0.1.0-alpha.1/handoff"
 
 mise exec -- node scripts/mise-run.mjs pnpm release:assemble:candidate -- \
+  --build-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build" \
   --validation-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/validation" \
   --handoff-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/handoff"
 ```
+
+Archives are taken from `build/` and hardlinked into `handoff/` when both live on the same
+volume (no second physical copy); the handoff later becomes the only surviving name once
+step 11 compacts the build output. Report sidecars come from `validation/`.
 
 The handoff must contain exactly five files:
 
@@ -250,19 +268,34 @@ The installed `buildCommitId` should match the commit you built.
 
 ## 11. Cleanup after the new app works
 
-Once you have verified the new app, reclaim the previous generation (path-scoped, conservative):
+Once you have verified the new app (installation verified + `shasum -a 256 -c` on the handoff
+passed), reclaim the previous generation **and compact same-generation duplicates**
+(path-scoped, conservative):
 
 ```bash
-# 1. Rollbacks: keep exactly ONE — the most recent hidden backup — delete the rest.
+# 1. Same-generation compaction: after a verified install, build/ and validation/ must not
+#    retain .app/DMG/ZIP copies. Refuses to run unless the handoff five-file set verifies.
+mise exec -- node scripts/mise-run.mjs pnpm release:compact:candidate -- \
+  --build-dir "release/0.1.0-alpha.1/build" \
+  --validation-dir "release/0.1.0-alpha.1/validation" \
+  --handoff-dir "release/0.1.0-alpha.1/handoff"
+
+# 2. Rollbacks: keep exactly ONE — the most recent hidden backup — delete the rest.
 ls -dut /Applications/.AceVra.app.backup-* | tail -n +2 | xargs rm -rf
 
-# 2. Confirm no per-label or stale artifact directories remain under the release workspace.
+# 3. Confirm no stale generations and no same-generation duplicate copies remain.
 pnpm artifacts:report
 ```
 
-`pnpm artifacts:report` warns if `build-*/`, `validation-*/`, `handoff-*/`, `candidate-*/` or
-timestamped equivalents still exist under `release/0.1.0-alpha.1/`; delete what it lists unless
-an active investigation needs the tree.
+`pnpm release:compact:candidate` removes only fixed allowlist paths: the build app tree
+(`build/mac-arm64/`), the build-side DMG/ZIP/blockmaps (mere names when hardlinked into the
+handoff), and any legacy `AceVra.app`/DMG/ZIP copies inside `validation/`. Reports, logs,
+manifests, and checksums stay. Do not run it before the installation is verified.
+
+`pnpm artifacts:report` warns about both stale generations (`build-*/`, `validation-*/`,
+`handoff-*/`, `candidate-*/`, timestamped equivalents) and **same-generation duplicate physical
+copies** across `build/`+`validation/`+`handoff/`; delete what it lists unless an active
+investigation needs the tree.
 
 Never delete as part of artifact cleanup: source code, `.git`, `node_modules`, userData or
 conversation data, local profile data, signing certificates/keychains, TCC state, accepted test
@@ -290,5 +323,8 @@ If you have no backup left, stop and ask before deleting or replacing `/Applicat
 - Never use `sudo xattr -rd com.apple.quarantine` as an install workflow.
 - Keep at most one `/Applications/.AceVra.app.backup-*`; delete older ones after the new
   candidate is verified.
+- `handoff/` is the sole persistent owner of the final DMG/ZIP; compact same-generation copies
+  out of `build/` and `validation/` after a verified install, and never copy a 500–600 MB `.app`
+  just to validate it.
 - Do not commit generated `.dmg`, `.zip`, app bundles, signing keys, keychains, or passwords.
 - Do not rename `com.acevra.desktop`, `dev.acevra.cua-helper`, or the stable `zcode` backend value.

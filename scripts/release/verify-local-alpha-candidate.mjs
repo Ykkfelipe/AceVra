@@ -14,7 +14,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -474,15 +473,10 @@ if (isEntrypoint) {
     if (existsSync(validationDir))
       throw new Error(`validation directory already exists: ${validationDir}`);
     mkdirSync(validationDir);
-    const validationAppPath = join(validationDir, "AceVra.app");
-    const appCopy = run("/usr/bin/ditto", [result.appPath, validationAppPath]);
-    if (!appCopy.ok) throw new Error(`validation app copy failed: ${appCopy.output.trim()}`);
-    for (const archive of result.archives)
-      cpSync(join(buildDir, archive), join(validationDir, archive));
-    writeCandidateProvenance(validationDir, {
-      ...result,
-      appPath: join(validationDir, "AceVra.app"),
-    });
+    // 同代际不复制 .app/DMG/ZIP：全部校验都原地读取 build 产物（归档在自清理临时目录里
+    // 解包/挂载）。validation/ 只保存报告、清单与校验和；handoff 是最终分发包的唯一持久
+    // 所有者（策略见 AGENTS.md「本地构建产物管理」）。provenance 的 appPath 保持真实 build 路径。
+    writeCandidateProvenance(validationDir, result);
   } else if (result.ok) {
     writeCandidateProvenance(buildDir, result);
   }
