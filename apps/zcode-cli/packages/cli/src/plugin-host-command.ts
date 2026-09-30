@@ -6,6 +6,8 @@ import {
   getCapturedZCodeCuaBrokerCredentials,
   ZCODE_CUA_BROKER_SOCKET_ENV_KEY,
   ZCODE_CUA_BROKER_TOKEN_ENV_KEY,
+  ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY,
+  ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY,
   ZCODE_CUA_NODE_REPL_HOST_ENV_KEY,
 } from "@zcode/shared/runtime-env";
 import { ZCODE_CUA_OFFICIAL_PLUGIN_ID, ZCODE_PLUGIN_ID_ENV_KEY } from "@zcode/shared/mcp";
@@ -57,6 +59,8 @@ export async function runPluginHostCommand(ctx: RunContext, argv: string[]): Pro
     const originalArgv = process.argv;
     const originalBrokerSocket = process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY];
     const originalCapabilityToken = process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY];
+    const originalLeaseSocket = process.env[ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY];
+    const originalLeaseToken = process.env[ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY];
     // shared node_repl 把同一凭据组（socket + launch-scoped capability token）恢复到环境，
     // 由 broker bridge 读取；旧的独立 CUA MCP 不再拥有执行入口。
     // token 是 hardened transport 的 session capability：relay 对每个 client 请求做常量时间
@@ -67,6 +71,17 @@ export async function runPluginHostCommand(ctx: RunContext, argv: string[]): Pro
       process.env[ZCODE_CUA_BROKER_SOCKET_ENV_KEY] = capturedBrokerCredentials.socket;
       if (capturedBrokerCredentials.capabilityToken) {
         process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY] = capturedBrokerCredentials.capabilityToken;
+      }
+      // CUA-4 sideband：lease authority 的 socket/token 与 broker 凭据走同一条私有捕获 + 定向注入，
+      // 也会被同一道 sanitize 从本进程 env 剔除；缺了这一步，node_repl 进程构造不出 lease client，
+      // reportActivity 变成 no-op，会话条就永远没有可投影的活动（packaged 实测：config 里有、进程里没有）。
+      // 只在同一个受信任分支内恢复（官方 node_repl 宿主 + 已有 capture），成对恢复：缺一即都不恢复，
+      // 绝不给出半个 lease client；broker 与 lease 两组凭据互相独立。
+      const leaseAuthoritySocket = capturedBrokerCredentials.leaseAuthoritySocket?.trim();
+      const leaseAuthorityToken = capturedBrokerCredentials.leaseAuthorityToken?.trim();
+      if (leaseAuthoritySocket && leaseAuthorityToken) {
+        process.env[ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY] = leaseAuthoritySocket;
+        process.env[ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY] = leaseAuthorityToken;
       }
     }
     try {
@@ -82,6 +97,18 @@ export async function runPluginHostCommand(ctx: RunContext, argv: string[]): Pro
         delete process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY];
       } else {
         process.env[ZCODE_CUA_BROKER_TOKEN_ENV_KEY] = originalCapabilityToken;
+      }
+      // 与 broker 同样在 main() 返回后收回：node_repl 的 runtime 在启动窗口内已经把值取进私有
+      // lease client，之后留在进程 env 里只会让模型可执行的 cell（worker 继承父进程环境）读到它。
+      if (originalLeaseSocket === undefined) {
+        delete process.env[ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY];
+      } else {
+        process.env[ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY] = originalLeaseSocket;
+      }
+      if (originalLeaseToken === undefined) {
+        delete process.env[ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY];
+      } else {
+        process.env[ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY] = originalLeaseToken;
       }
     }
 
