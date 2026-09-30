@@ -23,6 +23,7 @@
 | 模块阅读包       | `pnpm architecture:context <module-id>`   |
 | 未使用依赖与导出 | `pnpm knip`                               |
 | 导出引用查询     | `pnpm dep:refs --list-exports <file>`     |
+| 构建产物盘点     | `pnpm artifacts:report`（只读，不删除）   |
 
 测试入口以目标包当前的 `package.json` 和实际测试文件为准，不假定存在统一的单测或 E2E 命令。
 
@@ -34,6 +35,17 @@
 - `apps/zcode-cli`：Agent CLI 与运行时。
 - `CONTEXT.md`：插件商店领域词汇；修改相关 UI 前阅读。
 - `DESIGN.md`：UI 设计规范；修改 UI 前阅读。
+
+## 本地构建产物管理
+
+本地 alpha 打包一律使用固定工作区 `release/0.1.0-alpha.1/` 下的 `build/`、`validation/`、`handoff/`。普通迭代构建禁止创建 `build-<sha>/`、`candidate-<sha>/`、`validation-<sha>/`、`handoff-<sha>/` 或时间戳等价物；Git 是历史记录，编译产物可随时重建。操作步骤见 `release/0.1.0-alpha.1/HOW_TO_UPDATE.md`。
+
+- Clean-before-build：每次打包前先清空/重建上述三个固定目录，再把新候选构建进同一路径；不得以腾空间为由删除源码、`node_modules`、缓存或签名资产。
+- 已安装应用最多保留 `/Applications/AceVra.app` 加一份上一代已知可用回滚副本（`/Applications/.AceVra.app.backup-*`）；新候选验证通过后删除其余回滚副本，只保留最近一代，不得无限累积。
+- 本地 DMG/ZIP 只保留当前候选所需的最新产物；新候选通过验证后删除或复用旧产物，不得在多个目录堆积同名副本。
+- 临时插桩/诊断构建在取证完成、诊断改动还原并重建干净候选后必须删除；无活跃调查时不得同时保留诊断树与多份干净候选树。
+- 自动清理必须路径限定且保守。源码、`.git`、`node_modules`、userData/会话数据、本地 profile、签名证书与 keychain、TCC 状态、已接受的测试证据/报告、`.spike` 永不在产物清理中删除。
+- 打包前运行 `pnpm artifacts:report` 盘点产物体积与陈旧代次；脚本只报告、不删除，普通源码开发不因其失败。
 
 ## 实现与验证
 

@@ -9,6 +9,39 @@ commit → build → validate → assemble handoff → close AceVra → install 
 
 Do not copy `AceVra.app` manually and do not use `xattr` to bypass Gatekeeper.
 
+## Artifact storage policy (fixed workspace)
+
+All local alpha packaging uses ONE reusable workspace; reinitialize it before every run and
+build the new candidate into the same paths:
+
+```text
+release/0.1.0-alpha.1/build/
+release/0.1.0-alpha.1/validation/
+release/0.1.0-alpha.1/handoff/
+```
+
+- Do NOT create `build-<sha>/`, `candidate-<sha>/`, `validation-<sha>/`, `handoff-<sha>/`, or
+  timestamped equivalents for ordinary iterative builds. Git is the historical record; compiled
+  artifacts are disposable. The authoritative rule lives in `AGENTS.md`（本地构建产物管理）.
+- Clean-before-build: remove/reinitialize the three fixed directories before each packaging run.
+  Never delete source files, `node_modules`, caches, or signing assets as part of this cleanup.
+- Installed app: keep `/Applications/AceVra.app` plus at most ONE rollback copy of the
+  immediately previous known-good app (a hidden `/Applications/.AceVra.app.backup-*`). After a
+  newly installed candidate is verified, delete every rollback older than one generation.
+- DMG/ZIP: keep only the newest local handoff artifacts for the current candidate (current
+  arm64 DMG, plus the arm64 ZIP when the pipeline produces both). Delete or reuse previous
+  outputs once the replacement candidate has passed validation; do not accumulate same-named
+  copies in alternate directories.
+- Diagnostic builds: temporary instrumented trees must be deleted after evidence is collected,
+  diagnostics are reverted, and a clean candidate has been rebuilt.
+- Before each packaging run, inventory sizes and stale generations with:
+
+```bash
+pnpm artifacts:report
+```
+
+It is read-only (it never deletes) and it never fails ordinary source development.
+
 ## 0. One-time assumptions
 
 Run commands from:
@@ -47,47 +80,51 @@ node scripts/check-workspace-freshness.mjs
 mise exec -- node scripts/mise-run.mjs pnpm typecheck
 mise exec -- node scripts/mise-run.mjs pnpm lint
 mise exec -- node scripts/mise-run.mjs pnpm architecture:check --changed
+pnpm artifacts:report
 ```
 
-All three `pnpm` gates must pass before you package.
+All three `pnpm` gates must pass before you package. The artifact report is informational:
+act on its stale-generation warnings (see section 11), but a large `node_modules` is never a
+failure.
 
-## 3. Choose a build label
+## 3. Note the build label
 
-Use the short commit when possible:
+The packaged app embeds the commit ID; record it for provenance and build-meta checks:
 
 ```bash
 LABEL=$(git rev-parse --short HEAD)
 echo "$LABEL"
 ```
 
-The examples below use `$LABEL`.
+Paths no longer include the label — everything goes into the fixed workspace.
 
-## 4. Build a fresh no-clobber candidate
+## 4. Build a fresh candidate into the fixed build workspace
 
 ```bash
-rm -rf "release/0.1.0-alpha.1/build-cua-$LABEL"
+rm -rf "release/0.1.0-alpha.1/build"
+mkdir -p "release/0.1.0-alpha.1/build"
 
 ZCODE_DESKTOP_RELEASE_PROFILE=local-engineering-alpha \
-ZCODE_DESKTOP_DIST_DIR="/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build-cua-$LABEL" \
+ZCODE_DESKTOP_DIST_DIR="/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build" \
 mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop bundle -- --os mac --arch arm64
 ```
 
 This creates:
 
 ```text
-release/0.1.0-alpha.1/build-cua-$LABEL/mac-arm64/AceVra.app
-release/0.1.0-alpha.1/build-cua-$LABEL/AceVra-0.1.0-alpha.1-arm64.dmg
-release/0.1.0-alpha.1/build-cua-$LABEL/AceVra-0.1.0-alpha.1-arm64.zip
+release/0.1.0-alpha.1/build/mac-arm64/AceVra.app
+release/0.1.0-alpha.1/build/AceVra-0.1.0-alpha.1-arm64.dmg
+release/0.1.0-alpha.1/build/AceVra-0.1.0-alpha.1-arm64.zip
 ```
 
 ## 5. Validate the candidate
 
 ```bash
-rm -rf "release/0.1.0-alpha.1/validation-cua-$LABEL"
+rm -rf "release/0.1.0-alpha.1/validation"
 
 mise exec -- node scripts/mise-run.mjs pnpm release:verify:candidate -- \
-  --build-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build-cua-$LABEL" \
-  --validation-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/validation-cua-$LABEL" \
+  --build-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build" \
+  --validation-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/validation" \
   --json
 ```
 
@@ -117,7 +154,7 @@ You should see the commit and time from the build you just made, for example:
 Open:
 
 ```text
-release/0.1.0-alpha.1/validation-cua-$LABEL/build-info.json
+release/0.1.0-alpha.1/validation/build-info.json
 ```
 
 Make sure these fields exist at the top and match `build-meta.json`:
@@ -133,11 +170,11 @@ Make sure these fields exist at the top and match `build-meta.json`:
 ## 7. Assemble the exact handoff
 
 ```bash
-rm -rf "release/0.1.0-alpha.1/handoff-final-$LABEL"
+rm -rf "release/0.1.0-alpha.1/handoff"
 
 mise exec -- node scripts/mise-run.mjs pnpm release:assemble:candidate -- \
-  --validation-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/validation-cua-$LABEL" \
-  --handoff-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/handoff-final-$LABEL"
+  --validation-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/validation" \
+  --handoff-dir "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/handoff"
 ```
 
 The handoff must contain exactly five files:
@@ -153,7 +190,7 @@ SHA256SUMS.txt
 Check the archives:
 
 ```bash
-cd "release/0.1.0-alpha.1/handoff-final-$LABEL"
+cd "release/0.1.0-alpha.1/handoff"
 shasum -a 256 -c SHA256SUMS.txt
 cd -
 ```
@@ -176,8 +213,8 @@ No output means it is closed. Do not install while AceVra is running.
 
 ```bash
 mise exec -- node scripts/mise-run.mjs pnpm release:accept:installed -- \
-  --handoff "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/handoff-final-$LABEL" \
-  --source-app "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build-cua-$LABEL/mac-arm64/AceVra.app" \
+  --handoff "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/handoff" \
+  --source-app "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build/mac-arm64/AceVra.app" \
   --app "/Applications/AceVra.app"
 ```
 
@@ -187,7 +224,8 @@ On success it prints a backup path like:
 backup=/Applications/.AceVra.app.backup-<uuid>
 ```
 
-Keep that backup until you have confirmed the new app works.
+That backup is the previous known-good app. Keep it (and only it) until you have confirmed the
+new app works.
 
 ## 10. Open the updated app
 
@@ -210,44 +248,47 @@ NODE
 
 The installed `buildCommitId` should match the commit you built.
 
-## 11. Optional cleanup after the new app works
+## 11. Cleanup after the new app works
 
-Only after you have verified the new app:
+Once you have verified the new app, reclaim the previous generation (path-scoped, conservative):
 
 ```bash
-rm -rf \
-  "release/0.1.0-alpha.1/build-cua-<old-label>" \
-  "release/0.1.0-alpha.1/validation-cua-<old-label>" \
-  "release/0.1.0-alpha.1/handoff-final-<old-label>"
+# 1. Rollbacks: keep exactly ONE — the most recent hidden backup — delete the rest.
+ls -dut /Applications/.AceVra.app.backup-* | tail -n +2 | xargs rm -rf
+
+# 2. Confirm no per-label or stale artifact directories remain under the release workspace.
+pnpm artifacts:report
 ```
 
-Never delete:
+`pnpm artifacts:report` warns if `build-*/`, `validation-*/`, `handoff-*/`, `candidate-*/` or
+timestamped equivalents still exist under `release/0.1.0-alpha.1/`; delete what it lists unless
+an active investigation needs the tree.
 
-```text
-/Applications/.AceVra.app.backup-*
-```
-
-until you are sure you will not need the old version.
+Never delete as part of artifact cleanup: source code, `.git`, `node_modules`, userData or
+conversation data, local profile data, signing certificates/keychains, TCC state, accepted test
+evidence or reports, `.spike/`, or tracked files under `release/0.1.0-alpha.1/` (release notes,
+reports, logs, checksums). If an item is not clearly a disposable artifact, leave it and ask.
 
 ## If something looks wrong
 
-Close AceVra and reinstall the backup using the same runner pattern:
+Close AceVra and restore the retained hidden backup (it contains the previous installed app):
 
 ```bash
-mise exec -- node scripts/mise-run.mjs pnpm release:accept:installed -- \
-  --handoff "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/handoff-final-<known-good-label>" \
-  --source-app "/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build-cua-<known-good-label>/mac-arm64/AceVra.app" \
-  --app "/Applications/AceVra.app"
+pgrep -fl 'AceVra Local Engineering Alpha|/Applications/AceVra.app/Contents/MacOS' || true
+rm -rf /Applications/AceVra.app
+mv /Applications/.AceVra.app.backup-<uuid-of-newest-backup> /Applications/AceVra.app
+open -a /Applications/AceVra.app
 ```
 
-If you do not have the known-good handoff anymore, stop and ask before deleting or replacing
-`/Applications/AceVra.app`; the hidden backup still contains the previous installed app.
+Only do this with the newest backup — older ones should already have been deleted in step 11.
+If you have no backup left, stop and ask before deleting or replacing `/Applications/AceVra.app`.
 
 ## Rules
 
 - Never install while AceVra is running.
 - Never install directly from an unvalidated raw build directory.
 - Never use `sudo xattr -rd com.apple.quarantine` as an install workflow.
-- Never delete backups automatically.
+- Keep at most one `/Applications/.AceVra.app.backup-*`; delete older ones after the new
+  candidate is verified.
 - Do not commit generated `.dmg`, `.zip`, app bundles, signing keys, keychains, or passwords.
 - Do not rename `com.acevra.desktop`, `dev.acevra.cua-helper`, or the stable `zcode` backend value.

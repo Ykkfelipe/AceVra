@@ -12,6 +12,17 @@ machine. Read this file first, then the specs it points at:
 **START HERE for the next task:** see "Immediate next steps" at the end of this file. The
 top item is UI, not plumbing: the user explicitly disliked the current Accounts placement.
 
+## Local build artifact policy (2026-09-30)
+
+Local alpha packaging uses ONE fixed workspace — `release/0.1.0-alpha.1/{build,validation,handoff}/`,
+reinitialized before every run. Do not create `build-<sha>/`, `validation-<sha>/`, `handoff-<sha>/`
+or timestamped equivalents; Git is the historical record. Keep at most `/Applications/AceVra.app`
+plus ONE `/Applications/.AceVra.app.backup-*` rollback (the immediately previous known-good).
+Authoritative rule: `AGENTS.md`（本地构建产物管理）. Operational steps incl. clean-before-build and
+rollback pruning: `release/0.1.0-alpha.1/HOW_TO_UPDATE.md`. Inventory before packaging:
+`pnpm artifacts:report` (read-only; never deletes; protected data such as `.spike/`, signing
+material, and accepted evidence is always out of scope).
+
 ## State
 
 | Phase | Commit               | Scope                                                                                          |

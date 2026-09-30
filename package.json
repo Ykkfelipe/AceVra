@@ -37,6 +37,7 @@
     "release:verify:candidate": "node scripts/release/verify-local-alpha-candidate.mjs",
     "release:assemble:candidate": "node scripts/release/assemble-local-alpha-handoff.mjs",
     "release:accept:installed": "node scripts/release/accept-local-alpha-installed.mjs",
+    "artifacts:report": "node scripts/release/artifact-report.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix --fix-suggestions",
     "bootstrap": "node scripts/bootstrap.mjs",
