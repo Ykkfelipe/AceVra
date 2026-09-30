@@ -209,6 +209,62 @@ test("observation frame read serves this session's latest recorded frame only", 
   }
 });
 
+// 修复回归：Helper 截图链路用 `UUID().uuidString`（NSUUID）生成 observationId，形如
+// F5FADF17-A793-4C78-BA2B-B0757DCB828E（大写十六进制），帧文件同样以大写命名；id 原样
+// 贯穿 runtime/activity/投影回传 UI。读取器必须接受大写 id，同时 basename 相等保持
+// 大小写精确，不得借机放宽其余校验。
+const UPPER_ID = "F5FADF17-A793-4C78-BA2B-B0757DCB828E";
+
+test("uppercase Helper UUID observation ids read their frame while basename case stays exact", async () => {
+  const root = mkFrameRoot();
+  try {
+    const observations = join(root, "computer-use", "observations");
+    const authority = sessionAuthority();
+    const framePath = join(observations, `${UPPER_ID}.png`);
+    writeFileSync(framePath, PNG);
+    authority.reportActivity({
+      session: "session-a",
+      task: "turn-1",
+      callId: "call-1",
+      phase: "completed",
+      method: "observe",
+      at: 20,
+      observation: { id: UPPER_ID, width: 4, height: 4, framePath },
+    });
+    const deps = { authority, env: frameEnv(root) };
+    const frame = await readComputerUseObservationFrame(deps, "session-a", UPPER_ID);
+    assert.equal(frame.status, "available");
+    assert.equal(frame.mimeType, "image/png");
+    assert.equal(frame.byteLength, PNG.byteLength);
+
+    // basename 相等保持大小写精确：同 id 的小写命名帧文件必须被拒。
+    const lowercaseAuthority = sessionAuthority();
+    const lowercasePath = join(observations, `${UPPER_ID.toLowerCase()}.png`);
+    writeFileSync(lowercasePath, PNG);
+    lowercaseAuthority.reportActivity({
+      session: "session-a",
+      task: "turn-1",
+      callId: "call-1",
+      phase: "completed",
+      method: "observe",
+      at: 20,
+      observation: { id: UPPER_ID, framePath: lowercasePath },
+    });
+    assert.equal(
+      (
+        await readComputerUseObservationFrame(
+          { authority: lowercaseAuthority, env: frameEnv(root) },
+          "session-a",
+          UPPER_ID,
+        )
+      ).code,
+      "forbidden",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("observation frame read rejects traversal, swapped names, and paths outside the roots", async () => {
   const root = mkFrameRoot();
   try {

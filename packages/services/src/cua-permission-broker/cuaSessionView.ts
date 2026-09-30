@@ -141,7 +141,12 @@ export interface CuaPauseResumeDeps {
 // ---------------------------------------------------------------------------
 
 const MAX_FRAME_BYTES = 8 * 1024 * 1024;
-const OBSERVATION_ID_PATTERN = /^[0-9a-f-]{36}$/u;
+// 修复依据：Helper 截图链路用 `UUID().uuidString`（NSUUID，大写十六进制）生成 observationId，
+// 并以 `<id>.png` 命名帧文件；id 原样贯穿 runtime/activity/投影回传 UI。此前校验只允许小写
+// 十六进制，导致首道门直接 `forbidden`，帧文件本身健康也永远读不到（CUA-4 预览不渲染）。
+// 改为大小写不敏感仅放宽字符集，basename 精确相等、会话归属、accepted-root、PNG 与大小
+// 校验全部保持不变。
+const OBSERVATION_ID_PATTERN = /^[0-9a-f-]{36}$/iu;
 const PNG_SIGNATURE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /**
