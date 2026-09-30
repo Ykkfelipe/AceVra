@@ -519,8 +519,10 @@ import {
   describeComputerUseSession,
   readComputerUseObservationFrame,
 } from "./cua-permission-broker/cuaSessionView.js";
-import { startLeaseAuthorityServer } from "./cua-permission-broker/lease-authority/server.js";
-import type { LeaseAuthority } from "./cua-permission-broker/lease-authority/contract.js";
+import {
+  startLeaseAuthorityServer,
+  type LeaseAuthorityServer,
+} from "./cua-permission-broker/lease-authority/server.js";
 import { WindowsCuaHelperHost } from "#src/cua-permission-broker/windowsCuaDevHelperHost.js";
 import { HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import {
@@ -546,6 +548,8 @@ import {
   isZCodeCuaMcpCommand,
   isZCodeCuaMcpPackageArg,
   ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY,
+  ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY,
+  ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY,
   type ZCodeAutomation,
   type ZCodeAutomationRun,
   getCapturedZCodeAgentTelemetryEnv,
@@ -684,10 +688,7 @@ interface ManagedCuaHelperHostDispose {
 // 已授权主体常驻、甚至在 services 重建时再起一个 → 多实例/孤儿/权限主体泄漏。用与 ServiceCollection 绑定
 // 的 WeakMap 侧表登记，dispose 时统一终止（best-effort，不阻断其它资源回收）。
 const managedCuaHelperHosts = new WeakMap<ServiceCollection, ManagedCuaHelperHostDispose>();
-const leaseAuthorityServers = new WeakMap<
-  ServiceCollection,
-  { authority: LeaseAuthority; close(): Promise<void> }
->();
+const leaseAuthorityServers = new WeakMap<ServiceCollection, LeaseAuthorityServer>();
 let e2eComputerControlState: "inactive" | "active" | "released" = "inactive";
 let e2eComputerControlInitialized = false;
 const providerRuntimes = new WeakMap<ServiceCollection, ProviderRuntime>();
@@ -1283,6 +1284,34 @@ function resolveCuaTransportSpawnEnv(
       [BROKER_SOCKET_ENV]: socketPath,
       [ZCODE_CUA_PLUGIN_AUTHORITY_ENV_KEY]: pluginAuthority,
     },
+  };
+}
+
+/**
+ * Lease-authority credentials for one Agent spawn.
+ *
+ * The desktop-local lease authority is the sideband the runtime reports Computer Use activity through
+ * (`reportActivity`), and the CUA-4 session UI is projected from those records. It used to publish its
+ * socket + token onto the host's own `process.env` and rely on inheritance — but an Agent child env is
+ * assembled as `{...sanitizeZCodeRuntimeEnv(process.env), ...spawnEnv}`, and the sanitizer removes
+ * every CUA credential by design, so that route can never deliver them. Broker credentials work only
+ * because they are composed explicitly into the spawn env; the lease pair needs the same treatment.
+ *
+ * The pair is atomic: it is read from one live authority handle and is emitted only when both parts
+ * are present. A half pair, a synthesized value, or a value from another server start must never
+ * reach an Agent — a runtime with a half pair would simply open an unauthenticated sideband.
+ *
+ * Exported so the composition is covered by a deterministic regression.
+ */
+export function buildLeaseAuthoritySpawnEnv(
+  server: { socketPath?: string; token?: string } | undefined,
+): Record<string, string> {
+  const socketPath = server?.socketPath?.trim();
+  const token = server?.token?.trim();
+  if (!socketPath || !token) return {};
+  return {
+    [ZCODE_CUA_LEASE_AUTHORITY_SOCKET_ENV_KEY]: socketPath,
+    [ZCODE_CUA_LEASE_AUTHORITY_TOKEN_ENV_KEY]: token,
   };
 }
 
@@ -2655,6 +2684,14 @@ export function createLocalServices(options: {
       } else if (cuaPluginEnabled && defaultCuaProductHelperLifecycle.disposed) {
         cuaProductHelperEnv = {
           [BROKER_UNAVAILABLE_ENV]: "broker_unavailable: helper lifecycle is disposed",
+        };
+      }
+      // CUA-4 sideband：与 broker tuple 同一处、同样显式地把 lease authority 凭据交给 runtime。
+      // 只在 CUA 启用时下发；`buildLeaseAuthoritySpawnEnv` 保证成对（缺一不下发）。
+      if (cuaPluginEnabled) {
+        cuaProductHelperEnv = {
+          ...cuaProductHelperEnv,
+          ...buildLeaseAuthoritySpawnEnv(leaseAuthorityServers.get(services)),
         };
       }
       const telemetryEnv = getCapturedZCodeAgentTelemetryEnv();
