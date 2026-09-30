@@ -412,8 +412,13 @@ export function verifyLocalAlphaCandidate(distDir) {
   };
 }
 
-export function writeCandidateProvenance(distDir, result) {
+/**
+ * 写候选报告。`archiveSourceDir` 指向归档（DMG/ZIP）所在目录：校验阶段只写报告，
+ * 归档留在 build/，因此校验和必须从那里读取（没有它时回退 distDir，兼容旧调用与测试）。
+ */
+export function writeCandidateProvenance(distDir, result, archiveSourceDir) {
   const dist = resolve(distDir);
+  const archiveSource = resolve(archiveSourceDir ?? distDir);
   const buildInfo = {
     product: "AceVra",
     version: rootVersion,
@@ -452,7 +457,7 @@ See build-info.json and SHA256SUMS.txt for non-secret provenance.
 
   const checksumLines = [];
   for (const archive of result.archives) {
-    const filePath = join(dist, archive);
+    const filePath = join(archiveSource, archive);
     checksumLines.push(`${sha256(filePath)}  ${archive}`);
   }
   writeFileSync(join(dist, "SHA256SUMS.txt"), `${checksumLines.join("\n")}\n`, "utf8");
@@ -474,9 +479,9 @@ if (isEntrypoint) {
       throw new Error(`validation directory already exists: ${validationDir}`);
     mkdirSync(validationDir);
     // 同代际不复制 .app/DMG/ZIP：全部校验都原地读取 build 产物（归档在自清理临时目录里
-    // 解包/挂载）。validation/ 只保存报告、清单与校验和；handoff 是最终分发包的唯一持久
-    // 所有者（策略见 AGENTS.md「本地构建产物管理」）。provenance 的 appPath 保持真实 build 路径。
-    writeCandidateProvenance(validationDir, result);
+    // 解包/挂载）。validation/ 只保存报告、清单与校验和（校验和仍取自 build 归档）；handoff
+    // 是最终分发包的唯一持久所有者（策略见 AGENTS.md「本地构建产物管理」）。
+    writeCandidateProvenance(validationDir, result, buildDir);
   } else if (result.ok) {
     writeCandidateProvenance(buildDir, result);
   }

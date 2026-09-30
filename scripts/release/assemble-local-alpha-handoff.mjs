@@ -37,8 +37,12 @@ const validation = resolve(
 const handoff = resolve(arg("--handoff-dir", join(root, "release", "0.1.0-alpha.1", "handoff")));
 if (!existsSync(build) || !existsSync(validation) || existsSync(handoff))
   throw new Error("build/validation directory missing or handoff already exists");
-if (!existsSync(join(validation, "build-info.json")))
-  throw new Error("validation report is missing build-info.json");
+// fail-closed：只有成功的 candidate 校验才会写全这三份报告；缺一份即拒绝组装，
+// 绝不把失败/不完整的校验结果变成 canonical handoff。
+for (const sidecar of sidecars) {
+  if (!existsSync(join(validation, sidecar)))
+    throw new Error(`validation report is incomplete (missing ${sidecar})`);
+}
 const staging = `${handoff}.staging-${process.pid}`;
 mkdirSync(staging);
 for (const name of required) {
