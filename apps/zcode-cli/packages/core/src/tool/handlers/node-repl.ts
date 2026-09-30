@@ -9,6 +9,15 @@ import type { SessionId } from "@zcode/contracts";
 import { isAbsolute, resolve } from "node:path";
 import { NodeReplSession } from "../../repl/node-repl-session.js";
 import { setupBrowserRuntime } from "../../browser-client/index.js";
+import {
+  createComputerUseBridgeGlobals,
+  prepareComputerUseRuntimeGlobals,
+  type NodeReplCuaBroker,
+} from "@zcode/zcode-cua/node-repl-cua-bridge";
+import {
+  coreNodeReplCuaDocumentationRoot,
+  createCoreNodeReplCuaBroker,
+} from "./node-repl-cua.js";
 import type { ToolEntry, ToolExecutionContext, ToolHandler } from "../types.js";
 import { formatJsModelContent } from "./node-repl-model-content.js";
 
@@ -23,6 +32,48 @@ const sessions = new Map<SessionId, NodeReplSession>();
 const activeToolContexts = new Map<SessionId, ToolExecutionContext>();
 const browserRuntimeGenerations = new Map<SessionId, number>();
 let browserRuntimeGenerationSequence = 0;
+/** 每个 session 一个本地代理 broker（持有本进程已获授权的 ComputerUseRuntime）。 */
+const cuaBrokers = new Map<SessionId, NodeReplCuaBroker>();
+
+/**
+ * 测试专用工厂缝（与 resetCapturedZCodeCuaBrokerCredentialsForTest 同类约定）：单测用它注入
+ * 持有 fake runtime 的本地代理 broker，从而不接触真实 hardened 传输与 Helper。
+ */
+let coreCuaBrokerFactory: () => NodeReplCuaBroker | undefined = createCoreNodeReplCuaBroker;
+
+export function setCoreCuaBrokerFactoryForTest(
+  factory?: () => NodeReplCuaBroker | undefined,
+): void {
+  coreCuaBrokerFactory = factory ?? createCoreNodeReplCuaBroker;
+}
+
+/** 测试专用：拿到 core handler 的持久 NodeReplSession，验证 cell 侧 globals 契约。 */
+export function getNodeReplSessionForTest(context: ToolExecutionContext): NodeReplSession {
+  return getSession(context);
+}
+
+/**
+ * core handler 的 CUA 请求元数据：与 node-repl-host 的 requestContext 同字段，
+ * broker 侧据此做会话/工作区隔离（workspaceKey 必填）。
+ */
+function buildCuaRequestMeta(context: ToolExecutionContext): Record<string, unknown> {
+  const workspaceIdentity = context.workspaceIdentity?.trim();
+  const workspacePath = context.workingDirectory?.trim();
+  return {
+    runtime_scope: context.runtimeScope === "subagent" ? "subagent" : "main",
+    session_id: context.sessionId,
+    ...(workspacePath ? { workspace_path: workspacePath } : {}),
+    ...(workspaceIdentity ? { workspace_identity: workspaceIdentity } : {}),
+    workspace_key: workspaceIdentity || workspacePath || "",
+    ...(context.remoteSessionId ? { remote_session_id: context.remoteSessionId } : {}),
+    ...(context.turnId ? { turn_id: context.turnId } : {}),
+    ...(context.clientMode ? { client_mode: context.clientMode } : {}),
+    ...(context.deliveryKind ? { delivery_kind: context.deliveryKind } : {}),
+    ...(context.traceId ? { trace_id: context.traceId } : {}),
+    ...(context.spanId ? { span_id: context.spanId } : {}),
+    ...(context.parentSpanId ? { parent_span_id: context.parentSpanId } : {}),
+  };
+}
 
 function isBrowserSurfaceSideEffect(command: import("@zcode/contracts").BrowserCommand): boolean {
   if (command.method === "playwright" && command.action.name === "locator") {
@@ -161,17 +212,43 @@ function getSession(context: ToolExecutionContext): NodeReplSession {
   let session = sessions.get(context.sessionId);
   if (!session) {
     let created: NodeReplSession;
+    // 能力在 session 建立时获取一次；缺凭据时返回 undefined，bridge 仍按既有 fail-closed 语义安装。
+    const cuaBroker = cuaBrokers.get(context.sessionId) ?? coreCuaBrokerFactory();
+    if (cuaBroker) cuaBrokers.set(context.sessionId, cuaBroker);
     created = new NodeReplSession({
       injectedGlobals: () => {
         // session 释放后可能用同一个 id 重建，generation 必须进程内单调递增，避免旧异步任务发生 ABA 串线。
         const runtimeGeneration = ++browserRuntimeGenerationSequence;
         browserRuntimeGenerations.set(context.sessionId, runtimeGeneration);
-        return buildInjectedGlobals(
+        const globals = buildInjectedGlobals(
           context,
           (meta) => created.mergeResponseMeta(meta),
           (image) => created.recordBrowserScreenshot(image),
           runtimeGeneration,
         );
+        // Computer Use：与 MCP 宿主同一份共享 bridge；缺凭据时 bridge 仍在、调用如实报 unavailable。
+        Object.assign(
+          globals as Record<PropertyKey, unknown>,
+          createComputerUseBridgeGlobals({
+            broker: cuaBroker?.connection,
+            generation: runtimeGeneration,
+            getActiveCall: () => {
+              const active = activeToolContexts.get(context.sessionId) ?? context;
+              return {
+                generation: runtimeGeneration,
+                requestMeta: buildCuaRequestMeta(active),
+                signal: active.abortSignal,
+              };
+            },
+            session: () => created,
+            documentationRoot: coreNodeReplCuaDocumentationRoot(),
+          }),
+        );
+        // 与 MCP 宿主同一门控：main scope 安装 agent.computerUse；subagent 保持不安装。
+        if (context.runtimeScope !== "subagent") {
+          prepareComputerUseRuntimeGlobals(globals as Record<PropertyKey, unknown>);
+        }
+        return globals;
       },
     });
     session = created;
@@ -184,6 +261,11 @@ function getSession(context: ToolExecutionContext): NodeReplSession {
 export function disposeNodeReplSession(sessionId: SessionId): void {
   activeToolContexts.delete(sessionId);
   browserRuntimeGenerations.delete(sessionId);
+  const broker = cuaBrokers.get(sessionId);
+  if (broker) {
+    cuaBrokers.delete(sessionId);
+    void broker.close().catch(() => undefined);
+  }
   const session = sessions.get(sessionId);
   if (session) {
     session.dispose();

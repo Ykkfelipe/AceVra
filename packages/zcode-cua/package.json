@@ -65,6 +65,10 @@
     "./broker/helperHealth": {
       "types": "./broker-helper-health.d.ts",
       "import": "./broker-helper-health.js"
+    },
+    "./node-repl-cua-bridge": {
+      "types": "./node-repl-cua-bridge.d.ts",
+      "import": "./node-repl-cua-bridge.js"
     }
   }
 }
