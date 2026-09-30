@@ -315,6 +315,7 @@ import {
   type CuaOperationStateReporter,
 } from "./cuaOperationTurnTracker.js";
 import type { PipSessionEvent } from "@zcode/zcode-cua/pip-session";
+import { BROKER_SOCKET_ENV } from "@zcode/zcode-cua/broker";
 import { registerMemoryDiagnosticsProvider } from "#src/memoryDiagnostics.js";
 
 const logger = createServiceLogger("zcode-agent-service");
@@ -1207,6 +1208,16 @@ export function createZCodeAgentService(
   const waitingWorkspaceStartups = new Map<string, WaitingWorkspaceStartup>();
   /** 需求边界 stale runtime 回收的在飞标记（按 workspaceKey），防并发重复回收。 */
   const recyclingStaleRuntimeByWorkspaceKey = new Set<string>();
+  /**
+   * spawn 结算触发的收敛扫描状态（与 Helper readiness 边界互补，共用同一套安全门）。
+   *
+   * packaged 冷启动实测：readiness 转换发生在预 spawn 的 resolveSpawnEnv 内部，此时
+   * activeClientsByWorkspaceKey 里还没有任何 client 可扫描，扫描空转且之后不再被触发，
+   * 缺凭据的代际（node_repl 永远没有 ComputerUseRuntime）就长期存活。注册结算与
+   * readiness 是先后不定的两个事件：缺 broker 键的代际在注册结算时补跑同一次扫描。
+   * 串行化（promise 链）避免并发 spawn 结算重叠扫描；不引入定时器或轮询。
+   */
+  let staleRecoverySweepScheduled = false;
   function cancelWaitingWorkspaceStartup(workspaceKey: string): void {
     const waiting = waitingWorkspaceStartups.get(workspaceKey);
     if (waiting) {
@@ -2905,6 +2916,8 @@ export function createZCodeAgentService(
       workspace: params,
     };
     activeClientsByWorkspaceKey.set(workspaceKey, entry);
+    // spawn 结算即注册：缺 broker 键的代际在此补跑恢复扫描（见 scheduler 注释）。
+    scheduleStaleRecoverySweepAfterSpawnSettle(params, client);
     const interactionPreferencesReady = (async () => {
       let appliedSnapshot: ZCodeAgentAppRuntimePreferences | undefined;
       while (latestAppRuntimePreferences && latestAppRuntimePreferences !== appliedSnapshot) {
@@ -3109,6 +3122,78 @@ export function createZCodeAgentService(
     return true;
   }
 
+  /** 现有扫描本体；`recycleStaleProvisionedRuntimes` 与 spawn 结算触发共用同一次实现。 */
+  async function sweepStaleProvisionedRuntimes(): Promise<number> {
+    let recycled = 0;
+    for (const [workspaceKey, active] of [...activeClientsByWorkspaceKey]) {
+      if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, active.workspace, active)) {
+        recycled += 1;
+      }
+    }
+    return recycled;
+  }
+
+  /**
+   * spawn 结算收敛触发：只服务于 fail-closed 的代际（spawn env 缺 broker socket 键）。
+   *
+   * 已持凭据键的健康代际不调度——正常 idle / 重连语义仍完全由既有 Helper 恢复边界决定，
+   * 不新增回收类别。readiness 已就绪时这里立即收敛；readiness 尚未就绪时裁决为 false，
+   * 随后由 readiness 边界的同一次扫描收敛（两个到达顺序都有触发，判定只读 live 事实）。
+   */
+  function scheduleStaleRecoverySweepAfterSpawnSettle(
+    params: ZCodeAgentWorkspaceTarget,
+    client: ZCodeProtocolClient,
+  ): void {
+    if (!options?.shouldRecycleStaleProvisionedRuntime) return;
+    const spawnEnvKeys = processManager.getResolvedSpawnEnvKeys(params);
+    if (!spawnEnvKeys || spawnEnvKeys.has(BROKER_SOCKET_ENV)) return;
+    if (staleRecoverySweepScheduled) return;
+    staleRecoverySweepScheduled = true;
+    void (async () => {
+      try {
+        // 启动结算：注册发生在触发 spawn 的调用内部，而该调用随后才对这个 client 发出
+        // 首个请求（listSessions 先取 client 再 request）。回收必须从请求周期已结束的
+        // runtime 出发，否则 dispose 会拒绝仍在途/刚发出的请求。事件驱动，无定时器。
+        await waitForClientRequestSettled(client);
+        staleRecoverySweepScheduled = false;
+        await sweepStaleProvisionedRuntimes();
+      } catch (error) {
+        staleRecoverySweepScheduled = false;
+        // 单次扫描失败不得影响后续边界；下一个边界会重新评估。
+        logger.warn(undefined, "spawn 结算后的 CUA stale runtime 扫描失败", {
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+  }
+
+  /**
+   * 等一个“请求周期”结束：要么触发 spawn 的请求出现并排空（drained 事件只覆盖业务
+   * 请求），要么一个宏任务边界内没有新请求出现（例如 existing-only 提升路径不再发请求）。
+   * 两种都结算；client 在等待期间被回收也算结算。
+   */
+  async function waitForClientRequestSettled(client: ZCodeProtocolClient): Promise<void> {
+    if (client.isDisposed) return;
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      let subscription: IDisposable | undefined;
+      let closeSubscription: IDisposable | undefined;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        subscription?.dispose();
+        closeSubscription?.dispose();
+        resolve();
+      };
+      subscription = client.onPendingRequestsDrained(finish);
+      closeSubscription = client.onClose(finish);
+      setImmediate(() => {
+        if (client.isDisposed || client.pendingRequestCount === 0) finish();
+      });
+      if (client.isDisposed) finish();
+    });
+  }
+
   async function getClient(params: ZCodeAgentWorkspaceTarget) {
     const workspaceKey = resolveWorkspaceKey(params);
     // 有意不在 send/getClient 路径上回收：packaged 实测（f080495 acceptance）在发送
@@ -3199,6 +3284,8 @@ export function createZCodeAgentService(
         modelExecutionEnabled: false,
         workspace: params,
       });
+      // 与主动注册路径同一收敛触发：提升的 client 同样可能是 fail-closed 代际。
+      scheduleStaleRecoverySweepAfterSpawnSettle(params, existingClient);
       return existingClient;
     }
     return (await getOrStartReadOnlyClient(params)).client;
@@ -5753,13 +5840,7 @@ export function createZCodeAgentService(
      * 在重建窗口内禁止发送），因此不在 send 路径上回收。
      */
     async recycleStaleProvisionedRuntimes(): Promise<number> {
-      let recycled = 0;
-      for (const [workspaceKey, active] of [...activeClientsByWorkspaceKey]) {
-        if (await maybeRecycleStaleRuntimeForDemand(workspaceKey, active.workspace, active)) {
-          recycled += 1;
-        }
-      }
-      return recycled;
+      return await sweepStaleProvisionedRuntimes();
     },
 
     disposeAll(): void {

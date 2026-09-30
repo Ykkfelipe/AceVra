@@ -627,6 +627,19 @@ const cuaProductHelperReservedSpawns = new WeakSet<Pick<CuaHelperHost, "start">>
 /** Agent 已消费 Windows transport_ready tuple；full startup 后续失败时仍保留既有 Agent。 */
 const cuaProductHelperTransportSpawns = new WeakSet<Pick<CuaHelperHost, "start">>();
 
+/**
+ * 托管 Helper 冷启动在后台 true-ready 时的就绪回调（模块级：trackCuaProductHelperStartup
+ * 在服务装配闭包之外）。装配层把它接到既有的 stale runtime 恢复扫描上：这就是
+ * “session establishment 转入健康传输”的边界——此前只有 spawn 时刻的 1s checkHealth
+ * 输家（fail-closed 代际），而后台 startup 真正成功时没有任何恢复扫描触发
+ * （packaged 63836/63852：无凭据代际在 Helper 就绪后长期存活）。
+ */
+let cuaProductHelperReadyListener: (() => void) | undefined;
+
+export function setCuaProductHelperReadyListener(listener: (() => void) | undefined): void {
+  cuaProductHelperReadyListener = listener;
+}
+
 function trackCuaProductHelperStartup(
   host: Pick<CuaHelperHost, "start">,
   startup: Promise<unknown>,
@@ -641,6 +654,8 @@ function trackCuaProductHelperStartup(
       if (cuaProductHelperTrackedStart.get(host) === startup) {
         cuaProductHelperTrackedStart.delete(host);
       }
+      // 传输就绪边界：通知装配层补跑 stale runtime 恢复扫描（幂等；裁决只见 live 事实）。
+      cuaProductHelperReadyListener?.();
     },
     () => {
       // The caller may already have timed out while the shared 30s startup continued. Its eventual
@@ -1949,6 +1964,10 @@ export function createLocalServices(options: {
       );
     });
   };
+  // 托管 Helper 后台 startup 真正就绪 = 传输就绪边界：补跑同一次恢复扫描，让预 spawn
+  // 窗口里 fail-closed 的代际在 Helper ready 后自动收敛（另一个到达顺序由 spawn 结算
+  // 触发覆盖；两处都只调度既有的 recycleStaleProvisionedRuntimes 扫描）。
+  setCuaProductHelperReadyListener(() => scheduleCuaStaleRuntimeRecoverySweep());
   const isCuaEnabledForContext = (context?: CuaProductMcpServerResolverContext): boolean =>
     isOfficialCuaPluginEnabledForWorkspace({
       env: process.env,
