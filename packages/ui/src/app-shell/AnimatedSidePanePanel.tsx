@@ -1,6 +1,14 @@
 /* eslint-disable max-lines -- Side pane 当前集中承载 tabs、browser/git/code-viewer 内容；完整拆分需按 pane 功能边界继续推进。 */
 import { ServiceProvider } from "@/hooks/useServices.js";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { IServiceAccessor } from "@zcode/services";
 import {
@@ -29,6 +37,7 @@ import { TreemappingPane } from "@/TreemappingPane.js";
 import { WhiteboardPane } from "@/WhiteboardPane.js";
 import { ModelTrajectoryPane } from "@/ModelTrajectoryPane.js";
 import { DeveloperToolsPane } from "@/DeveloperToolsPane.js";
+import { ComputerPane } from "@/computers/ComputerPane.js";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import {
@@ -94,6 +103,7 @@ import {
   FileDiffIcon,
   GlobeIcon,
   MessageSquareTextIcon,
+  MonitorIcon,
   PlusIcon,
   SquareTerminalIcon,
   type LucideIcon,
@@ -285,6 +295,7 @@ export function AnimatedSidePanePanel({
   recentClosedSidePaneTabs,
   isBrowserOpen,
   supportsEmbeddedBrowser = true,
+  supportsComputers = false,
   workspaceAbsPath,
   workspaceIdentity,
   workspaceRemoteSessionId,
@@ -313,6 +324,7 @@ export function AnimatedSidePanePanel({
   onOpenBrowserTab,
   onOpenWhiteboard: _onOpenWhiteboard,
   onOpenDeveloperTools,
+  onOpenComputer,
   onOpenTerminalTab,
   onOpenReviewTab,
   onOpenSelectionSideConversation,
@@ -350,6 +362,7 @@ export function AnimatedSidePanePanel({
   recentClosedSidePaneTabs: RecentClosedSidePaneTab[];
   isBrowserOpen: boolean;
   supportsEmbeddedBrowser?: boolean;
+  supportsComputers?: boolean;
   workspaceAbsPath: string;
   workspaceIdentity?: string;
   workspaceRemoteSessionId?: string;
@@ -378,6 +391,8 @@ export function AnimatedSidePanePanel({
   onOpenBrowserTab: () => void;
   onOpenWhiteboard: () => void;
   onOpenDeveloperTools: () => void;
+  /** Opens (or retargets) the single Computer tab; null keeps the current computer / shows the picker. */
+  onOpenComputer: (computerId: string | null) => void;
   onOpenTerminalTab: () => void;
   onOpenReviewTab: () => void;
   onOpenSelectionSideConversation: () => void;
@@ -447,6 +462,20 @@ export function AnimatedSidePanePanel({
   const widthUnlockTimerRef = useRef<number | null>(null);
   const previousIsVisibleRef = useRef(isVisible);
   const panelLayout = resolveAnimatedSidePanePanelLayout();
+  // Computer tab 的「展开」只复用现有面板尺寸：放大到 maxSize，再点恢复到展开前的宽度。
+  const [computerExpandRestoreSize, setComputerExpandRestoreSize] = useState<string | null>(null);
+  const toggleComputerExpand = useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    if (computerExpandRestoreSize) {
+      panel.resize(computerExpandRestoreSize);
+      setComputerExpandRestoreSize(null);
+      return;
+    }
+    const current = panel.getSize().asPercentage;
+    setComputerExpandRestoreSize(Number.isFinite(current) && current > 0 ? `${current}%` : null);
+    panel.resize(panelLayout.maxSize);
+  }, [computerExpandRestoreSize, panelLayout.maxSize, panelRef]);
   const hasReviewTab = visibleTabs.some((tab) => tab.type === "git");
   const canOpenSelectionSideConversation = shouldOfferSelectionSideConversation({
     activeTaskId,
@@ -746,6 +775,17 @@ export function AnimatedSidePanePanel({
             <span>{intl.formatMessage({ id: "browser.title" })}</span>
           </DropdownMenuItem>
         ) : null}
+        {supportsComputers ? (
+          <DropdownMenuItem
+            data-side-pane-add-item="computer"
+            onSelect={() => {
+              onOpenComputer(null);
+            }}
+          >
+            <MonitorIcon className="size-4" />
+            <span>{intl.formatMessage({ id: "computers.panel.tabTitle" })}</span>
+          </DropdownMenuItem>
+        ) : null}
         {developerToolsEnabled ? (
           <DropdownMenuItem
             data-side-pane-add-item="developer-tools"
@@ -785,6 +825,12 @@ export function AnimatedSidePanePanel({
       icon: GlobeIcon,
       onOpen: onOpenBrowserTab,
     },
+    computer: {
+      id: "computer",
+      label: intl.formatMessage({ id: "computers.panel.tabTitle" }),
+      icon: MonitorIcon,
+      onOpen: () => onOpenComputer(null),
+    },
     "developer-tools": {
       id: "developer-tools",
       label: intl.formatMessage({ id: "developerTools.title" }),
@@ -797,6 +843,7 @@ export function AnimatedSidePanePanel({
     developerToolsEnabled,
     hasReviewTab,
     supportsEmbeddedBrowser,
+    supportsComputers,
   })
     .filter((itemId) => !isOfficeMode || (itemId !== "terminal" && itemId !== "review"))
     .map((itemId) => openTabLauncherItemById[itemId]);
@@ -885,6 +932,7 @@ export function AnimatedSidePanePanel({
         developerToolsTitle: intl.formatMessage({
           id: "developerTools.title",
         }),
+        computerTitle: intl.formatMessage({ id: "computers.panel.tabTitle" }),
         terminalTitle: intl.formatMessage({ id: "terminal.title" }),
         subagentTypeLabel: intl.formatMessage({ id: "sidePane.subagent" }),
         subagentDirectoryTitle: intl.formatMessage({
@@ -1253,6 +1301,14 @@ export function AnimatedSidePanePanel({
                               enabled={isVisible && tab.id === visibleActiveTabId}
                             />
                           </ServiceProvider>
+                        ) : tab.type === "computer" ? (
+                          <ComputerPane
+                            computerId={tab.computerId}
+                            visible={isVisible && tab.id === visibleActiveTabId}
+                            expanded={computerExpandRestoreSize !== null}
+                            onToggleExpand={toggleComputerExpand}
+                            onSelectComputer={onOpenComputer}
+                          />
                         ) : tab.type === "terminal" ? (
                           <SidePaneTerminalPane
                             services={services}

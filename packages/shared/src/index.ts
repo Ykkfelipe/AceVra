@@ -125,6 +125,7 @@ export * from "./storage.js";
 export * from "./oauth.js";
 export * from "./account.js";
 export * from "./execution-target-protocol.js";
+export * from "./agent-computer.js";
 export * from "./desktopMenu.js";
 export * from "./feedback.js";
 export * from "./e2e-test-bridge.js";

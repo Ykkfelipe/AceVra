@@ -170,3 +170,84 @@ test("cancel forwards to the existing cancel path", async () => {
   assert.equal(result.task.state, "cancelling");
   assert.deepEqual(calls, ["cancel:task-1:false"]);
 });
+
+test("computer actions go to the SSH computer and announce the session once", async () => {
+  const tasks = {} as AccountTasksApi;
+  const seen: Array<{ sessionId: string; targetId: string; kind: string }> = [];
+  const handle = createAgentExecutionHandler({
+    tasks,
+    computers: {
+      computerAction: async (input) => (
+        seen.push({
+          sessionId: input.sessionId,
+          targetId: input.targetId,
+          kind: input.action.kind,
+        }),
+        { ok: true, screen: { width: 1366, height: 768 }, sessionStarted: seen.length === 1 }
+      ),
+    },
+  });
+  const sessions: Array<{ sessionId: string; computerId: string }> = [];
+  const request = {
+    ...BASE,
+    op: "computer" as const,
+    targetId: "ssh:dell",
+    action: { kind: "click" as const, x: 10, y: 20 },
+  };
+  const first = await handle(
+    request,
+    () => undefined,
+    (notice) => sessions.push(notice),
+  );
+  assert.deepEqual(first, { op: "computer", ok: true, screen: { width: 1366, height: 768 } });
+  await handle(
+    request,
+    () => undefined,
+    (notice) => sessions.push(notice),
+  );
+  assert.deepEqual(sessions, [{ sessionId: "sess-A", computerId: "dell" }]);
+  assert.equal(seen.length, 2);
+});
+
+test("computer actions never run locally and fail truthfully when offline or paused", async () => {
+  const local = createAgentExecutionHandler({ tasks: {} as AccountTasksApi });
+  assert.deepEqual(
+    await local(
+      { ...BASE, op: "computer", targetId: LOCAL_TARGET_ID, action: { kind: "screenshot" } },
+      () => undefined,
+    ),
+    { op: "computer", ok: false, reason: "target_is_local" },
+  );
+  const offline = createAgentExecutionHandler({
+    tasks: {} as AccountTasksApi,
+    computers: {
+      computerAction: async () => ({
+        ok: false,
+        reason: "computer_offline",
+        detail: "unreachable",
+      }),
+    },
+  });
+  assert.deepEqual(
+    await offline(
+      { ...BASE, op: "computer", targetId: "ssh:dell", action: { kind: "screenshot" } },
+      () => undefined,
+    ),
+    { op: "computer", ok: false, reason: "computer_offline", detail: "unreachable" },
+  );
+  const paused = createAgentExecutionHandler({
+    tasks: {} as AccountTasksApi,
+    computers: {
+      computerAction: async () => ({
+        ok: false,
+        reason: "computer_paused",
+        detail: "physical_input",
+      }),
+    },
+  });
+  const result = await paused(
+    { ...BASE, op: "computer", targetId: "ssh:dell", action: { kind: "type", text: "x" } },
+    () => undefined,
+  );
+  assert.equal(result.ok === false && result.reason, "computer_paused");
+});

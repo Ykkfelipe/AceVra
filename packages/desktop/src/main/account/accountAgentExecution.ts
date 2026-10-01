@@ -2,6 +2,7 @@ import {
   executionTargetCapabilitySchema,
   zcodeExecutionTargetResultSchema,
   type AgentTaskStartedNotice,
+  type ComputerSessionStartedNotice,
   type ExecutionTarget,
   type ExecutionTaskWire,
   type ExecutionTargetWire,
@@ -10,6 +11,8 @@ import {
   type ZCodeExecutionTargetResult,
 } from "@zcode/shared";
 import type { AccountTasksApi } from "./accountTasks.js";
+import { computerIdOf } from "../computers/computerJob.js";
+import type { ComputersService } from "../computers/computersService.js";
 import { LOCAL_TARGET_ID } from "./localProcessRunner.js";
 
 const KNOWN_CAPABILITIES = new Set<string>(executionTargetCapabilitySchema.options);
@@ -47,10 +50,14 @@ const isLocalTarget = (targetId: string) =>
  * Pure forwarding over the existing account tasks API: Main keeps no task/session state. The only
  * side effect besides the API call is the one-shot attach notice for the conversation card.
  */
-export function createAgentExecutionHandler(deps: { tasks: AccountTasksApi }) {
+export function createAgentExecutionHandler(deps: {
+  tasks: AccountTasksApi;
+  computers?: Pick<ComputersService, "computerAction">;
+}) {
   return async function handleAgentExecution(
     request: ZCodeExecutionTargetParams,
     notifyStarted: (notice: AgentTaskStartedNotice) => void,
+    notifyComputerSession?: (notice: ComputerSessionStartedNotice) => void,
   ): Promise<ZCodeExecutionTargetResult> {
     const fail = (
       reason: Extract<ZCodeExecutionTargetResult, { ok: false }>["reason"],
@@ -111,6 +118,28 @@ export function createAgentExecutionHandler(deps: { tasks: AccountTasksApi }) {
           const task = await deps.tasks.cancelTask(request.taskId, request.force === true);
           if (!task) return fail("task_not_found");
           result = { op: "cancel", ok: true, task: toWireTask(task) };
+          break;
+        }
+        case "computer": {
+          // SSH 电脑的 GUI 动作；本机目标不走这里（本机 Computer Use 不变），离线如实失败不回落本机。
+          if (isLocalTarget(request.targetId)) return fail("target_is_local");
+          if (!deps.computers) return fail("unavailable");
+          const outcome = await deps.computers.computerAction({
+            sessionId: request.sessionId,
+            targetId: request.targetId,
+            action: request.action,
+          });
+          if (!outcome.ok) return fail(outcome.reason, outcome.detail);
+          const computerId = computerIdOf(request.targetId);
+          if (outcome.sessionStarted && computerId) {
+            notifyComputerSession?.({ sessionId: request.sessionId, computerId });
+          }
+          result = {
+            op: "computer",
+            ok: true,
+            screen: outcome.screen,
+            ...(outcome.image ? { image: outcome.image } : {}),
+          };
           break;
         }
       }

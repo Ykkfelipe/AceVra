@@ -118,3 +118,55 @@ export const ExecutionTargetsOutputSchema = z
   })
   .strict();
 export const ExecutionTargetsOutputJsonSchema = toToolJsonSchema(ExecutionTargetsOutputSchema);
+
+export const REMOTE_COMPUTER_TOOL_NAME = "RemoteComputer";
+
+export const RemoteComputerInputSchema = z
+  .object({
+    targetId: z
+      .string()
+      .trim()
+      .min(1)
+      .max(128)
+      .describe("Id of an SSH computer from ExecutionTargets (kind 'ssh', capability computerUse)."),
+    action: z
+      .enum(["screenshot", "click", "double_click", "right_click", "move", "drag", "scroll", "type", "key"])
+      .describe(
+        "screenshot: see the screen (do this first and after actions). click/double_click/right_click/move need x,y. drag needs x,y (from) and toX,toY. scroll needs dy (positive = down) and optional x,y. type needs text. key needs keys, e.g. ['enter'] or ['ctrl','s'].",
+      ),
+    x: z.number().int().min(0).max(16_384).optional().describe("Screen x in the screenshot's pixels."),
+    y: z.number().int().min(0).max(16_384).optional().describe("Screen y in the screenshot's pixels."),
+    toX: z.number().int().min(0).max(16_384).optional(),
+    toY: z.number().int().min(0).max(16_384).optional(),
+    dy: z.number().int().min(-50).max(50).optional().describe("Wheel clicks; positive scrolls down."),
+    text: z.string().min(1).max(2000).optional(),
+    keys: z
+      .array(z.string().min(1).max(24))
+      .min(1)
+      .max(4)
+      .optional()
+      .describe("Windows key names (pyautogui): enter, tab, esc, backspace, delete, up, down, left, right, home, end, pageup, pagedown, f1-f12, ctrl, alt, shift, win, or a single letter/digit."),
+  })
+  .strict();
+export type RemoteComputerInput = z.infer<typeof RemoteComputerInputSchema>;
+export const RemoteComputerInputJsonSchema = toToolJsonSchema(RemoteComputerInputSchema);
+
+export const RemoteComputerOutputSchema = z
+  .object({
+    targetId: z.string(),
+    action: z.string(),
+    screen: z.object({ width: z.number(), height: z.number() }).strict(),
+    message: z.string(),
+    image: z
+      .object({
+        mimeType: z.string(),
+        base64: z.string(),
+        width: z.number(),
+        height: z.number(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type RemoteComputerOutput = z.infer<typeof RemoteComputerOutputSchema>;
+export const RemoteComputerOutputJsonSchema = toToolJsonSchema(RemoteComputerOutputSchema);

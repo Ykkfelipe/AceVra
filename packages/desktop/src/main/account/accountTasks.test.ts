@@ -259,3 +259,72 @@ test("getTask reads one remote task by id, local tasks locally, and nothing when
   assert.equal(await signedOut.api.getTask("task-remote-1"), null);
   assert.equal(signedOut.calls.length, 0);
 });
+
+test("ssh computers are listed even signed out and run through the ssh runner, never locally", async () => {
+  const sshCalls: string[] = [];
+  const local = {
+    start: () => (sshCalls.push("local-start"), { ok: true as const, taskId: "local-1" }),
+    list: () => [],
+    events: () => [],
+    cancel: () => null,
+    shutdown() {},
+  } as unknown as LocalProcessRunner;
+  const sshTask = {
+    id: "ssh-1",
+    targetId: "ssh:dell",
+    state: "running" as const,
+    process: { executable: "whoami", args: [], cwd: "C:\\", timeoutMs: 1 },
+    createdAt: "2026-01-01T00:00:00Z",
+    startedAt: null,
+    finishedAt: null,
+    result: null,
+    lastSequence: 0,
+  };
+  const api = createAccountTasks({
+    local,
+    accountReady: () => false,
+    thisDevice: () => ({ id: "dev_mac", displayName: "Mac", capabilities: ["shell"] }),
+    call: async () => null,
+    ssh: {
+      listTargets: async () => [
+        {
+          id: "ssh:dell",
+          type: "ssh",
+          displayName: "Dell",
+          online: true,
+          capabilities: ["computerUse", "shell"],
+          isThisDevice: false,
+          available: true,
+        },
+      ],
+      hostAliasFor: async (id) => (id === "ssh:dell" ? "dell" : null),
+      runner: {
+        start: (input: { hostAlias: string }) => (
+          sshCalls.push(`ssh-start:${input.hostAlias}`), { ok: true, taskId: "ssh-1" }
+        ),
+        get: (id: string) => (id === "ssh-1" ? sshTask : null),
+        list: () => [sshTask],
+        events: () => [],
+        cancel: (id: string) => (sshCalls.push(`ssh-cancel:${id}`), sshTask),
+      } as never,
+    },
+  });
+  const targets = await api.listTargets();
+  assert.deepEqual(
+    targets.map((t) => t.id),
+    [LOCAL_TARGET_ID, "ssh:dell"],
+  );
+  const started = await api.startRemoteProcess({
+    targetId: "ssh:dell",
+    process: { executable: "whoami", cwd: "C:\\" },
+  });
+  assert.deepEqual(started, { ok: true, taskId: "ssh-1", targetId: "ssh:dell" });
+  assert.equal((await api.getTask("ssh-1"))?.targetId, "ssh:dell");
+  await api.cancelTask("ssh-1", false);
+  assert.deepEqual(sshCalls, ["ssh-start:dell", "ssh-cancel:ssh-1"]);
+  const unknown = await api.startRemoteProcess({
+    targetId: "ssh:gone",
+    process: { executable: "whoami", cwd: "C:\\" },
+  });
+  assert.deepEqual(unknown, { ok: false, reason: "target_not_found" });
+});

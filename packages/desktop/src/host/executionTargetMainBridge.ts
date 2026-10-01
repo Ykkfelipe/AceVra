@@ -25,6 +25,8 @@ interface PendingEntry {
 
 /** 每个 op 只是一次控制面 HTTP 往返；20s 足够，超时如实返回 timeout 而不是悬挂 agent 工具。 */
 const DEFAULT_TIMEOUT_MS = 20_000;
+/** computer op 首次可能要建 SSH 隧道 + 取 token + 截屏，给足时间但仍有上限。 */
+const COMPUTER_TIMEOUT_MS = 60_000;
 
 export interface ExecutionTargetMainBridge extends ExecutionTargetExecutor {
   handleResult(message: { requestId: string; result: ZCodeExecutionTargetResult }): void;
@@ -49,15 +51,18 @@ export function createExecutionTargetMainBridge(deps: {
       // bridge 自己的 correlation key：agent 侧 requestId 可能在重试时复用，不能直接当 pending key。
       const requestId = randomUUID();
       return new Promise<ZCodeExecutionTargetResult>((resolve) => {
-        const timer = setTimeout(() => {
-          settle(requestId, {
-            op: request.op,
-            ok: false,
-            reason: "timeout",
-            // start 超时无法证明任务未创建；如实告知，避免 agent 误以为可以安全重试。
-            ...(request.op === "start" ? { detail: "task_may_have_started" } : {}),
-          });
-        }, timeoutMs);
+        const timer = setTimeout(
+          () => {
+            settle(requestId, {
+              op: request.op,
+              ok: false,
+              reason: "timeout",
+              // start 超时无法证明任务未创建；如实告知，避免 agent 误以为可以安全重试。
+              ...(request.op === "start" ? { detail: "task_may_have_started" } : {}),
+            });
+          },
+          Math.max(timeoutMs, request.op === "computer" ? COMPUTER_TIMEOUT_MS : 0),
+        );
         pending.set(requestId, { resolve, timer, op: request.op });
         try {
           deps.postToMain({ type: HostResponseTypes.ExecutionTargetRequest, requestId, request });

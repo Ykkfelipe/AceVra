@@ -34,6 +34,7 @@ import {
   openWorkflowWorkspaceSidePane,
   openWorkflowArtifactSidePane,
   activateDeveloperToolsSidePane,
+  openComputerSidePane,
   openBrowserSidePane,
   openOrActivateBrowserSidePaneByUrl,
   findBrowserSidePaneTabByUrl,
@@ -785,6 +786,18 @@ export function useAppPanels(options: {
       return next;
     });
   }, [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath]);
+
+  const handleOpenComputer = useCallback(
+    (computerId: string | null) => {
+      revealSidePaneForCurrentOwner();
+      commitOpenedSidePaneState((current) => {
+        const next = openComputerSidePane(current, computerId);
+        logger.info(`[App] 打开右侧面板 mode=computer tabs=${next.tabs.length}`);
+        return next;
+      });
+    },
+    [commitOpenedSidePaneState, revealSidePaneForCurrentOwner],
+  );
 
   const handleOpenTerminalTab = useCallback(() => {
     if (isOfficeMode) return;
@@ -1587,6 +1600,7 @@ export function useAppPanels(options: {
     handleOpenTreemapping,
     handleOpenWhiteboard,
     handleOpenDeveloperTools,
+    handleOpenComputer,
     handleOpenTerminalTab,
     handleOpenModelTrajectory,
     handleOpenSubagentSession,

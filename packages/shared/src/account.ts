@@ -90,7 +90,8 @@ export type AccountPairingDecisionResult = {
  */
 export interface ExecutionTarget {
   id: string;
-  type: "desktop" | "node";
+  /** `ssh`: a computer reached over the user's SSH config (acevra-agent-computer.md). */
+  type: "desktop" | "node" | "ssh";
   displayName: string;
   online: boolean;
   capabilities: AccountDeviceCapability[];

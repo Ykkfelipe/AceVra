@@ -92,6 +92,8 @@ import {
   isWorkspaceFilePathInside,
 } from "@/workspace-file-tree/model.js";
 import type { WorkspaceShellLayoutProps } from "@/app-shell/types.js";
+import { useComputerSessionAutoOpen } from "@/hooks/useComputer.js";
+import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
@@ -302,6 +304,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   handleOpenTreemapping,
   handleOpenWhiteboard,
   handleOpenDeveloperTools,
+  handleOpenComputer,
   handleOpenTerminalTab,
   handleToggleGit,
   handleOpenGitReview,
@@ -335,6 +338,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
 }: WorkspaceShellLayoutProps) {
   const { intl } = useZCodeIntl();
   const isOfficeMode = useIsOfficeMode();
+  const supportsComputers = Boolean(useOptionalPlatform()?.computers);
+  useComputerSessionAutoOpen(activeTaskId, handleOpenComputer);
   const baseServices = useBaseWorkspaceServices();
   const tabStoreApi = useTabStoreApi();
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
@@ -1484,6 +1489,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       onOpenBrowserTab={handleOpenBrowserTab}
       onOpenWhiteboard={handleOpenWhiteboard}
       onOpenDeveloperTools={handleOpenDeveloperTools}
+      onOpenComputer={handleOpenComputer}
+      supportsComputers={supportsComputers}
       onOpenTerminalTab={handleOpenTerminalTab}
       onOpenReviewTab={handleToggleGit}
       onOpenSelectionSideConversation={handleOpenSelectionSideConversationLauncher}

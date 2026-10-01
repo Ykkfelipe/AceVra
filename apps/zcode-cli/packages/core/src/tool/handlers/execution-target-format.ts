@@ -57,6 +57,16 @@ export function describeExecutionTargetFailure(
       return result.detail === "task_may_have_started"
         ? `Starting the task on ${who} timed out; it may have started. Check the task card before retrying.`
         : `Talking to ${who} timed out. The task, if any, keeps its last known state.`;
+    case "computer_paused":
+      return result.detail === "user_active" || result.detail === "physical_input"
+        ? `The user is using ${who} right now, so you were paused. ${NOTHING_LOCAL} Wait for them to resume you in the Computer panel; do not retry in a loop.`
+        : `${who} is paused or the user took control (${result.detail ?? "paused"}). ${NOTHING_LOCAL} Wait until the user gives control back; do not retry in a loop.`;
+    case "computer_busy":
+      return result.detail === "user_in_control"
+        ? `The user is controlling ${who} from the Computer panel. ${NOTHING_LOCAL} Wait until they give it back.`
+        : `${who} is busy with another job (${result.detail ?? "busy"}). ${NOTHING_LOCAL} Tell the user.`;
+    case "computer_offline":
+      return `${who} is offline or unreachable over SSH (${result.detail ?? "offline"}). ${NOTHING_LOCAL} Tell the user; do not do the work on this Mac instead.`;
     default:
       return `Running on ${who} failed (${result.reason}${result.detail ? `: ${result.detail}` : ""}). ${NOTHING_LOCAL}`;
   }

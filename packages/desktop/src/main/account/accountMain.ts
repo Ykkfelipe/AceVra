@@ -10,6 +10,7 @@ import { deriveDesktopCapabilities } from "./accountCapabilities.js";
 import { createAgentExecutionHandler } from "./accountAgentExecution.js";
 import { createAccountTasks } from "./accountTasks.js";
 import { createLocalProcessRunner } from "./localProcessRunner.js";
+import { initComputersMain } from "../computers/computersMain.js";
 import { createInstallationStore } from "./accountInstallation.js";
 import {
   ACCOUNT_TOKEN_STORE_NAME,
@@ -96,8 +97,15 @@ export function initAccountMain(options: {
 
   // Local execution is independent of the account: it works signed out and offline.
   const local = createLocalProcessRunner();
+  // SSH computers are local config too: available signed out (acevra-agent-computer.md).
+  const computers = initComputersMain();
   const tasksApi = createAccountTasks({
     local,
+    ssh: {
+      listTargets: () => computers.service.listTargets(),
+      hostAliasFor: (targetId) => computers.service.hostAliasFor(targetId),
+      runner: computers.runner,
+    },
     call: (method, path, body) => devices?.call(method, path, body) ?? Promise.resolve(null),
     accountReady: () => controller.getView().phase === "ready",
     thisDevice: () => ({
@@ -111,7 +119,10 @@ export function initAccountMain(options: {
   });
   let gitKnown = false;
   void gitProbe.then((ok) => (gitKnown = ok));
-  const handleAgentExecution = createAgentExecutionHandler({ tasks: tasksApi });
+  const handleAgentExecution = createAgentExecutionHandler({
+    tasks: tasksApi,
+    computers: computers.service,
+  });
 
   const subscribers = new Map<number, WebContents>();
   const broadcast = (view: AccountView) => {
@@ -188,6 +199,7 @@ export function initAccountMain(options: {
     start: () => restored.catch(() => undefined),
     dispose() {
       local.shutdown();
+      computers.dispose();
       devices?.stop();
       controller.dispose();
       windowSource?.dispose();

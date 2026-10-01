@@ -1,5 +1,6 @@
 import {
   AccountChannels,
+  ComputerChannels,
   databaseStartupControlSchema,
   databaseStartupStateSchema,
   databaseStartupPortPayloadSchema,
@@ -23,6 +24,70 @@ function parseDeviceIdFromArgs(): string {
     }
   }
   return "";
+}
+
+/**
+ * Computer tab 的帧订阅：整个 preload 只有一个 Frame 监听，按 computerId 分发给订阅者；
+ * main 侧按订阅引用计数，最后一个退订即关闭 worker 视图流。
+ */
+function createComputersBridge() {
+  const frameSubscribers = new Map<
+    string,
+    { computerId: string; callback: (frame: unknown) => void }
+  >();
+  let frameListenerInstalled = false;
+  let nextSubscription = 0;
+  const onFrame = (_event: unknown, frame: unknown) => {
+    const computerId = (frame as { computerId?: unknown } | null)?.computerId;
+    for (const subscriber of frameSubscribers.values()) {
+      if (subscriber.computerId === computerId) subscriber.callback(frame);
+    }
+  };
+  return {
+    list: () => ipcRenderer.invoke(ComputerChannels.List),
+    test: (input: unknown) => ipcRenderer.invoke(ComputerChannels.Test, input),
+    add: (input: unknown) => ipcRenderer.invoke(ComputerChannels.Add, input),
+    remove: (id: string) => ipcRenderer.invoke(ComputerChannels.Remove, id),
+    getView: (id: string) => ipcRenderer.invoke(ComputerChannels.GetView, id),
+    takeControl: (id: string) => ipcRenderer.invoke(ComputerChannels.TakeControl, id),
+    giveBack: (id: string) => ipcRenderer.invoke(ComputerChannels.GiveBack, id),
+    resume: (id: string) => ipcRenderer.invoke(ComputerChannels.Resume, id),
+    stop: (id: string) => ipcRenderer.invoke(ComputerChannels.Stop, id),
+    sendInput: (id: string, events: unknown[]) =>
+      ipcRenderer.send(ComputerChannels.Input, id, events),
+    onViewChanged: (callback: (view: unknown) => void): (() => void) => {
+      const handler = (_event: unknown, view: unknown) => callback(view);
+      ipcRenderer.on(ComputerChannels.ViewChanged, handler);
+      return () => ipcRenderer.removeListener(ComputerChannels.ViewChanged, handler);
+    },
+    onSessionStarted: (callback: (notice: unknown) => void): (() => void) => {
+      const handler = (_event: unknown, notice: unknown) => callback(notice);
+      ipcRenderer.on(ComputerChannels.SessionStarted, handler);
+      return () => ipcRenderer.removeListener(ComputerChannels.SessionStarted, handler);
+    },
+    subscribeFrames: (
+      computerId: string,
+      options: { interactive: boolean },
+      callback: (frame: unknown) => void,
+    ): (() => void) => {
+      if (!frameListenerInstalled) {
+        ipcRenderer.on(ComputerChannels.Frame, onFrame);
+        frameListenerInstalled = true;
+      }
+      nextSubscription += 1;
+      const subscriptionId = `s${nextSubscription}`;
+      frameSubscribers.set(subscriptionId, { computerId, callback });
+      ipcRenderer.send(ComputerChannels.Subscribe, {
+        computerId,
+        subscriptionId,
+        interactive: options.interactive === true,
+      });
+      return () => {
+        if (!frameSubscribers.delete(subscriptionId)) return;
+        ipcRenderer.send(ComputerChannels.Unsubscribe, subscriptionId);
+      };
+    },
+  };
 }
 
 // 在 contextBridge 建立之前就暴露同步值，让 renderer 在 React 渲染前就能读到
@@ -635,6 +700,8 @@ contextBridge.exposeInMainWorld("zcode", {
       return () => ipcRenderer.removeListener(AccountChannels.AgentTaskStarted, handler);
     },
   },
+  /** SSH computers：只暴露视图、帧与命令；隧道、token、socket 留在 main。 */
+  computers: createComputersBridge(),
   /** 上报 OAuth state 用于 deep link 路由 */
   registerOAuthState: (payload: OAuthStateRegistration) =>
     ipcRenderer.send(PlatformChannels.OAuthRegisterState, payload),

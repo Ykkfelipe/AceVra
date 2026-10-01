@@ -44,7 +44,7 @@ export const executionTargetCapabilitySchema = z.enum([
 export const executionTargetWireSchema = z
   .object({
     id: idString,
-    type: z.enum(["desktop", "node"]),
+    type: z.enum(["desktop", "node", "ssh"]),
     displayName: shortText,
     online: z.boolean(),
     capabilities: z.array(executionTargetCapabilitySchema).max(16),
@@ -89,6 +89,71 @@ export const executionProcessSpecSchema = z
   })
   .strict();
 
+const coordinate = z.number().int().min(0).max(16_384);
+const mouseButton = z.enum(["left", "right", "middle"]);
+
+/**
+ * SSH 电脑的 GUI 动作（acevra-agent-computer.md §5）。坐标是远端屏幕像素；Main 映射到 worker API。
+ * 本机 Computer Use 不走这里（本机 SDK 不变）。
+ */
+export const computerActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("screenshot") }).strict(),
+  z
+    .object({
+      kind: z.literal("click"),
+      x: coordinate,
+      y: coordinate,
+      button: mouseButton.optional(),
+      double: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ kind: z.literal("move"), x: coordinate, y: coordinate }).strict(),
+  z
+    .object({
+      kind: z.literal("drag"),
+      fromX: coordinate,
+      fromY: coordinate,
+      toX: coordinate,
+      toY: coordinate,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("scroll"),
+      x: coordinate.optional(),
+      y: coordinate.optional(),
+      dy: z.number().int().min(-50).max(50),
+    })
+    .strict(),
+  z.object({ kind: z.literal("type"), text: z.string().min(1).max(2000) }).strict(),
+  z
+    .object({
+      kind: z.literal("key"),
+      keys: z
+        .array(
+          z
+            .string()
+            .min(1)
+            .max(24)
+            .regex(/^[a-z0-9]+$/),
+        )
+        .min(1)
+        .max(4),
+    })
+    .strict(),
+]);
+export type ComputerAction = z.infer<typeof computerActionSchema>;
+
+export const computerImageSchema = z
+  .object({
+    base64: z.string().min(1).max(8_000_000),
+    mimeType: z.enum(["image/jpeg", "image/png"]),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  })
+  .strict();
+export type ComputerImage = z.infer<typeof computerImageSchema>;
+
 const requestBase = {
   requestId: idString,
   sessionId: idString,
@@ -128,6 +193,14 @@ export const zcodeExecutionTargetParamsSchema = z.discriminatedUnion("op", [
       force: z.boolean().optional(),
     })
     .strict(),
+  z
+    .object({
+      ...requestBase,
+      op: z.literal("computer"),
+      targetId: idString,
+      action: computerActionSchema,
+    })
+    .strict(),
 ]);
 export type ZCodeExecutionTargetParams = z.infer<typeof zcodeExecutionTargetParamsSchema>;
 export type ZCodeExecutionTargetOp = ZCodeExecutionTargetParams["op"];
@@ -144,13 +217,19 @@ export const executionTargetFailureReasonSchema = z.enum([
   "task_not_found",
   "timeout",
   "internal",
+  /** SSH 电脑：用户接管 / 用户在那台电脑上操作 / 已暂停；detail = worker 原因。 */
+  "computer_paused",
+  /** SSH 电脑正被另一个会话或面板占用。 */
+  "computer_busy",
+  /** 隧道或 worker 不可达；绝不改在本机执行。 */
+  "computer_offline",
 ]);
 export type ExecutionTargetFailureReason = z.infer<typeof executionTargetFailureReasonSchema>;
 
 export const zcodeExecutionTargetResultSchema = z.union([
   z
     .object({
-      op: z.enum(["list", "start", "read", "cancel"]),
+      op: z.enum(["list", "start", "read", "cancel", "computer"]),
       ok: z.literal(false),
       reason: executionTargetFailureReasonSchema,
       detail: shortText.optional(),
@@ -177,6 +256,14 @@ export const zcodeExecutionTargetResultSchema = z.union([
   z
     .object({ op: z.literal("cancel"), ok: z.literal(true), task: executionTaskWireSchema })
     .strict(),
+  z
+    .object({
+      op: z.literal("computer"),
+      ok: z.literal(true),
+      screen: z.object({ width: z.number().int(), height: z.number().int() }).strict(),
+      image: computerImageSchema.optional(),
+    })
+    .strict(),
 ]);
 export type ZCodeExecutionTargetResult = z.infer<typeof zcodeExecutionTargetResultSchema>;
 export type ExecutionTargetWire = z.infer<typeof executionTargetWireSchema>;
@@ -188,6 +275,12 @@ export const agentTaskStartedNoticeSchema = z
   .object({ sessionId: idString, taskId: idString, targetId: idString })
   .strict();
 export type AgentTaskStartedNotice = z.infer<typeof agentTaskStartedNoticeSchema>;
+
+/** Main → renderer：会话首次在 SSH 电脑上执行 Computer 动作（渲染端据此打开一次 Computer tab）。 */
+export const computerSessionStartedNoticeSchema = z
+  .object({ sessionId: idString, computerId: idString })
+  .strict();
+export type ComputerSessionStartedNotice = z.infer<typeof computerSessionStartedNoticeSchema>;
 
 /** Host 注入给 services 的执行目标执行器（Desktop：经 parentPort 转 Main）。缺省 = 能力不存在。 */
 export interface ExecutionTargetExecutor {

@@ -13,6 +13,7 @@ import type {
   SaveCliMcpToUserDirectoryRequest,
 } from "./mcp.js";
 import type { IAccountPlatform } from "./account.js";
+import type { IComputersPlatform } from "./agent-computer.js";
 import type { OAuthStateRegistration } from "./oauth.js";
 import type { AppSettings, Locale } from "./protocol.js";
 import type { ArmsCustomEventPayload, RendererTelemetryEventPayload } from "./telemetry.js";
@@ -663,6 +664,9 @@ export interface IPlatformService {
 
   /** AceVra Account（Clerk 登录 + 后端准入）；仅 Desktop 提供，与 Provider 登录互相独立。 */
   account?: IAccountPlatform;
+
+  /** SSH computers（acevra-agent-computer.md）；仅 Desktop 提供。 */
+  computers?: IComputersPlatform;
 
   /** 上报 OAuth state 给 main process，用于 deep link 路由 */
   registerOAuthState(payload: OAuthStateRegistration): void;

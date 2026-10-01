@@ -122,6 +122,19 @@ export function createProtocolExecutionTargetPort(
         })),
       };
     },
+    async computer(input, callContext) {
+      const result = await request(
+        { op: "computer", targetId: input.targetId, action: input.action },
+        callContext,
+      );
+      if (!result.ok) return failureOf(result);
+      if (result.op !== "computer") return unexpected;
+      return {
+        ok: true,
+        screen: result.screen,
+        ...(result.image ? { image: { ...result.image } } : {}),
+      };
+    },
     async cancelTask(input, callContext) {
       if (!startedTaskIds.has(input.taskId)) return notInSession;
       const result = await request({ op: "cancel", taskId: input.taskId }, callContext);

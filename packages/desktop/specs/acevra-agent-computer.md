@@ -72,9 +72,10 @@ Config (id, name, host alias, port) is stored locally; the token is never stored
 No above-composer card for computers (terminal task cards stay as they are). The computer lives in
 the existing toggled right side pane as **one more tab type**, `computer`, registered exactly like
 Terminal and Browser (side-pane tab model, "Open tab" launcher entry **Computer** next to Review /
-Terminal / Browser, tab trigger icon + title, persistence, i18n). It is opened from that launcher,
-from Settings → Computers, or automatically (once per conversation) on the first `Computer` action
-on an SSH computer. No new layout framework, no agent identity header, no extra tabs.
+Terminal / Browser, tab trigger icon + title, persistence, i18n). It is opened from that launcher, or
+automatically (once per conversation, when that conversation is on screen) on the first
+`RemoteComputer` action on an SSH computer. With several computers and no choice yet, the tab shows
+a picker; with exactly one it selects it. No new layout framework, no agent identity header, no extra tabs.
 
 ```text
 ┌ Review │ Browser │ Computer ×                              ┐
@@ -214,7 +215,7 @@ cua_pipe: "present"|"absent", stream: {viewers}`.
 flowchart LR
   subgraph Mac
     R[Renderer<br/>Computers settings · Computer side panel<br/>presentation only] -- IPC computers.* --> M
-    CLI[Agent CLI<br/>Computer / RunOnTarget tools] -- interaction/executionTarget --> S[Services relay] --> M
+    CLI[Agent CLI<br/>RemoteComputer / RunOnTarget tools] -- interaction/executionTarget --> S[Services relay] --> M
     M[Main: SSH computers infra<br/>store · tunnels · token in memory ·<br/>worker client · ssh process runner · view stream socket]
   end
   M -- "ssh -N -L 127.0.0.1:P:127.0.0.1:8765" --> D[Dell worker 8765<br/>job / lease / yield owner]
@@ -239,11 +240,11 @@ Event order (agent GUI action):
 ```mermaid
 sequenceDiagram
   participant Model
-  participant CLI as CLI Computer tool
+  participant CLI as CLI RemoteComputer tool
   participant Main
   participant Tun as SSH tunnel
   participant W as Dell worker
-  Model->>CLI: Computer {targetId: ssh:dell, action: click 400,300}
+  Model->>CLI: RemoteComputer {targetId: ssh:dell, action: click 400,300}
   CLI->>Main: interaction/executionTarget {op: computer}
   Main->>Tun: ensure tunnel + token (ssh -N -L / ssh type token)
   Main->>W: POST /agent/attach (first action of this session) → job_id
@@ -281,7 +282,7 @@ sequenceDiagram
   participant R as Renderer
   participant Main
   participant W as Dell worker
-  participant A as Agent (CLI Computer tool)
+  participant A as Agent (CLI RemoteComputer tool)
   U->>R: Take control
   R->>Main: computers.takeControl(computerId)
   Main->>W: POST /agent/take-control {job_id}
@@ -336,7 +337,7 @@ action}` → `{op:"computer", ok:true, result, image?: {base64, mimeType, width,
   `computerUse`.
 - `packages/shared/src/agent-computer.ts`: SSH computer config, status, session view, frame and
   `IComputersPlatform` (optional on `IPlatformService`; Web has none).
-- CLI `Computer` tool (Desktop, local workspaces only), same registration as `RunOnTarget`.
+- CLI `RemoteComputer` tool (Desktop, local workspaces only), same registration as `RunOnTarget`; named `RemoteComputer` so it is never confused with local computer use on this Mac. No per-call approval (user decision): the Computer tab is the live oversight surface.
 
 ## 7. Milestones
 

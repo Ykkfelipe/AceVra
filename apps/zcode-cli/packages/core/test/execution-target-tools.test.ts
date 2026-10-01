@@ -17,6 +17,10 @@ import {
   runOnTargetToolEntry,
   targetTaskToolEntry,
 } from "../src/tool/handlers/execution-target.js";
+import {
+  remoteComputerToolEntry,
+  toRemoteComputerAction,
+} from "../src/tool/handlers/remote-computer.js";
 import { formatExecutionTargetUserInput } from "../src/runtime/helpers/execution-target-context.js";
 import { registerBuiltInTools } from "../src/tool/handlers/index.js";
 
@@ -46,6 +50,7 @@ function outputEvent(sequence: number, text: string): ExecutionTaskEventRecord {
 
 type FakeOptions = {
   selected?: SelectedExecutionTarget;
+  computerResult?: Awaited<ReturnType<ExecutionTargetPort["computer"]>>;
   startResult?: Awaited<ReturnType<ExecutionTargetPort["startProcess"]>>;
   reads?: Array<{
     state: ExecutionTaskSnapshot["state"];
@@ -55,7 +60,12 @@ type FakeOptions = {
 };
 
 function fakePort(options: FakeOptions = {}) {
-  const calls = { start: [] as unknown[], cancel: [] as string[], read: 0 };
+  const calls = {
+    start: [] as unknown[],
+    cancel: [] as string[],
+    read: 0,
+    computer: [] as Array<Parameters<ExecutionTargetPort["computer"]>[0]>,
+  };
   let readIndex = 0;
   const port: ExecutionTargetPort = {
     selectedTarget: () => options.selected,
@@ -101,6 +111,19 @@ function fakePort(options: FakeOptions = {}) {
     cancelTask: async ({ taskId }) => {
       calls.cancel.push(taskId);
       return { ok: true, task: snapshot("cancelling") } as never;
+    },
+    computer: async (input) => {
+      calls.computer.push(input);
+      return (
+        options.computerResult ??
+        ({
+          ok: true,
+          screen: { width: 1366, height: 768 },
+          ...(input.action.kind === "screenshot"
+            ? { image: { base64: "AAAA", mimeType: "image/jpeg", width: 1366, height: 768 } }
+            : {}),
+        } as never)
+      );
     },
   };
   return { port, calls };
@@ -237,7 +260,8 @@ test("工具注册：仅在 includeExecutionTargets 时出现", () => {
   };
   assert.equal(names().includes("RunOnTarget"), false);
   const included = names({ includeExecutionTargets: true });
-  for (const name of ["ExecutionTargets", "RunOnTarget", "TargetTask"]) {
+  assert.equal(names().includes("RemoteComputer"), false);
+  for (const name of ["ExecutionTargets", "RunOnTarget", "TargetTask", "RemoteComputer"]) {
     assert.ok(included.includes(name), name);
   }
 });
@@ -257,4 +281,67 @@ test("模型可见文案不再引用 composer 的 Run on 选择（acevra-agent-c
   }
   assert.match(runOnTargetToolEntry.metadata.description, /only when the user asked/);
   assert.doesNotMatch(formatExecutionTargetUserInput("hi", "hi", DELL), /Run on/);
+});
+
+test("RemoteComputer：动作映射与参数校验", () => {
+  assert.deepEqual(
+    toRemoteComputerAction({ targetId: "ssh:dell", action: "right_click", x: 1, y: 2 }),
+    {
+      kind: "click",
+      x: 1,
+      y: 2,
+      button: "right",
+    },
+  );
+  assert.deepEqual(
+    toRemoteComputerAction({ targetId: "ssh:dell", action: "double_click", x: 3, y: 4 }),
+    {
+      kind: "click",
+      x: 3,
+      y: 4,
+      double: true,
+    },
+  );
+  assert.deepEqual(
+    toRemoteComputerAction({ targetId: "ssh:dell", action: "drag", x: 1, y: 1, toX: 9, toY: 9 }),
+    { kind: "drag", fromX: 1, fromY: 1, toX: 9, toY: 9 },
+  );
+  assert.deepEqual(
+    toRemoteComputerAction({ targetId: "ssh:dell", action: "key", keys: ["Ctrl", "S"] }),
+    {
+      kind: "key",
+      keys: ["ctrl", "s"],
+    },
+  );
+  assert.equal(typeof toRemoteComputerAction({ targetId: "ssh:dell", action: "click" }), "string");
+  assert.equal(
+    typeof toRemoteComputerAction({ targetId: "ssh:dell", action: "key", keys: ["ctrl;rm"] }),
+    "string",
+  );
+});
+
+test("RemoteComputer：截图以图片块交给模型，不需要审批", async () => {
+  const { port, calls } = fakePort();
+  const output = await remoteComputerToolEntry.handler(
+    { targetId: "ssh:dell", action: "screenshot" },
+    context(port),
+  );
+  assert.deepEqual(calls.computer, [{ targetId: "ssh:dell", action: { kind: "screenshot" } }]);
+  const content = remoteComputerToolEntry.formatModelContent?.(output);
+  assert.ok(Array.isArray(content));
+  assert.equal(content[1]?.type, "image");
+  assert.equal(remoteComputerToolEntry.metadata.needsApproval, false);
+});
+
+test("RemoteComputer：用户接管时如实说明已暂停，不在本机执行", async () => {
+  const { port } = fakePort({
+    computerResult: { ok: false, reason: "computer_paused", detail: "physical_input" } as never,
+  });
+  await assert.rejects(
+    remoteComputerToolEntry.handler(
+      { targetId: "ssh:dell", action: "click", x: 1, y: 1 },
+      context(port),
+    ),
+    (error: Error) => /pause/i.test(error.message),
+  );
 });

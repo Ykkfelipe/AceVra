@@ -9,6 +9,7 @@ export interface SidePaneTabPresentationLabels {
   whiteboardTitle: string;
   modelTrajectoryTitle: string;
   developerToolsTitle: string;
+  computerTitle: string;
   terminalTitle: string;
   subagentTypeLabel: string;
   subagentDirectoryTitle: string;
@@ -64,6 +65,7 @@ export function getSidePaneTabSearchHint(tab: WorkspaceSidePaneTab): string {
   if (tab.type === "developer-tools") {
     return "developer tools token debug network status request response headers";
   }
+  if (tab.type === "computer") return "computer screen remote control ssh";
   if (tab.type === "terminal" || tab.type === "bash-output")
     return `${tab.title} terminal shell command`;
   return tab.source.path ?? tab.source.title;
@@ -82,6 +84,7 @@ export function getLocalizedSidePaneTabTitle(
       "whiteboard.title": labels.whiteboardTitle,
       "modelTrajectory.title": labels.modelTrajectoryTitle,
       "developerTools.title": labels.developerToolsTitle,
+      "computers.panel.tabTitle": labels.computerTitle,
       "terminal.title": labels.terminalTitle,
       "sidePane.subagent": labels.subagentTypeLabel,
       "sidePane.subagentDirectory": labels.subagentDirectoryTitle,
@@ -117,6 +120,7 @@ export function getSidePaneTabTypeLabel(
   if (tab.type === "whiteboard") return labels.whiteboardTitle;
   if (tab.type === "model-trajectory") return labels.modelTrajectoryTitle;
   if (tab.type === "developer-tools") return labels.developerToolsTitle;
+  if (tab.type === "computer") return labels.computerTitle;
   if (tab.type === "terminal" || tab.type === "bash-output") return labels.terminalTitle;
   return labels.codeViewerTitle;
 }

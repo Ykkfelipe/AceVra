@@ -7,7 +7,9 @@ import type {
   TaskEvent,
   TaskView,
 } from "@zcode/shared";
+import { SSH_TARGET_PREFIX } from "@zcode/shared";
 import { LOCAL_TARGET_ID, type LocalProcessRunner } from "./localProcessRunner.js";
+import { SSH_TASK_PREFIX, type SshProcessRunner } from "../computers/sshProcessRunner.js";
 
 type Call = (
   method: string,
@@ -60,8 +62,15 @@ export function createAccountTasks(deps: {
     displayName: string;
     capabilities: AccountDevice["capabilities"];
   };
+  /** SSH computers: local config, no account needed (acevra-agent-computer.md). */
+  ssh?: {
+    listTargets(): Promise<ExecutionTarget[]>;
+    hostAliasFor(targetId: string): Promise<string | null>;
+    runner: SshProcessRunner;
+  };
 }): AccountTasksApi {
   const isLocal = (id: string) => id === LOCAL_TARGET_ID || id.startsWith("local-");
+  const isSshTask = (id: string) => id.startsWith(SSH_TASK_PREFIX);
   return {
     async listTargets(): Promise<ExecutionTarget[]> {
       const me = deps.thisDevice();
@@ -76,6 +85,7 @@ export function createAccountTasks(deps: {
           available: true,
         },
       ];
+      if (deps.ssh) targets.push(...(await deps.ssh.listTargets().catch(() => [])));
       if (!deps.accountReady()) return targets;
       const result = await deps.call("GET", "/v1/targets");
       for (const t of (result?.status === 200 ? (result.json?.targets ?? []) : []) as Record<
@@ -103,6 +113,16 @@ export function createAccountTasks(deps: {
           ? { ok: true, taskId: started.taskId, targetId: LOCAL_TARGET_ID }
           : { ok: false, reason: "invalid_request" };
       }
+      if (input.targetId.startsWith(SSH_TARGET_PREFIX)) {
+        const hostAlias = deps.ssh ? await deps.ssh.hostAliasFor(input.targetId) : null;
+        if (!deps.ssh || !hostAlias) return { ok: false, reason: "target_not_found" };
+        const started = deps.ssh.runner.start({
+          targetId: input.targetId,
+          hostAlias,
+          process: input.process,
+        });
+        return { ok: true, taskId: started.taskId, targetId: input.targetId };
+      }
       if (!deps.accountReady()) return { ok: false, reason: "not_signed_in" };
       const result = await deps.call("POST", "/v1/tasks", {
         targetDeviceId: input.targetId,
@@ -128,12 +148,13 @@ export function createAccountTasks(deps: {
     },
     async getTask(taskId: string): Promise<TaskView | null> {
       if (isLocal(taskId)) return deps.local.list().find((task) => task.id === taskId) ?? null;
+      if (isSshTask(taskId)) return deps.ssh?.runner.get(taskId) ?? null;
       if (!deps.accountReady()) return null;
       const result = await deps.call("GET", `/v1/tasks/${encodeURIComponent(taskId)}`);
       return result?.status === 200 && result.json?.task ? fromRemote(result.json.task) : null;
     },
     async listTasks(): Promise<TaskView[]> {
-      const local = deps.local.list();
+      const local = [...deps.local.list(), ...(deps.ssh?.runner.list() ?? [])];
       if (!deps.accountReady()) return local;
       const result = await deps.call("GET", "/v1/tasks?limit=25");
       const remote =
@@ -144,6 +165,7 @@ export function createAccountTasks(deps: {
     },
     async getTaskEvents(taskId: string, after: number): Promise<TaskEvent[]> {
       if (isLocal(taskId)) return deps.local.events(taskId, after) ?? [];
+      if (isSshTask(taskId)) return deps.ssh?.runner.events(taskId, after) ?? [];
       const result = await deps.call(
         "GET",
         `/v1/tasks/${encodeURIComponent(taskId)}/events?after=${Math.max(0, Math.floor(after))}`,
@@ -152,6 +174,7 @@ export function createAccountTasks(deps: {
     },
     async cancelTask(taskId: string, force = false): Promise<TaskView | null> {
       if (isLocal(taskId)) return deps.local.cancel(taskId);
+      if (isSshTask(taskId)) return deps.ssh?.runner.cancel(taskId) ?? null;
       const result = await deps.call("POST", `/v1/tasks/${encodeURIComponent(taskId)}/cancel`, {
         force,
       });

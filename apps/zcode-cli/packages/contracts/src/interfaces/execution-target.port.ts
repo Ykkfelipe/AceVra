@@ -16,7 +16,7 @@ export type ExecutionTargetTaskState =
 
 export interface ExecutionTargetInfo {
   id: string;
-  type: "desktop" | "node";
+  type: "desktop" | "node" | "ssh";
   displayName: string;
   online: boolean;
   capabilities: string[];
@@ -84,4 +84,25 @@ export interface ExecutionTargetPort {
     input: { taskId: string },
     context?: ExecutionTargetCallContext,
   ): Promise<{ ok: true; task: ExecutionTaskSnapshot } | ExecutionTargetFailure>;
+  /** SSH 电脑的一次 GUI 动作（坐标 = 远端屏幕像素）；离线/暂停/占用如实失败，绝不在本机执行。 */
+  computer(
+    input: { targetId: string; action: RemoteComputerAction },
+    context?: ExecutionTargetCallContext,
+  ): Promise<
+    | {
+        ok: true;
+        screen: { width: number; height: number };
+        image?: { base64: string; mimeType: string; width: number; height: number };
+      }
+    | ExecutionTargetFailure
+  >;
 }
+
+export type RemoteComputerAction =
+  | { kind: "screenshot" }
+  | { kind: "click"; x: number; y: number; button?: "left" | "right" | "middle"; double?: boolean }
+  | { kind: "move"; x: number; y: number }
+  | { kind: "drag"; fromX: number; fromY: number; toX: number; toY: number }
+  | { kind: "scroll"; x?: number; y?: number; dy: number }
+  | { kind: "type"; text: string }
+  | { kind: "key"; keys: string[] };

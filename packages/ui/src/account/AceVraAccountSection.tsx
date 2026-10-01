@@ -3,6 +3,7 @@ import { useAccountEngineeringTools } from "@/hooks/useAccountEngineeringTools.j
 import { describeAccountStatus } from "./accountStatus.js";
 import { AceVraComputersSection } from "./AceVraComputersSection.js";
 import { AceVraTasksSection } from "./AceVraTasksSection.js";
+import { SshComputersSection } from "./SshComputersSection.js";
 import { useAccountText } from "./useAccountText.js";
 import { useAceVraAccount } from "./useAceVraAccount.js";
 
@@ -105,6 +106,8 @@ export function AceVraAccountSection() {
           )}
         </div>
       )}
+      {/* SSH 电脑是本地配置，不依赖账号登录状态。 */}
+      <SshComputersSection />
       {/* 工程 runner 只在显式开启且未打包时出现；正常账号页不承载手动执行表单。 */}
       {available && view && engineeringTools && <AceVraTasksSection />}
     </section>

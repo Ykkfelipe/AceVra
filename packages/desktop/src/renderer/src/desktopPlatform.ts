@@ -71,6 +71,24 @@ export function createDesktopPlatform(options: {
       onViewChanged: (callback) => window.zcode.account.onViewChanged(callback),
       onAgentTaskStarted: (callback) => window.zcode.account.onAgentTaskStarted(callback),
     },
+    computers: window.zcode.computers
+      ? {
+          list: () => window.zcode.computers.list(),
+          test: (input) => window.zcode.computers.test(input),
+          add: (input) => window.zcode.computers.add(input),
+          remove: (id) => window.zcode.computers.remove(id),
+          getView: (id) => window.zcode.computers.getView(id),
+          onViewChanged: (callback) => window.zcode.computers.onViewChanged(callback),
+          subscribeFrames: (id, options, callback) =>
+            window.zcode.computers.subscribeFrames(id, options, callback),
+          takeControl: (id) => window.zcode.computers.takeControl(id),
+          giveBack: (id) => window.zcode.computers.giveBack(id),
+          resume: (id) => window.zcode.computers.resume(id),
+          stop: (id) => window.zcode.computers.stop(id),
+          sendInput: (id, events) => window.zcode.computers.sendInput(id, events),
+          onSessionStarted: (callback) => window.zcode.computers.onSessionStarted(callback),
+        }
+      : undefined,
     registerOAuthState: (payload) => window.zcode.registerOAuthState(payload),
     onOAuthCallback: (callback) => window.zcode.onOAuthCallback(callback),
     onPaymentCallback: (callback) => window.zcode.onPaymentCallback(callback),

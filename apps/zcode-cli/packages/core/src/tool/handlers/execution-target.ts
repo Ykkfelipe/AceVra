@@ -1,5 +1,4 @@
 import {
-  CoreErrorType,
   EXECUTION_TARGETS_TOOL_NAME,
   ExecutionTargetsInputJsonSchema,
   ExecutionTargetsInputSchema,
@@ -15,7 +14,6 @@ import {
   TargetTaskInputSchema,
   TargetTaskResultJsonSchema,
   TargetTaskResultSchema,
-  createCoreError,
   type ExecutionTargetFailure,
   type ExecutionTargetPort,
   type RunOnTargetInput,
@@ -24,39 +22,26 @@ import {
 } from "@zcode/contracts";
 import type { ToolEntry, ToolExecutionContext, ToolHandler } from "../types.js";
 import { describeExecutionTargetFailure, TargetOutputTail } from "./execution-target-format.js";
+import {
+  MAX_MODEL_BYTES,
+  callContext,
+  failure,
+  requirePort,
+  shared,
+} from "./execution-target-shared.js";
+import { remoteComputerToolEntry } from "./remote-computer.js";
 
 const POLL_INTERVAL_MS = 750;
 const STOP_SETTLE_SECONDS = 10;
 /** 控制面单页事件上限；满页说明还有积压，立即续读不等待。 */
 const EVENTS_PAGE_LIMIT = 200;
 const TERMINAL_STATES = new Set(["completed", "failed", "cancelled"]);
-const MAX_MODEL_BYTES = 40_000;
 const RUN_TIMEOUT_MS = (RUN_ON_TARGET_MAX_WAIT_SECONDS + 30) * 1000;
 
 const ROUTING_NOTE =
-  "By default all work happens on this Mac (Bash, files, Computer, browser). Use RunOnTarget only when the user asks you to work on one of their other computers by name (e.g. 'use my Dell'). Only commands run there; Read/Write/Edit/Grep/Glob, Computer, browser tools and subagents always act on this Mac.";
+  "By default all work happens on this Mac (Bash, files, local computer use, browser). Use RunOnTarget (commands) and RemoteComputer (screen, mouse, keyboard; SSH computers only) only when the user asks you to work on one of their other computers by name (e.g. 'use my Dell'). Read/Write/Edit/Grep/Glob, local computer use, browser tools and subagents always act on this Mac.";
 
 type TaskIds = { taskId: string; targetId: string; targetName?: string };
-
-function requirePort(context: ToolExecutionContext, toolName: string): ExecutionTargetPort {
-  if (context.executionTargetPort) return context.executionTargetPort;
-  throw createCoreError(
-    CoreErrorType.ConfigurationError,
-    `${toolName} is not available: this host cannot run tasks on other devices`,
-    { context: { toolCallId: context.toolCallId, toolName }, recoverable: false },
-  );
-}
-
-function failure(toolName: string, message: string, context: ToolExecutionContext): Error {
-  return createCoreError(CoreErrorType.ToolExecutionFailed, message, {
-    context: { toolCallId: context.toolCallId, toolName },
-    recoverable: true,
-  });
-}
-
-function callContext(context: ToolExecutionContext) {
-  return { turnId: context.turnId, toolCallId: context.toolCallId };
-}
 
 /**
  * 会话绑定到另一台电脑（record.executionTarget）时 Bash 必须拒绝，绝不静默在本机执行。
@@ -203,29 +188,10 @@ const targetTaskHandler: ToolHandler = async (input, context) => {
   );
 };
 
+/** Flat tool input → the wire action (strict per kind; missing fields are a model error, not a guess). */
 function describeFailureFor(result: ExecutionTargetFailure, taskId: string): string {
   return describeExecutionTargetFailure(result, { taskId, targetId: "" });
 }
-
-function formatModelContent(output: unknown): string {
-  return JSON.stringify(output);
-}
-
-const shared = {
-  formatModelContent,
-  resultBudget: {
-    maxInlineBytes: MAX_MODEL_BYTES,
-    maxModelBytes: MAX_MODEL_BYTES,
-    strategy: "truncate" as const,
-    preview: { maxBytes: MAX_MODEL_BYTES, direction: "tail" as const },
-  },
-  trace: {
-    required: true as const,
-    propagateToAdapters: false,
-    recordInput: "summary" as const,
-    recordOutput: "summary" as const,
-  },
-};
 
 export const executionTargetsToolEntry: ToolEntry = {
   ...shared,
@@ -279,6 +245,7 @@ export const runOnTargetToolEntry: ToolEntry = {
       "- Use it only when the user asked you to work on that computer. targetId comes from ExecutionTargets. This Mac is not a valid target: use Bash for local commands.",
       "- No shell: give executable + args. For shell syntax use executable 'bash' with args ['-lc', '<script>'].",
       "- cwd is REQUIRED and must be an absolute path on the node inside a root the node allows (acevra-node --allow-root). Files are not synced from this Mac. If the node rejects the cwd ('rejected (policy)'), ask the user which directory to use.",
+      "- SSH computers (kind 'ssh') are Windows machines reached over SSH: the process runs in PowerShell there; cwd is a Windows path such as 'C:\\Users\\<user>'; for shell syntax use executable 'powershell' with args ['-NoProfile', '-Command', '<script>'].",
       `- Waits up to waitSeconds (default ${RUN_ON_TARGET_DEFAULT_WAIT_SECONDS}s, max ${RUN_ON_TARGET_MAX_WAIT_SECONDS}s). Returns exit code and the output tail when finished; otherwise a taskId that keeps running — use ${TARGET_TASK_TOOL_NAME} to wait more or stop it.`,
       "- Offline, revoked or unknown targets fail; nothing is ever run on this Mac instead.",
     ].join("\n"),
@@ -360,4 +327,5 @@ export const executionTargetToolEntries: readonly ToolEntry[] = [
   executionTargetsToolEntry,
   runOnTargetToolEntry,
   targetTaskToolEntry,
+  remoteComputerToolEntry,
 ];

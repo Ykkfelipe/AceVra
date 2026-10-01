@@ -5,6 +5,7 @@ export type OpenTabLauncherItemId =
   | "review"
   | "terminal"
   | "browser"
+  | "computer"
   | "developer-tools";
 
 export function resolveOpenTabLauncherItemIds({
@@ -12,11 +13,13 @@ export function resolveOpenTabLauncherItemIds({
   hasReviewTab,
   canOpenSelectionSideConversation = false,
   supportsEmbeddedBrowser = true,
+  supportsComputers = false,
 }: {
   developerToolsEnabled: boolean;
   hasReviewTab: boolean;
   canOpenSelectionSideConversation?: boolean;
   supportsEmbeddedBrowser?: boolean;
+  supportsComputers?: boolean;
 }): OpenTabLauncherItemId[] {
   const itemIds: OpenTabLauncherItemId[] = [];
 
@@ -32,6 +35,10 @@ export function resolveOpenTabLauncherItemIds({
 
   if (supportsEmbeddedBrowser) {
     itemIds.push("browser");
+  }
+
+  if (supportsComputers) {
+    itemIds.push("computer");
   }
 
   if (developerToolsEnabled) {

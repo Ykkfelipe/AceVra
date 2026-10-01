@@ -127,3 +127,27 @@ test("workspace/updateExecutionTargetPolicy 设置工具面门禁", async () => 
   assert.equal(h.context.appRuntimePreferences.executionTargetsEnabled, true);
   await assert.rejects(updateExecutionTargetPolicy(h.context as never, { enabled: "yes" }));
 });
+
+test("computer 走 interaction/executionTarget，返回屏幕尺寸与图片；暂停如实映射", async () => {
+  const image = { base64: "AAAA", mimeType: "image/jpeg", width: 1366, height: 768 };
+  const h = harness(() => ({ op: "computer", ok: true, screen: { width: 1366, height: 768 }, image }));
+  const result = await h.port.computer(
+    { targetId: "ssh:dell", action: { kind: "screenshot" } },
+    { turnId: "turn-1", toolCallId: "call-2" },
+  );
+  assert.deepEqual(result, { ok: true, screen: { width: 1366, height: 768 }, image });
+  assert.equal(h.sent[0]!.params.op, "computer");
+  assert.equal(h.sent[0]!.params.sessionId, "session-a");
+  assert.deepEqual(h.sent[0]!.params.action, { kind: "screenshot" });
+
+  const paused = harness(() => ({
+    op: "computer",
+    ok: false,
+    reason: "computer_paused",
+    detail: "physical_input",
+  }));
+  assert.deepEqual(
+    await paused.port.computer({ targetId: "ssh:dell", action: { kind: "type", text: "x" } }),
+    { ok: false, reason: "computer_paused", detail: "physical_input" },
+  );
+});

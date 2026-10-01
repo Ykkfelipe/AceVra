@@ -241,7 +241,7 @@ import {
   stopDesktopNetworkTelemetry,
 } from "./desktopNetworkTelemetry.js";
 import { applyDesktopChromiumNetworkPolicies } from "./desktopNetworkPolicy.js";
-import { AccountChannels, mapZCodeEnvToArmsRumEnv } from "@zcode/shared";
+import { AccountChannels, ComputerChannels, mapZCodeEnvToArmsRumEnv } from "@zcode/shared";
 import {
   findWindowsProcessesReferencingResourceMarkers,
   probeWindowsPackagedResourceWritable,
@@ -1760,11 +1760,19 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
           // M2F：agent 执行目标请求经账号模块的任务 API 转发；启动成功后通知该窗口挂卡片。
           handleExecutionTargetRequest: async ({ win: hostWin, request }) =>
             accountMain
-              ? accountMain.handleAgentExecution(request, (notice) => {
-                  if (!hostWin.isDestroyed()) {
-                    hostWin.webContents.send(AccountChannels.AgentTaskStarted, notice);
-                  }
-                })
+              ? accountMain.handleAgentExecution(
+                  request,
+                  (notice) => {
+                    if (!hostWin.isDestroyed()) {
+                      hostWin.webContents.send(AccountChannels.AgentTaskStarted, notice);
+                    }
+                  },
+                  (notice) => {
+                    if (!hostWin.isDestroyed()) {
+                      hostWin.webContents.send(ComputerChannels.SessionStarted, notice);
+                    }
+                  },
+                )
               : { op: request.op, ok: false, reason: "unavailable" },
         },
         {

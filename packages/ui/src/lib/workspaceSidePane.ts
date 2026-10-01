@@ -85,6 +85,17 @@ export interface DeveloperToolsSidePaneTab {
   openedAt?: number;
 }
 
+/** SSH computer live view (acevra-agent-computer.md §3.3); one workspace-global tab. */
+export interface ComputerSidePaneTab {
+  id: "computer";
+  type: "computer";
+  ownerTaskId?: string | null;
+  workspaceKey?: string | null;
+  openedAt?: number;
+  /** Selected SSH computer; null → the pane offers the list (or points to Settings). */
+  computerId: string | null;
+}
+
 export interface TerminalSidePaneTab {
   id: string;
   type: "terminal";
@@ -522,6 +533,7 @@ export type WorkspaceSidePaneTab =
   | WhiteboardSidePaneTab
   | ModelTrajectorySidePaneTab
   | DeveloperToolsSidePaneTab
+  | ComputerSidePaneTab
   | TerminalSidePaneTab
   | BrowserUseSidePaneTab
   | SubagentSessionSidePaneTab
@@ -670,6 +682,10 @@ function createDeveloperToolsSidePaneTab(): DeveloperToolsSidePaneTab {
     type: "developer-tools",
     openedAt: Date.now(),
   };
+}
+
+function createComputerSidePaneTab(computerId: string | null): ComputerSidePaneTab {
+  return { id: "computer", type: "computer", openedAt: Date.now(), computerId };
 }
 
 function createTerminalSidePaneTab(options: {
@@ -1055,6 +1071,7 @@ const WORKSPACE_GLOBAL_SIDE_PANE_TAB_TYPES = new Set<WorkspaceSidePaneTab["type"
   "git",
   "developer-tools",
   "treemapping",
+  "computer",
 ]);
 
 function isWorkspaceGlobalSidePaneTab(tab: WorkspaceSidePaneTab): boolean {
@@ -1584,6 +1601,16 @@ export function activateDeveloperToolsSidePane(
   current: WorkspaceSidePaneState | null,
 ): WorkspaceSidePaneState {
   return activateSidePaneTab(current, createDeveloperToolsSidePaneTab());
+}
+
+/** Opens (or retargets) the Computer tab; keeps the current computer when none is given. */
+export function openComputerSidePane(
+  current: WorkspaceSidePaneState | null,
+  computerId: string | null,
+): WorkspaceSidePaneState {
+  const existing = current?.tabs.find((tab) => tab.type === "computer");
+  const keep = existing?.type === "computer" ? existing.computerId : null;
+  return activateSidePaneTab(current, createComputerSidePaneTab(computerId ?? keep));
 }
 
 export function openTerminalSidePane(

@@ -7,6 +7,7 @@ import {
   CREATE_WORKFLOW_TOOL_NAME,
   EVAL_WORKFLOW_SNIPPET_TOOL_NAME,
   EXECUTION_TARGETS_TOOL_NAME,
+  REMOTE_COMPUTER_TOOL_NAME,
   RUN_ON_TARGET_TOOL_NAME,
   TARGET_TASK_TOOL_NAME,
   GET_WORKFLOW_RUN_TOOL_NAME,
@@ -52,6 +53,7 @@ import {
   runOnTargetToolEntry,
   targetTaskToolEntry,
 } from "./execution-target.js";
+import { remoteComputerToolEntry } from "./remote-computer.js";
 import {
   createEnterPlanModeToolEntry,
   enterPlanModeToolEntry,
@@ -103,6 +105,7 @@ export const builtInTools: ToolEntry[] = [
   executionTargetsToolEntry,
   runOnTargetToolEntry,
   targetTaskToolEntry,
+  remoteComputerToolEntry,
   enterPlanModeToolEntry,
   exitPlanModeToolEntry,
   askUserQuestionToolEntry,
@@ -170,6 +173,7 @@ const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
 
 const EXECUTION_TARGET_TOOL_NAMES: ReadonlySet<string> = new Set([
   EXECUTION_TARGETS_TOOL_NAME,
+  REMOTE_COMPUTER_TOOL_NAME,
   RUN_ON_TARGET_TOOL_NAME,
   TARGET_TASK_TOOL_NAME,
 ]);
