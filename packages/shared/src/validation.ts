@@ -8,6 +8,10 @@ import { z } from "zod";
 import { zcodeProcessDiagnosticSchema } from "./process-diagnostic.js";
 import { browserCommandSchema } from "./browser-use/commands.js";
 import { browserCommandResultSchema } from "./browser-use/result.js";
+import {
+  zcodeExecutionTargetParamsSchema,
+  zcodeExecutionTargetResultSchema,
+} from "./execution-target-protocol.js";
 import { REMOTE_ASSET_INSTALL_MODES } from "./remoteAssetInstallMode.js";
 import { PROCESS_RESOURCE_CLI_LANES } from "./processResourceTelemetry.js";
 import { isKnownRemoteResourcePackageId } from "./remoteResourcePackages.js";
@@ -404,6 +408,15 @@ export const hostBrowserExecuteResultMessageSchema = z.object({
   result: browserCommandResultSchema,
 });
 
+// main → host：M2F 执行目标请求结果（按 requestId 关联到 host 的 pending）。
+export const hostExecutionTargetResultMessageSchema = z
+  .object({
+    type: z.literal("execution-target-result"),
+    requestId: nonEmptyStringSchema,
+    result: zcodeExecutionTargetResultSchema,
+  })
+  .strict();
+
 export const hostLocalMediaPreviewPathAuthorizeResultMessageSchema = z
   .object({
     type: z.literal("local-media-preview-path-authorize-result"),
@@ -476,6 +489,7 @@ export const hostIncomingMessageSchema = z.discriminatedUnion("type", [
   hostCronRunMessageSchema,
   hostOffPeakRunMessageSchema,
   hostBrowserExecuteResultMessageSchema,
+  hostExecutionTargetResultMessageSchema,
   hostLocalMediaPreviewPathAuthorizeResultMessageSchema,
   hostCuaPipFocusChangedMessageSchema,
   hostProviderProvisioningExecuteMessageSchema,
@@ -849,6 +863,15 @@ export const hostOffPeakSchedulerWakeRequestResponseSchema = z.object({
   offPeakTaskId: z.string().optional(),
 });
 
+// host → main：M2F agent 执行目标请求；request 即 interaction/executionTarget 的已校验参数。
+export const hostExecutionTargetRequestResponseSchema = z
+  .object({
+    type: z.literal("execution-target-request"),
+    requestId: nonEmptyStringSchema,
+    request: zcodeExecutionTargetParamsSchema,
+  })
+  .strict();
+
 // host → main：执行一条 browser-use 命令（main 用 WebContentsView+CDP 执行）。
 export const hostBrowserExecuteRequestResponseSchema = z.object({
   type: z.literal("browser-execute-request"),
@@ -975,6 +998,7 @@ export const hostResponseMessageSchema = z.discriminatedUnion("type", [
   hostSessionMessageDeliverResultResponseSchema,
   hostFeedbackLogArchiveRequestResponseSchema,
   hostBrowserExecuteRequestResponseSchema,
+  hostExecutionTargetRequestResponseSchema,
   hostLocalMediaPreviewPathAuthorizeRequestResponseSchema,
   hostNetworkTelemetryBatchResponseSchema,
   hostProviderProvisioningSourceChangedResponseSchema,

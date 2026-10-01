@@ -31,6 +31,8 @@ import {
   serializeLaunchMarks,
   type RemoteTarget,
   type WorkspacePurpose,
+  type ZCodeExecutionTargetParams,
+  type ZCodeExecutionTargetResult,
   ZCODE_DESKTOP_CONTEXT_PROMPT_ENABLED_ENV,
 } from "@zcode/shared";
 import { getMainLaunchPartialMarks } from "./desktopLaunchMarks.js";
@@ -222,6 +224,11 @@ export function spawnHostProcess(
       sessionContext?: "live" | "cached";
       command: unknown;
     }) => Promise<{ ok: boolean; [k: string]: unknown }>;
+    // M2F：agent 执行目标请求（list/start/read/cancel）。缺省（账号模块未就绪）→ unavailable。
+    handleExecutionTargetRequest?: (params: {
+      win: BrowserWindow;
+      request: ZCodeExecutionTargetParams;
+    }) => Promise<ZCodeExecutionTargetResult>;
     /** Host 已完成附件授权后，由 Main 将本地视频 realpath 加入精确协议授权集合。 */
     authorizeLocalMediaPreviewPath?: (path: string) => Promise<string>;
   },
@@ -453,6 +460,26 @@ export function spawnHostProcess(
           result: commandResult,
         });
       });
+      return;
+    }
+
+    if (result.data.type === HostResponseTypes.ExecutionTargetRequest) {
+      const { requestId, request } = result.data;
+      const handler = dependencies.handleExecutionTargetRequest;
+      const failure = (reason: "unavailable" | "internal"): ZCodeExecutionTargetResult => ({
+        op: request.op,
+        ok: false,
+        reason,
+      });
+      void (handler ? handler({ win, request }) : Promise.resolve(failure("unavailable")))
+        .catch(() => failure("internal"))
+        .then((executionResult) => {
+          child.postMessage({
+            type: HostMessageTypes.ExecutionTargetResult,
+            requestId,
+            result: executionResult,
+          });
+        });
       return;
     }
 

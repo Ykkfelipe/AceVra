@@ -21,6 +21,10 @@ import { bashOutputDisplaySchema } from "../bash-output-display.js";
 export * from "../background-bash-output.js";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
 import { z } from "zod";
+import {
+  zcodeExecutionTargetParamsSchema,
+  zcodeExecutionTargetResultSchema,
+} from "../execution-target-protocol.js";
 export * from "../process-diagnostic.js";
 import { errorAttributionSchema } from "../zcode-protocol-v4/snapshot.js";
 import { modelSelectionSchema } from "../model-selection.js";
@@ -2300,6 +2304,20 @@ export type ZCodeWorkspaceUpdateOffPeakToolPolicyResult = z.infer<
   typeof zcodeWorkspaceUpdateOffPeakToolPolicyResultSchema
 >;
 
+// M2F：agent 执行工具（ExecutionTargets / RunOnTarget / TargetTask）的 host 能力门禁，
+// 与 Off-Peak 同一套 host→CLI 同步模式；CLI 缺省关闭（fail-closed）。
+export const zcodeWorkspaceUpdateExecutionTargetPolicyParamsSchema = z
+  .object({
+    workspace: zcodeWorkspaceRefSchema,
+    enabled: z.boolean(),
+  })
+  .strict();
+export type ZCodeWorkspaceUpdateExecutionTargetPolicyParams = z.infer<
+  typeof zcodeWorkspaceUpdateExecutionTargetPolicyParamsSchema
+>;
+export const zcodeWorkspaceUpdateExecutionTargetPolicyResultSchema =
+  zcodeWorkspaceUpdateExecutionTargetPolicyParamsSchema;
+
 // 动态工作流灰度门禁：workspace 级事实，
 // 与 Off-Peak 同一套 host→CLI 同步模式；旧 CLI method-not-found → host 降级忽略。
 export const zcodeWorkspaceUpdateDynamicWorkflowPolicyParamsSchema = z
@@ -3661,6 +3679,8 @@ export const zcodeProtocolMethods = {
   workspaceUpdateOffPeakToolPolicy: "workspace/updateOffPeakToolPolicy",
   // 动态工作流灰度门禁：同 Off-Peak 的同步模式。
   workspaceUpdateDynamicWorkflowPolicy: "workspace/updateDynamicWorkflowPolicy",
+  // M2F：执行目标工具门禁（host 有 executor 且本地 workspace 时开启）。
+  workspaceUpdateExecutionTargetPolicy: "workspace/updateExecutionTargetPolicy",
   // LLM 执行面在 CLI，直连不可行；消费仅 services 内部
   // （commit message），待 v4 workspace 查询/命令面覆盖后移除。
   workspaceGenerateText: "workspace/generateText",
@@ -3717,6 +3737,8 @@ export const zcodeProtocolMethods = {
   // browser-use 反向请求由 agent 发起，host 转给 main 中的 CDP executor。
   interactionBrowserList: "interaction/browserList",
   interactionBrowserExecute: "interaction/browserExecute",
+  // M2F：agent 经 host 调用 Desktop main 的 IRemoteProcessService（list/start/read/cancel）。
+  interactionExecutionTarget: "interaction/executionTarget",
 } as const;
 
 export type ZCodeProtocolMethod = (typeof zcodeProtocolMethods)[keyof typeof zcodeProtocolMethods];
@@ -3741,6 +3763,10 @@ export const zcodeProtocolSessionMethodContracts = {
   [zcodeProtocolMethods.interactionBrowserExecute]: {
     params: zcodeBrowserExecuteParamsSchema,
     result: zcodeBrowserExecuteResultSchema,
+  },
+  [zcodeProtocolMethods.interactionExecutionTarget]: {
+    params: zcodeExecutionTargetParamsSchema,
+    result: zcodeExecutionTargetResultSchema,
   },
 } as const satisfies Partial<
   Record<ZCodeProtocolMethod, { params: z.ZodTypeAny; result: z.ZodTypeAny }>

@@ -29,6 +29,7 @@ import { registerHostServiceResourceTelemetry } from "./hostServiceResourceTelem
 import { resolveResourceTelemetryEnvironmentKey } from "./hostResourceTelemetryEnvironment.js";
 import { reportHostSessionCreate } from "./hostSessionCreateTelemetry.js";
 import { createBrowserControlMainBridge } from "./browserControlMainBridge.js";
+import { createExecutionTargetMainBridge } from "./executionTargetMainBridge.js";
 import { materializeBrowserRecordingArtifact } from "./browserRecordingArtifactMaterializer.js";
 import {
   ServiceCollection,
@@ -230,6 +231,16 @@ function authorizeLocalMediaPreviewPath(path: string): Promise<string> {
     }
   });
 }
+
+// M2F：agent 执行目标请求（Run-on 节点上的进程任务）经 parentPort 转给 main 的账号任务 API。
+const executionTargetMainBridge = createExecutionTargetMainBridge({
+  postToMain: (message) => {
+    if (!parentPort) {
+      throw new Error("parentPort unavailable");
+    }
+    parentPort.postMessage(message);
+  },
+});
 
 // browser-use host↔main 桥：把 agent 的 browser 命令经 parentPort 转给 main（WebContentsView+CDP）。
 // parentPort 为空（不应发生于 host 进程）时 postToMain 抛错，bridge 自身返回 backend_unavailable。
@@ -2135,6 +2146,7 @@ async function disposeHostResources(reason: string): Promise<HostShutdownResult>
     logger.info(`disposing host resources, reason=${reason}`);
 
     stopHostNetworkTelemetry();
+    executionTargetMainBridge.dispose();
     hostSelfResourceTelemetry.stop();
     disposeLocalResourceTelemetry();
     activeCustomForkHostRelay?.dispose();
@@ -2423,6 +2435,11 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
         });
       }
     })();
+    return;
+  }
+
+  if (msg.type === HostMessageTypes.ExecutionTargetResult) {
+    executionTargetMainBridge.handleResult({ requestId: msg.requestId, result: msg.result });
     return;
   }
 
@@ -2862,6 +2879,8 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
               // browser-use：agent 的 interaction/browserExecute 经 zcodeAgentService 转到这个 executor，
               // 再经 parentPort 到 main 的 WebContentsView+CDP 执行。
               browserControlExecutor: browserControlMainBridge,
+              // M2F：仅 Desktop 本机 Host 提供；services 只对本地 workspace 打开 agent 执行目标工具。
+              executionTargetExecutor: executionTargetMainBridge,
               // CUA 顶部提示属于物理 Windows 桌面投影；非 Windows 和远端 authority 都不得上报。
               cuaOperationStateReporter:
                 process.platform === "win32" ? cuaOperationStateReporter : undefined,

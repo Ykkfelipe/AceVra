@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AccountView } from "@zcode/shared";
+import { installAgentTaskAttachBridge } from "@/account/agentTaskAttachBridge.js";
 import { useOptionalPlatform } from "@/hooks/usePlatform.js";
 
 /**
@@ -16,6 +17,8 @@ export function useAceVraAccount() {
     let active = true;
     // Subscribe first so a change racing the initial read is not lost.
     const off = account.onViewChanged((next) => active && setView(next));
+    // App-level (Root mounts this hook); shared ref-counted subscription, never per render.
+    const disposeAttachBridge = installAgentTaskAttachBridge(account);
     account
       .getView()
       .then((next) => active && setView((current) => current ?? next))
@@ -23,6 +26,7 @@ export function useAceVraAccount() {
     return () => {
       active = false;
       off();
+      disposeAttachBridge();
     };
   }, [account]);
 

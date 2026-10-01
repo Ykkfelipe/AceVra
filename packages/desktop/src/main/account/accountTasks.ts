@@ -33,6 +33,18 @@ const fromRemote = (task: Record<string, any>): TaskView => ({
   lastSequence: task.lastSequence,
 });
 
+/** Main-side tasks API: the shared contract plus a single-task read for the agent wait loop. */
+export interface AccountTasksApi extends IRemoteProcessService {
+  getTask(taskId: string): Promise<TaskView | null>;
+}
+
+const UNAVAILABLE_DETAILS = new Set([
+  "target_offline",
+  "target_revoked",
+  "target_not_node",
+  "target_lacks_shell",
+]);
+
 /**
  * One entry point for "run a process on a target". Local runs never touch the control plane;
  * node runs go through the server-owned queue. Both return a handle at once and expose the
@@ -48,7 +60,7 @@ export function createAccountTasks(deps: {
     displayName: string;
     capabilities: AccountDevice["capabilities"];
   };
-}): IRemoteProcessService {
+}): AccountTasksApi {
   const isLocal = (id: string) => id === LOCAL_TARGET_ID || id.startsWith("local-");
   return {
     async listTargets(): Promise<ExecutionTarget[]> {
@@ -101,15 +113,24 @@ export function createAccountTasks(deps: {
       if (result.status === 201 || result.status === 200)
         return { ok: true, taskId: result.json!.task.id, targetId: input.targetId };
       if (result.status === 400) return { ok: false, reason: "invalid_request" };
-      return {
-        ok: false,
-        reason:
-          result.status === 404
-            ? "target_not_found"
-            : result.status === 409
-              ? "target_unavailable"
-              : "unavailable",
-      };
+      if (result.status === 404) return { ok: false, reason: "target_not_found" };
+      if (result.status === 409) {
+        // M2F：保留控制面 409 的真实原因（离线/吊销/无 shell），agent 才能如实告知用户，
+        // 不能笼统成 "unavailable" 后被误读为可以改在本机执行。
+        const detail = result.json?.error;
+        return {
+          ok: false,
+          reason: "target_unavailable",
+          ...(typeof detail === "string" && UNAVAILABLE_DETAILS.has(detail) ? { detail } : {}),
+        };
+      }
+      return { ok: false, reason: "unavailable" };
+    },
+    async getTask(taskId: string): Promise<TaskView | null> {
+      if (isLocal(taskId)) return deps.local.list().find((task) => task.id === taskId) ?? null;
+      if (!deps.accountReady()) return null;
+      const result = await deps.call("GET", `/v1/tasks/${encodeURIComponent(taskId)}`);
+      return result?.status === 200 && result.json?.task ? fromRemote(result.json.task) : null;
     },
     async listTasks(): Promise<TaskView[]> {
       const local = deps.local.list();

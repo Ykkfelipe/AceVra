@@ -586,6 +586,46 @@ await scenario("G-remote-process", async (ctx) => {
   const runOn = page.getByTestId("v4-composer-run-on");
   const runOnOption = (id) =>
     page.locator(`[data-testid="v4-composer-run-on-option"][data-target-id="${id}"]`);
+  // M2F: scripted model. A prompt tagged `AGENT-RUN:<name>` makes the fixture call RunOnTarget
+  // with agentScripts[name] (only when the request offers that tool); the tool result is recorded.
+  const agentScripts = {};
+  const agentLog = [];
+  fixture.setResponder((input) => {
+    const tools = (input.tools ?? []).map((tool) => tool.function?.name);
+    if (!tools.includes("RunOnTarget")) return null;
+    const last = (input.messages ?? []).at(-1);
+    const text = (content) => (typeof content === "string" ? content : JSON.stringify(content));
+    if (last?.role === "tool") {
+      agentLog.push({ toolResult: text(last.content) });
+      return { content: "Agent remote step finished." };
+    }
+    const tag = last?.role === "user" ? text(last.content).match(/AGENT-RUN:(\w+)/) : null;
+    if (!tag || !agentScripts[tag[1]]) return null;
+    agentLog.push({
+      prompt: tag[1],
+      hasRunOnContext: text(last.content).includes("<execution-target-context"),
+    });
+    return {
+      toolCall: {
+        id: `call_${tag[1]}_${agentLog.length}`,
+        name: "RunOnTarget",
+        arguments: agentScripts[tag[1]],
+      },
+    };
+  });
+  const latestTaskId = async () =>
+    (await backend.db.query("SELECT id FROM tasks ORDER BY created_at DESC LIMIT 1")).rows[0]?.id;
+  const askAgent = async (prompt) => {
+    const input = page.getByTestId("v4-composer-input");
+    await input.fill(prompt);
+    await input.press("Enter");
+    // RunOnTarget needs approval (it runs a process on another device): allow once.
+    const allow = page.locator('[data-permission-option-kind="allowOnce"]').first();
+    await allow.waitFor({ timeout: 30000 });
+    await allow.click();
+    if (await allow.isVisible().catch(() => false)) await allow.click().catch(() => {});
+  };
+  const toolResults = () => agentLog.filter((entry) => entry.toolResult);
   try {
     await connectProvider(page);
     await page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
@@ -649,7 +689,7 @@ await scenario("G-remote-process", async (ctx) => {
       )
     ).rows[0].id;
     // Composer: the paired node appears by its user-given name; choosing it is per conversation
-    // and honestly states that agent tools still run on this device.
+    // and the caption states that agent commands go to the node while files/Computer stay here.
     await backToWorkspace(page);
     await snap(page, "composer-run-on-automatic");
     await runOn.click();
@@ -731,6 +771,55 @@ await scenario("G-remote-process", async (ctx) => {
     });
     await card.getByTestId("acevra-task-card-dismiss").click();
     await card.waitFor({ state: "detached", timeout: 5000 });
+    // M2F: with Run on = Dell Runner the agent's command runs on the node as a Task; the card in
+    // this conversation streams its TaskEvents. The caption states the real routing boundary.
+    await runOn.click();
+    assert.match(
+      await page.getByTestId("v4-composer-run-on-gap").innerText(),
+      /Commands the agent runs go to Dell Runner\. Files and Computer stay on this device\./,
+    );
+    await snap(page, "composer-run-on-agent-caption");
+    await page.keyboard.press("Escape");
+    agentScripts.quick = {
+      targetId: nodeId,
+      executable: process.execPath,
+      args: ["-e", "console.log('agent ran on dell')"],
+      cwd: join(project, "app"),
+      waitSeconds: 30,
+    };
+    const beforeAgent = await latestTaskId();
+    await askAgent("AGENT-RUN:quick run it on Dell");
+    await until(async () => (await latestTaskId()) !== beforeAgent);
+    const agentTask = await latestTaskId();
+    const agentCard = page.locator(`[data-testid="acevra-task-card"][data-task-id="${agentTask}"]`);
+    await agentCard.waitFor({ timeout: 20000 });
+    await agentCard.getByText("agent ran on dell").waitFor({ timeout: 20000 });
+    await until(async () => (await agentCard.getAttribute("data-task-status")) === "completed");
+    await page.getByText("Agent remote step finished.").first().waitFor({ timeout: 30000 });
+    assert.ok(agentLog.find((entry) => entry.prompt === "quick")?.hasRunOnContext);
+    const quickResult = toolResults()[0].toolResult;
+    assert.match(quickResult, /agent ran on dell/);
+    assert.match(quickResult, /"state":"completed"/);
+    await snap(page, "conversation-agent-task-card-completed");
+    // Agent-started long task → Stop on the card → node kills it → the tool reports cancelled.
+    agentScripts.long = {
+      ...agentScripts.quick,
+      args: ["-e", "console.log('agent long started'); setInterval(() => {}, 1000)"],
+      waitSeconds: 120,
+    };
+    await askAgent("AGENT-RUN:long keep it running on Dell");
+    await until(async () => (await latestTaskId()) !== agentTask);
+    const agentLongTask = await latestTaskId();
+    const agentLongCard = page.locator(
+      `[data-testid="acevra-task-card"][data-task-id="${agentLongTask}"]`,
+    );
+    await agentLongCard.getByText("agent long started").waitFor({ timeout: 20000 });
+    assert.match(await agentLongCard.innerText(), /Dell Runner · Running/);
+    await snap(page, "conversation-agent-task-card-running");
+    await agentLongCard.getByTestId("acevra-task-card-stop").click();
+    await until(async () => (await agentLongCard.getAttribute("data-task-status")) === "cancelled");
+    await until(() => toolResults().length >= 2, 30000);
+    assert.match(toolResults()[1].toolResult, /"state":"cancelled"/);
     await openAccountSection(page);
     await until(
       async () =>
@@ -763,12 +852,27 @@ await scenario("G-remote-process", async (ctx) => {
     await snap(page, "composer-run-on-offline");
     assert.equal(await runOn.getAttribute("data-run-on"), nodeId);
     await page.keyboard.press("Escape");
+    // M2F: offline target → the agent's run fails truthfully; no task, nothing run on this Mac.
+    agentScripts.offline = {
+      ...agentScripts.quick,
+      args: ["-e", "require('fs').writeFileSync('ran-locally.txt', 'x')"],
+    };
+    const beforeOffline = await latestTaskId();
+    await askAgent("AGENT-RUN:offline try Dell again");
+    await until(() => toolResults().length >= 3, 30000);
+    assert.match(toolResults()[2].toolResult, /offline/i);
+    assert.match(toolResults()[2].toolResult, /Nothing was run on this Mac/);
+    assert.equal(await latestTaskId(), beforeOffline, "no task was created for an offline target");
+    await assert.rejects(readFile(join(ctx.roots.workspace, "ran-locally.txt")));
+    await assert.rejects(readFile(join(project, "app", "ran-locally.txt")));
     return {
       remote:
         "shell only after readiness; live events; completed; local target; offline target unavailable",
       composer:
-        "Run on lists real targets, per-conversation choice, honest agent-tools note, offline shown disabled",
+        "Run on lists real targets, per-conversation choice, truthful routing caption, offline shown disabled",
       card: "TaskEvent-driven card in the attached conversation, Stop cancelled and killed the process",
+      agent:
+        "RunOnTarget routed via Task to the node, card streamed and completed, card Stop cancelled an agent task, offline failed with no local fallback",
     };
   } finally {
     for (const child of children) child.kill("SIGKILL");

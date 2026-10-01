@@ -7,6 +7,7 @@ import { resolveCuaOsSupport } from "../cuaOsSupport.js";
 import { execFile } from "node:child_process";
 import { createAccountDevices } from "./accountDevices.js";
 import { deriveDesktopCapabilities } from "./accountCapabilities.js";
+import { createAgentExecutionHandler } from "./accountAgentExecution.js";
 import { createAccountTasks } from "./accountTasks.js";
 import { createLocalProcessRunner } from "./localProcessRunner.js";
 import { createInstallationStore } from "./accountInstallation.js";
@@ -110,6 +111,7 @@ export function initAccountMain(options: {
   });
   let gitKnown = false;
   void gitProbe.then((ok) => (gitKnown = ok));
+  const handleAgentExecution = createAgentExecutionHandler({ tasks: tasksApi });
 
   const subscribers = new Map<number, WebContents>();
   const broadcast = (view: AccountView) => {
@@ -181,6 +183,8 @@ export function initAccountMain(options: {
 
   return {
     controller,
+    /** M2F：agent 的 interaction/executionTarget 反向请求入口（只转发，不持有任务状态）。 */
+    handleAgentExecution,
     start: () => restored.catch(() => undefined),
     dispose() {
       local.shutdown();

@@ -241,7 +241,7 @@ import {
   stopDesktopNetworkTelemetry,
 } from "./desktopNetworkTelemetry.js";
 import { applyDesktopChromiumNetworkPolicies } from "./desktopNetworkPolicy.js";
-import { mapZCodeEnvToArmsRumEnv } from "@zcode/shared";
+import { AccountChannels, mapZCodeEnvToArmsRumEnv } from "@zcode/shared";
 import {
   findWindowsProcessesReferencingResourceMarkers,
   probeWindowsPackagedResourceWritable,
@@ -257,6 +257,8 @@ import { registerPrivilegedSchemes } from "./account/accountScheme.js";
 // AceVra Account：Clerk bridge 须在 app ready 前创建，并早于统一的特权 scheme 注册——
 // registerSchemesAsPrivileged 会整体替换先前注册，所以两类 scheme 必须同一次声明。
 const accountRuntime = resolveAccountRuntime(process.env, app.isPackaged);
+/** M2F：agent 执行目标请求的转发入口；app ready 之前为 null（请求如实返回 unavailable）。 */
+let accountMain: ReturnType<typeof initAccountMain> | null = null;
 if (accountRuntime.clerkEnabled) {
   // 修复：Clerk bridge 及其 electron-store 依赖曾被静态导入，安装包缺 `conf` 时未配置账号的用户也在
   // 启动时崩溃。改为仅在配置了账号时才动态加载——可选的账号依赖绝不能阻断本地启动。
@@ -1755,6 +1757,15 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
           // browser-use：main 用 WebContentsView+CDP 执行命令。
           handleBrowserExecuteRequest: ({ win: browserWin, ...request }) =>
             runBrowserCommandOnView({ win: browserWin, ...request }),
+          // M2F：agent 执行目标请求经账号模块的任务 API 转发；启动成功后通知该窗口挂卡片。
+          handleExecutionTargetRequest: async ({ win: hostWin, request }) =>
+            accountMain
+              ? accountMain.handleAgentExecution(request, (notice) => {
+                  if (!hostWin.isDestroyed()) {
+                    hostWin.webContents.send(AccountChannels.AgentTaskStarted, notice);
+                  }
+                })
+              : { op: request.op, ok: false, reason: "unavailable" },
         },
         {
           taskRealtime: {
@@ -1878,11 +1889,12 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 app.whenReady().then(async () => {
   markMainLaunchAppReady();
   // 账号服务不阻塞启动：未配置、Clerk 或后端不可用时本地模式照常工作。
-  void initAccountMain({
+  accountMain = initAccountMain({
     runtime: accountRuntime,
     rendererDir: join(import.meta.dirname, "../renderer"),
     accountPreloadPath: join(import.meta.dirname, "../preload/accountWindow.cjs"),
-  })
+  });
+  void accountMain
     .start()
     .catch((error: unknown) =>
       logger.warn("AceVra account start failed", { error: String(error) }),

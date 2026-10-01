@@ -20,6 +20,8 @@ export async function createIsolatedRoots() {
 }
 export async function startInferenceFixture() {
   const requests = [];
+  /** Optional per-request script: return `{ toolCall: { id, name, arguments } }` or null (default reply). */
+  let responder = null;
   const server = createServer(async (request, response) => {
     if (request.url !== "/v1/chat/completions") {
       response.writeHead(503, { "content-type": "application/json" });
@@ -35,7 +37,14 @@ export async function startInferenceFixture() {
     for await (const chunk of request) body += chunk;
     const input = JSON.parse(body);
     requests.push({ model: input.model, stream: Boolean(input.stream) });
-    const message = "AceVra fixture inference complete.";
+    const scripted = responder?.(input) ?? null;
+    const toolCall = scripted?.toolCall ?? null;
+    const message = scripted?.content ?? "AceVra fixture inference complete.";
+    const wireToolCall = toolCall && {
+      id: toolCall.id,
+      type: "function",
+      function: { name: toolCall.name, arguments: JSON.stringify(toolCall.arguments) },
+    };
     const base = {
       id: "fixture-completion",
       object: "chat.completion",
@@ -48,7 +57,17 @@ export async function startInferenceFixture() {
         JSON.stringify({
           ...base,
           choices: [
-            { index: 0, message: { role: "assistant", content: message }, finish_reason: "stop" },
+            toolCall
+              ? {
+                  index: 0,
+                  message: { role: "assistant", content: null, tool_calls: [wireToolCall] },
+                  finish_reason: "tool_calls",
+                }
+              : {
+                  index: 0,
+                  message: { role: "assistant", content: message },
+                  finish_reason: "stop",
+                },
           ],
           usage: { prompt_tokens: 10, completion_tokens: 6, total_tokens: 16 },
         }),
@@ -61,13 +80,19 @@ export async function startInferenceFixture() {
         ...base,
         object: "chat.completion.chunk",
         choices: [
-          { index: 0, delta: { role: "assistant", content: message }, finish_reason: null },
+          {
+            index: 0,
+            delta: toolCall
+              ? { role: "assistant", tool_calls: [{ index: 0, ...wireToolCall }] }
+              : { role: "assistant", content: message },
+            finish_reason: null,
+          },
         ],
       },
       {
         ...base,
         object: "chat.completion.chunk",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        choices: [{ index: 0, delta: {}, finish_reason: toolCall ? "tool_calls" : "stop" }],
         usage: { prompt_tokens: 10, completion_tokens: 6, total_tokens: 16 },
       },
     ])
@@ -78,6 +103,9 @@ export async function startInferenceFixture() {
   return {
     origin: `http://127.0.0.1:${server.address().port}`,
     requests,
+    setResponder: (next) => {
+      responder = next;
+    },
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }

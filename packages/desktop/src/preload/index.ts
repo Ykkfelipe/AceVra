@@ -619,6 +619,21 @@ contextBridge.exposeInMainWorld("zcode", {
       ipcRenderer.on(AccountChannels.ViewChanged, handler);
       return () => ipcRenderer.removeListener(AccountChannels.ViewChanged, handler);
     },
+    onAgentTaskStarted: (
+      callback: (notice: { sessionId: string; taskId: string; targetId: string }) => void,
+    ): (() => void) => {
+      const isId = (value: unknown): value is string =>
+        typeof value === "string" && value.length > 0 && value.length <= 128;
+      const handler = (_event: unknown, notice: unknown) => {
+        // 只转发结构合法的挂载通知；畸形 payload 直接丢弃，渲染端不会据此挂卡片。
+        if (typeof notice !== "object" || notice === null) return;
+        const { sessionId, taskId, targetId } = notice as Record<string, unknown>;
+        if (!isId(sessionId) || !isId(taskId) || !isId(targetId)) return;
+        callback({ sessionId, taskId, targetId });
+      };
+      ipcRenderer.on(AccountChannels.AgentTaskStarted, handler);
+      return () => ipcRenderer.removeListener(AccountChannels.AgentTaskStarted, handler);
+    },
   },
   /** 上报 OAuth state 用于 deep link 路由 */
   registerOAuthState: (payload: OAuthStateRegistration) =>

@@ -504,6 +504,8 @@ export async function executeTurnCommand(
           this.messageHistory.addEntries(
             buildRuntimeUserEntriesFromTurn(input, resolvedAttachments, {
               browserAmbientContext: options?.browserAmbientContext,
+              // M2F：会话选中远程节点时，告知模型进程命令须经 RunOnTarget（只对 provider 可见）。
+              executionTargetContext: this.executionTargetPort?.selectedTarget(),
             }).map((entry) => {
               const metadata = runtimeInputMetadata(options?.inputPresentation);
               return entry.kind !== "attachment" && metadata ? { ...entry, metadata } : entry;

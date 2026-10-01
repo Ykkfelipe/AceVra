@@ -16,6 +16,8 @@ import type {
   ModelMessageContentBlock,
 } from "../deps.js";
 import type { ResolvedTurnAttachment, RunModelTextRequestOptions } from "../types.js";
+import type { SelectedExecutionTarget } from "@zcode/contracts";
+import { formatExecutionTargetUserInput } from "./execution-target-context.js";
 
 export function getLatestActiveSessionMessageId(
   messages: MessageWithParts[],
@@ -111,6 +113,7 @@ export function buildRuntimeUserEntriesFromTurn(
   attachments: ResolvedTurnAttachment[],
   options: {
     browserAmbientContext?: { tabCount: number; currentUrl?: string };
+    executionTargetContext?: SelectedExecutionTarget;
   } = {},
 ): RuntimeMessageEntry[] {
   const realUserBlocks: ModelMessageContentBlock[] = [];
@@ -143,7 +146,11 @@ export function buildRuntimeUserEntriesFromTurn(
   if (input.length > 0) {
     blocks.push({
       type: "text",
-      text: formatBrowserAmbientUserInput(input, options.browserAmbientContext),
+      text: formatExecutionTargetUserInput(
+        formatBrowserAmbientUserInput(input, options.browserAmbientContext),
+        input,
+        options.executionTargetContext,
+      ),
     });
   }
   blocks.push(...realUserBlocks, ...pastedImageBlocks);

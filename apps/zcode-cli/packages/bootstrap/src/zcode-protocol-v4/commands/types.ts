@@ -69,6 +69,8 @@ export interface V4SessionRecordView {
   activeAutomationId?: string;
   /** 当前正在执行的闲时派发 turn；只在 turn 运行期间存在。 */
   activeOffPeakTaskId?: string;
+  /** M2F：会话 Run-on 选择；只由 sendText / createSession.firstInput 的 executionTarget 写入。 */
+  executionTarget?: { targetId: string; displayName?: string };
   /** 恢复失败告警：存在时拒绝新 turn（历史损坏不能静默续写）。 */
   restoreWarning?: { message: string; type: string };
   taskType?: SessionTaskType;

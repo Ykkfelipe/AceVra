@@ -69,6 +69,7 @@ export function createDesktopPlatform(options: {
       revokeDevice: (id) => window.zcode.account.revokeDevice(id),
       engineeringTools: () => window.zcode.account.engineeringTools(),
       onViewChanged: (callback) => window.zcode.account.onViewChanged(callback),
+      onAgentTaskStarted: (callback) => window.zcode.account.onAgentTaskStarted(callback),
     },
     registerOAuthState: (payload) => window.zcode.registerOAuthState(payload),
     onOAuthCallback: (callback) => window.zcode.onOAuthCallback(callback),

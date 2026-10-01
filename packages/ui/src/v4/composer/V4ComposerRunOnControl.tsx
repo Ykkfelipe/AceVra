@@ -2,8 +2,8 @@
  * Composer「Run on」次级控件（M2E）。
  *
  * 只读真实 ExecutionTarget（本机 + 已配对节点），选择写入对话级 executionTargetStore；
- * 渲染与打开菜单都不会启动任务或任何捕获。Agent 工具链尚未接入远程目标，
- * 选中非本机目标时菜单如实说明，不伪造路由。
+ * 渲染与打开菜单都不会启动任务或任何捕获。M2F 起选中远端节点时 agent 运行的命令路由到该节点，
+ * 文件与 Computer 工具仍在本机，菜单如实说明这一边界。
  */
 import { memo, useState } from "react";
 import { ChevronDownIcon, ServerIcon } from "lucide-react";
@@ -155,16 +155,24 @@ function RunOnControlMounted({ scopeKey, disabled = false }: V4ComposerRunOnCont
         {remoteSelected && (
           <>
             <DropdownMenuSeparator />
-            <p
-              className="px-2 py-1.5 text-ui-sm text-foreground-subtle"
-              data-testid="v4-composer-run-on-gap"
-            >
-              {t("agentToolsLocal")}
-            </p>
+            <RunOnRemoteCaption targetName={triggerName} />
           </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/** Truthful routing boundary for a remote selection: commands go to the node, the rest stays. */
+export function RunOnRemoteCaption({ targetName }: { targetName: string }) {
+  const { intl } = useZCodeIntl();
+  return (
+    <p
+      className="px-2 py-1.5 text-ui-sm text-foreground-subtle"
+      data-testid="v4-composer-run-on-gap"
+    >
+      {intl.formatMessage({ id: "acevra.execution.agentCommandsOnTarget" }, { target: targetName })}
+    </p>
   );
 }
 

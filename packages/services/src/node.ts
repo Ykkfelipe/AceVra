@@ -547,6 +547,7 @@ import {
   resolveRuntimeZCodeEndpointOrigin,
   type BrowserBackendDescriptor,
   type BrowserClientMode,
+  type ExecutionTargetExecutor,
   type BrowserCommand,
   isZCodeCuaMcpCommand,
   isZCodeCuaMcpPackageArg,
@@ -1609,6 +1610,8 @@ export function createLocalServices(options: {
       command: BrowserCommand;
     }): Promise<{ ok: boolean; [k: string]: unknown }>;
   };
+  /** M2F：agent 执行目标执行器（host→main 账号任务 API）；仅 Desktop 本机 Host 注入。 */
+  executionTargetExecutor?: ExecutionTargetExecutor;
   /** Windows desktop-local Host 的 CUA turn 状态投影；其它 authority 会在装配层拒绝。 */
   cuaOperationStateReporter?: CuaOperationStateReporter;
 }): ServiceCollection {
@@ -2586,6 +2589,7 @@ export function createLocalServices(options: {
           registry: taskArtifactRegistry,
         })
       : undefined,
+    executionTargetExecutor: options?.executionTargetExecutor,
     // 官方 Server MCP 身份头：host 是唯一身份权威，Agent 经反向请求索取。
     // Provider 存在性读取正式 Model Selection View；不恢复旧 Provider Snapshot。
     officialMcpAuthHeadersResolver: createOfficialMcpAuthHeadersResolver({

@@ -18,6 +18,7 @@ import {
   V4InputAdmissionRejectedError,
   resolveSubmittedExecutionState,
 } from "./session-flow.js";
+import { applySubmittedExecutionTarget } from "./execution-target-selection.js";
 
 /**
  * createSession：回落面最后一项的原生化。
@@ -78,6 +79,7 @@ async function createSession(
   if (payload.firstInput) {
     // 附件命令面：firstInput.attachments（AttachmentRef → TurnAttachment）随首条发送。
     const record = requireRecord(host, sessionId);
+    applySubmittedExecutionTarget(record, payload.firstInput.executionTarget);
     const admission = commandAdmissionOf(envelope);
     const durableAdmission =
       (await host.admitInputCommand?.(envelope, sessionId, admission)) ?? null;

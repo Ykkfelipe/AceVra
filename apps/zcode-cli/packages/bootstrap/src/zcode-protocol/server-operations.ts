@@ -107,6 +107,7 @@ import { buildAppUsageSnapshot, resolveTzOffsetMs } from "./usage-stats-builder.
 import { createProtocolInteractionBroker } from "./interaction-broker.js";
 import { createProtocolAutomationPort } from "./automation-port.js";
 import { createProtocolOffPeakPort } from "./offpeak-port.js";
+import { createProtocolExecutionTargetPort } from "./execution-target-port.js";
 import { createProtocolBrowserControlBroker } from "./browser-control-broker.js";
 import { mapComputerUseOperationEvent } from "./computer-use-operation-event.js";
 import { protocolMcpServersToRuntimeMcpConfig } from "./protocol-mcp-config.js";
@@ -3378,6 +3379,14 @@ async function createRecord(
     ...(("offPeakToolEnabled" in params && params.offPeakToolEnabled === true) ||
     context.appRuntimePreferences.offPeakToolEnabled === true
       ? { offPeakPort: createProtocolOffPeakPort(context, () => ownSessionRecord) }
+      : {}),
+    // M2F：Run-on 节点进程执行端口。只有 host 声明能力（Desktop + 本地 workspace）时注入，
+    // 远程 workspace 一律不注入（那里的 agent 不在这台 Desktop 上）。
+    ...(context.appRuntimePreferences.executionTargetsEnabled === true &&
+    !workspace.workspaceIdentity?.trim()
+      ? {
+          executionTargetPort: createProtocolExecutionTargetPort(context, () => ownSessionRecord),
+        }
       : {}),
     resolveInitialBashShellSelection: startupPreferences.resolveInitialBashShellSelection,
     // browser-use：agent.browsers.* 经此把命令转成 interaction/browserExecute 反向请求。

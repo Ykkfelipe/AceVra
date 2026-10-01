@@ -17,7 +17,8 @@ const enUS: Record<string, string> = {
   "acevra.execution.runOnValue": "Run on: {target}",
   "acevra.execution.automatic": "Automatic",
   "acevra.execution.automaticDescription": "Let AceVra choose. Today that's this device.",
-  "acevra.execution.agentToolsLocal": "Agent tools still run on this device for now.",
+  "acevra.execution.agentCommandsOnTarget":
+    "Commands the agent runs go to {target}. Files and Computer stay on this device.",
   "acevra.execution.target.thisDevice": "This device",
   "acevra.execution.target.offline": "Offline",
   "acevra.execution.target.cannotRun": "Can't run tasks",

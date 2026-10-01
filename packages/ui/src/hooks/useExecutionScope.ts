@@ -4,7 +4,8 @@ import { executionScopeKey, useExecutionTargetStore } from "@/store/executionTar
 /**
  * The composer's execution scope (`session:<id>` or `draft:<workspaceKey>`). When the same
  * workspace's draft becomes a session (first send), the draft's Run-on choice and attached tasks
- * move to the session once; the store refuses to overwrite a session that already has state.
+ * merge into the session once (the session's own explicit choice wins; tasks are unioned, since an
+ * agent-started task may already be attached to the session) and the draft resets to Automatic.
  */
 export function useExecutionScope(
   workspace: { workspacePath: string; workspaceIdentity?: string },

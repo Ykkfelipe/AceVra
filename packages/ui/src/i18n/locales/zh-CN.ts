@@ -15,7 +15,8 @@ const zhCN: Record<string, string> = {
   "acevra.execution.runOnValue": "运行于：{target}",
   "acevra.execution.automatic": "自动",
   "acevra.execution.automaticDescription": "由 AceVra 决定，目前即本设备。",
-  "acevra.execution.agentToolsLocal": "目前 Agent 工具仍在本设备上运行。",
+  "acevra.execution.agentCommandsOnTarget":
+    "智能体运行的命令将在 {target} 上执行。文件和 Computer 仍在本机。",
   "acevra.execution.target.thisDevice": "本设备",
   "acevra.execution.target.offline": "离线",
   "acevra.execution.target.cannotRun": "无法运行任务",

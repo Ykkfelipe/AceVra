@@ -6,6 +6,7 @@ import type {
   ExecutionShellSelection,
   AutomationPort,
   OffPeakPort,
+  ExecutionTargetPort,
   EmbeddedSearchBackend,
   ExecutionPort,
   BrowserControlPort,
@@ -164,6 +165,8 @@ export interface ToolExecutionContext {
   artifactStore?: ToolArtifactStorePort;
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
+  /** M2F：Run-on 目标进程执行端口；仅 Desktop 本地 workspace 的主会话注入。 */
+  executionTargetPort?: ExecutionTargetPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;

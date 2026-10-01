@@ -54,6 +54,7 @@ import {
 import { createBashProviderDescription } from "./bash-prompt.js";
 import { applyBashReadFileStateEffects } from "./bash-read-file-state.js";
 import { isRuntimeReadOnlyBashCommand } from "./bash-semantics.js";
+import { assertBashRunsOnThisMac } from "./execution-target.js";
 import {
   attachToolExecutionTelemetry,
   classifyCommand,
@@ -107,6 +108,7 @@ async function executeBashHandler(
   timeoutPolicy: BashTimeoutPolicy,
 ): Promise<BashOutput> {
   const parsed = BashInputSchema.parse(input) as BashInput;
+  assertBashRunsOnThisMac(context);
   const executionPort = context.executionPort;
 
   if (!executionPort) {

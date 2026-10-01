@@ -72,6 +72,7 @@ import type {
   ExecutionShellSelection,
   AutomationPort,
   OffPeakPort,
+  ExecutionTargetPort,
   FileSystemPort,
   HttpClientPort,
   ImageProcessorPort,
@@ -367,6 +368,8 @@ export interface AgentRuntimeDeps {
   artifactStore?: ToolArtifactStorePort;
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
+  /** M2F：Run-on 目标进程执行端口（bootstrap 按会话注入）；存在即注册执行目标工具。 */
+  executionTargetPort?: ExecutionTargetPort;
   contextSourcePort?: ContextSourcePort;
   eventSink?: SessionEventSink;
   logger?: Logger;

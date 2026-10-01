@@ -222,3 +222,40 @@ test("tasks list merges local and remote newest-first with one shape; events and
   assert.equal((await api.cancelTask("task-remote-1", true))!.state, "cancelling");
   assert.deepEqual(calls.at(-1)!.body, { force: true });
 });
+
+test("start keeps the control-plane 409 reason as detail so the agent can report it truthfully", async () => {
+  for (const error of ["target_offline", "target_revoked", "target_lacks_shell"]) {
+    const { api } = setup({ responses: { "POST /v1/tasks": { status: 409, json: { error } } } });
+    assert.deepEqual(
+      await api.startRemoteProcess({
+        targetId: "dev_dell",
+        process: { executable: "x", cwd: "/" },
+      }),
+      { ok: false, reason: "target_unavailable", detail: error },
+    );
+  }
+  const { api } = setup({
+    responses: { "POST /v1/tasks": { status: 409, json: { error: "<script>" } } },
+  });
+  assert.deepEqual(
+    await api.startRemoteProcess({ targetId: "dev_dell", process: { executable: "x", cwd: "/" } }),
+    { ok: false, reason: "target_unavailable" },
+    "unknown 409 bodies are not echoed",
+  );
+});
+
+test("getTask reads one remote task by id, local tasks locally, and nothing when signed out", async () => {
+  const { api, calls } = setup({
+    responses: { "GET /v1/tasks/task-remote-1": { status: 200, json: { task: REMOTE_TASK } } },
+  });
+  const remote = await api.getTask("task-remote-1");
+  assert.equal(remote?.targetId, "dev_dell");
+  assert.equal(remote?.state, "running");
+  assert.equal(calls.at(-1)?.path, "/v1/tasks/task-remote-1");
+  assert.equal((await api.getTask("local-1"))?.targetId, LOCAL_TARGET_ID);
+  const missing = setup({ responses: { "GET /v1/tasks/nope-1234": { status: 404, json: {} } } });
+  assert.equal(await missing.api.getTask("nope-1234"), null);
+  const signedOut = setup({ ready: false });
+  assert.equal(await signedOut.api.getTask("task-remote-1"), null);
+  assert.equal(signedOut.calls.length, 0);
+});

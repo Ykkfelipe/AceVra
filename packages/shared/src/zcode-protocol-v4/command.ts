@@ -24,6 +24,7 @@ import {
   zcodeProtocolMcpServerSchema,
 } from "../zcode-protocol/index.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
+import { submissionExecutionTargetSchema } from "../execution-target-protocol.js";
 export type { SharedContextRef } from "./shared-context-ref.js";
 
 const createSessionRequestedConfigSchema = z.object({
@@ -51,6 +52,8 @@ export const commandPayloadSchemas = {
         modelSelection: modelSelectionSchema.optional(),
         mode: submissionModeSchema.optional(),
         planEnabled: z.boolean().optional(),
+        // M2F：Run-on 选择随首条输入进入 CLI 会话 record；缺省 = 不改变（旧 CLI 静默丢弃）。
+        executionTarget: submissionExecutionTargetSchema.optional(),
       })
       .optional(),
     config: createSessionRequestedConfigSchema.optional(),
@@ -85,6 +88,8 @@ export const commandPayloadSchemas = {
       // startNow 由 CLI 原子抢占当前 turn，不经过 queue admission。
       requestedDelivery: z.enum(["startNow", "queue", "guide"]).optional(),
       browserAmbientContext: zcodeBrowserAmbientContextSchema.optional(),
+      // M2F：Run-on 选择随输入写入 CLI 会话 record（agent 执行工具的路由事实）；缺省 = 不改变。
+      executionTarget: submissionExecutionTargetSchema.optional(),
       // Share handover 只允许当前 session 的一个已导入上下文；完整正文由 runtime 从
       // 持久化 provenance 解析，不能随 command 从 renderer 传入。
       context_refs: z.array(sharedContextRefSchema).max(1).optional(),

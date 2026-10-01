@@ -12,7 +12,8 @@ import React from "react";
 register("./uiAssetStubLoader.mjs", import.meta.url);
 const { ZCodeIntlProvider } = await import("../src/i18n/IntlProvider.js");
 const { ExecutionTaskCardView } = await import("../src/v4/composer/ExecutionTaskCards.js");
-const { V4ComposerRunOnControl } = await import("../src/v4/composer/V4ComposerRunOnControl.js");
+const { RunOnRemoteCaption, V4ComposerRunOnControl } =
+  await import("../src/v4/composer/V4ComposerRunOnControl.js");
 
 const render = (node: React.ReactNode, locale: "en-US" | "zh-CN" = "en-US") =>
   renderToStaticMarkup(<ZCodeIntlProvider initialLocale={locale}>{node}</ZCodeIntlProvider>);
@@ -71,4 +72,16 @@ test("status text is localized, not hardcoded English", () => {
 
 test("Run-on control renders nothing without a desktop account bridge", () => {
   assert.equal(render(<V4ComposerRunOnControl scopeKey="draft:/w" />), "");
+});
+
+test("remote selection caption names the target and the local-only tools (M2F)", () => {
+  const en = render(<RunOnRemoteCaption targetName="Dell Runner" />);
+  assert.match(en, /data-testid="v4-composer-run-on-gap"/);
+  assert.match(
+    en,
+    /Commands the agent runs go to Dell Runner\. Files and Computer stay on this device\./,
+  );
+  assert.doesNotMatch(en, /still run on this device/);
+  const zh = render(<RunOnRemoteCaption targetName="Dell Runner" />, "zh-CN");
+  assert.match(zh, /智能体运行的命令将在 Dell Runner 上执行。文件和 Computer 仍在本机。/);
 });

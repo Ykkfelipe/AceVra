@@ -145,6 +145,8 @@ export type StartProcessResult =
         | "target_not_found"
         | "unavailable"
         | "not_signed_in";
+      /** Control-plane reason behind `target_unavailable` (target_offline, target_revoked, …). */
+      detail?: string;
     };
 
 /**
@@ -185,6 +187,10 @@ export interface IAccountPlatform extends IRemoteProcessService {
   revokeDevice(id: string): Promise<AccountDevicesView>;
   /** Engineering-only raw process runner UI; never true in packaged builds. */
   engineeringTools(): Promise<boolean>;
+  /** Agent-started tasks to attach to their conversation card (M2F). Never a task fact. */
+  onAgentTaskStarted(
+    callback: (notice: { sessionId: string; taskId: string; targetId: string }) => void,
+  ): () => void;
 }
 
 /** Runtime validation of the backend `/v1/me` body; anything else is a failure. */
@@ -226,6 +232,7 @@ export const AccountChannels = {
   EngineeringTools: "acevra-account:engineering-tools",
   /** main → main renderer */
   ViewChanged: "acevra-account:view-changed",
+  AgentTaskStarted: "acevra-account:agent-task-started",
   /** account window → main */
   WindowGetConfig: "acevra-account:window-get-config",
   WindowSession: "acevra-account:window-session",

@@ -13,6 +13,7 @@ import type {
   ExecutionShellSelection,
   AutomationPort,
   OffPeakPort,
+  ExecutionTargetPort,
   FileSystemPort,
   HttpClientPort,
   ImageProcessorPort,
@@ -106,6 +107,7 @@ export interface ToolExecutorOptions {
   artifactStore?: ToolArtifactStorePort;
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
+  executionTargetPort?: ExecutionTargetPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;
@@ -210,6 +212,7 @@ export interface ToolExecutorDeps {
   artifactStore?: ToolArtifactStorePort;
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
+  executionTargetPort?: ExecutionTargetPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;

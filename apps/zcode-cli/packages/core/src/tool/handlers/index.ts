@@ -6,6 +6,9 @@ import {
   AMEND_WORKFLOW_TOOL_NAME,
   CREATE_WORKFLOW_TOOL_NAME,
   EVAL_WORKFLOW_SNIPPET_TOOL_NAME,
+  EXECUTION_TARGETS_TOOL_NAME,
+  RUN_ON_TARGET_TOOL_NAME,
+  TARGET_TASK_TOOL_NAME,
   GET_WORKFLOW_RUN_TOOL_NAME,
   LIST_MODELS_TOOL_NAME,
   LIST_SAVED_WORKFLOWS_TOOL_NAME,
@@ -44,6 +47,11 @@ import {
   cronUpdateToolEntry,
 } from "./cron.js";
 import { offPeakCreateToolEntry, offPeakListToolEntry } from "./off-peak.js";
+import {
+  executionTargetsToolEntry,
+  runOnTargetToolEntry,
+  targetTaskToolEntry,
+} from "./execution-target.js";
 import {
   createEnterPlanModeToolEntry,
   enterPlanModeToolEntry,
@@ -91,6 +99,10 @@ export const builtInTools: ToolEntry[] = [
   cronDeleteToolEntry,
   offPeakCreateToolEntry,
   offPeakListToolEntry,
+  // M2F：Run-on 节点进程执行；仅 host 声明能力时注册（includeExecutionTargets）。
+  executionTargetsToolEntry,
+  runOnTargetToolEntry,
+  targetTaskToolEntry,
   enterPlanModeToolEntry,
   exitPlanModeToolEntry,
   askUserQuestionToolEntry,
@@ -156,6 +168,12 @@ const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
   RESOLVE_WORKFLOW_QUESTION_TOOL_NAME,
 ]);
 
+const EXECUTION_TARGET_TOOL_NAMES: ReadonlySet<string> = new Set([
+  EXECUTION_TARGETS_TOOL_NAME,
+  RUN_ON_TARGET_TOOL_NAME,
+  TARGET_TASK_TOOL_NAME,
+]);
+
 interface RegisterBuiltInToolsOptions {
   bashTimeoutPolicy?: BashTimeoutPolicy;
   includeSkill?: boolean;
@@ -174,6 +192,8 @@ interface RegisterBuiltInToolsOptions {
   includeAutomation?: boolean;
   /** Off-Peak 会话内创建工具面；由 host 的 offPeakToolEnabled flag（灰度/远程门）驱动。 */
   includeOffPeak?: boolean;
+  /** M2F：执行目标工具面；仅 Desktop 本地 workspace 主会话（注入了 ExecutionTargetPort）。 */
+  includeExecutionTargets?: boolean;
   /**
    * 动态工作流灰度门。**只有显式 false
    * 才下架** DYNAMIC_WORKFLOW_TOOL_NAMES：缺席代表调用方不参与灰度（TUI、headless、
@@ -251,6 +271,9 @@ export function registerBuiltInTools(
       (entry.metadata.name === "OffPeakCreate" || entry.metadata.name === "OffPeakList") &&
       options.includeOffPeak !== true
     ) {
+      continue;
+    }
+    if (EXECUTION_TARGET_TOOL_NAMES.has(entry.metadata.name) && !options.includeExecutionTargets) {
       continue;
     }
     if (

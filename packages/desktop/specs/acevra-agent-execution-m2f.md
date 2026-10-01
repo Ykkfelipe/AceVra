@@ -28,7 +28,8 @@ no conversation sync, no remote graphical Computer.
   tasks return the result; longer tasks return a task handle and keep running. The conversation
   card shows live progress and has a working Stop; the agent can later `TargetTask wait|stop`.
 - **Local-only keeps working.** No account / account-api down: Bash works as before; the target
-  list is just this device; `RunOnTarget` fails with `not_signed_in` / `account_unavailable`.
+  list is just this device; `RunOnTarget` fails with `not_signed_in`, or `unavailable`
+  (`account_api_unreachable`) when account-api is down.
 - Rendering the composer, selector or card never starts a task or tool call.
 
 ## Tool contract (return-at-finish with bounded wait, then handle)
@@ -139,12 +140,17 @@ stop` or card Stop → cancelling → cancelled; agent abort cancels too.
 8. Rendering composer/card/menu triggers no tool call and no task.
 9. Local-only (no account): chat and Bash work; `RunOnTarget` reports `not_signed_in`.
 
+Automated coverage: scenarios 2, 3 (card Stop on an agent task) and 4 (offline) run end to end in
+`pnpm --dir packages/desktop e2e:account` (G-remote-process: scripted model → RunOnTarget → real
+paired node); the rest are unit tests in the CLI, desktop main/host, services and UI packages.
+
 ## Known limits
 
 - No file sync: the project must already exist on the node; allowed roots are not listed to the
   agent. One task at a time per node (queued tasks wait).
-- Subagents and background commands (`Bash run_in_background`) run on this Mac; the context block
-  says so. `TaskOutput`/`TaskStop` do not see node tasks (use `TargetTask`).
+- Subagents run their commands on this Mac (they get no execution-target tools); the context block
+  says so. In the main conversation `Bash` refuses while a node is selected, including
+  `run_in_background`. `TaskOutput`/`TaskStop` do not see node tasks (use `TargetTask`).
 - Tasks started before a CLI restart can no longer be waited on by the agent (card still shows them
   for the renderer lifetime).
 - Remote workspaces (`workspaceIdentity` set) and Web/mobile clients do not get these tools.

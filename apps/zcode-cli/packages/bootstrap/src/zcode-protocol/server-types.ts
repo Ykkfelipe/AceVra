@@ -4,6 +4,7 @@ import {
   type Logger,
   type LoggerFactory,
   type McpPort,
+  type SelectedExecutionTarget,
   type SessionEventStorePort,
   type SessionId,
   type SessionTaskType,
@@ -109,6 +110,11 @@ export interface ZCodeProtocolSessionRecord {
   activeAutomationId?: string;
   /** 当前正在执行的闲时派发 turn；只在 turn 运行期间存在，禁止递归 OffPeakCreate。 */
   activeOffPeakTaskId?: string;
+  /**
+   * M2F：会话的 Run-on 选择（agent 进程执行工具的路由事实）。只由用户输入命令
+   * （v4 sendText / createSession.firstInput 的 executionTarget）写入；undefined = Automatic/本机。
+   */
+  executionTarget?: SelectedExecutionTarget;
   restoreWarning?: { message: string; type: string };
   /** 冷恢复候选只供初始投影；新的选模事件立即清除，不能替代 Runtime 执行绑定。 */
   restoredModelSelection?: ModelSelection;
@@ -137,6 +143,8 @@ export interface ZCodeProtocolAgentServerContext {
      * 工作流工具面、`/workflow` 与 dynamic-workflows 技能一律不露出。
      */
     dynamicWorkflowEnabled: boolean;
+    /** M2F：host 同步的执行目标工具门禁；缺省 false（fail-closed）。 */
+    executionTargetsEnabled: boolean;
   };
   // 竖切：v4 conversation 通道（订阅/帧/命令），与旧 session/* 方法并存。
   // 构造顺序问题（gateway 闭包持有 context）用可选字段收口，server 构造完立即赋值。

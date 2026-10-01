@@ -2,6 +2,7 @@ import { requestPluginReferenceCatalog } from "#src/zcode-agent/pluginReferenceC
 import {
   localTtftFactsSchema,
   sessionDebugSnapshotSchema,
+  type ExecutionTargetExecutor,
   type LocalTtftFacts,
 } from "@zcode/shared";
 /* oxlint-disable eslint(max-lines) -- ZCode Protocol transport、通知 wiring 和 app-facing session 方法必须共享同一个 client/emitter 上下文。 */
@@ -103,6 +104,7 @@ import {
   type ZCodeAutomation,
   type ZCodeAutomationRun,
   zcodeWorkspaceUpdateOffPeakToolPolicyResultSchema,
+  zcodeWorkspaceUpdateExecutionTargetPolicyResultSchema,
   zcodeWorkspaceUpdateDynamicWorkflowPolicyResultSchema,
   type DynamicWorkflowClientConfig,
   type AgentLaneResourceSample,
@@ -309,6 +311,7 @@ import {
   type BrowserAmbientContextExecutor,
 } from "./zcodeAgentBrowserAmbientContext.js";
 import { handleBrowserExecuteRequest, handleBrowserListRequest } from "./zcodeAgentBrowserRpc.js";
+import { handleExecutionTargetRequest } from "./zcodeAgentExecutionTargetRpc.js";
 import {
   createCuaOperationTurnTracker,
   type CuaOperationWorkspaceTarget,
@@ -897,6 +900,11 @@ interface CreateZCodeAgentServiceOptions extends Omit<
    * browser 命令返回 backend_unavailable，不影响其它功能。
    */
   browserControlExecutor?: BrowserAmbientContextExecutor;
+  /**
+   * M2F：agent 执行目标（Run-on 节点）执行器。仅 Desktop 本机 Host 注入；缺省时 CLI 不注册
+   * ExecutionTargets/RunOnTarget/TargetTask，反向请求一律 unavailable。
+   */
+  executionTargetExecutor?: ExecutionTargetExecutor;
   /**
    * 官方 Server MCP 身份头解析器。Agent 进程不持有用户身份权威，
    * 经 interaction/requestOfficialMcpAuthHeaders 向 host 索取本次请求的身份头。
@@ -2452,6 +2460,17 @@ export function createZCodeAgentService(
           return;
         }
 
+        if (request.method === zcodeProtocolMethods.interactionExecutionTarget) {
+          handleExecutionTargetRequest({
+            client,
+            executor: options?.executionTargetExecutor,
+            requestId: request.id,
+            params: request.params,
+            workspace,
+          });
+          return;
+        }
+
         if (request.method === zcodeProtocolMethods.automationCreate) {
           const parsed = zcodeAutomationCreateParamsSchema.safeParse(request.params);
           if (!parsed.success) {
@@ -2975,10 +2994,30 @@ export function createZCodeAgentService(
         }
       }
     })();
+    // M2F：执行目标工具门禁——只有注入了 executor 的 Desktop Host 且本地 workspace 才打开。
+    // 同 Off-Peak 模式：关闭时不发请求；-32601 是旧 CLI 的正常降级（fail-closed）。
+    const executionTargetPolicyReady = (async () => {
+      if (!options?.executionTargetExecutor || params.workspaceIdentity?.trim()) return;
+      try {
+        await client.request(
+          zcodeProtocolMethods.workspaceUpdateExecutionTargetPolicy,
+          { workspace: buildWorkspaceRef(params), enabled: true },
+          zcodeWorkspaceUpdateExecutionTargetPolicyResultSchema,
+        );
+      } catch (error) {
+        if (!isProtocolMethodNotFoundError(error)) {
+          logger.warn(undefined, "执行目标工具策略同步失败，CLI 维持缺省关闭", {
+            workspaceKey,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    })();
     entry.interactionPreferencesReady = Promise.all([
       interactionPreferencesReady,
       offPeakToolPolicyReady,
       dynamicWorkflowPolicyReady,
+      executionTargetPolicyReady,
     ]).then(() => undefined);
     try {
       // 新建或重启 runtime 在允许任何 session 工作前追平缓存；同步期间的新开关
