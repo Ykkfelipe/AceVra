@@ -22,6 +22,10 @@
       "types": "./computer-workspace-backend.d.ts",
       "import": "./computer-workspace-backend.js"
     },
+    "./computer-workspace-projection": {
+      "types": "./computer-workspace-projection.d.ts",
+      "import": "./computer-workspace-projection.js"
+    },
     "./frame-contract": {
       "types": "./frame-contract.d.ts",
       "import": "./frame-contract.js"

@@ -31,6 +31,8 @@ export interface AgentWorkspacePerformResult {
 
 export interface AgentWorkspaceBackend extends ComputerBackend {
   readonly agentPointer: AgentPointerSnapshot;
+  /** M2B read model for the mini Computer view (pure snapshot; never captures). */
+  projectionSnapshot(): import("./computer-workspace-projection.js").WorkspaceProjectionSnapshot;
   perform(
     method: string,
     args: Record<string, unknown>,
@@ -41,4 +43,5 @@ export interface AgentWorkspaceBackend extends ComputerBackend {
 export declare function createAgentWorkspaceBackend(options: {
   execute: (input: { toolName: string; arguments: Record<string, unknown>; context: ComputerExecuteContext }) => Promise<unknown>;
   snapshot?: () => Promise<{ frontmost: number | string | null; cursor: { x: number; y: number } | null } | null>;
+  projection?: import("./computer-workspace-projection.js").WorkspaceProjection;
 }): AgentWorkspaceBackend;

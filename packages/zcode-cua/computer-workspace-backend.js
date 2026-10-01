@@ -23,6 +23,7 @@
 // end-to-end (user foreground unchanged, physical cursor unchanged).
 
 import { normalizeBackendCapabilities, routeClassFor } from "./computer-backend.js";
+import { createWorkspaceProjection } from "./computer-workspace-projection.js";
 
 const WORKSPACE_METHODS = Object.freeze(["workspace_click", "workspace_type_text"]);
 
@@ -32,8 +33,10 @@ const WORKSPACE_METHODS = Object.freeze(["workspace_click", "workspace_type_text
  * @param options.execute the sanctioned runtime seam (same shape as the native backend).
  * @param options.snapshot optional zero-steal probe returning {frontmost, cursor} — wired
  *   by the host from a trusted source; never taken from model input.
+ * @param options.projection optional workspace projection (M2B); when absent one is created
+ *   for this backend instance so the mini Computer view always has a stable read model.
  */
-export function createAgentWorkspaceBackend({ execute, snapshot } = {}) {
+export function createAgentWorkspaceBackend({ execute, snapshot, projection } = {}) {
   if (typeof execute !== "function") {
     throw new Error("createAgentWorkspaceBackend requires the runtime execute seam");
   }
@@ -50,6 +53,9 @@ export function createAgentWorkspaceBackend({ execute, snapshot } = {}) {
   // Backend-owned logical agent cursor: where the agent last acted / will act inside its
   // targets. Never the user's physical cursor. Later rendered by the mini Computer view.
   let agentPointer = { x: null, y: null, target: null, updatedAt: null };
+  const workspaceProjection =
+    projection ??
+    createWorkspaceProjection({ workspaceId: `workspace:${capabilities.id}` });
 
   const readSnapshot = async () => {
     if (typeof snapshot !== "function") return null;
@@ -68,8 +74,14 @@ export function createAgentWorkspaceBackend({ execute, snapshot } = {}) {
     get agentPointer() {
       return { ...agentPointer };
     },
+    /** M2B read model for the mini Computer view. Pure snapshot; never captures. */
+    projectionSnapshot() {
+      return workspaceProjection.snapshot();
+    },
     async perform(method, args, context) {
       const route = routeClassFor(method, capabilities);
+      const actionTarget = projectionTargetOf(args);
+      workspaceProjection.noteActionStart({ method, target: actionTarget });
       const before = await readSnapshot();
       const result = await execute({
         toolName: `computer.${method}`,
@@ -79,6 +91,7 @@ export function createAgentWorkspaceBackend({ execute, snapshot } = {}) {
       const after = await readSnapshot();
       // Track the logical agent pointer from what the action actually addressed: an
       // explicit point when given, otherwise the element center the Helper resolved.
+      let pointerUpdate = null;
       if (method === "workspace_click") {
         const point =
           args && typeof args.point === "object" && args.point !== null
@@ -91,6 +104,18 @@ export function createAgentWorkspaceBackend({ execute, snapshot } = {}) {
           target: targetOf(args, result),
           updatedAt: now,
         };
+        pointerUpdate = { x: point.x, y: point.y };
+      }
+      const body = envelopeBodyOf(result);
+      if (method === "observe") {
+        workspaceProjection.noteObservation({ target: actionTarget, result: body });
+      } else {
+        workspaceProjection.noteActionResult({
+          method,
+          target: actionTarget,
+          result: body,
+          cursor: pointerUpdate,
+        });
       }
       return {
         route,
@@ -113,6 +138,17 @@ export function createAgentWorkspaceBackend({ execute, snapshot } = {}) {
           : {}),
       };
     },
+  };
+}
+
+function projectionTargetOf(args) {
+  if (!args || typeof args !== "object") return null;
+  const pid = args.pid;
+  if (typeof pid !== "number") return null;
+  return {
+    pid,
+    windowId: typeof args.window_id === "number" ? args.window_id : null,
+    appName: typeof args.app_name === "string" ? args.app_name : null,
   };
 }
 
