@@ -104,11 +104,6 @@ import { useDraftModelReadinessGate } from "@/v4/composer/useDraftModelReadiness
 import { useSettings } from "@/hooks/useSettingService.js";
 import { useZCodeStoreWithDefault } from "@/store/StoreProvider.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import {
-  executionScopeKey,
-  resolveSubmissionExecutionTarget,
-  useExecutionTargetStore,
-} from "@/store/executionTargetStore.js";
 import { withSubmissionExecutionTarget } from "@/account/submissionExecutionTarget.js";
 import {
   DEFAULT_CONVERSATION_SHARE_ACCESS_MODE,
@@ -1527,16 +1522,10 @@ export function SessionPane({
       onEnvelopeCreated?: (envelope: CommandEnvelope) => void,
       sessionCreateSource?: SessionCreateSource,
     ): Promise<CommandAck> => {
-      // M2F：Run-on 选择随用户输入进入 CLI 会话 record；scope 取发送时 composer 所展示的
-      // scope（草稿发送即 draft scope，adopt 发生在 ACK 之后）。
+      // 用户输入总是声明 automatic：agent 用哪台电脑由 agent 按用户请求决定，composer 不选。
       const payload = withSubmissionExecutionTarget(type, rawPayload, {
         hasAccountBridge: Boolean(platform?.account),
         workspaceIdentity,
-        resolve: () => {
-          const store = useExecutionTargetStore.getState();
-          const scope = executionScopeKey({ workspacePath, workspaceIdentity }, sessionId);
-          return resolveSubmissionExecutionTarget(store.selectionOf(scope), store.knownTargets);
-        },
       });
       const submission = submissionConfigFromCommand(type, payload);
       const acceptRecent = submission

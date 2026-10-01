@@ -1,5 +1,5 @@
 // ============================================================
-// Execution target tools - run processes on the composer "Run on" target (M2F)
+// Execution target tools - run processes on the user's other computers (M2F)
 // ============================================================
 // 只路由进程执行：文件/Computer/浏览器工具仍在本机。上限与 account-api processSpec 一致，
 // 超限在 schema 层即拒绝。cwd 是节点上的绝对路径，绝不缺省为本机 workspace。

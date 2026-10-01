@@ -32,13 +32,7 @@ function fakeAccount() {
   };
 }
 
-const reset = () =>
-  useExecutionTargetStore.setState({
-    selectionByScope: {},
-    tasksByScope: {},
-    activeScope: null,
-    knownTargets: {},
-  });
+const reset = () => useExecutionTargetStore.setState({ tasksByScope: {}, activeScope: null });
 
 test("a notice attaches the task to its session scope, idempotently", () => {
   reset();

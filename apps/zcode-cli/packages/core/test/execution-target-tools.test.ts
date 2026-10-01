@@ -245,7 +245,16 @@ test("工具注册：仅在 includeExecutionTargets 时出现", () => {
 test("上下文块：选中节点时前置说明，未选中时原样", () => {
   assert.equal(formatExecutionTargetUserInput("hi", "hi", undefined), "hi");
   const text = formatExecutionTargetUserInput("hi", "hi", DELL);
-  assert.match(text, /<execution-target-context source="run-on-selection">/);
+  assert.match(text, /<execution-target-context source="conversation-computer">/);
   assert.match(text, /"Dell" \(id node-1\)/);
   assert.match(text, /## My request for ZCode:\nhi$/);
+});
+
+test("模型可见文案不再引用 composer 的 Run on 选择（acevra-agent-computer.md M1）", () => {
+  for (const entry of [executionTargetsToolEntry, runOnTargetToolEntry, targetTaskToolEntry]) {
+    assert.doesNotMatch(entry.metadata.description, /Run on/);
+    assert.doesNotMatch(entry.capability, /Run on/);
+  }
+  assert.match(runOnTargetToolEntry.metadata.description, /only when the user asked/);
+  assert.doesNotMatch(formatExecutionTargetUserInput("hi", "hi", DELL), /Run on/);
 });

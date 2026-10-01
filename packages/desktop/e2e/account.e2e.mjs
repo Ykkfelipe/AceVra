@@ -317,8 +317,13 @@ await scenario("E-device-registry", async (ctx) => {
   const row = page.locator('[data-testid="acevra-device-row"][data-this-device="true"]');
   await row.waitFor({ timeout: 20000 });
   assert.equal(await row.getAttribute("data-this-device"), "true");
-  assert.match(await row.innerText(), /This device · Online/);
-  // Capabilities are registry facts, not admin text in the normal Devices UI.
+  assert.match(await row.innerText(), /This computer · Online/);
+  // Computers section: plain wording, no device/node/execution jargon.
+  const computersText = await page.getByTestId("acevra-devices-section").innerText();
+  assert.match(computersText, /Computers/);
+  assert.match(computersText, /Connect a computer/);
+  assert.doesNotMatch(computersText, /Devices|Node|Pair a node|Revoke|execution|commands/);
+  // Capabilities are registry facts, not admin text in the normal Computers UI.
   const capabilities = (await row.getAttribute("data-capabilities")).split(",");
   for (const capability of ["files", "shell", "git"]) assert.ok(capabilities.includes(capability));
   assert.doesNotMatch(await row.innerText(), /Shell|Files|Git|Computer Use/);
@@ -334,7 +339,7 @@ await scenario("E-device-registry", async (ctx) => {
   assert.equal(rows1.find((r) => r.id === deviceId).installation_id, installation.installationId);
   // Rename.
   await row.getByTestId("acevra-device-rename").click();
-  await page.getByLabel("Device name").fill("Studio Mac");
+  await page.getByLabel("Computer name").fill("Studio Mac");
   await page.getByTestId("acevra-device-rename-save").click();
   await row.getByTestId("acevra-device-name").getByText("Studio Mac").waitFor({ timeout: 10000 });
   // Sign out keeps the installation identity; sign in again resolves the same device.
@@ -379,7 +384,7 @@ await scenario("E-device-registry", async (ctx) => {
     "ownership unchanged",
   );
   await third.app.close();
-  // Revoke from the owning account: device flagged, local use still works.
+  // Remove (revoke) from the owning account: device flagged, local use still works.
   const fourth = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
   await fourth.page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
   await fourth.page.getByTestId("acevra-account-signin").click();
@@ -390,7 +395,7 @@ await scenario("E-device-registry", async (ctx) => {
   const mine = fourth.page.locator('[data-testid="acevra-device-row"][data-this-device="true"]');
   await mine.getByTestId("acevra-device-revoke").click();
   await mine.getByTestId("acevra-device-revoke-confirm").click();
-  await mine.getByText("Revoked").waitFor({ timeout: 10000 });
+  await mine.getByText("Removed").waitFor({ timeout: 10000 });
   assert.ok((await deviceRows()).find((r) => r.id === deviceId).revoked_at);
   await fourth.page.keyboard.press("Escape");
   await app4Reload(fourth);
@@ -459,13 +464,13 @@ await scenario("F-node-pairing", async (ctx) => {
     const code = node.out().match(/Code: ([A-Z2-9]{4}-[A-Z2-9]{4})/)[1];
     // Desktop: look up by code, review, approve.
     await page.getByTestId("acevra-pair-open").click();
-    await page.getByLabel("Pairing code").fill("AAAA-AAAA");
+    await page.getByLabel("Connection code").fill("AAAA-AAAA");
     await page.getByTestId("acevra-pair-lookup").click();
     await page
       .getByTestId("acevra-pair-note")
-      .getByText("No pending node found")
+      .getByText("No computer is waiting")
       .waitFor({ timeout: 10000 });
-    await page.getByLabel("Pairing code").fill(code);
+    await page.getByLabel("Connection code").fill(code);
     await page.getByTestId("acevra-pair-lookup").click();
     await page
       .getByTestId("acevra-pair-pending")
@@ -483,27 +488,27 @@ await scenario("F-node-pairing", async (ctx) => {
       }
       throw new Error(`device row never matched ${pattern}: ${await row.allInnerTexts()}`);
     };
-    await refreshUntil(/Node · Online/);
+    await refreshUntil(/Connected computer · Online/);
     assert.equal((await nodes()).length, 1);
     const nodeId = (await nodes())[0].id;
     assert.equal(await row.first().getAttribute("data-this-device"), "false");
     // Stop → Offline (after the grace window); restart → same device Online, no new pairing.
     node.child.kill("SIGTERM");
     await node.exited;
-    await refreshUntil(/Node · Offline/);
+    await refreshUntil(/Connected computer · Offline/);
     const again = startNode();
     ctx.nodeChildren.push(again.child);
-    await refreshUntil(/Node · Online/);
+    await refreshUntil(/Connected computer · Online/);
     assert.ok(!/Code:/.test(again.out()), "restart does not re-pair");
     assert.deepEqual(
       (await nodes()).map((n) => n.id),
       [nodeId],
       "same device, no duplicate",
     );
-    // Revoke from the desktop: the node's live connection is terminated and it exits as revoked.
+    // Remove from the desktop: the node's live connection is terminated and it exits as revoked.
     await row.first().getByTestId("acevra-device-revoke").click();
     await row.first().getByTestId("acevra-device-revoke-confirm").click();
-    await refreshUntil(/Revoked/);
+    await refreshUntil(/Removed/);
     assert.equal(
       await Promise.race([
         again.exited,
@@ -536,8 +541,9 @@ await scenario("F-node-pairing", async (ctx) => {
   }
 });
 
-// G. Task routing: shell capability only after the node's service is ready; Run on [target];
-// live events while running; completion; cancel kills the process; local target; offline target.
+// G. Remote work: shell capability only after the node's service is ready; no Run-on control in the
+// composer; live events while running; completion; cancel kills the process; local target;
+// offline target; the agent uses a connected computer only when asked (RunOnTarget by name).
 await scenario("G-remote-process", async (ctx) => {
   const nodeHome = join(ctx.roots.root, "node-home");
   const project = join(ctx.roots.root, "project");
@@ -583,9 +589,6 @@ await scenario("G-remote-process", async (ctx) => {
   });
   const hasShell = async (locator) =>
     (await locator.first().getAttribute("data-capabilities")).split(",").includes("shell");
-  const runOn = page.getByTestId("v4-composer-run-on");
-  const runOnOption = (id) =>
-    page.locator(`[data-testid="v4-composer-run-on-option"][data-target-id="${id}"]`);
   // M2F: scripted model. A prompt tagged `AGENT-RUN:<name>` makes the fixture call RunOnTarget
   // with agentScripts[name] (only when the request offers that tool); the tool result is recorded.
   const agentScripts = {};
@@ -632,13 +635,10 @@ await scenario("G-remote-process", async (ctx) => {
     await page.getByTestId("acevra-account-signin").click();
     await page.getByTestId("acevra-account-choice").waitFor({ state: "hidden", timeout: 30000 });
     await skipPreferences(page);
-    // Composer: secondary Run-on control defaults to Automatic and lists this device by name.
-    await runOn.waitFor({ timeout: 30000 });
-    assert.equal(await runOn.getAttribute("data-run-on"), "auto");
-    await runOn.click();
-    await runOnOption("local").waitFor({ timeout: 10000 });
-    assert.equal(await runOnOption("local").getAttribute("data-target-status"), "available");
-    await page.keyboard.press("Escape");
+    // Composer: no Run-on control and no execution wording (acevra-agent-computer.md M1).
+    await page.getByTestId("v4-composer-input").waitFor({ timeout: 30000 });
+    assert.equal(await page.getByTestId("v4-composer-run-on").count(), 0);
+    await snap(page, "composer-no-run-on");
     await openAccountSection(page);
     // Pair a node that has NO allowed root: it connects, but shell is not advertised.
     const bare = startNode();
@@ -646,7 +646,7 @@ await scenario("G-remote-process", async (ctx) => {
     await until(() => /Code: [A-Z2-9]{4}-[A-Z2-9]{4}/.test(bare.out()));
     await page.getByTestId("acevra-pair-open").click();
     await page
-      .getByLabel("Pairing code")
+      .getByLabel("Connection code")
       .fill(bare.out().match(/Code: ([A-Z2-9]{4}-[A-Z2-9]{4})/)[1]);
     await page.getByTestId("acevra-pair-lookup").click();
     await page.getByTestId("acevra-pair-approve").click();
@@ -664,7 +664,8 @@ await scenario("G-remote-process", async (ctx) => {
       throw new Error("condition never met");
     };
     await refreshUntil(
-      async () => (await row.count()) && /Node · Online/.test(await row.first().innerText()),
+      async () =>
+        (await row.count()) && /Connected computer · Online/.test(await row.first().innerText()),
     );
     assert.ok(!(await hasShell(row)), "no shell advertised without a ready service");
     await until(
@@ -679,7 +680,7 @@ await scenario("G-remote-process", async (ctx) => {
     await refreshUntil(
       async () =>
         (await row.count()) &&
-        /Node · Online/.test(await row.first().innerText()) &&
+        /Connected computer · Online/.test(await row.first().innerText()) &&
         (await hasShell(row)),
     );
     await until(async () => !(await dellOption.evaluate((el) => el.disabled)));
@@ -688,25 +689,17 @@ await scenario("G-remote-process", async (ctx) => {
         "SELECT id FROM devices WHERE type = 'node' AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
       )
     ).rows[0].id;
-    // Composer: the paired node appears by its user-given name; choosing it is per conversation
-    // and the caption states that agent commands go to the node while files/Computer stay here.
+    // Still no Run-on control once a computer is connected.
     await backToWorkspace(page);
-    await snap(page, "composer-run-on-automatic");
-    await runOn.click();
-    await runOnOption(nodeId).waitFor({ timeout: 10000 });
-    await snap(page, "composer-run-on-menu");
-    assert.match(await runOnOption(nodeId).innerText(), /Dell Runner/);
-    await runOnOption(nodeId).click();
-    assert.equal(await runOn.getAttribute("data-run-on"), nodeId);
-    await runOn.click();
-    await page.getByTestId("v4-composer-run-on-gap").waitFor({ timeout: 5000 });
-    await snap(page, "composer-run-on-node-selected");
-    await page.keyboard.press("Escape");
+    assert.equal(await page.getByTestId("v4-composer-run-on").count(), 0);
+    assert.doesNotMatch(await page.getByTestId("v4-composer").innerText(), /Run on|Dell Runner/);
+    await snap(page, "composer-with-connected-computer");
     await openAccountSection(page);
-    await snap(page.getByTestId("acevra-devices-section"), "devices-with-node");
-    // Run on the node: the engineering runner defaults to the conversation's Run-on choice.
+    await snap(page.getByTestId("acevra-devices-section"), "computers-with-node");
+    // Engineering runner: defaults to this computer; pick the node explicitly.
     const target = page.getByTestId("acevra-run-target");
-    assert.equal(await target.inputValue(), nodeId, "runner follows the conversation's Run on");
+    assert.equal(await target.inputValue(), "local", "runner defaults to this computer");
+    await target.selectOption(nodeId);
     await page.getByLabel("Program").fill(process.execPath);
     await page
       .getByLabel("Arguments")
@@ -752,7 +745,7 @@ await scenario("G-remote-process", async (ctx) => {
     const card = page.locator(`[data-testid="acevra-task-card"][data-task-id="${longTask}"]`);
     await card.waitFor({ timeout: 20000 });
     await until(async () => (await card.getAttribute("data-task-status")) === "running");
-    assert.match(await card.innerText(), /Dell Runner · Running/);
+    assert.match(await card.innerText(), /Dell Runner · Working/);
     await card.getByText("long task started").waitFor({ timeout: 20000 });
     assert.doesNotMatch(await card.innerText(), /setInterval|node|-e /);
     // The first (completed) task is attached to this conversation too, shown as Done.
@@ -771,15 +764,8 @@ await scenario("G-remote-process", async (ctx) => {
     });
     await card.getByTestId("acevra-task-card-dismiss").click();
     await card.waitFor({ state: "detached", timeout: 5000 });
-    // M2F: with Run on = Dell Runner the agent's command runs on the node as a Task; the card in
-    // this conversation streams its TaskEvents. The caption states the real routing boundary.
-    await runOn.click();
-    assert.match(
-      await page.getByTestId("v4-composer-run-on-gap").innerText(),
-      /Commands the agent runs go to Dell Runner\. Files and Computer stay on this device\./,
-    );
-    await snap(page, "composer-run-on-agent-caption");
-    await page.keyboard.press("Escape");
+    // Asked to use Dell, the agent runs the command on the node as a Task (no selection, no
+    // context block); the card in this conversation streams its TaskEvents.
     agentScripts.quick = {
       targetId: nodeId,
       executable: process.execPath,
@@ -796,7 +782,11 @@ await scenario("G-remote-process", async (ctx) => {
     await agentCard.getByText("agent ran on dell").waitFor({ timeout: 20000 });
     await until(async () => (await agentCard.getAttribute("data-task-status")) === "completed");
     await page.getByText("Agent remote step finished.").first().waitFor({ timeout: 30000 });
-    assert.ok(agentLog.find((entry) => entry.prompt === "quick")?.hasRunOnContext);
+    assert.equal(
+      agentLog.find((entry) => entry.prompt === "quick")?.hasRunOnContext,
+      false,
+      "no Run-on context block without a selection",
+    );
     const quickResult = toolResults()[0].toolResult;
     assert.match(quickResult, /agent ran on dell/);
     assert.match(quickResult, /"state":"completed"/);
@@ -814,7 +804,7 @@ await scenario("G-remote-process", async (ctx) => {
       `[data-testid="acevra-task-card"][data-task-id="${agentLongTask}"]`,
     );
     await agentLongCard.getByText("agent long started").waitFor({ timeout: 20000 });
-    assert.match(await agentLongCard.innerText(), /Dell Runner · Running/);
+    assert.match(await agentLongCard.innerText(), /Dell Runner · Working/);
     await snap(page, "conversation-agent-task-card-running");
     await agentLongCard.getByTestId("acevra-task-card-stop").click();
     await until(async () => (await agentLongCard.getAttribute("data-task-status")) === "cancelled");
@@ -841,17 +831,7 @@ await scenario("G-remote-process", async (ctx) => {
       async () => await dellOption.evaluate((el) => el.disabled && /offline/.test(el.textContent)),
       30000,
     );
-    // Composer shows the offline node truthfully (listed, disabled, labelled), keeping the choice.
     await backToWorkspace(page);
-    await runOn.click();
-    await until(
-      async () => (await runOnOption(nodeId).getAttribute("data-target-status")) === "offline",
-    );
-    assert.equal(await runOnOption(nodeId).getAttribute("aria-disabled"), "true");
-    assert.match(await runOnOption(nodeId).innerText(), /Offline/);
-    await snap(page, "composer-run-on-offline");
-    assert.equal(await runOn.getAttribute("data-run-on"), nodeId);
-    await page.keyboard.press("Escape");
     // M2F: offline target → the agent's run fails truthfully; no task, nothing run on this Mac.
     agentScripts.offline = {
       ...agentScripts.quick,
@@ -868,8 +848,7 @@ await scenario("G-remote-process", async (ctx) => {
     return {
       remote:
         "shell only after readiness; live events; completed; local target; offline target unavailable",
-      composer:
-        "Run on lists real targets, per-conversation choice, truthful routing caption, offline shown disabled",
+      composer: "no Run-on control or execution wording, with and without a connected computer",
       card: "TaskEvent-driven card in the attached conversation, Stop cancelled and killed the process",
       agent:
         "RunOnTarget routed via Task to the node, card streamed and completed, card Stop cancelled an agent task, offline failed with no local fallback",

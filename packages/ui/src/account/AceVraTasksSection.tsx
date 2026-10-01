@@ -3,7 +3,7 @@ import type { ExecutionTarget, TaskEvent, TaskView } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { AUTO_TARGET, useExecutionTargetStore } from "@/store/executionTargetStore.js";
+import { useExecutionTargetStore } from "@/store/executionTargetStore.js";
 import { splitArgs } from "./splitArgs.js";
 import { useAccountText } from "./useAccountText.js";
 import { useAceVraAccount } from "./useAceVraAccount.js";
@@ -74,7 +74,7 @@ function describeEvent(event: TaskEvent): { text: string; tone: "out" | "err" | 
 /**
  * Engineering-only harness (gated by `engineeringTools`): run a process on an execution target and
  * watch it live. Started tasks are attached to the last active conversation so its live card shows
- * them; the conversation's Run-on choice is the default target.
+ * them; the default target is this device.
  */
 export function AceVraTasksSection() {
   const account = usePlatform().account;
@@ -82,11 +82,7 @@ export function AceVraTasksSection() {
   const phase = useAceVraAccount().view?.phase;
   const [targets, setTargets] = useState<ExecutionTarget[]>([]);
   const [tasks, setTasks] = useState<TaskView[]>([]);
-  const [targetId, setTargetId] = useState(() => {
-    const { activeScope, selectionOf } = useExecutionTargetStore.getState();
-    const selection = activeScope ? selectionOf(activeScope) : AUTO_TARGET;
-    return selection === AUTO_TARGET ? "local" : selection;
-  });
+  const [targetId, setTargetId] = useState("local");
   const [executable, setExecutable] = useState("");
   const [argLine, setArgLine] = useState("");
   const [cwd, setCwd] = useState("");
@@ -184,7 +180,7 @@ export function AceVraTasksSection() {
       </p>
       <div className="grid gap-2 text-sm">
         <label className="grid gap-1">
-          <span>{text("tasks.runOn", "Run on")}</span>
+          <span>{text("tasks.target", "Target")}</span>
           <select
             className="rounded-md border bg-background p-2"
             data-testid="acevra-run-target"

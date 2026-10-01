@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button.js";
 import { useAccountEngineeringTools } from "@/hooks/useAccountEngineeringTools.js";
 import { describeAccountStatus } from "./accountStatus.js";
-import { AceVraDevicesSection } from "./AceVraDevicesSection.js";
+import { AceVraComputersSection } from "./AceVraComputersSection.js";
 import { AceVraTasksSection } from "./AceVraTasksSection.js";
 import { useAccountText } from "./useAccountText.js";
 import { useAceVraAccount } from "./useAceVraAccount.js";
@@ -86,7 +86,7 @@ export function AceVraAccountSection() {
               )}
             </div>
           </div>
-          {view.phase === "ready" && <AceVraDevicesSection />}
+          {view.phase === "ready" && <AceVraComputersSection />}
           {view.phase === "ready" && view.rememberSession === false && (
             <p
               className="text-ui-sm text-foreground-subtle"

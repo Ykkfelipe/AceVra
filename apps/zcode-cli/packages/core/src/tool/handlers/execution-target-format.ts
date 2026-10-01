@@ -26,7 +26,7 @@ export function describeExecutionTargetFailure(
   const who = label(subject);
   switch (result.reason) {
     case "not_signed_in":
-      return `AceVra is not signed in to an account on this Mac, so other devices are unavailable. ${NOTHING_LOCAL} Ask the user to sign in (Settings → AceVra Account) or switch Run on to this Mac.`;
+      return `AceVra is not signed in to an account on this Mac, so other devices are unavailable. ${NOTHING_LOCAL} Ask the user to sign in (Settings → AceVra Account), or do the work on this Mac if they agree.`;
     case "unavailable":
       return `Running on other devices is unavailable right now (${result.detail ?? "host unavailable"}). ${NOTHING_LOCAL}`;
     case "target_not_found":

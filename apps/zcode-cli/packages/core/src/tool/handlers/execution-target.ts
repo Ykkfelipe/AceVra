@@ -34,7 +34,7 @@ const MAX_MODEL_BYTES = 40_000;
 const RUN_TIMEOUT_MS = (RUN_ON_TARGET_MAX_WAIT_SECONDS + 30) * 1000;
 
 const ROUTING_NOTE =
-  "Only process execution can run on a node (RunOnTarget). Read/Write/Edit/Grep/Glob, Computer, browser tools and subagents always act on this Mac. Use Bash for this Mac.";
+  "By default all work happens on this Mac (Bash, files, Computer, browser). Use RunOnTarget only when the user asks you to work on one of their other computers by name (e.g. 'use my Dell'). Only commands run there; Read/Write/Edit/Grep/Glob, Computer, browser tools and subagents always act on this Mac.";
 
 type TaskIds = { taskId: string; targetId: string; targetName?: string };
 
@@ -59,8 +59,8 @@ function callContext(context: ToolExecutionContext) {
 }
 
 /**
- * M2F：会话 Run-on 选中远程节点时 Bash 必须拒绝，绝不静默在本机执行。
- * 选择读自会话 record（实时），之后切回 Automatic 的输入会恢复 Bash。
+ * 会话绑定到另一台电脑（record.executionTarget）时 Bash 必须拒绝，绝不静默在本机执行。
+ * 绑定读自会话 record（实时）；桌面端每轮都声明 automatic，所以当前只有协议客户端会设置它。
  */
 export function assertBashRunsOnThisMac(context: ToolExecutionContext): void {
   const selected = context.executionTargetPort?.selectedTarget();
@@ -68,7 +68,7 @@ export function assertBashRunsOnThisMac(context: ToolExecutionContext): void {
   const name = selected.displayName ? `"${selected.displayName}"` : selected.targetId;
   throw failure(
     "Bash",
-    `Bash is disabled in this conversation because Run on is set to ${name} (targetId "${selected.targetId}"), an AceVra Node. Nothing was run on this Mac. Run the command there with ${RUN_ON_TARGET_TOOL_NAME} (targetId "${selected.targetId}", cwd = an absolute path on that node). File tools still work on this Mac.`,
+    `Bash is disabled in this conversation because it is set to use the computer ${name} (targetId "${selected.targetId}"), an AceVra Node. Nothing was run on this Mac. Run the command there with ${RUN_ON_TARGET_TOOL_NAME} (targetId "${selected.targetId}", cwd = an absolute path on that node). File tools still work on this Mac.`,
     context,
   );
 }
@@ -229,12 +229,12 @@ const shared = {
 
 export const executionTargetsToolEntry: ToolEntry = {
   ...shared,
-  capability: "List the devices the user can run tasks on (this Mac and paired AceVra Nodes)",
+  capability: "List the user's computers (this Mac and connected AceVra Nodes)",
   metadata: {
     name: EXECUTION_TARGETS_TOOL_NAME,
     description: [
-      "Lists where commands can run: this Mac and the user's paired AceVra Nodes (id, user-given name, online/available, capabilities, which one the conversation's Run on selection points to).",
-      "Use it to resolve requests like 'run this on <device name>' to a targetId (match displayName; never guess ids or hardcode names).",
+      "Lists the user's computers: this Mac and their connected computers (AceVra Nodes) with id, user-given name, online/available and capabilities.",
+      "Use it to resolve requests like 'use my Dell' or 'run this on <computer name>' to a targetId (match displayName; never guess ids or hardcode names).",
       ROUTING_NOTE,
     ].join("\n"),
     readOnly: true,
@@ -271,12 +271,12 @@ export const executionTargetsToolEntry: ToolEntry = {
 
 export const runOnTargetToolEntry: ToolEntry = {
   ...shared,
-  capability: "Run a process on a paired AceVra Node through a control-plane task",
+  capability: "Run a process on one of the user's connected computers (AceVra Node)",
   metadata: {
     name: RUN_ON_TARGET_TOOL_NAME,
     description: [
-      "Runs one process on another device (an AceVra Node) as a tracked task. The user sees it as a live card with a Stop button.",
-      "- targetId comes from ExecutionTargets or the conversation's Run on context. This Mac is not a valid target: use Bash for local commands.",
+      "Runs one process on another of the user's computers (an AceVra Node). The user sees it as a live card with a Stop button.",
+      "- Use it only when the user asked you to work on that computer. targetId comes from ExecutionTargets. This Mac is not a valid target: use Bash for local commands.",
       "- No shell: give executable + args. For shell syntax use executable 'bash' with args ['-lc', '<script>'].",
       "- cwd is REQUIRED and must be an absolute path on the node inside a root the node allows (acevra-node --allow-root). Files are not synced from this Mac. If the node rejects the cwd ('rejected (policy)'), ask the user which directory to use.",
       `- Waits up to waitSeconds (default ${RUN_ON_TARGET_DEFAULT_WAIT_SECONDS}s, max ${RUN_ON_TARGET_MAX_WAIT_SECONDS}s). Returns exit code and the output tail when finished; otherwise a taskId that keeps running — use ${TARGET_TASK_TOOL_NAME} to wait more or stop it.`,

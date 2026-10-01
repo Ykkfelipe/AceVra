@@ -1,7 +1,7 @@
 /**
- * Live work card + Run-on control rendering (M2E). The card is a pure projection of
- * TaskView/TaskEvents: it shows "<target> · <status>", the latest lines and Stop, and never the
- * executable/args/cwd. Rendering never starts a task.
+ * Conversation work card (acevra-agent-computer.md M1). The card is a pure projection of
+ * TaskView/TaskEvents: it shows "<computer> · <status>" in plain words, the latest lines and Stop,
+ * and never the executable/args/cwd or task/execution jargon. Rendering never starts a task.
  */
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -12,8 +12,6 @@ import React from "react";
 register("./uiAssetStubLoader.mjs", import.meta.url);
 const { ZCodeIntlProvider } = await import("../src/i18n/IntlProvider.js");
 const { ExecutionTaskCardView } = await import("../src/v4/composer/ExecutionTaskCards.js");
-const { RunOnRemoteCaption, V4ComposerRunOnControl } =
-  await import("../src/v4/composer/V4ComposerRunOnControl.js");
 
 const render = (node: React.ReactNode, locale: "en-US" | "zh-CN" = "en-US") =>
   renderToStaticMarkup(<ZCodeIntlProvider initialLocale={locale}>{node}</ZCodeIntlProvider>);
@@ -30,7 +28,9 @@ test("running card shows target, status, latest lines and Stop — not the comma
     />,
   );
   assert.match(markup, /Dell Runner/);
-  assert.match(markup, /Running/);
+  assert.match(markup, /Working/);
+  const visibleText = markup.replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(visibleText, /Running|task|execution|command/i);
   assert.match(markup, /71 tests discovered/);
   assert.match(markup, /data-testid="acevra-task-card-stop"/);
   assert.doesNotMatch(markup, /acevra-task-card-dismiss/);
@@ -48,8 +48,8 @@ test("finished card offers dismiss instead of Stop and reports the exit code", (
       onDismiss={() => {}}
     />,
   );
-  assert.match(markup, /Failed/);
-  assert.match(markup, /exit 2/);
+  assert.match(markup, /Couldn(&#x27;|')t finish/);
+  assert.match(markup, /code 2/);
   assert.doesNotMatch(markup, /acevra-task-card-stop/);
   assert.match(markup, /acevra-task-card-dismiss/);
 });
@@ -68,20 +68,24 @@ test("status text is localized, not hardcoded English", () => {
   );
   assert.doesNotMatch(markup, />Running</);
   assert.doesNotMatch(markup, />Stop</);
+  assert.match(markup, /工作中/);
 });
 
-test("Run-on control renders nothing without a desktop account bridge", () => {
-  assert.equal(render(<V4ComposerRunOnControl scopeKey="draft:/w" />), "");
-});
-
-test("remote selection caption names the target and the local-only tools (M2F)", () => {
-  const en = render(<RunOnRemoteCaption targetName="Dell Runner" />);
-  assert.match(en, /data-testid="v4-composer-run-on-gap"/);
-  assert.match(
-    en,
-    /Commands the agent runs go to Dell Runner\. Files and Computer stay on this device\./,
-  );
-  assert.doesNotMatch(en, /still run on this device/);
-  const zh = render(<RunOnRemoteCaption targetName="Dell Runner" />, "zh-CN");
-  assert.match(zh, /智能体运行的命令将在 Dell Runner 上执行。文件和 Computer 仍在本机。/);
+test("plain status words: Done and Stopped, localized in Chinese", () => {
+  const card = (id: "completed" | "cancelled", locale: "en-US" | "zh-CN" = "en-US") =>
+    render(
+      <ExecutionTaskCardView
+        taskId="t1"
+        targetName="Dell"
+        status={{ id, active: false }}
+        lines={[]}
+        onStop={() => {}}
+        onDismiss={() => {}}
+      />,
+      locale,
+    );
+  assert.match(card("completed"), /Dell<\/span>.*· .*Done/s);
+  assert.match(card("cancelled"), /Stopped/);
+  assert.match(card("completed", "zh-CN"), /完成/);
+  assert.match(card("cancelled", "zh-CN"), /已停止/);
 });

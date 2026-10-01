@@ -58,6 +58,13 @@ function shouldRefreshQueuedSummaryContent(
   );
 }
 
+// Bug 原因：primaryText 与 secondaryText 都是裸字符串时（如通用工具行的「Tool call」+「Running」），
+// 相邻文本节点在 flex 容器里会被合并成同一个匿名 flex item，容器的 gap 不生效，显示成
+// 「Tool callRunning」。修复依据：把字符串/数字包成独立 span，让每段都是自己的 flex item。
+function asSummaryItem(node: ReactNode): ReactNode {
+  return typeof node === "string" || typeof node === "number" ? <span>{node}</span> : node;
+}
+
 function usePrefersReducedMotion() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
@@ -224,8 +231,8 @@ export function QueuedSummaryContent({
   if (!shouldAnimate) {
     return (
       <>
-        {primaryText}
-        {secondaryText}
+        {asSummaryItem(primaryText)}
+        {asSummaryItem(secondaryText)}
         {trailingText}
       </>
     );
@@ -242,8 +249,8 @@ export function QueuedSummaryContent({
           exit={{ y: "-0.8em", opacity: 0 }}
           transition={SUMMARY_ROLL_TRANSITION}
         >
-          {displayedContent.primaryText}
-          {displayedContent.secondaryText}
+          {asSummaryItem(displayedContent.primaryText)}
+          {asSummaryItem(displayedContent.secondaryText)}
         </motion.span>
       </AnimatePresence>
       {/* Changes 的 diff count 必须与文件摘要属于同一排队快照，

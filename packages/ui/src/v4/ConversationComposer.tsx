@@ -156,7 +156,6 @@ import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
 import { ComputerUseBar } from "@/v4/composer/ComputerUseBar.js";
 import { MiniComputerPanel } from "@/v4/composer/MiniComputerPanel.js";
 import { ExecutionTaskCards } from "@/v4/composer/ExecutionTaskCards.js";
-import { V4ComposerRunOnControl } from "@/v4/composer/V4ComposerRunOnControl.js";
 import { useExecutionScope } from "@/hooks/useExecutionScope.js";
 import { useComputerUseSession } from "@/hooks/useComputerUseSession.js";
 import {
@@ -605,7 +604,7 @@ function ConversationComposerImpl({
     { workspacePath, ...(workspaceIdentity ? { workspaceIdentity } : {}) },
     sessionId ?? null,
   );
-  // 远程 workspace 的 agent 不在本机运行，「Run on」与本机发起的任务卡不适用。
+  // 远程 workspace 的 agent 不在本机运行，本机发起的电脑工作卡不适用。
   const showExecutionControls = !workspaceIdentity?.trim();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -2292,9 +2291,6 @@ function ConversationComposerImpl({
           remoteSessionId={remoteSessionId}
           currentSessionBusy={canStop}
         />
-        {showExecutionControls ? (
-          <V4ComposerRunOnControl scopeKey={executionScope} disabled={disabled} />
-        ) : null}
         <ConversationBackgroundWorkTrigger
           backgroundWorks={snapshot?.backgroundWorks ?? []}
           runningSubagentCount={runningSubagentCount}
@@ -2307,7 +2303,6 @@ function ConversationComposerImpl({
       activeConfigPicker,
       canStop,
       disabled,
-      executionScope,
       intl,
       draftConfig,
       handleConfigPickerOpenChange,
@@ -2317,7 +2312,6 @@ function ConversationComposerImpl({
       provider,
       remoteSessionId,
       runningSubagentCount,
-      showExecutionControls,
       snapshot?.backgroundWorks,
       workspaceIdentity,
       workspacePath,

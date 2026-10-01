@@ -15,8 +15,11 @@ const PLATFORM_LABEL: Record<AccountDevice["platform"], string> = {
   linux: "Linux",
 };
 
-/** Device management only (name, presence, role, pair/rename/revoke). Devices run work; they aren't operated here. */
-export function AceVraDevicesSection() {
+/**
+ * 「Computers」管理：名称、在线状态、这台电脑 / 已连接的电脑、连接（配对）、重命名、移除（撤销）。
+ * 只做管理，不出现执行/命令/能力等术语；agent 用哪台电脑由对话决定（acevra-agent-computer.md）。
+ */
+export function AceVraComputersSection() {
   const account = usePlatform().account;
   const text = useAccountText();
   const [view, setView] = useState<AccountDevicesView | null>(null);
@@ -39,17 +42,17 @@ export function AceVraDevicesSection() {
 
   const presence = (device: AccountDevice) =>
     device.presence === "revoked"
-      ? text("devices.revoked", "Revoked")
+      ? text("computers.removed", "Removed")
       : device.presence === "online"
-        ? text("devices.online", "Online")
-        : text("devices.offline", "Offline");
+        ? text("computers.online", "Online")
+        : text("computers.offline", "Offline");
   const role = (device: AccountDevice) => {
     const kind = describeDeviceRole(device, view.thisDeviceId);
     return kind === "thisDevice"
-      ? text("devices.thisDevice", "This device")
+      ? text("computers.thisComputer", "This computer")
       : kind === "node"
-        ? text("devices.node", "Node")
-        : text("devices.desktop", "Desktop");
+        ? text("computers.connected", "Connected computer")
+        : text("computers.otherApp", "AceVra app");
   };
   const lookup = async () => {
     setPairNote(null);
@@ -58,10 +61,13 @@ export function AceVraDevicesSection() {
     else
       setPairNote(
         result?.status === "too_many_attempts"
-          ? text("pair.tooMany", "Too many attempts. Wait a few minutes and try again.")
+          ? text("connect.tooMany", "Too many attempts. Wait a few minutes and try again.")
           : result?.status === "unavailable"
-            ? text("pair.unavailable", "Pairing is temporarily unavailable.")
-            : text("pair.notFound", "No pending node found for that code. It may have expired."),
+            ? text("connect.unavailable", "Connecting is temporarily unavailable.")
+            : text(
+                "connect.notFound",
+                "No computer is waiting with that code. It may have expired.",
+              ),
       );
   };
   const decide = async (decision: "approve" | "reject") => {
@@ -71,10 +77,10 @@ export function AceVraDevicesSection() {
     setCode("");
     setPairNote(
       result?.status === "approved"
-        ? text("pair.approved", "Approved. The node will appear here once it connects.")
+        ? text("connect.approved", "Approved. The computer will appear here once it connects.")
         : result?.status === "rejected"
-          ? text("pair.rejected", "Rejected.")
-          : text("pair.stale", "That pairing is no longer pending."),
+          ? text("connect.rejected", "Rejected.")
+          : text("connect.stale", "That request is no longer waiting."),
     );
     await refresh();
   };
@@ -87,14 +93,14 @@ export function AceVraDevicesSection() {
     <div className="space-y-2" data-testid="acevra-devices-section">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-ui-base font-medium text-foreground">
-          {text("devices.title", "Devices")}
+          {text("computers.title", "Computers")}
         </h3>
         <div className="flex items-center gap-1">
           <Button
             size="icon-sm"
             variant="ghost"
             data-testid="acevra-devices-refresh"
-            aria-label={text("devices.refresh", "Refresh")}
+            aria-label={text("computers.refresh", "Refresh")}
             onClick={() => void refresh()}
           >
             <RefreshCwIcon className="size-3.5" />
@@ -106,15 +112,29 @@ export function AceVraDevicesSection() {
             aria-expanded={pairOpen}
             onClick={() => setPairOpen((open) => !open)}
           >
-            {text("pair.open", "Pair a node")}
+            {text("connect.open", "Connect a computer")}
           </Button>
         </div>
       </div>
+      <p className="text-ui-sm text-foreground-subtle">
+        {text(
+          "computers.description",
+          "Computers connected to your AceVra account. The agent can use them when you ask.",
+        )}
+      </p>
       {pairOpen && (
         <div
           className="space-y-2 rounded-xl border border-card-border bg-card p-3 text-ui-base"
           data-testid="acevra-pair-panel"
         >
+          {!pending && (
+            <p className="text-ui-sm text-foreground-subtle" data-testid="acevra-connect-how-to">
+              {text(
+                "connect.howTo",
+                "On the other computer, start AceVra Node and enter the code it shows.",
+              )}
+            </p>
+          )}
           {!pending ? (
             <form
               className="flex gap-2"
@@ -124,7 +144,7 @@ export function AceVraDevicesSection() {
               }}
             >
               <Input
-                aria-label={text("pair.code", "Pairing code")}
+                aria-label={text("connect.code", "Connection code")}
                 placeholder="ABCD-EFGH"
                 value={code}
                 maxLength={16}
@@ -132,7 +152,7 @@ export function AceVraDevicesSection() {
                 onChange={(event) => setCode(event.target.value)}
               />
               <Button type="submit" size="sm" data-testid="acevra-pair-lookup">
-                {text("pair.lookup", "Find node")}
+                {text("connect.lookup", "Find computer")}
               </Button>
             </form>
           ) : (
@@ -141,7 +161,7 @@ export function AceVraDevicesSection() {
               <p className="text-ui-sm text-foreground-subtle">
                 {PLATFORM_LABEL[pending.platform]}
                 {" · "}
-                {text("pair.review", "Only approve a node you started yourself.")}
+                {text("connect.review", "Only approve a computer you set up yourself.")}
               </p>
               <div className="flex gap-2">
                 <Button
@@ -149,7 +169,7 @@ export function AceVraDevicesSection() {
                   data-testid="acevra-pair-approve"
                   onClick={() => void decide("approve")}
                 >
-                  {text("pair.approve", "Approve")}
+                  {text("connect.approve", "Approve")}
                 </Button>
                 <Button
                   size="sm"
@@ -157,7 +177,7 @@ export function AceVraDevicesSection() {
                   data-testid="acevra-pair-reject"
                   onClick={() => void decide("reject")}
                 >
-                  {text("pair.reject", "Reject")}
+                  {text("connect.reject", "Reject")}
                 </Button>
               </div>
             </div>
@@ -172,19 +192,19 @@ export function AceVraDevicesSection() {
       {view.registration === "conflict" && (
         <p className="text-ui-sm text-foreground-subtle" data-testid="acevra-device-conflict">
           {text(
-            "devices.conflict",
+            "computers.conflict",
             "This installation is registered to a different AceVra account. Local features still work.",
           )}
         </p>
       )}
       {view.registration === "unavailable" && (
         <p className="text-ui-sm text-foreground-subtle">
-          {text("devices.unavailable", "Devices are temporarily unavailable.")}
+          {text("computers.unavailable", "Computers are temporarily unavailable.")}
         </p>
       )}
       {view.devices.length === 0 && view.registration === "registered" && (
         <p className="text-ui-sm text-foreground-subtle">
-          {text("devices.none", "No devices yet.")}
+          {text("computers.none", "No computers yet.")}
         </p>
       )}
       {view.devices.length > 0 && (
@@ -221,7 +241,7 @@ export function AceVraDevicesSection() {
                     >
                       <Input
                         autoFocus
-                        aria-label={text("devices.name", "Device name")}
+                        aria-label={text("computers.name", "Computer name")}
                         value={editing.name}
                         maxLength={60}
                         onChange={(event) =>
@@ -229,7 +249,7 @@ export function AceVraDevicesSection() {
                         }
                       />
                       <Button type="submit" size="sm" data-testid="acevra-device-rename-save">
-                        {text("devices.save", "Save")}
+                        {text("computers.save", "Save")}
                       </Button>
                     </form>
                   ) : (
@@ -252,7 +272,7 @@ export function AceVraDevicesSection() {
                       data-testid="acevra-device-rename"
                       onClick={() => setEditing({ id: device.id, name: device.displayName })}
                     >
-                      {text("devices.rename", "Rename")}
+                      {text("computers.rename", "Rename")}
                     </Button>
                     {revoking === device.id ? (
                       <Button
@@ -264,7 +284,7 @@ export function AceVraDevicesSection() {
                           void act(() => account.revokeDevice(device.id));
                         }}
                       >
-                        {text("devices.revokeConfirm", "Confirm revoke")}
+                        {text("computers.removeConfirm", "Confirm remove")}
                       </Button>
                     ) : (
                       <Button
@@ -273,7 +293,7 @@ export function AceVraDevicesSection() {
                         data-testid="acevra-device-revoke"
                         onClick={() => setRevoking(device.id)}
                       >
-                        {text("devices.revoke", "Revoke")}
+                        {text("computers.remove", "Remove")}
                       </Button>
                     )}
                   </div>
@@ -285,8 +305,8 @@ export function AceVraDevicesSection() {
       )}
       <p className="text-ui-sm text-foreground-subtle">
         {text(
-          "devices.note",
-          "Revoking removes a device's account association. Local features on it keep working.",
+          "computers.note",
+          "Removing a computer disconnects it from your account. Nothing on it is deleted.",
         )}
       </p>
     </div>
