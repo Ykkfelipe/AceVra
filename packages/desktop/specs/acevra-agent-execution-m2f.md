@@ -1,5 +1,10 @@
 # AceVra agent execution on the Run-on target — M2F
 
+> **Superseded UX (2026-10-01) by `acevra-agent-computer.md` §8:** there is no composer "Run on"
+> selection any more. User turns always declare `automatic`, so work stays on this Mac; the agent
+> uses `ExecutionTargets` / `RunOnTarget` only when the user asks for another computer by name.
+> The session binding, Bash refusal and tools described here remain as infrastructure.
+
 Status: implemented with this change. Closes the M2E "honest gap" (`acevra-execution-ux-m2e.md`):
 the agent's process-execution tools now run on the target picked in the composer "Run on" control.
 Reuses M2D/M2E infra end to end: `ExecutionTarget`, `TaskView`, `TaskEvent`,

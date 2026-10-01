@@ -1,5 +1,9 @@
 # AceVra execution UX realignment — M2E
 
+> **Superseded (2026-10-01) by `acevra-agent-computer.md` §8:** the composer "Run on" control,
+> its caption and the Devices wording are removed; Settings shows "Computers" and work cards use
+> plain wording. The task infrastructure described here is unchanged.
+
 Status: implemented with this change. Builds on M2D (`acevra-task-routing-m2d.md`). UI only: no new
 table, task protocol, IPC task command, remote service or agent tool. Reuses `ExecutionTarget`,
 `TaskView`, `TaskEvent`, `IRemoteProcessService` and the existing cancellation path.
