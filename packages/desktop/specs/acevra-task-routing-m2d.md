@@ -97,6 +97,8 @@ is derived from Devices; routing never hardcodes machine names. This desktop's l
 same shell service in the main process with the same Task/Event shape and no control plane. Account →
 Devices gains "Run a process" (Run on [target ▼], executable, args, cwd), a task list and a live
 event view fed only by TaskEvents (polled by `after` sequence). Cloud is not shown.
+Superseded for normal UX by M2E (`acevra-execution-ux-m2e.md`): the raw form is engineering-only;
+users get a composer "Run on" control and TaskEvent-driven work cards instead.
 `IRemoteProcessService.startRemoteProcess()` returns a task handle immediately; the main agent
 tool-registry wiring is the next step (the service and its contract exist; the UI is its first
 consumer).
