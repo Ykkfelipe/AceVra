@@ -41,23 +41,10 @@ installation id, and local tools/providers/conversations are unaffected. Local-o
 touches the registry. The UI lists only real registered devices, labels this one, allows rename
 and revoke.
 
-## Credential boundary and M2C extension point
+## Credential boundary
 
-M2B registration is **human-session-backed**; no device secret exists yet (nothing sensitive to
-store). M2C adds, without schema migration gymnastics:
-
-```
-acevra node connect → POST /v1/enrollments (public pairing code, node generates keypair)
-→ signed-in human approves in the app (recent Clerk auth; binds code → account)
-→ node claims once → backend creates/links a `devices` row (type node) and records the node's
-  PUBLIC key id in devices.device_key_id; node keeps its private key in OS-backed storage
-→ node authenticates with short-lived tokens signed by that key (renewal checked against
-  devices.revoked_at) → outbound WSS channel for presence and task delivery.
-```
-
-`device_key_id`, `type=node`, `revoked_at` and the per-account composite key already carry this.
-Revocation (`revoked_at`) is the single source that M2C credential renewal and WSS admission
-must consult.
+M2B registration is human-session-backed with no device secret. Node authentication is
+specified and implemented in `acevra-node-pairing-m2c.md`.
 
 ## Acceptance
 

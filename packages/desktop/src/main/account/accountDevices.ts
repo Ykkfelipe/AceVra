@@ -1,4 +1,10 @@
-import type { AccountDevice, AccountDevicesView } from "@zcode/shared";
+import type {
+  AccountDevice,
+  AccountDevicesView,
+  AccountPairingDecisionResult,
+  AccountPairingLookupResult,
+  AccountPairingPreview,
+} from "@zcode/shared";
 
 export interface DeviceDescriptor {
   platform: AccountDevice["platform"];
@@ -12,7 +18,7 @@ export interface AccountDevicesDeps {
   getToken(): Promise<string | null>;
   fetch: typeof fetch;
   installationId(): Promise<string>;
-  describe(): DeviceDescriptor;
+  describe(): DeviceDescriptor | Promise<DeviceDescriptor>;
   heartbeatMs?: number;
   timers?: { setInterval: typeof setInterval; clearInterval: typeof clearInterval };
 }
@@ -91,7 +97,7 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
       const result = await call("POST", "/v1/devices/register", {
         installationId,
         type: "desktop",
-        ...deps.describe(),
+        ...(await deps.describe()),
       });
       if (attempt !== generation) return;
       if (!result) {
@@ -126,6 +132,28 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
     async rename(id: string, displayName: string) {
       await call("PATCH", `/v1/devices/${encodeURIComponent(id)}`, { displayName });
       return view();
+    },
+    /** The code is the only way to discover a pending node; there is no global pending list. */
+    async lookupPairing(code: string): Promise<AccountPairingLookupResult> {
+      const result = await call("POST", "/v1/pairings/lookup", { code });
+      if (!result) return { status: "unavailable" };
+      if (result.status === 200 && result.json?.pairing) {
+        return { status: "found", pairing: result.json.pairing as AccountPairingPreview };
+      }
+      if (result.status === 429) return { status: "too_many_attempts" };
+      return { status: result.status === 404 ? "not_found" : "unavailable" };
+    },
+    async decidePairing(
+      id: string,
+      decision: "approve" | "reject",
+    ): Promise<AccountPairingDecisionResult> {
+      const result = await call("POST", `/v1/pairings/${encodeURIComponent(id)}/${decision}`);
+      if (!result) return { status: "unavailable" };
+      if (result.status === 200)
+        return { status: decision === "approve" ? "approved" : "rejected" };
+      return {
+        status: result.status === 409 || result.status === 404 ? "not_pending" : "unavailable",
+      };
     },
     async revoke(id: string) {
       const result = await call("POST", `/v1/devices/${encodeURIComponent(id)}/revoke`);

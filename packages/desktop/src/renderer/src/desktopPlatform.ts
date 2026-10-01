@@ -57,6 +57,8 @@ export function createDesktopPlatform(options: {
       signOut: () => window.zcode.account.signOut(),
       refresh: () => window.zcode.account.refresh(),
       chooseLocal: () => window.zcode.account.chooseLocal(),
+      lookupPairing: (code) => window.zcode.account.lookupPairing(code),
+      decidePairing: (id, decision) => window.zcode.account.decidePairing(id, decision),
       listDevices: () => window.zcode.account.listDevices(),
       renameDevice: (id, name) => window.zcode.account.renameDevice(id, name),
       revokeDevice: (id) => window.zcode.account.revokeDevice(id),

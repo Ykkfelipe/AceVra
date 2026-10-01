@@ -1,0 +1,23 @@
+{
+  "name": "@zcode/node",
+  "private": true,
+  "bin": {
+    "acevra": "./bin/acevra.mjs"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.ts",
+    "lint": "oxlint"
+  },
+  "dependencies": {
+    "tsx": "^4.19.4",
+    "ws": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/ws": "^8.18.1"
+  }
+}

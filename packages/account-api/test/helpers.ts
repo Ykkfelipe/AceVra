@@ -1,6 +1,10 @@
-import { createSign, generateKeyPairSync } from "node:crypto";
+import { createSign, generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { createAccountApp } from "../src/app.js";
+import { createServer, type Server } from "node:http";
+import { getRequestListener } from "@hono/node-server";
+import { createDeviceChannel, type DeviceChannelOptions } from "../src/deviceChannel.js";
+import { createPairingService } from "../src/pairing.js";
 import { createDeviceService } from "../src/devices.js";
 import { createAccountService, createAdmissionLedger } from "../src/accounts.js";
 import { createClerkIdentityVerifier } from "../src/clerk.js";
@@ -52,9 +56,23 @@ export async function createTestApp(options?: {
   authorizedParties?: string[];
   rateLimit?: { limit: number; windowMs: number };
   log?: (line: string) => void;
+  channel?: DeviceChannelOptions;
+  presenceWindowMs?: number;
+  nodeGraceMs?: number;
+  /** Use wall-clock time (acceptance runs); default is a controllable fake clock. */
+  realClock?: boolean;
+  /** Reuse a database across "backend restarts". */
+  db?: SqlExecutor;
 }) {
-  const db = await createTestDb();
-  const clock = { now: Date.now() };
+  const db = options?.db ?? (await createTestDb());
+  const clock = options?.realClock
+    ? {
+        get now() {
+          return Date.now();
+        },
+        set now(_value: number) {},
+      }
+    : { now: Date.now() };
   const users = options?.users ?? {};
   const directory: ClerkUserDirectory = {
     getUser: async (id) => {
@@ -63,6 +81,7 @@ export async function createTestApp(options?: {
       return user;
     },
   };
+  const channel = createDeviceChannel({ db, options: options?.channel });
   const app = createAccountApp({
     verifier: createClerkIdentityVerifier({
       secretKey: "sk_test_unused-networkless",
@@ -70,7 +89,13 @@ export async function createTestApp(options?: {
       authorizedParties: options?.authorizedParties ?? [],
     }),
     accounts: createAccountService({ db, directory }),
-    devices: createDeviceService(db, () => clock.now),
+    devices: createDeviceService(db, () => clock.now, {
+      isLive: (id) => channel.isLive(id),
+      presenceWindowMs: options?.presenceWindowMs,
+      nodeGraceMs: options?.nodeGraceMs,
+    }),
+    pairings: createPairingService(db, () => clock.now),
+    onDeviceRevoked: (id) => channel.closeDevice(id, "revoked"),
     rateLimit: options?.rateLimit ?? { limit: 10_000, windowMs: 60_000 },
     log: options?.log,
   });
@@ -91,5 +116,32 @@ export async function createTestApp(options?: {
         },
         ...(init.json !== undefined ? { body: JSON.stringify(init.json) } : {}),
       });
-  return { db, app, me, as, clock, ledger: createAdmissionLedger(db) };
+  /** Real HTTP + WebSocket listener (port 0 = ephemeral; pass a port to simulate a restart). */
+  const listen = async (port = 0) => {
+    const server: Server = createServer(getRequestListener(app.fetch));
+    channel.attach(server);
+    await new Promise<void>((ok) => server.listen(port, "127.0.0.1", ok));
+    const address = server.address() as { port: number };
+    return {
+      port: address.port,
+      url: `http://127.0.0.1:${address.port}`,
+      wsUrl: `ws://127.0.0.1:${address.port}/v1/device-channel`,
+      close: () => {
+        channel.dropAll();
+        server.closeAllConnections();
+        return new Promise<void>((ok) => server.close(() => ok()));
+      },
+    };
+  };
+  return { db, app, me, as, clock, channel, listen, ledger: createAdmissionLedger(db) };
+}
+
+/** A node's Ed25519 identity, as the headless node generates it. */
+export function makeNodeKeys() {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  return {
+    publicKey: publicKey.export({ type: "spki", format: "der" }).toString("base64url"),
+    sign: (message: string) =>
+      cryptoSign(null, Buffer.from(message), privateKey).toString("base64url"),
+  };
 }

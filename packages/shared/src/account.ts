@@ -68,6 +68,22 @@ export interface AccountDevicesView {
   devices: AccountDevice[];
 }
 
+/** What the human sees when they enter a node's pairing code. Never includes keys or secrets. */
+export interface AccountPairingPreview {
+  id: string;
+  displayName: string;
+  platform: "darwin" | "win32" | "linux";
+  capabilities: AccountDeviceCapability[];
+  createdAt: string;
+  expiresAt: string;
+}
+export type AccountPairingLookupResult =
+  | { status: "found"; pairing: AccountPairingPreview }
+  | { status: "not_found" | "too_many_attempts" | "unavailable" };
+export type AccountPairingDecisionResult = {
+  status: "approved" | "rejected" | "unavailable" | "not_pending";
+};
+
 /** Desktop-only account commands. Optional on IPlatformService (Web has none). */
 export interface IAccountPlatform {
   getView(): Promise<AccountView>;
@@ -80,6 +96,9 @@ export interface IAccountPlatform {
   refresh(): Promise<void>;
   /** Records "Continue locally". */
   chooseLocal(): Promise<void>;
+  /** Look up a node's pending pairing by its short code (the only discovery path). */
+  lookupPairing(code: string): Promise<AccountPairingLookupResult>;
+  decidePairing(id: string, decision: "approve" | "reject"): Promise<AccountPairingDecisionResult>;
   /** Registered devices for the signed-in account (empty unless ready). */
   listDevices(): Promise<AccountDevicesView>;
   renameDevice(id: string, displayName: string): Promise<AccountDevicesView>;
@@ -113,6 +132,8 @@ export const AccountChannels = {
   Refresh: "acevra-account:refresh",
   ChooseLocal: "acevra-account:choose-local",
   DevicesList: "acevra-account:devices-list",
+  PairingLookup: "acevra-account:pairing-lookup",
+  PairingDecide: "acevra-account:pairing-decide",
   DeviceRename: "acevra-account:device-rename",
   DeviceRevoke: "acevra-account:device-revoke",
   /** main → main renderer */

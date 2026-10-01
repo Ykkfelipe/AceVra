@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { app, ipcMain, type WebContents } from "electron";
 import { AccountChannels, type AccountDevice, type AccountView } from "@zcode/shared";
 import { resolveCuaOsSupport } from "../cuaOsSupport.js";
+import { execFile } from "node:child_process";
 import { createAccountDevices } from "./accountDevices.js";
+import { deriveDesktopCapabilities } from "./accountCapabilities.js";
 import { createInstallationStore } from "./accountInstallation.js";
 import { ACCOUNT_TOKEN_STORE_NAME, isAccountSessionPersistent } from "./accountClerkBridge.js";
 import { resolveAccountConfig } from "./accountConfig.js";
@@ -62,20 +64,21 @@ export function initAccountMain(options: {
           installationId: createInstallationStore(
             join(app.getPath("userData"), "acevra-installation.json"),
           ).getOrCreate,
-          describe: () => ({
+          describe: async () => ({
             platform: process.platform as AccountDevice["platform"],
             displayName: describeComputerName(),
-            // Only capabilities that are actually wired in this app.
-            capabilities: [
-              "files",
-              "shell",
-              "git",
-              ...(resolveCuaOsSupport().kind === "supported" ? (["computerUse"] as const) : []),
-            ],
+            capabilities: deriveDesktopCapabilities({
+              gitAvailable: await gitProbe,
+              computerUseSupported: resolveCuaOsSupport().kind === "supported",
+            }),
           }),
         })
       : null;
   let wasReady = false;
+  // Probed once, asynchronously, so capability facts never block startup.
+  const gitProbe = new Promise<boolean>((resolve) =>
+    execFile("git", ["--version"], { timeout: 3000 }, (error) => resolve(!error)),
+  );
   controller.onViewChanged((view) => {
     const ready = view.phase === "ready";
     if (ready && !wasReady) void devices?.start().catch(() => undefined);
@@ -104,6 +107,17 @@ export function initAccountMain(options: {
   ipcMain.handle(AccountChannels.Refresh, () => controller.refresh());
   const idle = { registration: "none" as const, thisDeviceId: null, devices: [] };
   ipcMain.handle(AccountChannels.DevicesList, () => devices?.list() ?? idle);
+  const unavailable = { status: "unavailable" as const };
+  ipcMain.handle(AccountChannels.PairingLookup, (_event, code: unknown) =>
+    typeof code === "string" && code.length <= 32
+      ? (devices?.lookupPairing(code) ?? unavailable)
+      : unavailable,
+  );
+  ipcMain.handle(AccountChannels.PairingDecide, (_event, id: unknown, decision: unknown) =>
+    typeof id === "string" && (decision === "approve" || decision === "reject")
+      ? (devices?.decidePairing(id, decision) ?? unavailable)
+      : unavailable,
+  );
   ipcMain.handle(AccountChannels.DeviceRename, (_event, id: unknown, name: unknown) =>
     typeof id === "string" && typeof name === "string" ? (devices?.rename(id, name) ?? idle) : idle,
   );
@@ -137,6 +151,8 @@ export function initAccountMain(options: {
         AccountChannels.Refresh,
         AccountChannels.ChooseLocal,
         AccountChannels.DevicesList,
+        AccountChannels.PairingLookup,
+        AccountChannels.PairingDecide,
         AccountChannels.DeviceRename,
         AccountChannels.DeviceRevoke,
       ]) {

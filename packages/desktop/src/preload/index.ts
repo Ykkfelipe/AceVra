@@ -599,6 +599,9 @@ contextBridge.exposeInMainWorld("zcode", {
     signOut: () => ipcRenderer.invoke(AccountChannels.SignOut),
     refresh: () => ipcRenderer.invoke(AccountChannels.Refresh),
     chooseLocal: () => ipcRenderer.invoke(AccountChannels.ChooseLocal),
+    lookupPairing: (code: string) => ipcRenderer.invoke(AccountChannels.PairingLookup, code),
+    decidePairing: (id: string, decision: string) =>
+      ipcRenderer.invoke(AccountChannels.PairingDecide, id, decision),
     listDevices: () => ipcRenderer.invoke(AccountChannels.DevicesList),
     renameDevice: (id: string, name: string) =>
       ipcRenderer.invoke(AccountChannels.DeviceRename, id, name),

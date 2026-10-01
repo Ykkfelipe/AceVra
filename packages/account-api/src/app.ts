@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import { createRateLimiter } from "./rateLimit.js";
+import { normalizePairingCode, parseEd25519PublicKey, type PairingService } from "./pairing.js";
 import type { createAccountService } from "./accounts.js";
 import type { HumanIdentityVerifier } from "./ports.js";
 import {
@@ -28,6 +29,9 @@ export function createAccountApp(deps: {
   verifier: HumanIdentityVerifier;
   accounts: ReturnType<typeof createAccountService>;
   devices?: DeviceService;
+  pairings?: PairingService;
+  /** Called after a revoke so live realtime connections are closed promptly. */
+  onDeviceRevoked?: (deviceId: string) => void;
   /** Requests per window per client key. Defaults: 60 / minute. */
   rateLimit?: { limit: number; windowMs: number };
   /** Derives the client key. Behind a trusted proxy, supply its forwarded address. */
@@ -169,7 +173,111 @@ export function createAccountApp(deps: {
       const auth = await authenticate(c);
       if (!auth.ok) return auth.response;
       const device = await devices.revoke(auth.account.id, c.req.param("id"));
+      if (device) deps.onDeviceRevoked?.(device.id);
       return device ? c.json({ device }) : c.json({ error: "not_found" }, 404);
+    });
+  }
+
+  const pairings = deps.pairings;
+  if (pairings) {
+    // Unauthenticated creation is the abuse surface: tighter than the global limiter.
+    const createLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
+    // Wrong human codes are brute-force attempts: a few misses per account, then a cooldown.
+    const missLimiter = createRateLimiter({ limit: 5, windowMs: 10 * 60_000 });
+    const clientOf = (c: Context) => deps.clientKey?.(c.req.raw) ?? "local";
+    const body = async (c: Context): Promise<Record<string, unknown>> => {
+      const parsed = await c.req.json().catch(() => null);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    };
+    const nameOf = (value: unknown) => {
+      const text = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+      return text.length >= 1 && text.length <= 60 && ![...text].some((ch) => ch.charCodeAt(0) < 32)
+        ? text
+        : null;
+    };
+
+    app.post("/v1/pairings", async (c) => {
+      const wait = createLimiter.check(clientOf(c));
+      if (wait !== null) {
+        c.header("Retry-After", String(wait));
+        return c.json({ error: "rate_limited" }, 429);
+      }
+      const input = await body(c);
+      const key = parseEd25519PublicKey(input.publicKey);
+      const displayName = nameOf(input.displayName);
+      const platform = (DEVICE_PLATFORMS as readonly string[]).includes(input.platform as string)
+        ? (input.platform as (typeof DEVICE_PLATFORMS)[number])
+        : null;
+      const caps = Array.isArray(input.capabilities) ? input.capabilities : [];
+      const capabilities = caps.map((cap) =>
+        (DEVICE_CAPABILITIES as readonly string[]).includes(cap as string)
+          ? (cap as DeviceCapability)
+          : null,
+      );
+      if (!key || !displayName || !platform || caps.length > 16 || capabilities.includes(null)) {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+      const created = await pairings.create({
+        publicKey: input.publicKey as string,
+        keyId: key.keyId,
+        displayName,
+        platform,
+        capabilities: [...new Set(capabilities as DeviceCapability[])],
+      });
+      c.header("Cache-Control", "no-store");
+      return c.json(created, 201);
+    });
+
+    app.post("/v1/pairings/lookup", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      const blocked = missLimiter.peek(auth.account.id);
+      if (blocked !== null) {
+        c.header("Retry-After", String(blocked));
+        return c.json({ error: "too_many_attempts" }, 429);
+      }
+      const code = normalizePairingCode((await body(c)).code);
+      const found = code ? await pairings.lookup(code) : null;
+      if (!found) {
+        missLimiter.check(auth.account.id);
+        return c.json({ error: "not_found" }, 404);
+      }
+      return c.json({ pairing: found });
+    });
+    for (const decision of ["approve", "reject"] as const) {
+      app.post(`/v1/pairings/:id/${decision}`, async (c) => {
+        const auth = await authenticate(c);
+        if (!auth.ok) return auth.response;
+        const result = await pairings.decide(auth.account.id, c.req.param("id"), decision);
+        if (result.ok) return c.json({ status: decision === "approve" ? "approved" : "rejected" });
+        return result.reason === "not_found"
+          ? c.json({ error: "not_found" }, 404)
+          : c.json({ error: result.reason }, 409);
+      });
+    }
+
+    // Node-facing (secret-proven, no Clerk). POST so the secret never rides in a URL.
+    app.post("/v1/pairings/:id/status", async (c) => {
+      const status = await pairings.status(c.req.param("id"), (await body(c)).secret);
+      return status ? c.json({ status }) : c.json({ error: "not_found" }, 404);
+    });
+    app.post("/v1/pairings/:id/challenge", async (c) => {
+      const result = await pairings.challenge(c.req.param("id"), (await body(c)).secret);
+      if (result.ok) return c.json({ nonce: result.nonce, expiresAt: result.expiresAt });
+      return result.reason === "not_found"
+        ? c.json({ error: "not_found" }, 404)
+        : c.json({ error: result.reason }, 409);
+    });
+    app.post("/v1/pairings/:id/claim", async (c) => {
+      const input = await body(c);
+      const result = await pairings.claim(c.req.param("id"), {
+        secret: input.secret,
+        nonce: input.nonce,
+        signature: input.signature,
+      });
+      if (result.ok) return c.json({ deviceId: result.deviceId, keyId: result.keyId }, 201);
+      if (result.reason === "not_found") return c.json({ error: "not_found" }, 404);
+      return c.json({ error: result.reason }, result.reason === "bad_proof" ? 401 : 409);
     });
   }
   return app;

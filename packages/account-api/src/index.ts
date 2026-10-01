@@ -7,3 +7,5 @@ export { migrate } from "./migrate.js";
 export type * from "./ports.js";
 export { createDeviceService, DEVICE_CAPABILITIES } from "./devices.js";
 export type { DeviceView, DeviceCapability } from "./devices.js";
+export { createDeviceChannel, DEVICE_CHANNEL_PATH } from "./deviceChannel.js";
+export { createPairingService } from "./pairing.js";

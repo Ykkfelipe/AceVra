@@ -158,3 +158,34 @@ test("installation identity: random UUID, stable across calls and restarts, surv
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("pairing lookup maps backend outcomes; approve/reject map decisions; nothing is cached", async () => {
+  const PAIR = {
+    id: "p1",
+    displayName: "Dell Server",
+    platform: "linux",
+    capabilities: [],
+    createdAt: "t",
+    expiresAt: "t",
+  };
+  const h = harness((r) => {
+    if (r.path === "/v1/pairings/lookup") {
+      return r.body.code === "GOOD-CODE"
+        ? json(200, { pairing: PAIR })
+        : r.body.code === "SLOW"
+          ? json(429, {})
+          : r.body.code === "DOWN"
+            ? null
+            : json(404, {});
+    }
+    if (r.path === "/v1/pairings/p1/approve") return json(200, { status: "approved" });
+    if (r.path === "/v1/pairings/p1/reject") return json(409, {});
+    return json(500, {});
+  });
+  assert.deepEqual(await h.devices.lookupPairing("GOOD-CODE"), { status: "found", pairing: PAIR });
+  assert.deepEqual(await h.devices.lookupPairing("nope"), { status: "not_found" });
+  assert.deepEqual(await h.devices.lookupPairing("SLOW"), { status: "too_many_attempts" });
+  assert.deepEqual(await h.devices.lookupPairing("DOWN"), { status: "unavailable" });
+  assert.deepEqual(await h.devices.decidePairing("p1", "approve"), { status: "approved" });
+  assert.deepEqual(await h.devices.decidePairing("p1", "reject"), { status: "not_pending" });
+});

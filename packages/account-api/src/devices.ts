@@ -45,7 +45,12 @@ interface DeviceRow {
 const iso = (value: Date | string | null) => (value ? new Date(value).toISOString() : null);
 
 /** Never includes installation_id, device_key_id or account_id. */
-export function toDeviceView(row: DeviceRow, now = Date.now()): DeviceView {
+export function toDeviceView(
+  row: DeviceRow,
+  now = Date.now(),
+  live = false,
+  presenceWindowMs = PRESENCE_WINDOW_MS,
+): DeviceView {
   const seen = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
   return {
     id: row.id,
@@ -58,7 +63,12 @@ export function toDeviceView(row: DeviceRow, now = Date.now()): DeviceView {
     createdAt: iso(row.created_at)!,
     lastSeenAt: iso(row.last_seen_at),
     revokedAt: iso(row.revoked_at),
-    presence: row.revoked_at ? "revoked" : now - seen <= PRESENCE_WINDOW_MS ? "online" : "offline",
+    // A live authenticated channel is online at once; otherwise only a recent check-in is.
+    presence: row.revoked_at
+      ? "revoked"
+      : live || now - seen <= presenceWindowMs
+        ? "online"
+        : "offline",
   };
 }
 
@@ -74,7 +84,28 @@ export type RegisterResult =
   | { ok: true; device: DeviceView; created: boolean }
   | { ok: false; reason: "installation_bound" | "device_revoked" };
 
-export function createDeviceService(db: SqlExecutor, clock: () => number = Date.now) {
+export interface DeviceServiceOptions {
+  /** Whether the device currently holds an authenticated realtime channel. */
+  isLive?: (deviceId: string) => boolean;
+  presenceWindowMs?: number;
+  /** Grace for nodes after their channel drops. Defaults to presenceWindowMs. */
+  nodeGraceMs?: number;
+}
+
+export function createDeviceService(
+  db: SqlExecutor,
+  clock: () => number = Date.now,
+  options: DeviceServiceOptions = {},
+) {
+  const view = (row: DeviceRow) =>
+    toDeviceView(
+      row,
+      clock(),
+      options.isLive?.(row.id) ?? false,
+      row.type === "node"
+        ? (options.nodeGraceMs ?? options.presenceWindowMs)
+        : options.presenceWindowMs,
+    );
   return {
     async register(accountId: string, input: RegisterInput): Promise<RegisterResult> {
       return db.transaction(async (tx) => {
@@ -95,7 +126,7 @@ export function createDeviceService(db: SqlExecutor, clock: () => number = Date.
              WHERE id = $1 RETURNING *`,
             [row.id, input.platform, input.capabilities, new Date(clock())],
           );
-          return { ok: true, created: false, device: toDeviceView(updated.rows[0]!, clock()) };
+          return { ok: true, created: false, device: view(updated.rows[0]!) };
         }
         const created = await tx.query<DeviceRow>(
           `INSERT INTO devices (id, account_id, installation_id, type, platform, display_name, capabilities, last_seen_at)
@@ -111,7 +142,7 @@ export function createDeviceService(db: SqlExecutor, clock: () => number = Date.
             new Date(clock()),
           ],
         );
-        return { ok: true, created: true, device: toDeviceView(created.rows[0]!, clock()) };
+        return { ok: true, created: true, device: view(created.rows[0]!) };
       });
     },
     async list(accountId: string): Promise<DeviceView[]> {
@@ -119,7 +150,7 @@ export function createDeviceService(db: SqlExecutor, clock: () => number = Date.
         "SELECT * FROM devices WHERE account_id = $1 ORDER BY created_at",
         [accountId],
       );
-      return rows.rows.map((row) => toDeviceView(row, clock()));
+      return rows.rows.map(view);
     },
     /** All mutations scope by account_id: another account's id behaves as nonexistent. */
     async rename(accountId: string, id: string, displayName: string) {
@@ -127,15 +158,14 @@ export function createDeviceService(db: SqlExecutor, clock: () => number = Date.
         `UPDATE devices SET display_name = $3 WHERE id = $1 AND account_id = $2 AND revoked_at IS NULL RETURNING *`,
         [id, accountId, displayName],
       );
-      return result.rows[0] ? toDeviceView(result.rows[0], clock()) : null;
+      return result.rows[0] ? view(result.rows[0]) : null;
     },
     async heartbeat(accountId: string, id: string) {
       const result = await db.query<DeviceRow>(
-        `UPDATE devices SET last_seen_at = $3 WHERE id = $1 AND account_id = $2 AND revoked_at IS NULL RETURNING *`,
+        `UPDATE devices SET last_seen_at = $3 WHERE id = $1 AND account_id = $2 AND type = 'desktop' AND revoked_at IS NULL RETURNING *`,
         [id, accountId, new Date(clock())],
       );
-      if (result.rows[0])
-        return { status: "ok" as const, device: toDeviceView(result.rows[0], clock()) };
+      if (result.rows[0]) return { status: "ok" as const, device: view(result.rows[0]) };
       const revoked = await db.query(
         "SELECT 1 FROM devices WHERE id = $1 AND account_id = $2 AND revoked_at IS NOT NULL",
         [id, accountId],
@@ -147,7 +177,7 @@ export function createDeviceService(db: SqlExecutor, clock: () => number = Date.
         `UPDATE devices SET revoked_at = COALESCE(revoked_at, $3) WHERE id = $1 AND account_id = $2 RETURNING *`,
         [id, accountId, new Date(clock())],
       );
-      return result.rows[0] ? toDeviceView(result.rows[0], clock()) : null;
+      return result.rows[0] ? view(result.rows[0]) : null;
     },
   };
 }

@@ -7,6 +7,14 @@ export function createRateLimiter(options: {
   const now = options.now ?? Date.now;
   const hits = new Map<string, { count: number; resetAt: number }>();
   return {
+    /** Seconds until allowed again if already over the limit, without counting a hit. */
+    peek(key: string): number | null {
+      const entry = hits.get(key);
+      const t = now();
+      return entry && entry.resetAt > t && entry.count >= options.limit
+        ? Math.ceil((entry.resetAt - t) / 1000)
+        : null;
+    },
     /** Returns null when allowed, or seconds to wait. */
     check(key: string): number | null {
       const t = now();

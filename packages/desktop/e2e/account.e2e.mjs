@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable max-lines -- 验收脚本按场景线性叙述（A–F），拆文件会割裂共享的 backend/fixture 装配。 */
 // M2A acceptance. Run through scripts/run-account-e2e.mjs (needs tsx for the backend).
 // Real Electron app, isolated profile per scenario, real AceVra backend code (Hono +
 // Clerk token verification + PostgreSQL semantics via PGlite) and a deterministic test
@@ -7,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { serve } from "@hono/node-server";
+import { spawn } from "node:child_process";
 import { _electron as electron } from "playwright-core";
 import { createIsolatedRoots, startInferenceFixture, SENTINEL_KEY } from "./onboarding-fixture.mjs";
 import { createTestApp, signSessionToken } from "../../account-api/test/helpers.ts";
@@ -32,14 +33,10 @@ const USERS = {
     verifiedEmails: ["sam@example.test"],
   },
 };
-const backend = await createTestApp({ users: USERS });
+const backend = await createTestApp({ users: USERS, nodeGraceMs: 2000, realClock: true });
 await backend.ledger.approve({ clerkUserId: "user_admitted" });
-const listen = (fetch) =>
-  new Promise((ok) => {
-    const server = serve({ fetch, hostname: "127.0.0.1", port: 0 }, () => ok(server));
-  });
-let server = await listen(backend.app.fetch);
-const backendOrigin = () => `http://127.0.0.1:${server.address().port}`;
+const listener = await backend.listen();
+const backendOrigin = () => listener.url;
 const DEAD_ORIGIN = "http://127.0.0.1:9"; // discard port: connection refused
 
 const results = [];
@@ -351,7 +348,8 @@ await scenario("E-device-registry", async (ctx) => {
   await third.page.getByTestId("acevra-device-conflict").waitFor({ timeout: 20000 });
   assert.equal((await deviceRows()).length, before.size + 1);
   assert.equal(
-    (await deviceRows()).find((r) => r.id === deviceId).account_id === rows2.find((r) => r.id === deviceId).account_id,
+    (await deviceRows()).find((r) => r.id === deviceId).account_id ===
+      rows2.find((r) => r.id === deviceId).account_id,
     true,
     "ownership unchanged",
   );
@@ -385,7 +383,130 @@ async function app4Reload({ app, page }) {
     .catch(() => {});
 }
 
-server.close();
+// F. Node pairing: headless node → code → approve in the desktop → proof-of-possession claim →
+// independent device auth over WS → Online; stop → Offline; restart → same device; revoke → closed.
+await scenario("F-node-pairing", async (ctx) => {
+  const nodeHome = join(ctx.roots.root, "node-home");
+  const nodeCwd = resolve(desktop, "../node");
+  const nodes = () =>
+    backend.db.query("SELECT id, revoked_at FROM devices WHERE type = 'node'").then((r) => r.rows);
+  const startNode = () => {
+    const child = spawn(
+      process.execPath,
+      ["bin/acevra.mjs", "node", "connect", "--api", backendOrigin(), "--name", "Dell Server"],
+      {
+        cwd: nodeCwd,
+        env: { ...process.env, ACEVRA_NODE_HOME: nodeHome },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    const exited = new Promise((r) => child.once("exit", (code) => r(code)));
+    return { child, exited, out: () => out };
+  };
+  const { app, page } = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
+  ctx.nodeChildren = [];
+  try {
+    await connectProvider(page);
+    await page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
+    await page.getByTestId("acevra-account-signin").click();
+    await page.getByTestId("acevra-account-choice").waitFor({ state: "hidden", timeout: 30000 });
+    await skipPreferences(page);
+    await openAccountSection(page);
+    const node = startNode();
+    ctx.nodeChildren.push(node.child);
+    const until = async (fn, ms = 20000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await fn()) return true;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      throw new Error("timeout");
+    };
+    await until(() => /Code: [A-Z2-9]{4}-[A-Z2-9]{4}/.test(node.out()));
+    const code = node.out().match(/Code: ([A-Z2-9]{4}-[A-Z2-9]{4})/)[1];
+    // Desktop: look up by code, review, approve.
+    await page.getByTestId("acevra-pair-open").click();
+    await page.getByLabel("Pairing code").fill("AAAA-AAAA");
+    await page.getByTestId("acevra-pair-lookup").click();
+    await page
+      .getByTestId("acevra-pair-note")
+      .getByText("No pending node found")
+      .waitFor({ timeout: 10000 });
+    await page.getByLabel("Pairing code").fill(code);
+    await page.getByTestId("acevra-pair-lookup").click();
+    await page
+      .getByTestId("acevra-pair-pending")
+      .getByText("Dell Server")
+      .waitFor({ timeout: 10000 });
+    await page.getByTestId("acevra-pair-approve").click();
+    await page.getByTestId("acevra-pair-note").getByText("Approved").waitFor({ timeout: 10000 });
+    const row = page.getByTestId("acevra-device-row").filter({ hasText: "Dell Server" });
+    const refreshUntil = async (pattern) => {
+      const end = Date.now() + 20000;
+      while (Date.now() < end) {
+        await page.getByTestId("acevra-devices-refresh").click();
+        if ((await row.count()) && pattern.test(await row.first().innerText())) return;
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      throw new Error(`device row never matched ${pattern}: ${await row.allInnerTexts()}`);
+    };
+    await refreshUntil(/Node · Online/);
+    assert.equal((await nodes()).length, 1);
+    const nodeId = (await nodes())[0].id;
+    assert.equal(await row.first().getAttribute("data-this-device"), "false");
+    // Stop → Offline (after the grace window); restart → same device Online, no new pairing.
+    node.child.kill("SIGTERM");
+    await node.exited;
+    await refreshUntil(/Node · Offline/);
+    const again = startNode();
+    ctx.nodeChildren.push(again.child);
+    await refreshUntil(/Node · Online/);
+    assert.ok(!/Code:/.test(again.out()), "restart does not re-pair");
+    assert.deepEqual(
+      (await nodes()).map((n) => n.id),
+      [nodeId],
+      "same device, no duplicate",
+    );
+    // Revoke from the desktop: the node's live connection is terminated and it exits as revoked.
+    await row.first().getByTestId("acevra-device-revoke").click();
+    await row.first().getByTestId("acevra-device-revoke-confirm").click();
+    await refreshUntil(/Revoked/);
+    assert.equal(
+      await Promise.race([
+        again.exited,
+        new Promise((r) => setTimeout(() => r("still-running"), 8000)),
+      ]),
+      3,
+    );
+    assert.ok((await nodes())[0].revoked_at);
+    // A restart of the revoked identity stays refused.
+    const retry = startNode();
+    ctx.nodeChildren.push(retry.child);
+    assert.equal(
+      await Promise.race([
+        retry.exited,
+        new Promise((r) => setTimeout(() => r("still-running"), 8000)),
+      ]),
+      3,
+    );
+    // Local use never depended on any of it.
+    await page.keyboard.press("Escape");
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].webContents.reload(),
+    );
+    await infer(page, "Reply with the fixture confirmation.");
+    return {
+      node: "paired by code, online, offline on stop, same device on restart, revoke terminated it, local use intact",
+    };
+  } finally {
+    for (const child of ctx.nodeChildren) child.kill("SIGKILL");
+  }
+});
+
+await listener.close();
 await fixture.close();
 console.log(JSON.stringify({ passed: results.map((r) => r.scenario) }));
 process.exit(0);
