@@ -81,6 +81,18 @@ export type ComputerTestResult =
 
 export type ComputerCommandResult = { ok: true } | { ok: false; reason: string };
 
+/** One raw keyboard event forwarded by Main while remote keyboard capture is active (spec §3.3). */
+export interface CapturedKeyEvent {
+  type: "keydown" | "keyup";
+  key: string;
+  code: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  isAutoRepeat: boolean;
+}
+
 /** Desktop-only. Optional on IPlatformService (Web has none). */
 export interface IComputersPlatform {
   list(): Promise<SshComputerConfig[]>;
@@ -101,6 +113,13 @@ export interface IComputersPlatform {
   resume(id: string): Promise<ComputerCommandResult>;
   stop(id: string): Promise<ComputerCommandResult>;
   sendInput(id: string, events: ComputerInputEvent[]): void;
+  /**
+   * Remote keyboard capture (spec §3.3 layer 1): while active, Main intercepts every key event on
+   * this renderer's webContents via `before-input-event` (so Electron menu accelerators such as
+   * Cmd+Q / Cmd+W cannot fire) and forwards them via `onCapturedKey`.
+   */
+  setKeyCapture(active: boolean): void;
+  onCapturedKey(callback: (event: CapturedKeyEvent) => void): () => void;
   /** First agent Computer action of a conversation on this computer. */
   onSessionStarted(
     callback: (notice: { sessionId: string; computerId: string }) => void,
@@ -120,6 +139,10 @@ export const ComputerChannels = {
   Resume: "acevra-computers:resume",
   Stop: "acevra-computers:stop",
   Input: "acevra-computers:input",
+  /** renderer → main: enable/disable before-input-event keyboard interception while in control. */
+  KeyCapture: "acevra-computers:key-capture",
+  /** main → renderer: a key event intercepted in Main (menu accelerators suppressed). */
+  CapturedKey: "acevra-computers:captured-key",
   /** main → renderer */
   ViewChanged: "acevra-computers:view-changed",
   Frame: "acevra-computers:frame",

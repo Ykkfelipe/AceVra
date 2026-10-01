@@ -126,6 +126,11 @@ export type ComputerViewStream = ReturnType<typeof createComputerViewStream>;
 
 const BUTTONS = new Set(["left", "right", "middle"]);
 const KEY_NAME = /^[a-z0-9]{1,24}$/;
+// 与 renderer computerInput.isSafeKeyName 相同的显式标点集合（跨包不复用 UI 内部模块）；
+// worker 端最终用 pyautogui.KEYBOARD_KEYS 校验，单字符键名合法。
+const PUNCTUATION = new Set(["-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "`"]);
+const isSafeKeyName = (name: string) =>
+  KEY_NAME.test(name) || (name.length === 1 && PUNCTUATION.has(name));
 const coord = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 16_384;
 
 /** Validates renderer input before it reaches the socket; anything unexpected is dropped. */
@@ -160,7 +165,7 @@ export function sanitizeInputEvent(raw: unknown): ComputerInputEvent | null {
         : null;
     case "keydown":
     case "keyup":
-      return typeof ev.key === "string" && KEY_NAME.test(ev.key)
+      return typeof ev.key === "string" && isSafeKeyName(ev.key)
         ? { kind: ev.kind, key: ev.key }
         : null;
     case "text":

@@ -8,6 +8,7 @@ import type { ComputerInputEvent } from "@zcode/shared";
 import {
   createMoveThrottle,
   isGiveBackChord,
+  isSafeKeyName,
   mapKeyEvent,
   mapPointToRemote,
   mapRemoteToView,
@@ -79,14 +80,15 @@ test("plain printable characters are sent as text on keydown only", () => {
   ]);
 });
 
-test("named keys use worker names; unmappable chorded punctuation is dropped", () => {
+test("named keys use worker names; unmappable keys are dropped", () => {
   assert.deepEqual(mapKeyEvent(key({ code: "Enter", key: "Enter" }), "down"), [
     { kind: "keydown", key: "enter" },
   ]);
   assert.deepEqual(mapKeyEvent(key({ code: "F5", key: "F5" }), "up"), [
     { kind: "keyup", key: "f5" },
   ]);
-  assert.deepEqual(mapKeyEvent(key({ code: "Slash", key: "/", metaKey: true }), "down"), []);
+  // F13 不在映射表也不在安全键名集合里：仍被丢弃（不做文本退化）。
+  assert.deepEqual(mapKeyEvent(key({ code: "F13", key: "F13", metaKey: true }), "down"), []);
 });
 
 test("Ctrl+Option+Esc is the give-back chord; plain Esc is not", () => {
@@ -127,4 +129,50 @@ test("wheel deltas become bounded wheel clicks", () => {
   assert.equal(wheelClicks(3, 1), 1);
   assert.equal(wheelClicks(100000, 0), 10);
   assert.equal(wheelClicks(0, 0), 0);
+});
+
+test("chorded punctuation forwards single-character key names (Ctrl+Shift+;)", () => {
+  const down = mapKeyEvent(
+    key({ code: "Semicolon", key: ";", ctrlKey: true, shiftKey: true }),
+    "down",
+  );
+  assert.deepEqual(down, [{ kind: "keydown", key: ";" }]);
+  const up = mapKeyEvent(key({ code: "Semicolon", key: ";", ctrlKey: true, shiftKey: true }), "up");
+  assert.deepEqual(up, [{ kind: "keyup", key: ";" }]);
+});
+
+test("every explicit punctuation code maps and the safe-name check accepts exactly that set", () => {
+  const codes = [
+    "Minus",
+    "Equal",
+    "BracketLeft",
+    "BracketRight",
+    "Backslash",
+    "Semicolon",
+    "Quote",
+    "Comma",
+    "Period",
+    "Slash",
+    "Backquote",
+  ];
+  const chars = ["-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "`"];
+  for (const [index, code] of codes.entries()) {
+    assert.deepEqual(
+      mapKeyEvent(key({ code, key: chars[index], ctrlKey: true, shiftKey: true }), "down"),
+      [{ kind: "keydown", key: chars[index] }],
+    );
+    assert.equal(isSafeKeyName(chars[index]), true);
+  }
+  // 未知/危险键名仍被丢弃（不做文本退化）。
+  assert.equal(isSafeKeyName("F13"), false);
+  assert.equal(isSafeKeyName("enter"), true);
+  assert.equal(isSafeKeyName("x"), true);
+  assert.deepEqual(mapKeyEvent(key({ code: "F13", key: "F13" }), "down"), []);
+});
+
+test("plain printable keys stay on the text path, not key names", () => {
+  assert.deepEqual(mapKeyEvent(key({ code: "KeyA", key: "a" }), "down"), [
+    { kind: "text", text: "a" },
+  ]);
+  assert.deepEqual(mapKeyEvent(key({ code: "KeyA", key: "a" }), "up"), []);
 });

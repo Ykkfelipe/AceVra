@@ -130,6 +130,14 @@ function keyNameFromCode(code: string): string | null {
 }
 
 const SAFE_KEY_NAME = /^[a-z0-9]{1,24}$/;
+// 组合键里的标点（如 Ctrl+Shift+;）：pyautogui 接受单字符键名，worker 端用 KEYBOARD_KEYS 校验；
+// 这里只放行显式列出的可打印 ASCII 符号，其余仍丢弃（spec §3.3）。
+const SAFE_PUNCTUATION = new Set(["-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "`"]);
+
+/** True when a mapped key name may be forwarded to the worker (letters/digits/named/punctuation). */
+export function isSafeKeyName(name: string): boolean {
+  return SAFE_KEY_NAME.test(name) || (name.length === 1 && SAFE_PUNCTUATION.has(name));
+}
 
 /**
  * One keyboard event → worker input events. Printable characters without Cmd/Control/Option are
@@ -145,8 +153,8 @@ export function mapKeyEvent(event: KeyLike, phase: "down" | "up"): ComputerInput
     return phase === "down" ? [{ kind: "text", text: event.key }] : [];
   }
   const name = keyNameFromCode(event.code);
-  // 标点在 pyautogui 名称里不是 [a-z0-9]；Main/worker 只接受安全键名，组合键里的标点暂不转发。
-  if (!name || !SAFE_KEY_NAME.test(name)) return [];
+  // 无法映射的键仍然吞掉；标点现在按单字符键名转发（与 worker 的 KEYBOARD_KEYS 一致）。
+  if (!name || !isSafeKeyName(name)) return [];
   return [{ kind: phase === "down" ? "keydown" : "keyup", key: name }];
 }
 

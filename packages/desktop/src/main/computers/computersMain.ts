@@ -5,6 +5,7 @@ import { WebSocket } from "ws";
 import {
   ComputerChannels,
   DEFAULT_WORKER_PORT,
+  type CapturedKeyEvent,
   type ComputerFrame,
   type ComputerImage,
   type ComputerView,
@@ -56,12 +57,35 @@ export function initComputersMain() {
   const runner = createSshProcessRunner({ spawn });
   /** `${webContentsId}:${subscriptionId}` → unsubscribe. */
   const subscriptions = new Map<string, () => void>();
+  /**
+   * 远程键盘捕获（spec §3.3 layer 1）：renderer 在接管且聚焦时开启。Electron 原生菜单 accelerator
+   * （Cmd+Q / Cmd+W 等）不经过 renderer 事件，必须在 Main 用 before-input-event 抢先拦截，
+   * preventDefault 后把原始键事件转发回 renderer 走同一条 mapKeyEvent → sendInput 路径。
+   */
+  const keyCapture = new Set<number>();
 
   const track = (contents: WebContents) => {
     if (viewers.has(contents.id)) return;
     viewers.set(contents.id, contents);
+    contents.on("before-input-event", (event, input) => {
+      if (!keyCapture.has(contents.id)) return;
+      if (event.type !== "keyDown" && event.type !== "keyUp") return;
+      if (input.type !== "keyDown" && input.type !== "keyUp") return;
+      event.preventDefault();
+      contents.send(ComputerChannels.CapturedKey, {
+        type: input.type === "keyDown" ? "keydown" : "keyup",
+        key: input.key,
+        code: input.code,
+        metaKey: input.meta,
+        ctrlKey: input.control,
+        altKey: input.alt,
+        shiftKey: input.shift,
+        isAutoRepeat: input.isAutoRepeat,
+      } satisfies CapturedKeyEvent);
+    });
     contents.once("destroyed", () => {
       viewers.delete(contents.id);
+      keyCapture.delete(contents.id);
       for (const [key, off] of subscriptions) {
         if (key.startsWith(`${contents.id}:`)) {
           off();
@@ -148,6 +172,10 @@ export function initComputersMain() {
     });
     if (clean.length > 0) service.sendInput(computerId, clean);
   });
+  ipcMain.on(ComputerChannels.KeyCapture, (event, active: unknown) => {
+    if (active === true) keyCapture.add(event.sender.id);
+    else keyCapture.delete(event.sender.id);
+  });
   const commands = [
     [ComputerChannels.TakeControl, service.takeControl],
     [ComputerChannels.GiveBack, service.giveBack],
@@ -186,6 +214,7 @@ export function initComputersMain() {
         ComputerChannels.Subscribe,
         ComputerChannels.Unsubscribe,
         ComputerChannels.Input,
+        ComputerChannels.KeyCapture,
       ]) {
         ipcMain.removeAllListeners(channel);
       }

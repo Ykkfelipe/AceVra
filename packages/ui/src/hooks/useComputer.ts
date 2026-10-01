@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  CapturedKeyEvent,
   ComputerCommandResult,
   ComputerFrame,
   ComputerInputEvent,
@@ -11,6 +12,29 @@ import { usePlatform } from "./usePlatform.js";
 
 export function useComputersPlatform(): IComputersPlatform | null {
   return usePlatform().computers ?? null;
+}
+
+/**
+ * 远程键盘捕获 layer 1（spec §3.3）：激活期间 Main 在 before-input-event 里拦截该窗口的
+ * 全部按键（连同 Electron 菜单 accelerator，如 Cmd+Q / Cmd+W），经 onCapturedKey 转回；
+ * 卸载/失活时自动关闭，保证本地逃生通道永远可用。
+ */
+export function useRemoteKeyboardCapture(
+  active: boolean,
+  onEvent: (event: CapturedKeyEvent) => void,
+) {
+  const computers = useComputersPlatform();
+  const latest = useRef(onEvent);
+  latest.current = onEvent;
+  useEffect(() => {
+    if (!computers?.setKeyCapture || !computers.onCapturedKey || !active) return;
+    computers.setKeyCapture(true);
+    const off = computers.onCapturedKey((event) => latest.current(event));
+    return () => {
+      computers.setKeyCapture(false);
+      off();
+    };
+  }, [computers, active]);
 }
 
 /** Saved SSH computers (Settings → Computers). */

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
-import { useComputer, useSshComputers } from "@/hooks/useComputer.js";
+import { useComputer, useRemoteKeyboardCapture, useSshComputers } from "@/hooks/useComputer.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import {
@@ -26,6 +26,7 @@ import {
   mapRemoteToView,
   mouseButtonName,
   wheelClicks,
+  type KeyLike,
 } from "./computerInput.js";
 import {
   computerPaneActions,
@@ -143,17 +144,28 @@ export function ComputerPane(props: ComputerPaneProps) {
   }, [runCommand, sendInput, throttle]);
 
   // 接管且聚焦时在 window 捕获阶段拦截按键：被转发的按键绝不触发 AceVra 自身快捷键。
+  // Layer 1（Main before-input-event）经 useRemoteKeyboardCapture 覆盖菜单 accelerator；
+  // 两条路径都汇入同一个 processKey，映射逻辑只有 mapKeyEvent 一份。
+  const processKey = useCallback(
+    (event: KeyLike, type: "down" | "up") => {
+      if (type === "down" && isGiveBackChord(event)) {
+        giveBack();
+        return;
+      }
+      sendInput(mapKeyEvent(event, type));
+    },
+    [giveBack, sendInput],
+  );
+  useRemoteKeyboardCapture(capturing, (event) =>
+    processKey(event, event.type === "keydown" ? "down" : "up"),
+  );
   useEffect(() => {
     if (!capturing) return;
     const handle = (event: KeyboardEvent) => {
       if (document.activeElement !== surfaceRef.current) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (event.type === "keydown" && isGiveBackChord(event)) {
-        giveBack();
-        return;
-      }
-      sendInput(mapKeyEvent(event, event.type === "keydown" ? "down" : "up"));
+      processKey(event, event.type === "keydown" ? "down" : "up");
     };
     window.addEventListener("keydown", handle, true);
     window.addEventListener("keyup", handle, true);
@@ -161,7 +173,7 @@ export function ComputerPane(props: ComputerPaneProps) {
       window.removeEventListener("keydown", handle, true);
       window.removeEventListener("keyup", handle, true);
     };
-  }, [capturing, giveBack, sendInput]);
+  }, [capturing, processKey]);
 
   const onPointerMove = (event: ReactPointerEvent) => {
     if (!inControl) return;

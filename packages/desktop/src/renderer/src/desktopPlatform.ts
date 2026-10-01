@@ -86,6 +86,8 @@ export function createDesktopPlatform(options: {
           resume: (id) => window.zcode.computers.resume(id),
           stop: (id) => window.zcode.computers.stop(id),
           sendInput: (id, events) => window.zcode.computers.sendInput(id, events),
+          setKeyCapture: (active) => window.zcode.computers.setKeyCapture(active),
+          onCapturedKey: (callback) => window.zcode.computers.onCapturedKey(callback),
           onSessionStarted: (callback) => window.zcode.computers.onSessionStarted(callback),
         }
       : undefined,

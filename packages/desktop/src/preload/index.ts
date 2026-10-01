@@ -55,6 +55,12 @@ function createComputersBridge() {
     stop: (id: string) => ipcRenderer.invoke(ComputerChannels.Stop, id),
     sendInput: (id: string, events: unknown[]) =>
       ipcRenderer.send(ComputerChannels.Input, id, events),
+    setKeyCapture: (active: boolean) => ipcRenderer.send(ComputerChannels.KeyCapture, active),
+    onCapturedKey: (callback: (event: unknown) => void): (() => void) => {
+      const handler = (_event: unknown, key: unknown) => callback(key);
+      ipcRenderer.on(ComputerChannels.CapturedKey, handler);
+      return () => ipcRenderer.removeListener(ComputerChannels.CapturedKey, handler);
+    },
     onViewChanged: (callback: (view: unknown) => void): (() => void) => {
       const handler = (_event: unknown, view: unknown) => callback(view);
       ipcRenderer.on(ComputerChannels.ViewChanged, handler);
