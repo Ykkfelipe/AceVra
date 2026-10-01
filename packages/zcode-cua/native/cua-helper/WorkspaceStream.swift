@@ -1,4 +1,4 @@
-// Human-only continuous window capture. No observations, AX reads, activation or physical input.
+// Human-only continuous window capture. No observations or background activation/physical input.
 import AppKit
 import CoreImage
 import CoreMedia
@@ -24,6 +24,8 @@ final class WorkspaceStream: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastCheck = Date.distantPast
     private var geometry = CGRect.zero
     private var verifiedWindow: SCWindow?
+    private var pixelWidth = 0
+    private var pixelHeight = 0
     private var watchdog: DispatchSourceTimer?
 
     private func shareable() -> SCShareableContent? {
@@ -65,9 +67,12 @@ final class WorkspaceStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 stop("permission_or_capture_unavailable")
                 return ["status": "unavailable", "reason": reason]
             }
-            let targetFrame = WorkspaceController.targetWindowFrame(pid: requestedPid)
+            // SCK 会继续列出已经 close 的窗口并保留末帧；活跃 AX 窗口必须同时确认存活。
+            let liveFrames = WorkspaceController.targetWindowFrames(pid: requestedPid)
+            let targetFrame = liveFrames.first ?? nil
             verifiedWindow = content.windows.first(where: {
                 $0.owningApplication?.processID == requestedPid &&
+                liveFrames.contains($0.frame) &&
                 (requestedWindow > 0 ? $0.windowID == requestedWindow : $0.frame == targetFrame)
             })
         }
@@ -122,6 +127,8 @@ final class WorkspaceStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 watchdog = timer; timer.resume()
             } else if geometry.size != window.frame.size {
                 geometry = window.frame
+                // 配置更新前排队的旧尺寸像素不能配上新窗口几何；等待尺寸一致的新帧。
+                latest = nil; reason = "waiting_for_screen"
                 stream?.updateConfiguration(configuration(window.frame)) { _ in }
             } else { geometry = window.frame }
         }
@@ -140,6 +147,7 @@ final class WorkspaceStream: NSObject, SCStreamOutput, SCStreamDelegate {
         let scale = min(1, 1280 / max(1, max(rect.width, rect.height)))
         config.width = max(2, Int(rect.width * scale))
         config.height = max(2, Int(rect.height * scale))
+        pixelWidth = config.width; pixelHeight = config.height
         config.minimumFrameInterval = CMTime(value: 1, timescale: 12)
         config.queueDepth = 3
         config.showsCursor = false
@@ -166,7 +174,9 @@ final class WorkspaceStream: NSObject, SCStreamOutput, SCStreamDelegate {
                 of type: SCStreamOutputType) {
         lock.lock(); defer { lock.unlock() }
         guard type == .screen, capture === stream,
-              let buffer = CMSampleBufferGetImageBuffer(sample) else { return }
+              let buffer = CMSampleBufferGetImageBuffer(sample),
+              CVPixelBufferGetWidth(buffer) == pixelWidth,
+              CVPixelBufferGetHeight(buffer) == pixelHeight else { return }
         if let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false)
             as? [[SCStreamFrameInfo: Any]], let raw = attachments.first?[.status] as? Int,
             raw != SCFrameStatus.complete.rawValue { return }

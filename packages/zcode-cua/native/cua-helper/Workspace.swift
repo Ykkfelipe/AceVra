@@ -292,41 +292,50 @@ struct WorkspaceController {
         return result
     }
 
-    static func targetWindowFrame(pid: pid_t) -> CGRect? {
-        guard let (window, _) = resolveWindow(pid: pid, ordinal: nil) else { return nil }
-        return axWSFrame(window)
+    static func targetWindowFrames(pid: pid_t) -> [CGRect?] {
+        // 最小化窗口的末帧不能被标成持续可用；遮挡窗口仍然允许独立窗口捕获。
+        // 保留 ordinal：第一个窗口最小化时不得改选同应用的另一个窗口。
+        applicationWindows(pid: pid).map {
+            axWSBool($0, kAXMinimizedAttribute as String) == true ? nil : axWSFrame($0)
+        }
     }
 
     /// Resolve the target window by ordinal (default 0) against the app's AX window list.
     private static func resolveWindow(pid: pid_t, ordinal: Int?) -> (AXUIElement, Int)? {
-        let application = AXUIElementCreateApplication(pid)
-        AXUIElementSetMessagingTimeout(application, 2.0)
-        var windowsValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(application, kAXWindowsAttribute as CFString,
-                                            &windowsValue) == .success,
-              let rawWindows = windowsValue as? [AXUIElement] else { return nil }
-        // SCK 持续捕获时系统把 WindowSharingSessionButton 浮窗插到 AXWindows 首位。
-        // 它不是 agent 的应用窗口；按旧 ordinal 0 会把点击/输入错路由到系统分享指示器。
-        let windows = rawWindows.filter { window in
-            !elements(in: window).contains { element in
-                [axWSString(element, kAXTitleAttribute as String),
-                 axWSString(element, kAXDescriptionAttribute as String),
-                 axWSString(element, kAXIdentifierAttribute as String)].compactMap { $0 }
-                    .contains("WindowSharingSessionButton")
-            }
-        }
+        let windows = applicationWindows(pid: pid)
         // 指定 ordinal 已消失时必须拒绝；不能夹取到另一窗口后继续输入。
         let index = ordinal ?? 0
         guard windows.indices.contains(index) else { return nil }
         return (windows[index], index)
     }
 
+    private static func applicationWindows(pid: pid_t) -> [AXUIElement] {
+        let application = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(application, 2.0)
+        var windowsValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(application, kAXWindowsAttribute as CFString,
+                                            &windowsValue) == .success,
+              let rawWindows = windowsValue as? [AXUIElement] else { return [] }
+        // SCK 持续捕获时系统把 WindowSharingSessionButton 浮窗插到 AXWindows 首位。
+        // 它不是 agent 的应用窗口；按旧 ordinal 0 会把点击/输入错路由到系统分享指示器。
+        return rawWindows.filter { window in
+            // 分享指示器是小浮窗；持续身份检查不能遍历真实文档的整棵 AX 树。
+            guard (axWSFrame(window)?.height ?? 0) <= 128 else { return true }
+            return !elements(in: window, limit: 16).contains { element in
+                [axWSString(element, kAXTitleAttribute as String),
+                 axWSString(element, kAXDescriptionAttribute as String),
+                 axWSString(element, kAXIdentifierAttribute as String)].compactMap { $0 }
+                    .contains("WindowSharingSessionButton")
+            }
+        }
+    }
+
     /// Depth-first element enumeration below a window (bounded like the observation tree).
-    private static func elements(in window: AXUIElement) -> [AXUIElement] {
+    private static func elements(in window: AXUIElement, limit: Int = 2000) -> [AXUIElement] {
         var collected: [AXUIElement] = []
         var queue: [AXUIElement] = [window]
         var visited = 0
-        while !queue.isEmpty, visited < 2000 {
+        while !queue.isEmpty, visited < limit {
             let element = queue.removeFirst()
             visited += 1
             collected.append(element)
