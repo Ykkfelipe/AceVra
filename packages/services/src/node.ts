@@ -2217,7 +2217,11 @@ export function createLocalServices(options: {
     paused: () => leaseAuthorityServers.get(services)?.authority.getAdmission().paused ?? true,
     pause: async () => leaseAuthorityServers.get(services)?.authority.pause(),
     resume: async () => leaseAuthorityServers.get(services)?.authority.resume(),
-    stop: async () => leaseAuthorityServers.get(services)?.authority.stop(),
+    stop: async (sessionId) => {
+      await leaseAuthorityServers.get(services)?.authority.stop();
+      // 原 mini 面板同时停止 Computer 和当前回合；统一右栏不能丢失回合停止路径。
+      await services.zcodeTaskService.stopGeneration({ taskId: sessionId });
+    },
     call: async (params) => {
       const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
       if (

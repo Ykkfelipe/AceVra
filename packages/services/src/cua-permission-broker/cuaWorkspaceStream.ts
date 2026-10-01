@@ -6,7 +6,7 @@ export interface WorkspaceStreamDependencies {
   paused(): boolean;
   pause(): Promise<unknown>;
   resume(): Promise<unknown>;
-  stop(): Promise<unknown>;
+  stop(sessionId: string): Promise<unknown>;
   call(params: Record<string, unknown>): Promise<Record<string, unknown>>;
 }
 
@@ -71,7 +71,7 @@ export function createWorkspaceStreamAdapter(deps: WorkspaceStreamDependencies) 
     }
     if (request.operation === "stop_agent") {
       await deps.pause();
-      await deps.stop();
+      await deps.stop(sessionId);
       return base(workspace);
     }
     if (request.operation === "take_control") {

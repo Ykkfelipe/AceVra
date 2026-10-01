@@ -27,6 +27,8 @@ not acquire the native exclusive foreground lease. Explicit Take control pauses 
 activates the positively identified target for the user; it does not grant the agent an exclusive
 lease or forward pane gestures into the Mac. Give back lifts admission only; it does not move the
 user's cursor or automatically reactivate AceVra. Background work resumes through normal routing.
+Local Stop first closes Computer admission/control, then stops the owning chat turn through
+the existing task stop command; hiding the pane never stops that turn.
 
 The Helper owns a ScreenCaptureKit `SCStream` per active visual target, nominally 12 fps, with
 `showsCursor=false` and a bounded capture queue. A host-only `workspace_stream` broker command

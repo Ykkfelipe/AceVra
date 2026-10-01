@@ -13,6 +13,7 @@ function setup() {
   };
   const calls: Record<string, unknown>[] = [];
   let paused = false;
+  const stopEvents: string[] = [];
   let respond: (p: Record<string, unknown>) => Promise<Record<string, unknown>> = async () => ({
     status: "available",
     seq: 1,
@@ -27,11 +28,14 @@ function setup() {
     paused: () => paused,
     pause: async () => {
       paused = true;
+      stopEvents.push("pause");
     },
     resume: async () => {
       paused = false;
     },
-    stop: async () => {},
+    stop: async (sessionId) => {
+      stopEvents.push(`stop:${sessionId}`);
+    },
     call: async (p) => {
       calls.push(p);
       return respond(p);
@@ -40,6 +44,7 @@ function setup() {
   return {
     read,
     calls,
+    stopEvents,
     setTarget: (v: CuaWorkspaceView | undefined) => {
       workspace = v;
     },
@@ -154,4 +159,10 @@ test("hide and reopen renews the visual generation while retaining explicit huma
   assert.notEqual(first.generation, reopened.generation);
   assert.equal(reopened.userControl, true);
   assert.equal(reopened.paused, true);
+});
+test("Stop blocks admission before stopping the owning chat turn", async () => {
+  const s = setup();
+  const r = await s.read("session", { operation: "stop_agent" });
+  assert.equal(r.paused, true);
+  assert.deepEqual(s.stopEvents, ["pause", "stop:session"]);
 });
