@@ -34,6 +34,7 @@ import {
   shouldStream,
   type ComputerStatusKind,
 } from "./computerPaneModel.js";
+import { ComputerCursorOverlay } from "./ComputerCursorOverlay.js";
 
 const MOVE_HZ = 40;
 
@@ -94,10 +95,10 @@ export function ComputerPane(props: ComputerPaneProps) {
   const streaming = shouldStream(computerId, visible);
   // 先拿到 view 才知道是否处于接管；接管时切到高帧率交互档位。
   const [interactive, setInteractive] = useState(false);
-  const { available, view, frame, run, sendInput } = useComputer(computerId, {
-    streaming,
-    interactive,
-  });
+  const { available, view, frame, run, sendInput, cursorRef, cursorVersionRef } = useComputer(
+    computerId,
+    { streaming, interactive },
+  );
   const kind = computerStatusKind(view);
   const actions = computerPaneActions(view);
   const inControl = kind === "inControl";
@@ -250,14 +251,6 @@ export function ComputerPane(props: ComputerPaneProps) {
     kind === "working" && view?.lastAction
       ? t(`activity.${KNOWN_ACTIVITY.has(view.lastAction) ? view.lastAction : "other"}`)
       : null;
-  const cursor =
-    frame && imageRef.current
-      ? mapRemoteToView(
-          { x: frame.cursorX, y: frame.cursorY },
-          { width: imageRef.current.clientWidth, height: imageRef.current.clientHeight },
-          { width: frame.screenWidth, height: frame.screenHeight },
-        )
-      : null;
 
   return (
     <div
@@ -385,16 +378,12 @@ export function ComputerPane(props: ComputerPaneProps) {
             {kind === "offline" ? statusText : t("waitingForScreen")}
           </div>
         )}
-        {cursor && imageRef.current ? (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black bg-white"
-            style={{
-              left: imageRef.current.offsetLeft + cursor.x,
-              top: imageRef.current.offsetTop + cursor.y,
-            }}
-          />
-        ) : null}
+        <ComputerCursorOverlay
+          frame={frame}
+          imageRef={imageRef}
+          cursorRef={cursorRef}
+          cursorVersionRef={cursorVersionRef}
+        />
         {inControl && !focused ? (
           <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-md bg-black/70 px-2 py-1 text-ui-xs text-white">
             {t("clickToControl")}

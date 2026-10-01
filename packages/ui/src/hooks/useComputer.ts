@@ -8,6 +8,14 @@ import type {
   IComputersPlatform,
   SshComputerConfig,
 } from "@zcode/shared";
+import { logger } from "@/logger.js";
+import {
+  acceptCursor,
+  acceptFrame,
+  createFrameStreamState,
+  createStreamSampler,
+  type StreamCursor,
+} from "@/computers/computerFrameStream.js";
 import { usePlatform } from "./usePlatform.js";
 
 export function useComputersPlatform(): IComputersPlatform | null {
@@ -110,29 +118,71 @@ export function useComputer(
   }, [computers, computerId]);
 
   const { streaming, interactive } = options;
+  // ComputerFrameStream 消费端（spec §4.5）：seq 单调，旧/乱序帧直接丢弃（计数，不排队）；
+  // 光标走独立轻量流，写入 ref 供 overlay 直接改 DOM，避免高频 React 重渲染。
+  const streamRef = useRef(createFrameStreamState<LiveFrame & { capturedAt?: number }>());
+  const cursorRef = useRef<StreamCursor | null>(null);
+  const cursorVersionRef = useRef(0);
   useEffect(() => {
     if (!computers || !computerId || !streaming) return;
+    const sampler = createStreamSampler();
     const unsubscribe = computers.subscribeFrames(
       computerId,
-      { interactive },
+      {
+        interactive,
+        onCursor: (cursor) => {
+          streamRef.current = acceptCursor(streamRef.current, cursor);
+          cursorRef.current = cursor;
+          cursorVersionRef.current += 1;
+          sampler.onCursor();
+        },
+      },
       (next: ComputerFrame) => {
         const url = URL.createObjectURL(
           new Blob([next.jpeg as Uint8Array<ArrayBuffer>], { type: "image/jpeg" }),
         );
         const previous = urlRef.current;
         urlRef.current = url;
-        setFrame({
+        const previousFrame = streamRef.current.frame;
+        const accepted = acceptFrame(streamRef.current, {
+          ...next,
           url,
-          seq: next.seq,
           screenWidth: next.screenWidth,
           screenHeight: next.screenHeight,
-          cursorX: next.cursorX,
-          cursorY: next.cursorY,
         });
-        if (previous) URL.revokeObjectURL(previous);
+        streamRef.current = accepted;
+        // 以对象身份判定：被拒的帧不进入展示（含乱序/重复 seq），立即释放其 blob。
+        if (accepted.frame !== previousFrame) {
+          setFrame({
+            url,
+            seq: next.seq,
+            screenWidth: next.screenWidth,
+            screenHeight: next.screenHeight,
+            cursorX: next.cursorX,
+            cursorY: next.cursorY,
+          });
+          if (previous) URL.revokeObjectURL(previous);
+        } else if (previous !== url) {
+          // 被拒收的帧立即释放，不进入展示（最新帧语义）。
+          URL.revokeObjectURL(url);
+        }
+        sampler.onFrame(next.capturedAt ? Math.max(0, Date.now() - next.capturedAt) : null);
+        const metrics = sampler.sample();
+        if (metrics) {
+          // 开发指标（spec §4.5）：只进 debug 日志，不做产品 UI。
+          logger.debug(
+            `[computers] stream fps=${metrics.fps} cursor/s=${metrics.cursorPerSec} ` +
+              `latency p50=${metrics.latencyP50Ms ?? "?"}ms p95=${metrics.latencyP95Ms ?? "?"}ms ` +
+              `dropped=${streamRef.current.counters.dropped}`,
+          );
+        }
       },
     );
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    };
   }, [computers, computerId, streaming, interactive]);
 
   useEffect(
@@ -160,5 +210,14 @@ export function useComputer(
     [computers, computerId],
   );
 
-  return { available: computers != null, view, frame, run, sendInput };
+  return {
+    available: computers != null,
+    view,
+    frame,
+    run,
+    sendInput,
+    /** 最新光标位置（cursor 事件流）；overlay 通过 cursorVersionRef 感知变化直接改 DOM。 */
+    cursorRef,
+    cursorVersionRef,
+  };
 }
