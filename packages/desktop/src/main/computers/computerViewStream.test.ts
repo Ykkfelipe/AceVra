@@ -1,7 +1,7 @@
 /** spec §3.3：relay 的键名白名单与 renderer 一致，显式标点单字符键名可转发。 */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeInputEvent } from "./computerViewStream.js";
+import { parseFrameMeta, sanitizeInputEvent } from "./computerViewStream.js";
 
 test("chorded punctuation key names pass the relay sanitizer", () => {
   assert.deepEqual(sanitizeInputEvent({ kind: "keydown", key: ";" }), {
@@ -20,4 +20,36 @@ test("unsafe key names are dropped", () => {
   assert.equal(sanitizeInputEvent({ kind: "keydown", key: "" }), null);
   assert.equal(sanitizeInputEvent({ kind: "keydown", key: "ab;cd" }), null);
   assert.equal(sanitizeInputEvent({ kind: "keydown", key: 42 }), null);
+});
+
+test("frame meta carries captured_at when the producer sends it", () => {
+  assert.deepEqual(
+    parseFrameMeta({
+      seq: 7,
+      captured_at: 1_720_000_000_000,
+      width: 100,
+      height: 50,
+      sw: 1366,
+      sh: 768,
+    }),
+    {
+      seq: 7,
+      capturedAt: 1_720_000_000_000,
+      width: 100,
+      height: 50,
+      sw: 1366,
+      sh: 768,
+      cx: -1,
+      cy: -1,
+    },
+  );
+  assert.deepEqual(parseFrameMeta({ seq: 7, width: 100, height: 50, sw: 1366, sh: 768 }), {
+    seq: 7,
+    width: 100,
+    height: 50,
+    sw: 1366,
+    sh: 768,
+    cx: -1,
+    cy: -1,
+  });
 });

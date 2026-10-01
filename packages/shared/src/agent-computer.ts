@@ -50,10 +50,12 @@ export interface ComputerView {
   screen: { width: number; height: number } | null;
 }
 
-/** One JPEG frame from the worker's view socket. */
+/** One JPEG frame from the worker's view socket (ComputerFrameStream, spec §4.5). */
 export interface ComputerFrame {
   computerId: string;
   seq: number;
+  /** Producer capture timestamp (epoch ms); absent → the consumer cannot compute latency. */
+  capturedAt?: number;
   /** JPEG pixel size (may be downscaled). */
   width: number;
   height: number;
@@ -63,6 +65,17 @@ export interface ComputerFrame {
   cursorX: number;
   cursorY: number;
   jpeg: Uint8Array;
+}
+
+/**
+ * Lightweight cursor update, decoupled from frame fps (spec §4.5): the renderer draws the overlay
+ * pointer from these events so the cursor stays smooth between captured frames.
+ */
+export interface ComputerCursorUpdate {
+  computerId: string;
+  seq: number;
+  x: number;
+  y: number;
 }
 
 /** Human input sent from the Computer tab while in control (worker `/ws/view` `ev`). */
@@ -105,7 +118,11 @@ export interface IComputersPlatform {
   /** Ref-counted in Main; the stream runs only while at least one subscription exists. */
   subscribeFrames(
     id: string,
-    options: { interactive: boolean },
+    options: {
+      interactive: boolean;
+      /** Cursor event stream (spec §4.5), updates between frames. */
+      onCursor?: (cursor: Omit<ComputerCursorUpdate, "computerId">) => void;
+    },
     callback: (frame: ComputerFrame) => void,
   ): () => void;
   takeControl(id: string): Promise<ComputerCommandResult>;
@@ -143,6 +160,8 @@ export const ComputerChannels = {
   KeyCapture: "acevra-computers:key-capture",
   /** main → renderer: a key event intercepted in Main (menu accelerators suppressed). */
   CapturedKey: "acevra-computers:captured-key",
+  /** main → renderer: lightweight cursor update between frames (spec §4.5). */
+  Cursor: "acevra-computers:cursor",
   /** main → renderer */
   ViewChanged: "acevra-computers:view-changed",
   Frame: "acevra-computers:frame",

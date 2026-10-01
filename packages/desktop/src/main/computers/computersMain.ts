@@ -140,6 +140,10 @@ export function initComputersMain() {
       key,
       service.subscribe(computerId, {
         interactive: interactive === true,
+        onCursor: (cursor) => {
+          if (contents.isDestroyed()) return;
+          contents.send(ComputerChannels.Cursor, { computerId, ...cursor });
+        },
         onFrame: (meta, jpeg) => {
           if (contents.isDestroyed()) return;
           const frame: ComputerFrame = {

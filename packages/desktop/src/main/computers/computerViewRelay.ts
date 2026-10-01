@@ -13,6 +13,7 @@ import type { WorkerClient } from "./workerClient.js";
 export interface FrameSink {
   interactive: boolean;
   onFrame: (meta: ViewFrameMeta, jpeg: Buffer) => void;
+  onCursor?: (cursor: { seq: number; x: number; y: number }) => void;
 }
 
 /** What the relay needs from its computer entry (the service owns connection and job facts). */
@@ -31,6 +32,9 @@ export interface ViewRelayHost {
 export function createViewRelay(host: ViewRelayHost, openSocket: OpenViewSocket) {
   const sinks = new Set<FrameSink>();
   let stream: ComputerViewStream | null = null;
+  /** Newest frame the relay delivered — the agent observation's preActionFrameSeq source. */
+  let lastFrameSeq = 0;
+  let lastCapturedAt = 0;
   let jobPoll: ReturnType<typeof setInterval> | null = null;
   let reopenTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -50,7 +54,12 @@ export function createViewRelay(host: ViewRelayHost, openSocket: OpenViewSocket)
         profile: profile(),
         onFrame: (meta, jpeg) => {
           host.onScreen({ width: meta.sw, height: meta.sh });
+          lastFrameSeq = meta.seq;
+          lastCapturedAt = meta.capturedAt ?? 0;
           for (const sink of sinks) sink.onFrame(meta, jpeg);
+        },
+        onCursor: (cursor) => {
+          for (const sink of sinks) sink.onCursor?.(cursor);
         },
         onState: (job) => host.applyJob(job),
         onClose: () => {
@@ -103,6 +112,9 @@ export function createViewRelay(host: ViewRelayHost, openSocket: OpenViewSocket)
     sendInput(jobId: string, events: ComputerInputEvent[]) {
       stream?.sendInput(jobId, events);
     },
+    /** Newest stream frame seq (0 = none yet); feeds /screen after_frame_seq (spec 4.5.1). */
+    lastFrameSeq: () => lastFrameSeq,
+    lastCapturedAt: () => lastCapturedAt,
     hasStream: () => stream !== null,
     close() {
       sinks.clear();

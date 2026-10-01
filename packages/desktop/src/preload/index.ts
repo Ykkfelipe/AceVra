@@ -37,11 +37,16 @@ function createComputersBridge() {
   >();
   let frameListenerInstalled = false;
   let nextSubscription = 0;
+  /** Cursor 更新（spec §4.5）：订阅者列表按帧订阅生命周期一起管理。 */
+  const cursorSubscribers = new Map<string, (cursor: unknown) => void>();
   const onFrame = (_event: unknown, frame: unknown) => {
     const computerId = (frame as { computerId?: unknown } | null)?.computerId;
     for (const subscriber of frameSubscribers.values()) {
       if (subscriber.computerId === computerId) subscriber.callback(frame);
     }
+  };
+  const onCursor = (_event: unknown, cursor: unknown) => {
+    for (const subscriber of cursorSubscribers.values()) subscriber(cursor);
   };
   return {
     list: () => ipcRenderer.invoke(ComputerChannels.List),
@@ -73,16 +78,21 @@ function createComputersBridge() {
     },
     subscribeFrames: (
       computerId: string,
-      options: { interactive: boolean },
+      options: {
+        interactive: boolean;
+        onCursor?: (cursor: { seq: number; x: number; y: number }) => void;
+      },
       callback: (frame: unknown) => void,
     ): (() => void) => {
       if (!frameListenerInstalled) {
         ipcRenderer.on(ComputerChannels.Frame, onFrame);
+        ipcRenderer.on(ComputerChannels.Cursor, onCursor);
         frameListenerInstalled = true;
       }
       nextSubscription += 1;
       const subscriptionId = `s${nextSubscription}`;
       frameSubscribers.set(subscriptionId, { computerId, callback });
+      if (options.onCursor) cursorSubscribers.set(subscriptionId, options.onCursor);
       ipcRenderer.send(ComputerChannels.Subscribe, {
         computerId,
         subscriptionId,
@@ -90,6 +100,7 @@ function createComputersBridge() {
       });
       return () => {
         if (!frameSubscribers.delete(subscriptionId)) return;
+        cursorSubscribers.delete(subscriptionId);
         ipcRenderer.send(ComputerChannels.Unsubscribe, subscriptionId);
       };
     },

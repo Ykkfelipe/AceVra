@@ -16,12 +16,20 @@ const OPEN = 1;
 
 export interface ViewFrameMeta {
   seq: number;
+  /** Producer capture timestamp (epoch ms) — absent on older workers. */
+  capturedAt?: number;
   width: number;
   height: number;
   sw: number;
   sh: number;
   cx: number;
   cy: number;
+}
+
+export interface ViewCursorUpdate {
+  seq: number;
+  x: number;
+  y: number;
 }
 
 export interface ViewStreamProfile {
@@ -43,7 +51,17 @@ export function parseFrameMeta(value: Record<string, unknown>): ViewFrameMeta | 
   const sw = num(value.sw);
   const sh = num(value.sh);
   if (seq === null || !width || !height || !sw || !sh) return null;
-  return { seq, width, height, sw, sh, cx: num(value.cx) ?? -1, cy: num(value.cy) ?? -1 };
+  const capturedAt = num(value.captured_at);
+  return {
+    seq,
+    ...(capturedAt !== null ? { capturedAt } : {}),
+    width,
+    height,
+    sw,
+    sh,
+    cx: num(value.cx) ?? -1,
+    cy: num(value.cy) ?? -1,
+  };
 }
 
 /**
@@ -57,6 +75,7 @@ export function createComputerViewStream(deps: {
   open: OpenViewSocket;
   profile: ViewStreamProfile;
   onFrame: (meta: ViewFrameMeta, jpeg: Buffer) => void;
+  onCursor?: (cursor: ViewCursorUpdate) => void;
   onState?: (job: Record<string, unknown> | null) => void;
   onInputError?: (code: string, reason: string | null) => void;
   onClose: () => void;
@@ -91,7 +110,12 @@ export function createComputerViewStream(deps: {
       return;
     }
     if (message.t === "frame") pendingMeta = parseFrameMeta(message);
-    else if (message.t === "state")
+    else if (message.t === "cursor") {
+      const seq = num(message.seq);
+      const x = num(message.x);
+      const y = num(message.y);
+      if (seq !== null && x !== null && y !== null) deps.onCursor?.({ seq, x, y });
+    } else if (message.t === "state")
       deps.onState?.((message.job as Record<string, unknown> | null) ?? null);
     else if (message.t === "error")
       deps.onInputError?.(
