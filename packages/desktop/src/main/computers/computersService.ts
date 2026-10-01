@@ -31,6 +31,9 @@ import { testComputer } from "./computerHealth.js";
 import { createViewRelay, type FrameSink, type ViewRelay } from "./computerViewRelay.js";
 import type { SshComputersStore } from "./sshComputersStore.js";
 import { createWorkerClient, type WorkerClient, type WorkerResponse } from "./workerClient.js";
+import { createServiceLogger } from "@zcode/services/node";
+
+const log = createServiceLogger("computers");
 
 interface Entry {
   config: SshComputerConfig;
@@ -261,10 +264,17 @@ export function createComputersService(deps: {
   ): Promise<WorkerResponse | { ok: true; image: ComputerImage | null }> {
     if (action.kind === "screenshot") {
       const client = await connect(entry);
-      const png = client ? await client.screenPng() : null;
-      if (!png)
+      const shot = client ? await client.screenPng() : null;
+      if (!shot)
         return { ok: false, status: 0, code: "offline", reason: "screen_unavailable", json: null };
-      return { ok: true, image: deps.encodeScreenshot(png) };
+      // action→fresh-frame 延迟测量（spec 4.5.1）：worker 已保证画面收敛后再返回。
+      log.debug(
+        `screen settle=${shot.settleMs ?? "?"}ms converged=${shot.converged ?? "?"} ` +
+          `${shot.png.length}B`,
+      );
+      if (shot.converged === false)
+        log.warn(`screen did not converge within the worker settle window`);
+      return { ok: true, image: deps.encodeScreenshot(shot.png) };
     }
     return runInputAction(action, (path, body) =>
       call(entry, (client) => client.post(path, { job_id: jobId, ...body }, "agent")),

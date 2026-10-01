@@ -68,13 +68,28 @@ export function createWorkerClient(deps: {
     get: (path: string) => request("GET", path),
     post: (path: string, body?: unknown, actor?: WorkerActor, timeoutMs?: number) =>
       request("POST", path, body ?? {}, actor, timeoutMs),
-    async screenPng(): Promise<Buffer | null> {
+    /**
+     * GET /screen。worker 侧已按 spec 4.5.1 做了收敛等待：返回的是“最近一次输入之后、
+     * 连续两帧一致”的画面；settle 头用于测量 action→fresh-frame 延迟（不进 agent 载荷）。
+     */
+    async screenPng(): Promise<{
+      png: Buffer;
+      settleMs: number | null;
+      converged: boolean | null;
+    } | null> {
       try {
         const response = await deps.fetch(`${base}/screen`, {
           headers: headers(),
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(20_000),
         });
-        return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
+        if (!response.ok) return null;
+        const settleMs = Number.parseInt(response.headers.get("x-acevra-settle-ms") ?? "", 10);
+        const convergedHeader = response.headers.get("x-acevra-converged");
+        return {
+          png: Buffer.from(await response.arrayBuffer()),
+          settleMs: Number.isFinite(settleMs) ? settleMs : null,
+          converged: convergedHeader === "0" ? false : convergedHeader === "1" ? true : null,
+        };
       } catch {
         return null;
       }

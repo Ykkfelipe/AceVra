@@ -121,7 +121,10 @@ function fakeWorker(opts: { unreachable?: boolean } = {}) {
         job = null;
         return json(200, { ok: true });
       case "/screen":
-        return new Response(new Uint8Array([137, 80, 78, 71]), { status: 200 });
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: { "x-acevra-settle-ms": "620", "x-acevra-settle-frames": "2", "x-acevra-converged": "1" },
+        });
       default:
         if (!job || body.job_id !== job.job_id)
           return json(409, { detail: { code: "stale_job_id", reason: "stale_job_id" } });
