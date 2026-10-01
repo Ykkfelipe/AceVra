@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { createAccountApp } from "./app.js";
+import { createDeviceService } from "./devices.js";
 import { createAccountService, createAdmissionLedger } from "./accounts.js";
 import { createClerkIdentityVerifier, createClerkUserDirectory } from "./clerk.js";
 import { readAccountApiConfig } from "./config.js";
@@ -19,6 +20,7 @@ const app = createAccountApp({
     authorizedParties: config.authorizedParties,
     jwtKey: config.clerkJwtKey,
   }),
+  devices: createDeviceService(db),
   accounts: createAccountService({
     db,
     directory: createClerkUserDirectory(config.clerkSecretKey),

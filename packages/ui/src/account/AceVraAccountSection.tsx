@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button.js";
 import { describeAccountStatus } from "./accountStatus.js";
+import { AceVraDevicesSection } from "./AceVraDevicesSection.js";
 import { useAccountText } from "./useAccountText.js";
 import { useAceVraAccount } from "./useAceVraAccount.js";
 
@@ -67,6 +68,7 @@ export function AceVraAccountSection() {
               </Button>
             )}
           </div>
+          {view.phase === "ready" && <AceVraDevicesSection />}
           {view.phase === "ready" && view.rememberSession === false && (
             <p
               className="text-xs text-muted-foreground"

@@ -1,6 +1,7 @@
 import { createSign, generateKeyPairSync } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { createAccountApp } from "../src/app.js";
+import { createDeviceService } from "../src/devices.js";
 import { createAccountService, createAdmissionLedger } from "../src/accounts.js";
 import { createClerkIdentityVerifier } from "../src/clerk.js";
 import { migrate } from "../src/migrate.js";
@@ -53,6 +54,7 @@ export async function createTestApp(options?: {
   log?: (line: string) => void;
 }) {
   const db = await createTestDb();
+  const clock = { now: Date.now() };
   const users = options?.users ?? {};
   const directory: ClerkUserDirectory = {
     getUser: async (id) => {
@@ -68,6 +70,7 @@ export async function createTestApp(options?: {
       authorizedParties: options?.authorizedParties ?? [],
     }),
     accounts: createAccountService({ db, directory }),
+    devices: createDeviceService(db, () => clock.now),
     rateLimit: options?.rateLimit ?? { limit: 10_000, windowMs: 60_000 },
     log: options?.log,
   });
@@ -75,5 +78,18 @@ export async function createTestApp(options?: {
     app.request("/v1/me", {
       headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...headers },
     });
-  return { db, app, me, ledger: createAdmissionLedger(db) };
+  /** Authenticated request as a Clerk user (admission decided by the ledger). */
+  const as =
+    (sub: string) =>
+    async (path: string, init: RequestInit & { json?: unknown } = {}) =>
+      app.request(path, {
+        ...init,
+        headers: {
+          authorization: `Bearer ${signSessionToken({ sub })}`,
+          ...(init.json !== undefined ? { "content-type": "application/json" } : {}),
+          ...(init.headers as Record<string, string> | undefined),
+        },
+        ...(init.json !== undefined ? { body: JSON.stringify(init.json) } : {}),
+      });
+  return { db, app, me, as, clock, ledger: createAdmissionLedger(db) };
 }

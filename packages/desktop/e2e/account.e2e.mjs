@@ -21,6 +21,11 @@ const USERS = {
     avatarUrl: null,
     verifiedEmails: ["ada@example.test"],
   },
+  user_other: {
+    displayName: "Olive Other",
+    avatarUrl: null,
+    verifiedEmails: ["olive@example.test"],
+  },
   user_stranger: {
     displayName: "Sam Stranger",
     avatarUrl: null,
@@ -273,6 +278,112 @@ await scenario("D-account-without-provider", async (ctx) => {
   await page.getByTestId("acevra-account-profile").getByText("Ada Admitted").waitFor();
   return { account: "ready", inference: "connection-required" };
 });
+
+// E. Device registry: register, rename, relogin same device, relaunch same device,
+// different account refused, revoke. Local features never depend on any of it.
+await scenario("E-device-registry", async (ctx) => {
+  await backend.ledger.approve({ clerkUserId: "user_other" });
+  const deviceRows = async () =>
+    (
+      await backend.db.query(
+        "SELECT id, installation_id, account_id, revoked_at FROM devices ORDER BY created_at",
+      )
+    ).rows;
+  const before = new Set((await deviceRows()).map((r) => r.id));
+  const first = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
+  const { app, page } = first;
+  await connectProvider(page);
+  await page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
+  await page.getByTestId("acevra-account-signin").click();
+  await page.getByTestId("acevra-account-choice").waitFor({ state: "hidden", timeout: 30000 });
+  await skipPreferences(page);
+  // Local use keeps working regardless of devices.
+  await infer(page, "Reply with the fixture confirmation.");
+  await openAccountSection(page);
+  const row = page.locator('[data-testid="acevra-device-row"][data-this-device="true"]');
+  await row.waitFor({ timeout: 20000 });
+  assert.equal(await row.getAttribute("data-this-device"), "true");
+  assert.match(await row.innerText(), /This device · Online/);
+  assert.match(await row.innerText(), /Files, Shell, Git/);
+  const rows1 = await deviceRows();
+  assert.equal(rows1.length, before.size + 1);
+  const deviceId = rows1.find((r) => !before.has(r.id)).id;
+  const installation = await readJson(join(ctx.roots.userData, "acevra-installation.json"));
+  assert.equal(rows1.find((r) => r.id === deviceId).installation_id, installation.installationId);
+  // Rename.
+  await row.getByTestId("acevra-device-rename").click();
+  await page.getByLabel("Device name").fill("Studio Mac");
+  await page.getByTestId("acevra-device-rename-save").click();
+  await row.getByTestId("acevra-device-name").getByText("Studio Mac").waitFor({ timeout: 10000 });
+  // Sign out keeps the installation identity; sign in again resolves the same device.
+  await page.getByTestId("acevra-account-signout").click();
+  await page.getByTestId("acevra-account-settings-signin").waitFor({ timeout: 15000 });
+  assert.equal(await page.getByTestId("acevra-devices-section").count(), 0);
+  assert.equal(
+    (await readJson(join(ctx.roots.userData, "acevra-installation.json"))).installationId,
+    installation.installationId,
+  );
+  await page.getByTestId("acevra-account-settings-signin").click();
+  await row.waitFor({ timeout: 20000 });
+  assert.equal((await deviceRows()).length, before.size + 1, "relogin created no duplicate");
+  await row.getByTestId("acevra-device-name").getByText("Studio Mac").waitFor();
+  await app.close();
+  // Relaunch (existing profile) as the same account: same device.
+  const second = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
+  await second.page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
+  await second.page.getByTestId("acevra-account-signin").click();
+  await second.page
+    .getByTestId("acevra-account-choice")
+    .waitFor({ state: "hidden", timeout: 30000 });
+  await new Promise((r) => setTimeout(r, 1500));
+  const rows2 = await deviceRows();
+  assert.equal(rows2.length, before.size + 1);
+  assert.ok(rows2.some((r) => r.id === deviceId));
+  await second.app.close();
+  // A different admitted account on the same installation is refused (no silent transfer).
+  const third = await open(ctx, { apiBase: backendOrigin(), user: "user_other" });
+  await third.page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
+  await third.page.getByTestId("acevra-account-signin").click();
+  await third.page
+    .getByTestId("acevra-account-choice")
+    .waitFor({ state: "hidden", timeout: 30000 });
+  await openAccountSection(third.page);
+  await third.page.getByTestId("acevra-device-conflict").waitFor({ timeout: 20000 });
+  assert.equal((await deviceRows()).length, before.size + 1);
+  assert.equal(
+    (await deviceRows()).find((r) => r.id === deviceId).account_id === rows2.find((r) => r.id === deviceId).account_id,
+    true,
+    "ownership unchanged",
+  );
+  await third.app.close();
+  // Revoke from the owning account: device flagged, local use still works.
+  const fourth = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
+  await fourth.page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
+  await fourth.page.getByTestId("acevra-account-signin").click();
+  await fourth.page
+    .getByTestId("acevra-account-choice")
+    .waitFor({ state: "hidden", timeout: 30000 });
+  await openAccountSection(fourth.page);
+  const mine = fourth.page.locator('[data-testid="acevra-device-row"][data-this-device="true"]');
+  await mine.getByTestId("acevra-device-revoke").click();
+  await mine.getByTestId("acevra-device-revoke-confirm").click();
+  await mine.getByText("Revoked").waitFor({ timeout: 10000 });
+  assert.ok((await deviceRows()).find((r) => r.id === deviceId).revoked_at);
+  await fourth.page.keyboard.press("Escape");
+  await app4Reload(fourth);
+  await infer(fourth.page, "Reply after revoke.");
+  return {
+    device:
+      "registered, renamed, relogin+relaunch same id, account switch refused, revoke state, local use intact",
+  };
+});
+async function app4Reload({ app, page }) {
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.reload());
+  await page
+    .getByTestId("acevra-account-local")
+    .click()
+    .catch(() => {});
+}
 
 server.close();
 await fixture.close();

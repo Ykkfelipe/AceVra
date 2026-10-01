@@ -599,6 +599,10 @@ contextBridge.exposeInMainWorld("zcode", {
     signOut: () => ipcRenderer.invoke(AccountChannels.SignOut),
     refresh: () => ipcRenderer.invoke(AccountChannels.Refresh),
     chooseLocal: () => ipcRenderer.invoke(AccountChannels.ChooseLocal),
+    listDevices: () => ipcRenderer.invoke(AccountChannels.DevicesList),
+    renameDevice: (id: string, name: string) =>
+      ipcRenderer.invoke(AccountChannels.DeviceRename, id, name),
+    revokeDevice: (id: string) => ipcRenderer.invoke(AccountChannels.DeviceRevoke, id),
     onViewChanged: (callback: (view: AccountView) => void): (() => void) => {
       const handler = (_event: unknown, view: AccountView) => callback(view);
       ipcRenderer.on(AccountChannels.ViewChanged, handler);

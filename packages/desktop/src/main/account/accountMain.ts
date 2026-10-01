@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { app, ipcMain, type WebContents } from "electron";
-import { AccountChannels, type AccountView } from "@zcode/shared";
+import { AccountChannels, type AccountDevice, type AccountView } from "@zcode/shared";
+import { resolveCuaOsSupport } from "../cuaOsSupport.js";
+import { createAccountDevices } from "./accountDevices.js";
+import { createInstallationStore } from "./accountInstallation.js";
 import { ACCOUNT_TOKEN_STORE_NAME, isAccountSessionPersistent } from "./accountClerkBridge.js";
 import { resolveAccountConfig } from "./accountConfig.js";
 import { createAccountPreferenceStore } from "./accountPreference.js";
@@ -47,6 +51,38 @@ export function initAccountMain(options: {
     rememberSession: !windowSource || isAccountSessionPersistent(),
   });
 
+  // Device registry: only meaningful while the account is ready; local features never wait on it.
+  const tokenSource = testSource ?? windowSource;
+  const devices =
+    config && tokenSource
+      ? createAccountDevices({
+          apiBaseUrl: config.apiBaseUrl,
+          getToken: () => tokenSource.getToken(),
+          fetch: options.fetch ?? fetch,
+          installationId: createInstallationStore(
+            join(app.getPath("userData"), "acevra-installation.json"),
+          ).getOrCreate,
+          describe: () => ({
+            platform: process.platform as AccountDevice["platform"],
+            displayName: describeComputerName(),
+            // Only capabilities that are actually wired in this app.
+            capabilities: [
+              "files",
+              "shell",
+              "git",
+              ...(resolveCuaOsSupport().kind === "supported" ? (["computerUse"] as const) : []),
+            ],
+          }),
+        })
+      : null;
+  let wasReady = false;
+  controller.onViewChanged((view) => {
+    const ready = view.phase === "ready";
+    if (ready && !wasReady) void devices?.start().catch(() => undefined);
+    if (!ready && wasReady) devices?.stop();
+    wasReady = ready;
+  });
+
   const subscribers = new Map<number, WebContents>();
   const broadcast = (view: AccountView) => {
     for (const [id, contents] of subscribers) {
@@ -66,6 +102,14 @@ export function initAccountMain(options: {
   ipcMain.handle(AccountChannels.SignIn, () => controller.signIn());
   ipcMain.handle(AccountChannels.SignOut, () => controller.signOut());
   ipcMain.handle(AccountChannels.Refresh, () => controller.refresh());
+  const idle = { registration: "none" as const, thisDeviceId: null, devices: [] };
+  ipcMain.handle(AccountChannels.DevicesList, () => devices?.list() ?? idle);
+  ipcMain.handle(AccountChannels.DeviceRename, (_event, id: unknown, name: unknown) =>
+    typeof id === "string" && typeof name === "string" ? (devices?.rename(id, name) ?? idle) : idle,
+  );
+  ipcMain.handle(AccountChannels.DeviceRevoke, (_event, id: unknown) =>
+    typeof id === "string" ? (devices?.revoke(id) ?? idle) : idle,
+  );
   ipcMain.handle(AccountChannels.ChooseLocal, () => controller.chooseLocal());
 
   // Restore only when Clerk has persisted tokens (OS-encrypted); otherwise stay idle.
@@ -83,6 +127,7 @@ export function initAccountMain(options: {
     controller,
     start: () => restored.catch(() => undefined),
     dispose() {
+      devices?.stop();
       controller.dispose();
       windowSource?.dispose();
       for (const channel of [
@@ -91,9 +136,23 @@ export function initAccountMain(options: {
         AccountChannels.SignOut,
         AccountChannels.Refresh,
         AccountChannels.ChooseLocal,
+        AccountChannels.DevicesList,
+        AccountChannels.DeviceRename,
+        AccountChannels.DeviceRevoke,
       ]) {
         ipcMain.removeHandler(channel);
       }
     },
   };
+}
+
+/** Friendly default name only (e.g. "Felipes-MacBook-Pro"); a hostname is never an identity. */
+function describeComputerName(): string {
+  const cleaned = hostname()
+    .replace(/\.(local|lan|home)$/i, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/[^\p{L}\p{N} '’.]/gu, "")
+    .trim()
+    .slice(0, 60);
+  return cleaned || "This computer";
 }

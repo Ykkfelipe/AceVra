@@ -5,3 +5,5 @@ export { createClerkIdentityVerifier, createClerkUserDirectory } from "./clerk.j
 export { readAccountApiConfig } from "./config.js";
 export { migrate } from "./migrate.js";
 export type * from "./ports.js";
+export { createDeviceService, DEVICE_CAPABILITIES } from "./devices.js";
+export type { DeviceView, DeviceCapability } from "./devices.js";

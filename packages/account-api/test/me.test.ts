@@ -100,14 +100,14 @@ test("a Clerk directory outage on first sight is a 503, never an admission", asy
   assert.equal((await me(signSessionToken({ sub: "user_unknown" }))).status, 503);
 });
 
-test("only account and admission tables exist in M2A (no future entities)", async () => {
+test("only account, admission and device tables exist (no sync/task entities)", async () => {
   const { db } = await createTestApp();
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1",
   );
   assert.deepEqual(
     tables.rows.map((r: any) => r.table_name),
-    ["accounts", "admissions"],
+    ["accounts", "admissions", "devices"],
   );
 });
 

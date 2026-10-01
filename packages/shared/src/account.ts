@@ -40,6 +40,34 @@ export const SIGNED_OUT_VIEW: AccountView = {
   phase: "signedOut",
 };
 
+export type AccountDeviceCapability =
+  | "computerUse"
+  | "shell"
+  | "files"
+  | "git"
+  | "longTasks"
+  | "minecraft";
+
+/** Descriptive device facts only; never a credential, installation id or owner id. */
+export interface AccountDevice {
+  id: string;
+  type: "desktop" | "node";
+  platform: "darwin" | "win32" | "linux";
+  displayName: string;
+  capabilities: AccountDeviceCapability[];
+  createdAt: string;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  presence: "online" | "offline" | "revoked";
+}
+
+export interface AccountDevicesView {
+  /** How THIS installation relates to the account's device registry. */
+  registration: "none" | "registered" | "conflict" | "revoked" | "unavailable";
+  thisDeviceId: string | null;
+  devices: AccountDevice[];
+}
+
 /** Desktop-only account commands. Optional on IPlatformService (Web has none). */
 export interface IAccountPlatform {
   getView(): Promise<AccountView>;
@@ -52,6 +80,10 @@ export interface IAccountPlatform {
   refresh(): Promise<void>;
   /** Records "Continue locally". */
   chooseLocal(): Promise<void>;
+  /** Registered devices for the signed-in account (empty unless ready). */
+  listDevices(): Promise<AccountDevicesView>;
+  renameDevice(id: string, displayName: string): Promise<AccountDevicesView>;
+  revokeDevice(id: string): Promise<AccountDevicesView>;
 }
 
 /** Runtime validation of the backend `/v1/me` body; anything else is a failure. */
@@ -80,6 +112,9 @@ export const AccountChannels = {
   SignOut: "acevra-account:sign-out",
   Refresh: "acevra-account:refresh",
   ChooseLocal: "acevra-account:choose-local",
+  DevicesList: "acevra-account:devices-list",
+  DeviceRename: "acevra-account:device-rename",
+  DeviceRevoke: "acevra-account:device-revoke",
   /** main → main renderer */
   ViewChanged: "acevra-account:view-changed",
   /** account window → main */
