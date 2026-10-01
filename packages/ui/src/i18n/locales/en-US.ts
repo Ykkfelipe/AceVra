@@ -2249,6 +2249,7 @@ const enUS: Record<string, string> = {
   "settings.previewBadge.active": "Active",
   "settings.previewBadge.light": "Light",
   "settings.previewBadge.dark": "Dark",
+  "settings.aceVraAccountTitle": "AceVra Account",
   "settings.modelProviderTitle": "Model settings",
   "settings.mcpTitle": "MCP Servers",
   "settings.mcp.description": "Manage MCP server configurations used by ZCode Agent.",

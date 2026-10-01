@@ -1,4 +1,6 @@
 import { AceVraFirstRun } from "./onboarding/AceVraFirstRun.js";
+import { AceVraAccountChoice } from "./account/AceVraAccountChoice.js";
+import { useAccountChoiceGate, useAceVraAccount } from "./account/useAceVraAccount.js";
 /* eslint-disable max-lines -- Root 当前集中编排启动和 workspace shell wiring，先保持入口收口避免跨层状态拆散。 */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LucideProvider, RefreshCw } from "lucide-react";
@@ -207,6 +209,9 @@ function RootInner({
     refresh: refreshAppSettings,
     update: updateAppSettings,
   } = useSettings();
+  // AceVra Account 与 Provider 完全独立：账号视图不读取任何 provider 状态。
+  const aceVraAccount = useAceVraAccount();
+  const showAccountChoice = useAccountChoiceGate(aceVraAccount.view);
   const [welcomeScreenOpenReason, setWelcomeScreenOpenReason] =
     useState<WelcomeScreenOpenReason | null>(() =>
       consumeZcodeJwtInvalidRestartMarker() ? "session-expired" : null,
@@ -974,6 +979,15 @@ function RootInner({
         ) : (
           <WelcomeScreen onComplete={handleWelcomeScreenComplete} />
         )}
+      </RootShell>
+    );
+  }
+
+  // Provider 首启之后的一次性可选账号步骤；「Continue locally」永远可用。
+  if (showAccountChoice) {
+    return (
+      <RootShell>
+        <AceVraAccountChoice />
       </RootShell>
     );
   }

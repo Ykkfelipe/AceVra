@@ -7,6 +7,7 @@ export type SettingsSectionId =
   | "migration"
   | "accounts"
   | "browser"
+  | "aceVraAccount"
   | "modelProvider"
   | "memory"
   | "plugin"

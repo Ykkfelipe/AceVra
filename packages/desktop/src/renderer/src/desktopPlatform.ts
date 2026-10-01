@@ -51,6 +51,14 @@ export function createDesktopPlatform(options: {
     startCuaHelperPermissionDrag: window.zcode.startCuaHelperPermissionDrag
       ? () => window.zcode.startCuaHelperPermissionDrag?.()
       : undefined,
+    account: {
+      getView: () => window.zcode.account.getView(),
+      signIn: () => window.zcode.account.signIn(),
+      signOut: () => window.zcode.account.signOut(),
+      refresh: () => window.zcode.account.refresh(),
+      chooseLocal: () => window.zcode.account.chooseLocal(),
+      onViewChanged: (callback) => window.zcode.account.onViewChanged(callback),
+    },
     registerOAuthState: (payload) => window.zcode.registerOAuthState(payload),
     onOAuthCallback: (callback) => window.zcode.onOAuthCallback(callback),
     onPaymentCallback: (callback) => window.zcode.onPaymentCallback(callback),

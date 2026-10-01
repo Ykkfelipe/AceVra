@@ -3,7 +3,7 @@ import { realpathSync as fsRealpathSync, statSync as fsStatSync } from "node:fs"
 import { isAbsolute } from "node:path";
 import { LOCAL_MEDIA_PREVIEW_SCHEME, buildLocalMediaPreviewUrl } from "@zcode/shared";
 
-interface LocalMediaPreviewSchemeRegistrar {
+export interface LocalMediaPreviewSchemeRegistrar {
   registerSchemesAsPrivileged(
     schemes: Array<{
       scheme: string;
@@ -134,12 +134,17 @@ export function createLocalMediaPreviewPathRegistry(
  * 缺少 standard 时 Chromium 不会按标准 URL 处理文件尾读取，导致 moov 位于 mdat
  * 之后的 MP4 被误判为不可解码；standard 与 stream 共同保留本地视频的元数据读取和 seek。
  */
-export function registerLocalMediaPreviewScheme(protocol: LocalMediaPreviewSchemeRegistrar): void {
+export function registerLocalMediaPreviewScheme(
+  protocol: LocalMediaPreviewSchemeRegistrar,
+  /** registerSchemesAsPrivileged 会整体替换先前注册，其它特权 scheme 必须同一次声明。 */
+  additionalSchemes: Electron.CustomScheme[] = [],
+): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: LOCAL_MEDIA_PREVIEW_SCHEME,
       privileges: { standard: true, secure: true, stream: true },
     },
+    ...additionalSchemes,
   ]);
 }
 

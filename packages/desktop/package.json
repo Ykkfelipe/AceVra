@@ -23,6 +23,7 @@
     "build:pinned": "node ../../scripts/mise-run.mjs pnpm run build",
     "bundle": "node scripts/bundle.mjs",
     "e2e:onboarding": "node scripts/run-provider-onboarding-e2e.mjs",
+    "e2e:account": "node scripts/run-account-e2e.mjs",
     "e2e:cua-alpha": "node scripts/run-cua-alpha-e2e.mjs",
     "audit:bundle-size": "node scripts/audit-bundle-size.mjs",
     "postinstall": "node scripts/node-pty-rebuild.mjs",
@@ -32,6 +33,7 @@
   "dependencies": {
     "@arms/rum-electron": "^0.0.3",
     "@babel/runtime": "^7.24.5",
+    "@clerk/electron": "0.0.49",
     "@fiahfy/icns": "^0.0.7",
     "@lydell/node-pty-linux-arm64": "1.2.0-beta.10",
     "@lydell/node-pty-linux-x64": "1.2.0-beta.10",

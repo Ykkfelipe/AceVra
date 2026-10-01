@@ -1,4 +1,5 @@
 import {
+  AccountChannels,
   databaseStartupControlSchema,
   databaseStartupStateSchema,
   databaseStartupPortPayloadSchema,
@@ -28,6 +29,7 @@ function parseDeviceIdFromArgs(): string {
 contextBridge.exposeInMainWorld("__ZCODE_DEVICE_ID__", parseDeviceIdFromArgs());
 
 import type {
+  AccountView,
   AppSettings,
   ApplicationIconRequest,
   BrowserViewOperationPayload,
@@ -590,6 +592,19 @@ contextBridge.exposeInMainWorld("zcode", {
   /** 从权限浮窗拖拽 Helper.app 到 macOS 权限列表。必须是 send —— invoke 的往返会错过手势。 */
   startCuaHelperPermissionDrag: () =>
     ipcRenderer.send(PlatformChannels.StartCuaHelperPermissionDrag),
+  /** AceVra Account：只暴露命令与脱敏视图；Clerk 会话与 token 留在 main / Account 窗口。 */
+  account: {
+    getView: () => ipcRenderer.invoke(AccountChannels.GetView),
+    signIn: () => ipcRenderer.invoke(AccountChannels.SignIn),
+    signOut: () => ipcRenderer.invoke(AccountChannels.SignOut),
+    refresh: () => ipcRenderer.invoke(AccountChannels.Refresh),
+    chooseLocal: () => ipcRenderer.invoke(AccountChannels.ChooseLocal),
+    onViewChanged: (callback: (view: AccountView) => void): (() => void) => {
+      const handler = (_event: unknown, view: AccountView) => callback(view);
+      ipcRenderer.on(AccountChannels.ViewChanged, handler);
+      return () => ipcRenderer.removeListener(AccountChannels.ViewChanged, handler);
+    },
+  },
   /** 上报 OAuth state 用于 deep link 路由 */
   registerOAuthState: (payload: OAuthStateRegistration) =>
     ipcRenderer.send(PlatformChannels.OAuthRegisterState, payload),

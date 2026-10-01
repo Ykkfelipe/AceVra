@@ -18,6 +18,7 @@ import {
   WandSparkles,
   Keyboard,
   FileSearch,
+  UserRound,
 } from "lucide-react";
 import { isSettingsSectionEnabled, type SettingsSectionId } from "@/lib/settingsNavigation.js";
 import type { Theme } from "@/useTheme.js";
@@ -65,6 +66,12 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "appearance",
     icon: Palette,
     titleId: "settings.appearanceTitle",
+    groupId: "basics",
+  },
+  {
+    id: "aceVraAccount",
+    icon: UserRound,
+    titleId: "settings.aceVraAccountTitle",
     groupId: "basics",
   },
   {

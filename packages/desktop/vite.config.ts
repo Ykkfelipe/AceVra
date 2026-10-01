@@ -244,6 +244,7 @@ export default defineConfig(({ mode }) => {
         input: {
           index: resolve(__dirname, "src/renderer/index.html"),
           "resource-manager": resolve(__dirname, "src/renderer/resource-manager.html"),
+          account: resolve(__dirname, "src/renderer/account.html"),
           "cua-permission-panel": resolve(__dirname, "src/renderer/cua-permission-panel.html"),
         },
       },

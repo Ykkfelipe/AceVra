@@ -12,6 +12,7 @@ import type {
   MigrateLegacyCommonMcpResult,
   SaveCliMcpToUserDirectoryRequest,
 } from "./mcp.js";
+import type { IAccountPlatform } from "./account.js";
 import type { OAuthStateRegistration } from "./oauth.js";
 import type { AppSettings, Locale } from "./protocol.js";
 import type { ArmsCustomEventPayload, RendererTelemetryEventPayload } from "./telemetry.js";
@@ -659,6 +660,9 @@ export interface IPlatformService {
   prepareCuaHelperPermissionDrag?(): Promise<PrepareCuaHelperPermissionDragResult>;
   /** 从权限浮窗把 Helper.app 拖进 macOS 权限列表。Desktop only。 */
   startCuaHelperPermissionDrag?(): void;
+
+  /** AceVra Account（Clerk 登录 + 后端准入）；仅 Desktop 提供，与 Provider 登录互相独立。 */
+  account?: IAccountPlatform;
 
   /** 上报 OAuth state 给 main process，用于 deep link 路由 */
   registerOAuthState(payload: OAuthStateRegistration): void;

@@ -23,7 +23,6 @@ import { installBrowserRestoreBootstrapProtocol } from "./browserView/browserRes
 import {
   createLocalMediaPreviewPathRegistry,
   installLocalMediaPreviewProtocol,
-  registerLocalMediaPreviewScheme,
 } from "./localMediaPreviewProtocol.js";
 import { createDesktopBrowserScreenshotSurfaceCoordinator } from "./browserView/browserScreenshotSurfaceCoordinatorWiring.js";
 import { EMBEDDED_BROWSER_PARTITION } from "./browserDataManager.js";
@@ -252,8 +251,15 @@ import {
   WINDOWS_UPDATE_LOCK_RELEASE_GRACE_MS,
 } from "./windowsInstallResourceLocks.js";
 import { mainMemoryDiagnosticsRegistry } from "./mainMemoryDiagnostics.js";
+import { createAccountClerkBridge } from "./account/accountClerkBridge.js";
+import { initAccountMain, resolveAccountRuntime } from "./account/accountMain.js";
+import { registerPrivilegedSchemes } from "./account/accountScheme.js";
 
-registerLocalMediaPreviewScheme(protocol);
+// AceVra Account：Clerk bridge 须在 app ready 前创建，并早于统一的特权 scheme 注册——
+// registerSchemesAsPrivileged 会整体替换先前注册，所以两类 scheme 必须同一次声明。
+const accountRuntime = resolveAccountRuntime(process.env, app.isPackaged);
+if (accountRuntime.clerkEnabled) createAccountClerkBridge();
+registerPrivilegedSchemes(protocol, { accountEnabled: accountRuntime.clerkEnabled });
 const localMediaPreviewPathRegistry = createLocalMediaPreviewPathRegistry();
 
 // e2e 由 Chromedriver 管理远程调试端口；如果这里继续固定到 9229，
@@ -1867,6 +1873,16 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 
 app.whenReady().then(async () => {
   markMainLaunchAppReady();
+  // 账号服务不阻塞启动：未配置、Clerk 或后端不可用时本地模式照常工作。
+  void initAccountMain({
+    runtime: accountRuntime,
+    rendererDir: join(import.meta.dirname, "../renderer"),
+    accountPreloadPath: join(import.meta.dirname, "../preload/accountWindow.cjs"),
+  })
+    .start()
+    .catch((error: unknown) =>
+      logger.warn("AceVra account start failed", { error: String(error) }),
+    );
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,
   });

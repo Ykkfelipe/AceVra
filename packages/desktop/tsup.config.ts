@@ -125,6 +125,8 @@ const desktopNodeRuntimeExternals = [
   "node-forge",
   // ZIP 解包器内部依赖 CommonJS require("fs")，不能内联到 ESM main/host 产物。
   "yauzl",
+  // Clerk 原生 passkey 可选依赖；M2A 不启用 passkey，也不随包提供。
+  "@clerk/electron-passkeys",
 ];
 
 function createDevReadyMarkerHook(target: "main" | "host" | "preload"): string {
@@ -166,6 +168,8 @@ export default defineConfig([
       // electron-builder 又会排除 node_modules/@zcode，导致安装包启动即 ERR_MODULE_NOT_FOUND。
       // producer 的 JS broker 必须跟随 services 一起内联，原生 addon 仍只存在于独立 Helper。
       "@zcode/zcode-cua",
+      // Clerk beta bridge：与 workspace 包一样随 main 内联，打包产物不依赖 node_modules。
+      "@clerk/electron",
     ],
     // OTLP 端点与鉴权只在运行时读取；构建环境中的凭据不能写进公开安装包。
     define: createSharedDefines(),
@@ -188,13 +192,14 @@ export default defineConfig([
       "preload/index": "src/preload/index.ts",
       "preload/resourceManager": "src/preload/resourceManager.ts",
       "preload/cuaPermissionPanel": "src/preload/cuaPermissionPanel.ts",
+      "preload/accountWindow": "src/preload/accountWindow.ts",
     },
     outDir: "out",
     format: "cjs",
     platform: "node",
     target: "node22",
     external: ["electron"],
-    noExternal: ["@zcode/shared"],
+    noExternal: ["@zcode/shared", "@clerk/electron"],
     outExtension: () => ({ js: ".cjs" }),
     define: createSharedDefines(),
     esbuildOptions(options) {

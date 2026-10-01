@@ -54,6 +54,7 @@ import {
   resolveEntitledAccountProviderAccessFingerprint,
 } from "@/lib/accountProviderAccess.js";
 import { buildUsageEntitlementCacheKey } from "@/lib/usageEntitlementCache.js";
+import { AceVraAccountSection } from "@/account/AceVraAccountSection.js";
 import { ModelProviderSection } from "@/settings/ModelProviderSection.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { useEnterpriseCodingPlanProducts } from "@/settings/model-provider-section/useEnterpriseCodingPlanProducts.js";
@@ -1809,6 +1810,8 @@ export function SettingsPage({
                           />
                         ) : activeSection === "shortcuts" ? (
                           <ShortcutSettingsSection isDesktop={Boolean(isDesktop)} />
+                        ) : activeSection === "aceVraAccount" ? (
+                          <AceVraAccountSection />
                         ) : activeSection === "modelProvider" ? (
                           <ServiceProvider services={localHostServices}>
                             {/* 模型配置属于本机全局事实源；激活远端 workspace 时也不能注入远端 Host。 */}

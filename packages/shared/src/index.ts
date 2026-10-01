@@ -123,6 +123,7 @@ export * from "./test-ids-workflow.js";
 export * from "./channels.js";
 export * from "./storage.js";
 export * from "./oauth.js";
+export * from "./account.js";
 export * from "./desktopMenu.js";
 export * from "./feedback.js";
 export * from "./e2e-test-bridge.js";

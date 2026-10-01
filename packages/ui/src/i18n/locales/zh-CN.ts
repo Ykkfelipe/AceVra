@@ -2116,6 +2116,7 @@ const zhCN: Record<string, string> = {
   "settings.previewBadge.active": "当前生效",
   "settings.previewBadge.light": "浅色",
   "settings.previewBadge.dark": "深色",
+  "settings.aceVraAccountTitle": "AceVra 账号",
   "settings.modelProviderTitle": "模型设置",
   "settings.mcpTitle": "MCP 服务器",
   "settings.mcp.description": "管理 ZCode Agent 使用的 MCP 服务器配置。",
