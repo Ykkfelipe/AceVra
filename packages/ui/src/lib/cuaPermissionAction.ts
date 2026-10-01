@@ -12,7 +12,12 @@ export function isZCodeCuaToolName(value: string | null | undefined): boolean {
   // 不是双连字符）。两种形态都包含 "computer-use" 串——用 includes 兼容，否则 main 的 namespace
   // 前缀会让 cua 工具识别失败、ToolCallBlock 退化成 fallback 渲染。"computer-use" 足够特异
   // （仅 cua server 用此 key，不会误判 android-emulator/browser-use 等）。
-  return normalized === "computer-use" || normalized.includes("computer-use");
+  return (
+    normalized === "computer-use" ||
+    normalized.includes("computer-use") ||
+    // M3 alpha facade: 扁平 Proxy 直接以 `computer.<action>` 暴露（computer.list_apps 等）。
+    normalized.startsWith("computer.")
+  );
 }
 
 function didReturnFromCuaPermissionSettings(

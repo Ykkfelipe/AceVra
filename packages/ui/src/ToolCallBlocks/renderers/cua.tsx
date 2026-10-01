@@ -25,9 +25,9 @@ import {
   buildCuaScreenshotDetails,
   type CuaScreenshotDetails,
 } from "@/ToolCallBlocks/renderers/cuaScreenshotDetails.js";
-import { CUA_TOOL_SUMMARY_IDS } from "@/ToolCallBlocks/renderers/cuaSummaryMessages.js";
 import type { ToolCallBlockRenderContext } from "@/ToolCallBlocks/shared.js";
 import { readToolResultDisplay } from "@/ToolCallBlocks/toolResultDisplay.js";
+import { computerActionMessageId, formatComputerActionLabel } from "@/lib/computerActionLabel.js";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -51,6 +51,11 @@ function normalizeCuaToolName(value: string | null | undefined): string {
 
 function readCuaToolName(value: string | null | undefined): string | null {
   const normalized = normalizeCuaToolName(value);
+  // M3 alpha facade: 扁平 Proxy 直接暴露 `computer.<action>`（computer.list_apps 等）。
+  if (normalized.startsWith("computer.")) {
+    const aliased = normalized.slice("computer.".length);
+    return /^[a-z0-9_]+$/u.test(aliased) ? aliased : null;
+  }
   // cua server key 段为 computer_use（feat）或 plugin namespace 里的 computer_use（main v3.5.3）。
   if (!normalized.includes("computer_use")) return null;
   // action = 最后一个 "__" 之后的段。兼容两种命名：
@@ -67,17 +72,6 @@ function readRawToolName(raw: unknown): string | null {
   for (const key of ["toolName", "tool_name", "name"] as const) {
     const value = readText(record, key);
     if (value) return value;
-  }
-  return null;
-}
-
-function readCuaUserTitle(
-  toolCall: ToolCallBlockRenderContext["toolCallNode"]["toolCall"],
-): string | null {
-  const raw = asRecord(toolCall.raw);
-  for (const input of [asRecord(toolCall.input), asRecord(raw?.rawInput), asRecord(raw?.input)]) {
-    const title = readText(input, "title");
-    if (title) return title;
   }
   return null;
 }
@@ -199,7 +193,7 @@ function buildCuaDetailsModel(
   if (!access && toolName !== "list_apps" && toolName !== "screenshot") {
     actionRows.push({
       labelId: "chat.toolCall.cua.details.operation",
-      value: formatTarget(CUA_TOOL_SUMMARY_IDS[toolName] ?? "chat.toolCall.cua.default", {}),
+      value: formatTarget(computerActionMessageId(toolName), {}),
     });
   }
   if (actionDetail || typedText || openUrl) {
@@ -389,42 +383,32 @@ export function buildCuaSummaryPresentation(
     toolName === "key" || toolName === "hold_key"
       ? readCuaActionDetail(toolName, toolCall.input)
       : null;
-  const authoredDescription = toolName === "get_app_state" ? readCuaUserTitle(toolCall) : null;
+  // M3：禁用模型自述（reasoning 语言）标题——产品自我拥有的标签始终胜出，且与
+  // MiniComputerPanel 共用同一来源（computerActionLabel）。目标名仍作为旁边 chip 展示。
   const listCount = toolName === "list_windows" ? readCuaResultListCount(toolCall) : null;
-  const actionId =
-    toolName === "type"
-      ? "chat.toolCall.cua.type"
-      : toolName === "right_click"
-        ? "chat.toolCall.cua.rightClick"
-        : "chat.toolCall.cua.leftClick";
-  const description =
-    authoredDescription ??
-    (actionTarget
-      ? intl.formatMessage({ id: actionId })
-      : keyName
-        ? intl.formatMessage({
-            id:
-              toolName === "hold_key"
-                ? "chat.toolCall.cua.holdKey"
-                : "chat.toolCall.cua.pressKeyAction",
-          })
-        : listCount !== null
-          ? intl.formatMessage({ id: "chat.toolCall.cua.listWindowsCount" }, { count: listCount })
-          : intl.formatMessage({
-              id: CUA_TOOL_SUMMARY_IDS[toolName ?? ""] ?? "chat.toolCall.cua.default",
-            }));
+  const description = actionTarget
+    ? formatComputerActionLabel(intl, toolName ?? "")
+    : keyName
+      ? intl.formatMessage({
+          id:
+            toolName === "hold_key"
+              ? "chat.computerAction.holdKey"
+              : "chat.computerAction.keyPress",
+        })
+      : listCount !== null
+        ? intl.formatMessage({ id: "chat.toolCall.cua.listWindowsCount" }, { count: listCount })
+        : formatComputerActionLabel(intl, toolName ?? "");
   const taggedTarget = actionTarget ?? keyName;
-  const primaryText =
-    taggedTarget && !authoredDescription ? (
-      <span className="inline-flex min-w-0 items-center gap-1">
-        <span className="shrink-0">{description}</span>
-        <span className="cua-action-target min-w-0 truncate rounded-full border border-border px-1.5 text-ui-sm text-foreground-subtlest">
-          {taggedTarget}
-        </span>
+  const primaryText = taggedTarget ? (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <span className="shrink-0">{description}</span>
+      <span className="cua-action-target min-w-0 truncate rounded-full border border-border px-1.5 text-ui-sm text-foreground-subtlest">
+        {taggedTarget}
       </span>
-    ) : (
-      description
-    );
+    </span>
+  ) : (
+    description
+  );
 
   return {
     toolName,

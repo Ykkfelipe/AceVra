@@ -90,7 +90,7 @@ test("inactive session means no bar at all", () => {
   assert.equal(project(sessionView({})).visible, false, "facts-less present view is not shown");
 });
 
-test("observing: a completed observe keeps the bar visible while the turn runs", () => {
+test("observing is NOT safety-relevant: no native takeover, no large bar", () => {
   const view = project(
     sessionView({
       activity: { method: "observe", phase: "completed", effect: "confirmed" },
@@ -98,11 +98,53 @@ test("observing: a completed observe keeps the bar visible while the turn runs",
     }),
     { turnRunning: true },
   );
-  assert.equal(view.visible, true);
+  // 大 ComputerUseBar 是「真实桌面接管」的安全面；observe/get_app_state 不触发它，
+  // 由 MiniComputerPanel 呈现。规则：无原生前台接管 → 无大 bar。
+  assert.equal(view.visible, false);
   assert.equal(view.state, "observing");
   assert.equal(view.mode, "observe");
   assert.equal(view.observationStale, false);
   assert.equal(view.effectUnverified, false);
+});
+
+test("work in the background workspace is NOT safety-relevant: no large bar", () => {
+  const workspaceAction = project(
+    sessionView({
+      activity: { method: "workspace_type_text", phase: "started" },
+      observation: { id: "obs-1", capturedAt: NOW - 1_000 },
+    }),
+    { turnRunning: true },
+  );
+  // 后台 workspace 动作（含 get_app_state / observe / screenshot）由 MiniComputerPanel
+  // 呈现，绝不当成原生前台接管渲染大 bar。
+  assert.equal(workspaceAction.visible, false);
+  assert.equal(workspaceAction.state, "observing"); // workspace 动作非前台 → 观察系
+});
+
+test("native reserving/active is the ONLY thing that raises the safety bar", () => {
+  const reserving = project(
+    sessionView({ activity: { method: "acquire_control", phase: "started" } }),
+    { turnRunning: true },
+  );
+  assert.equal(reserving.state, "waitingForForeground");
+  assert.equal(
+    reserving.visible,
+    true,
+    "reserving native foreground is chosen by the model; show the safety surface",
+  );
+  const active = project(
+    sessionView({
+      activity: { method: "click", phase: "started" },
+      lease: { state: "active", leaseId: "lease-1" },
+    }),
+    { turnRunning: true },
+  );
+  assert.equal(active.visible, true, "an exclusive native lease always shows the safety bar");
+  // 后台动作从不成全 bar。
+  const bg = project(sessionView({ activity: { method: "set_value", phase: "started" } }), {
+    turnRunning: true,
+  });
+  assert.equal(bg.visible, false, "background semantic actions never raise the safety bar");
 });
 
 test("background-safe action is its own state and never reads as foreground", () => {
@@ -111,6 +153,7 @@ test("background-safe action is its own state and never reads as foreground", ()
   });
   assert.equal(started.state, "backgroundAction");
   assert.equal(started.mode, "background");
+  assert.equal(started.visible, false, "a background action does not raise the safety bar");
   const completed = project(
     sessionView({
       activity: {
@@ -163,10 +206,22 @@ test("physical-input yield is shown as control returned to the user and never au
 });
 
 test("paused comes from the authority admission; resume reopens admission only", () => {
+  // 没有原生前台接管时，暂停也不渲染大 bar（后台 pause 由 MiniComputerPanel 呈现）。
   const paused = project(sessionView({ paused: true }), { turnRunning: false });
   assert.equal(paused.state, "paused");
-  assert.equal(paused.visible, true);
+  assert.equal(paused.visible, false, "no takeover → no safety bar, even while paused");
   assert.equal(paused.pauseAvailable, false, "the button flips to Resume");
+  // 暂停一段原生接管则是安全场景 → 大 bar 保留。
+  const takeoverPaused = project(
+    sessionView({
+      paused: true,
+      activity: { method: "click", phase: "started" },
+      lease: { state: "active", leaseId: "lease-1" },
+    }),
+    { turnRunning: false },
+  );
+  assert.equal(takeoverPaused.state, "paused");
+  assert.equal(takeoverPaused.visible, true, "pausing an active takeover keeps the safety surface");
   // After resume the view is no longer paused and never claims an active operation.
   const resumed = project(sessionView({ paused: false }), { turnRunning: false });
   assert.equal(resumed.state, "idle");

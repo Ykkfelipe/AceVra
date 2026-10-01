@@ -37,6 +37,19 @@ Helper, open a broker socket, or synthesize native input outside this SDK.
 5. Use screenshots only when visual evidence is required. Emit SDK images through the structured
    SDK result; do not JSON-stringify the full result or manually emit image bytes.
 
+## Background work and the mini Computer
+
+- The mini Computer panel (and its "Working in background · Show Computer" affordance) is
+  **product UI that AceVra manages automatically**. Never open AceVra/ZCode menus to find,
+  enable, or resize it.
+- When the user asks you to work in another app in the background, operate **that app**
+  through Computer Use (`list_apps` → `get_app_state` → semantic `press` / `set_value`, or the
+  workspace background actions). Do **not** inspect AceVra's own View/Window menus to reach it.
+- Only inspect AceVra's own UI when the user explicitly asks a question about AceVra UI.
+- Do not narrate Computer tool calls in your reasoning language as display titles. Computer
+  tool-call labels are product-owned and rendered by AceVra; your job is the action, not the
+  label text.
+
 ## Foreground control
 
 `computer.acquire_control`, `activate_target`, pointer, click, typing, key, scroll, and drag paths

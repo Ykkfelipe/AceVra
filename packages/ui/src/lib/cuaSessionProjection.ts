@@ -161,14 +161,30 @@ export function projectComputerUseBar(input: ComputerUseBarProjectionInput): Com
     state = "idle";
   }
 
-  // Visibility: the bar is absent for plain chat. It appears while the session has Computer
-  // Use facts and (the turn is running, control is held, Computer Use is paused, a command is
-  // in flight, or the last outcome is a yield/stop/failure of this turn).
-  const hasFacts = activity !== null || leaseActive || terminationReason !== null || session.paused;
+  // 大 ComputerUseBar 是「真实用户桌面接管」的安全面，不是通用活动指示器。渲染的充分
+  // 必要条件是：原生前台/独占租约确实涉及（reserving/active、前台/control 方法在飞、或
+  // 一段租约刚结束）。observe / get_app_state / screenshot / background 语义 / workspace
+  // 后台动作一律不触发它 —— 那些由 MiniComputerPanel 呈现。
+  const isForegroundMethod = (name: string | undefined): boolean => {
+    const mode = modeOf(name);
+    return mode === "control" || mode === "foreground";
+  };
+  const takeoverActive =
+    leaseActive ||
+    (activity !== null && isForegroundMethod(activity.method)) ||
+    activity?.method === "acquire_control";
+  // 一段租约已结束（让出、停止、释放、物理输入打断）→ 安全面仍有价值。
+  const takeoverEnded = terminationReason !== null;
+  const safetySurface =
+    takeoverActive ||
+    takeoverEnded ||
+    state === "waitingForForeground" ||
+    state === "exclusiveActive" ||
+    state === "stopped";
   const outcomeBelongsToCurrentTurn =
     !currentTurnId || !activity || activity.task === currentTurnId || isTerminalTurnOutcome(state);
   const visible =
-    hasFacts &&
+    safetySurface &&
     outcomeBelongsToCurrentTurn &&
     (turnRunning ||
       session.paused ||

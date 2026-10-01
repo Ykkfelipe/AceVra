@@ -33,6 +33,7 @@ import {
 import type { CuaComputerUseSessionView, CuaWorkspaceView } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { formatComputerActionLabel } from "@/lib/computerActionLabel.js";
 import type {
   ComputerUsePreviewState,
   UseComputerUseSessionResult,
@@ -138,21 +139,23 @@ export function MiniComputerPanelMounted(props: {
   const title = targetLabel ?? intl.formatMessage({ id: "chat.miniComputer.title" });
   const stateLabel = intl.formatMessage({ id: WORKSPACE_STATE_MESSAGE_ID[workspace.state] });
 
-  // Truthful caption: the projection's own action fact; a finished task shows the completion
-  // mark only once the turn stopped and nothing is in flight.
-  const actionLabel = workspace.action
-    ? [
-        workspace.action.label,
-        workspace.action.targetLabel && workspace.action.targetLabel !== targetLabel
-          ? workspace.action.targetLabel
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
+  // Truthful caption: 与 transcript 共用同一套 product-owned Computer 动作标签
+  // （computerActionLabel），不采用模型自述文本。目标名作为旁边 chip 一样由投影给出。
+  const captionVerb = workspace.action
+    ? formatComputerActionLabel(intl, workspace.action.method)
     : null;
+  const captionTarget =
+    workspace.action?.targetLabel && workspace.action.targetLabel !== targetLabel
+      ? workspace.action.targetLabel
+      : null;
+  const captionParts = [captionVerb, captionTarget].filter((part) => part) as string[];
   const done = !turnRunning && workspace.state === "idle" && !paused;
   const caption =
-    actionLabel ?? (done ? intl.formatMessage({ id: "chat.miniComputer.done" }) : stateLabel);
+    captionParts.length > 0
+      ? captionParts.join(" · ")
+      : done
+        ? intl.formatMessage({ id: "chat.miniComputer.done" })
+        : stateLabel;
 
   // Mode: background is the workspace default; "Exclusive control" only for a real lease.
   const modeLabel = leaseActive
