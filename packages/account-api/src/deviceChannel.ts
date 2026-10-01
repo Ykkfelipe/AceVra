@@ -5,6 +5,8 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { DEVICE_CAPABILITIES } from "./devices.js";
 import type { SqlExecutor } from "./ports.js";
 import { verifySignature } from "./pairing.js";
+import { parseTaskMessage } from "./taskProtocol.js";
+import type { TaskService } from "./tasks.js";
 
 /**
  * Outbound realtime channel for paired nodes (M2C). Tiny on purpose: auth, presence and
@@ -20,6 +22,12 @@ export const deviceAuthMessage = (deviceId: string, nonce: string) =>
   `acevra-device-auth:v1:${deviceId}:${nonce}`;
 
 export interface DeviceChannelOptions {
+  /** Pre-authentication message budget per window (hello/auth only). */
+  preAuthMessageLimit?: number;
+  /** Cumulative `task.ack` cadence for node events. */
+  ackEvery?: number;
+  /** Control-plane reconciliation interval (offers, unknown tasks, expiry). */
+  sweepIntervalMs?: number;
   pingIntervalMs?: number;
   /** Authenticated session lifetime; renewed by re-proving key possession on the same socket. */
   sessionTtlMs?: number;
@@ -52,14 +60,23 @@ const CLOSE = {
   replaced: 4004,
 };
 
-export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceChannelOptions }) {
+export function createDeviceChannel(deps: {
+  db: SqlExecutor;
+  tasks?: TaskService;
+  options?: DeviceChannelOptions;
+}) {
+  const tasks = deps.tasks;
   const o = {
     pingIntervalMs: 20_000,
     sessionTtlMs: 10 * 60_000,
     expiringWarnMs: 60_000,
     authTimeoutMs: 10_000,
-    maxPayload: 4096,
-    messageLimit: 30,
+    // Task frames carry up to ~8 KiB specs and output chunks (JSON-escaped); still tightly bounded.
+    maxPayload: 32_768,
+    messageLimit: 400,
+    preAuthMessageLimit: 10,
+    ackEvery: 16,
+    sweepIntervalMs: 5000,
     messageWindowMs: 10_000,
     maxPendingConnections: 100,
     clock: Date.now,
@@ -98,6 +115,8 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
     closed = false;
     /** Counted against maxPendingConnections until authenticated. */
     counted = true;
+    /** Set once the node sent task.sync; offers are only sent after reconciliation. */
+    synced = false;
     constructor(readonly ws: WebSocket) {}
     send(message: Record<string, unknown>) {
       if (this.ws.readyState === this.ws.OPEN) this.ws.send(JSON.stringify(message));
@@ -112,7 +131,11 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
     cleanup() {
       this.timers.forEach(clearTimeout);
       this.timers = [];
-      if (this.deviceId && live.get(this.deviceId) === this) live.delete(this.deviceId);
+      if (this.deviceId && live.get(this.deviceId) === this) {
+        live.delete(this.deviceId);
+        // Running work becomes "unknown" (never assumed failed); the node reconciles on reconnect.
+        void tasks?.markDisconnected(this.deviceId).catch(() => undefined);
+      }
     }
   }
 
@@ -148,7 +171,8 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
   async function onMessage(c: Connection, raw: string) {
     const t = o.clock();
     if (t - c.window.start > o.messageWindowMs) c.window = { start: t, count: 0 };
-    if (++c.window.count > o.messageLimit)
+    const limit = c.state === "authed" ? o.messageLimit : o.preAuthMessageLimit;
+    if (++c.window.count > limit)
       return c.close(CLOSE.badRequest, "error", { code: "rate_limited" });
     let message: Record<string, unknown>;
     try {
@@ -238,7 +262,65 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
       );
       return;
     }
+    if (typeof type === "string" && type.startsWith("task.")) {
+      const task = tasks ? parseTaskMessage(message) : null;
+      if (!task) return c.close(CLOSE.badRequest, "error", { code: "bad_task_message" });
+      await handleTask(c, task);
+      return;
+    }
     return c.close(CLOSE.badRequest, "error", { code: "unknown_type" });
+  }
+  async function offerNext(c: Connection) {
+    if (!tasks || !c.deviceId || c.closed || !c.synced) return;
+    const offer = await tasks.dispatchNext(c.deviceId);
+    if (offer)
+      c.send({
+        type: "task.offer",
+        taskId: offer.taskId,
+        attempt: offer.attempt,
+        process: offer.spec,
+      });
+  }
+  /** Every handler acts only for the connection's AUTHENTICATED device id (ownership fence). */
+  async function handleTask(c: Connection, m: NonNullable<ReturnType<typeof parseTaskMessage>>) {
+    const deviceId = c.deviceId!;
+    switch (m.type) {
+      case "task.sync": {
+        const { cancel } = await tasks!.sync(deviceId, m.active);
+        for (const taskId of cancel) c.send({ type: "task.cancel", taskId });
+        c.synced = true;
+        return void (await offerNext(c));
+      }
+      case "task.accept": {
+        const r = await tasks!.accept(deviceId, m);
+        if (r.status === "stale" || r.cancel) c.send({ type: "task.cancel", taskId: m.taskId });
+        return;
+      }
+      case "task.reject":
+        await tasks!.reject(deviceId, m);
+        return void (await offerNext(c));
+      case "task.event": {
+        const r = await tasks!.event(deviceId, m);
+        if (r.status === "gone")
+          c.send({ type: "task.ack", taskId: m.taskId, seq: m.seq, terminal: true });
+        else if (r.status === "ok" && m.seq % o.ackEvery === 0)
+          c.send({ type: "task.ack", taskId: m.taskId, seq: m.seq });
+        return;
+      }
+      case "task.complete":
+      case "task.fail": {
+        await tasks!.finish(deviceId, {
+          taskId: m.taskId,
+          attempt: m.attempt,
+          seq: m.seq,
+          ok: m.type === "task.complete",
+          reason: m.type === "task.fail" ? m.reason : undefined,
+          result: m.result,
+        });
+        c.send({ type: "task.ack", taskId: m.taskId, seq: m.seq, terminal: true });
+        return void (await offerNext(c));
+      }
+    }
   }
   const authTimer = new WeakMap<Connection, NodeJS.Timeout>();
 
@@ -250,11 +332,15 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
     }, o.authTimeoutMs);
     timer.unref();
     authTimer.set(c, timer);
+    // Messages are processed strictly in arrival order: task state transitions (sync before
+    // offers, terminal before sync) depend on it.
+    let chain: Promise<void> = Promise.resolve();
     ws.on("message", (data, isBinary) => {
       if (isBinary) return c.close(CLOSE.badRequest, "error", { code: "binary_unsupported" });
-      onMessage(c, data.toString("utf8")).catch(() =>
-        c.close(CLOSE.badRequest, "error", { code: "internal" }),
-      );
+      const text = data.toString("utf8");
+      chain = chain
+        .then(() => onMessage(c, text))
+        .catch(() => c.close(CLOSE.badRequest, "error", { code: "internal" }));
     });
     ws.on("error", () => c.cleanup());
     ws.on("close", () => {
@@ -265,7 +351,19 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
     });
   });
 
-  return {
+  const sweeper = tasks
+    ? setInterval(
+        () =>
+          void tasks
+            .sweep()
+            .then(() => api.kickAll())
+            .catch(() => undefined),
+        o.sweepIntervalMs,
+      )
+    : null;
+  sweeper?.unref();
+
+  const api = {
     /** Routes upgrade requests for the device channel; everything else is left alone. */
     attach(server: Server) {
       server.on("upgrade", (request: IncomingMessage, socket: Duplex, head) => {
@@ -281,6 +379,17 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
       });
     },
     isLive: (deviceId: string) => live.has(deviceId),
+    /** Offer the next queued task to a device if it is live and reconciled. */
+    async kick(deviceId: string) {
+      const c = live.get(deviceId);
+      if (c) await offerNext(c).catch(() => undefined);
+    },
+    async kickAll() {
+      for (const c of live.values()) await offerNext(c).catch(() => undefined);
+    },
+    sendCancel(deviceId: string, taskId: string) {
+      live.get(deviceId)?.send({ type: "task.cancel", taskId });
+    },
     liveCount: () => live.size,
     /** Closes a device's live connection (revocation). */
     closeDevice(deviceId: string, reason: "revoked" | "terminate" = "revoked") {
@@ -291,13 +400,15 @@ export function createDeviceChannel(deps: { db: SqlExecutor; options?: DeviceCha
     },
     /** Terminates every live connection but keeps accepting new ones (a listener restart). */
     dropAll() {
-      for (const c of live.values()) c.ws.terminate();
-      live.clear();
+      // Each close handler removes its entry and marks its running tasks "unknown".
+      for (const c of Array.from(live.values())) c.ws.terminate();
     },
     close() {
       this.dropAll();
+      if (sweeper) clearInterval(sweeper);
       wss.close();
     },
   };
+  return api;
 }
 export type DeviceChannel = ReturnType<typeof createDeviceChannel>;

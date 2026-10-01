@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import type { NodeCapability } from "./capabilities.js";
 import type { Connection } from "./state.js";
+import type { RunnerLink, TaskRunner } from "./taskRunner.js";
 
 export const deviceAuthMessage = (deviceId: string, nonce: string) =>
   `acevra-device-auth:v1:${deviceId}:${nonce}`;
@@ -16,6 +17,8 @@ export interface NodeChannelOptions {
     sessionExpiresAt?: string;
   }): void;
   log?(event: string, facts?: Record<string, string | number | undefined>): void;
+  /** Executes task offers (absent = this node accepts none). */
+  runner?: Pick<TaskRunner, "onOffer" | "onCancel" | "onAck" | "onConnected">;
   /** Reconnect backoff bounds. */
   minDelayMs?: number;
   maxDelayMs?: number;
@@ -48,7 +51,7 @@ export function createNodeChannel(options: NodeChannelOptions) {
   function connect() {
     if (stopped || terminal) return;
     set("connecting");
-    const ws = new WebSocket(options.wsUrl, { handshakeTimeout: 10_000, maxPayload: 4096 });
+    const ws = new WebSocket(options.wsUrl, { handshakeTimeout: 10_000, maxPayload: 32_768 });
     socket = ws;
     ws.on("open", () =>
       ws.send(JSON.stringify({ type: "hello", deviceId: options.deviceId, protocol: 1 })),
@@ -76,6 +79,7 @@ export function createNodeChannel(options: NodeChannelOptions) {
           options.log?.("connected");
           set("connected", { sessionExpiresAt: String(message.sessionExpiresAt) });
           ws.send(JSON.stringify({ type: "capabilities", capabilities: options.capabilities }));
+          options.runner?.onConnected();
           break;
         case "ping":
           ws.send(JSON.stringify({ type: "pong" }));
@@ -96,6 +100,23 @@ export function createNodeChannel(options: NodeChannelOptions) {
             options.log?.("auth-failed");
             set("auth-failed");
           }
+          break;
+        case "task.offer":
+          void options.runner?.onOffer({
+            taskId: String(message.taskId),
+            attempt: Number(message.attempt),
+            process: message.process,
+          });
+          break;
+        case "task.cancel":
+          options.runner?.onCancel({ taskId: String(message.taskId) });
+          break;
+        case "task.ack":
+          options.runner?.onAck({
+            taskId: String(message.taskId),
+            seq: Number(message.seq),
+            terminal: message.terminal === true,
+          });
           break;
         default:
           break; // disconnect / unknown: the close handler decides what happens next
@@ -123,5 +144,14 @@ export function createNodeChannel(options: NodeChannelOptions) {
     },
     /** True once the control plane told this node it is revoked or auth is hopeless. */
     isTerminal: () => terminal,
+    /** The live socket as a runner link, or null while disconnected. */
+    link(): RunnerLink | null {
+      const ws = socket;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return null;
+      return {
+        send: (frame) => (ws.send(JSON.stringify(frame)), true),
+        bufferedAmount: () => ws.bufferedAmount,
+      };
+    },
   };
 }

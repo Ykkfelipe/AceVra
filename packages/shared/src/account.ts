@@ -84,8 +84,88 @@ export type AccountPairingDecisionResult = {
   status: "approved" | "rejected" | "unavailable" | "not_pending";
 };
 
+/**
+ * Where a task can run. Derived from Devices (plus this desktop's local runner); routing never
+ * hardcodes machine names. Cloud is intentionally absent until it can actually run something.
+ */
+export interface ExecutionTarget {
+  id: string;
+  type: "desktop" | "node";
+  displayName: string;
+  online: boolean;
+  capabilities: AccountDeviceCapability[];
+  isThisDevice: boolean;
+  /** Can a process task be started on it right now? */
+  available: boolean;
+  unavailableReason?: "offline" | "no_shell_service" | "remote_desktop_unsupported";
+}
+
+export type TaskState =
+  | "queued"
+  | "dispatching"
+  | "running"
+  | "running_unknown"
+  | "cancelling"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+/** Same shape for local, node (and later cloud) execution. */
+export interface TaskView {
+  id: string;
+  targetId: string;
+  state: TaskState;
+  process: { executable: string; args: string[]; cwd: string; timeoutMs: number };
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  result: Record<string, unknown> | null;
+  lastSequence: number;
+}
+export interface TaskEvent {
+  sequence: number;
+  type: string;
+  ts: string;
+  payload: Record<string, unknown>;
+}
+export interface ProcessRequest {
+  executable: string;
+  args?: string[];
+  cwd: string;
+  env?: Record<string, string>;
+  timeoutMs?: number;
+}
+export type StartProcessResult =
+  | { ok: true; taskId: string; targetId: string }
+  | {
+      ok: false;
+      reason:
+        | "invalid_request"
+        | "target_unavailable"
+        | "target_not_found"
+        | "unavailable"
+        | "not_signed_in";
+    };
+
+/**
+ * The sanctioned way for the main agent (or UI) to run a process on an execution target.
+ * It returns a task handle immediately and never blocks on the process: progress is read
+ * separately from TaskEvents.
+ */
+export interface IRemoteProcessService {
+  listTargets(): Promise<ExecutionTarget[]>;
+  startRemoteProcess(input: {
+    targetId: string;
+    process: ProcessRequest;
+    idempotencyKey?: string;
+  }): Promise<StartProcessResult>;
+  listTasks(): Promise<TaskView[]>;
+  getTaskEvents(taskId: string, after: number): Promise<TaskEvent[]>;
+  cancelTask(taskId: string, force?: boolean): Promise<TaskView | null>;
+}
+
 /** Desktop-only account commands. Optional on IPlatformService (Web has none). */
-export interface IAccountPlatform {
+export interface IAccountPlatform extends IRemoteProcessService {
   getView(): Promise<AccountView>;
   onViewChanged(callback: (view: AccountView) => void): () => void;
   /** Opens the Clerk sign-in surface. Resolves when started, not when authenticated. */
@@ -132,6 +212,11 @@ export const AccountChannels = {
   Refresh: "acevra-account:refresh",
   ChooseLocal: "acevra-account:choose-local",
   DevicesList: "acevra-account:devices-list",
+  TargetsList: "acevra-account:targets-list",
+  TaskStart: "acevra-account:task-start",
+  TasksList: "acevra-account:tasks-list",
+  TaskEvents: "acevra-account:task-events",
+  TaskCancel: "acevra-account:task-cancel",
   PairingLookup: "acevra-account:pairing-lookup",
   PairingDecide: "acevra-account:pairing-decide",
   DeviceRename: "acevra-account:device-rename",

@@ -27,6 +27,8 @@ export interface DeviceView {
   lastSeenAt: string | null;
   revokedAt: string | null;
   presence: "online" | "offline" | "revoked";
+  /** True only while an authenticated realtime channel is connected (task-routable). */
+  live: boolean;
 }
 
 interface DeviceRow {
@@ -63,6 +65,7 @@ export function toDeviceView(
     createdAt: iso(row.created_at)!,
     lastSeenAt: iso(row.last_seen_at),
     revokedAt: iso(row.revoked_at),
+    live,
     // A live authenticated channel is online at once; otherwise only a recent check-in is.
     presence: row.revoked_at
       ? "revoked"

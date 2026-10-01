@@ -282,7 +282,7 @@ test("malformed, oversized, binary, unknown and command-like messages close the 
     );
     await send("[1,2]");
     await send("null");
-    await send("x".repeat(10_000), 1009);
+    await send("x".repeat(40_000), 1009);
     await send(Buffer.from([1, 2, 3]));
     await send(JSON.stringify({ type: "shell.exec", command: "id" }));
     await send(JSON.stringify({ type: "heartbeat" })); // before auth

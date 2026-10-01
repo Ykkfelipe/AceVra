@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button.js";
 import { describeAccountStatus } from "./accountStatus.js";
 import { AceVraDevicesSection } from "./AceVraDevicesSection.js";
+import { AceVraTasksSection } from "./AceVraTasksSection.js";
 import { useAccountText } from "./useAccountText.js";
 import { useAceVraAccount } from "./useAceVraAccount.js";
 
@@ -87,6 +88,7 @@ export function AceVraAccountSection() {
           )}
         </div>
       )}
+      {available && view && <AceVraTasksSection />}
     </section>
   );
 }

@@ -170,6 +170,8 @@ export default defineConfig([
       "@zcode/zcode-cua",
       // Clerk beta bridge：与 workspace 包一样随 main 内联，打包产物不依赖 node_modules。
       "@clerk/electron",
+      // 本地任务复用 node 的 shell service（结构化进程 + 有界输出），随 main 内联。
+      "@zcode/node",
     ],
     // OTLP 端点与鉴权只在运行时读取；构建环境中的凭据不能写进公开安装包。
     define: createSharedDefines(),

@@ -7,6 +7,8 @@ import { resolveCuaOsSupport } from "../cuaOsSupport.js";
 import { execFile } from "node:child_process";
 import { createAccountDevices } from "./accountDevices.js";
 import { deriveDesktopCapabilities } from "./accountCapabilities.js";
+import { createAccountTasks } from "./accountTasks.js";
+import { createLocalProcessRunner } from "./localProcessRunner.js";
 import { createInstallationStore } from "./accountInstallation.js";
 import { ACCOUNT_TOKEN_STORE_NAME, isAccountSessionPersistent } from "./accountClerkBridge.js";
 import { resolveAccountConfig } from "./accountConfig.js";
@@ -86,6 +88,24 @@ export function initAccountMain(options: {
     wasReady = ready;
   });
 
+  // Local execution is independent of the account: it works signed out and offline.
+  const local = createLocalProcessRunner();
+  const tasksApi = createAccountTasks({
+    local,
+    call: (method, path, body) => devices?.call(method, path, body) ?? Promise.resolve(null),
+    accountReady: () => controller.getView().phase === "ready",
+    thisDevice: () => ({
+      id: devices?.thisDeviceId() ?? null,
+      displayName: describeComputerName(),
+      capabilities: deriveDesktopCapabilities({
+        gitAvailable: gitKnown,
+        computerUseSupported: resolveCuaOsSupport().kind === "supported",
+      }),
+    }),
+  });
+  let gitKnown = false;
+  void gitProbe.then((ok) => (gitKnown = ok));
+
   const subscribers = new Map<number, WebContents>();
   const broadcast = (view: AccountView) => {
     for (const [id, contents] of subscribers) {
@@ -124,6 +144,22 @@ export function initAccountMain(options: {
   ipcMain.handle(AccountChannels.DeviceRevoke, (_event, id: unknown) =>
     typeof id === "string" ? (devices?.revoke(id) ?? idle) : idle,
   );
+  ipcMain.handle(AccountChannels.TargetsList, () => tasksApi.listTargets());
+  ipcMain.handle(AccountChannels.TaskStart, (_event, input: unknown) => {
+    const request = parseStartRequest(input);
+    return request
+      ? tasksApi.startRemoteProcess(request)
+      : { ok: false, reason: "invalid_request" };
+  });
+  ipcMain.handle(AccountChannels.TasksList, () => tasksApi.listTasks());
+  ipcMain.handle(AccountChannels.TaskEvents, (_event, id: unknown, after: unknown) =>
+    typeof id === "string" && id.length <= 80 && typeof after === "number"
+      ? tasksApi.getTaskEvents(id, after)
+      : [],
+  );
+  ipcMain.handle(AccountChannels.TaskCancel, (_event, id: unknown, force: unknown) =>
+    typeof id === "string" && id.length <= 80 ? tasksApi.cancelTask(id, force === true) : null,
+  );
   ipcMain.handle(AccountChannels.ChooseLocal, () => controller.chooseLocal());
 
   // Restore only when Clerk has persisted tokens (OS-encrypted); otherwise stay idle.
@@ -141,6 +177,7 @@ export function initAccountMain(options: {
     controller,
     start: () => restored.catch(() => undefined),
     dispose() {
+      local.shutdown();
       devices?.stop();
       controller.dispose();
       windowSource?.dispose();
@@ -151,6 +188,11 @@ export function initAccountMain(options: {
         AccountChannels.Refresh,
         AccountChannels.ChooseLocal,
         AccountChannels.DevicesList,
+        AccountChannels.TargetsList,
+        AccountChannels.TaskStart,
+        AccountChannels.TasksList,
+        AccountChannels.TaskEvents,
+        AccountChannels.TaskCancel,
         AccountChannels.PairingLookup,
         AccountChannels.PairingDecide,
         AccountChannels.DeviceRename,
@@ -171,4 +213,29 @@ function describeComputerName(): string {
     .trim()
     .slice(0, 60);
   return cleaned || "This computer";
+}
+
+/** Validates the renderer's start request; anything unexpected is dropped before it reaches a runner. */
+function parseStartRequest(input: unknown) {
+  if (!input || typeof input !== "object") return null;
+  const { targetId, process: p, idempotencyKey } = input as Record<string, unknown>;
+  if (typeof targetId !== "string" || targetId.length > 80 || !p || typeof p !== "object")
+    return null;
+  const { executable, args, cwd, env, timeoutMs } = p as Record<string, unknown>;
+  if (typeof executable !== "string" || typeof cwd !== "string") return null;
+  if (args !== undefined && (!Array.isArray(args) || !args.every((a) => typeof a === "string")))
+    return null;
+  if (env !== undefined && (typeof env !== "object" || env === null)) return null;
+  if (timeoutMs !== undefined && typeof timeoutMs !== "number") return null;
+  return {
+    targetId,
+    process: {
+      executable,
+      args: args as string[] | undefined,
+      cwd,
+      env: env as Record<string, string> | undefined,
+      timeoutMs: timeoutMs as number | undefined,
+    },
+    ...(typeof idempotencyKey === "string" ? { idempotencyKey } : {}),
+  };
 }

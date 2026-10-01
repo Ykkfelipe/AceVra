@@ -599,6 +599,13 @@ contextBridge.exposeInMainWorld("zcode", {
     signOut: () => ipcRenderer.invoke(AccountChannels.SignOut),
     refresh: () => ipcRenderer.invoke(AccountChannels.Refresh),
     chooseLocal: () => ipcRenderer.invoke(AccountChannels.ChooseLocal),
+    listTargets: () => ipcRenderer.invoke(AccountChannels.TargetsList),
+    startRemoteProcess: (input: unknown) => ipcRenderer.invoke(AccountChannels.TaskStart, input),
+    listTasks: () => ipcRenderer.invoke(AccountChannels.TasksList),
+    getTaskEvents: (id: string, after: number) =>
+      ipcRenderer.invoke(AccountChannels.TaskEvents, id, after),
+    cancelTask: (id: string, force?: boolean) =>
+      ipcRenderer.invoke(AccountChannels.TaskCancel, id, force === true),
     lookupPairing: (code: string) => ipcRenderer.invoke(AccountChannels.PairingLookup, code),
     decidePairing: (id: string, decision: string) =>
       ipcRenderer.invoke(AccountChannels.PairingDecide, id, decision),

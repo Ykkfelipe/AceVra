@@ -1,11 +1,8 @@
 import { serve } from "@hono/node-server";
-import { createAccountApp } from "./app.js";
-import { createDeviceService } from "./devices.js";
-import { createDeviceChannel } from "./deviceChannel.js";
-import { createPairingService } from "./pairing.js";
-import { createAccountService, createAdmissionLedger } from "./accounts.js";
+import { createAdmissionLedger } from "./accounts.js";
 import { createClerkIdentityVerifier, createClerkUserDirectory } from "./clerk.js";
 import { readAccountApiConfig } from "./config.js";
+import { createControlPlane } from "./controlPlane.js";
 import { migrate } from "./migrate.js";
 import { createPgExecutor } from "./pg.js";
 
@@ -16,21 +13,33 @@ const ledger = createAdmissionLedger(db);
 for (const email of config.seedEmails) await ledger.approve({ email });
 for (const clerkUserId of config.seedClerkUserIds) await ledger.approve({ clerkUserId });
 
-const channel = createDeviceChannel({ db });
-const app = createAccountApp({
-  pairings: createPairingService(db),
-  onDeviceRevoked: (id) => channel.closeDevice(id, "revoked"),
+const { app, channel, tasks } = createControlPlane({
+  db,
   verifier: createClerkIdentityVerifier({
     secretKey: config.clerkSecretKey,
     authorizedParties: config.authorizedParties,
     jwtKey: config.clerkJwtKey,
   }),
-  devices: createDeviceService(db, Date.now, { isLive: channel.isLive }),
-  accounts: createAccountService({
-    db,
-    directory: createClerkUserDirectory(config.clerkSecretKey),
-  }),
+  directory: createClerkUserDirectory(config.clerkSecretKey),
+  // Only trust X-Forwarded-For when explicitly deployed behind a proxy that sets it.
+  clientKey: (request) =>
+    (config.trustProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : null) ||
+    "direct",
+  log: (line) => console.log(line),
 });
-serve({ fetch: app.fetch, port: config.port }, (info) => {
-  console.log(`AceVra account API listening on :${info.port}`);
+// A restart leaves no live channels: reconcile queued/running work before accepting traffic.
+await tasks.sweep();
+
+const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
+  console.log(`AceVra account API listening on ${info.address}:${info.port}`);
 });
+// Outbound node connections arrive as WebSocket upgrades on the same listener.
+channel.attach(server as import("node:http").Server);
+
+const shutdown = () => {
+  channel.close();
+  server.close(() => void db.close().finally(() => process.exit(0)));
+  setTimeout(() => process.exit(1), 10_000).unref();
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

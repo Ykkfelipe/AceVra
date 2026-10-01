@@ -5,7 +5,7 @@
 // Clerk token verification + PostgreSQL semantics via PGlite) and a deterministic test
 // session token instead of an interactive Clerk login.
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -379,7 +379,12 @@ async function app4Reload({ app, page }) {
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.reload());
   await page
     .getByTestId("acevra-account-local")
-    .click()
+    .click({ timeout: 8000 })
+    .catch(() => {});
+  // The settings page can be restored after a reload; the conversation view must be showing.
+  await page
+    .getByText("Back to workspace")
+    .click({ timeout: 5000 })
     .catch(() => {});
 }
 
@@ -503,6 +508,183 @@ await scenario("F-node-pairing", async (ctx) => {
     };
   } finally {
     for (const child of ctx.nodeChildren) child.kill("SIGKILL");
+  }
+});
+
+// G. Task routing: shell capability only after the node's service is ready; Run on [target];
+// live events while running; completion; cancel kills the process; local target; offline target.
+await scenario("G-remote-process", async (ctx) => {
+  const nodeHome = join(ctx.roots.root, "node-home");
+  const project = join(ctx.roots.root, "project");
+  await mkdir(join(project, "app"), { recursive: true });
+  const nodeCwd = resolve(desktop, "../node");
+  const startNode = (extra = []) => {
+    const child = spawn(
+      process.execPath,
+      [
+        "bin/acevra.mjs",
+        "node",
+        "connect",
+        "--api",
+        backendOrigin(),
+        "--name",
+        "Dell Runner",
+        ...extra,
+      ],
+      {
+        cwd: nodeCwd,
+        env: { ...process.env, ACEVRA_NODE_HOME: nodeHome },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    let out = "";
+    child.stdout.on("data", (d) => (out += d));
+    child.stderr.on("data", (d) => (out += d));
+    return { child, exited: new Promise((r) => child.once("exit", (c) => r(c))), out: () => out };
+  };
+  const until = async (fn, ms = 25000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (await fn()) return true;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    throw new Error("timeout");
+  };
+  const children = [];
+  const { page } = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
+  try {
+    await connectProvider(page);
+    await page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
+    await page.getByTestId("acevra-account-signin").click();
+    await page.getByTestId("acevra-account-choice").waitFor({ state: "hidden", timeout: 30000 });
+    await skipPreferences(page);
+    await openAccountSection(page);
+    // Pair a node that has NO allowed root: it connects, but shell is not advertised.
+    const bare = startNode();
+    children.push(bare.child);
+    await until(() => /Code: [A-Z2-9]{4}-[A-Z2-9]{4}/.test(bare.out()));
+    await page.getByTestId("acevra-pair-open").click();
+    await page
+      .getByLabel("Pairing code")
+      .fill(bare.out().match(/Code: ([A-Z2-9]{4}-[A-Z2-9]{4})/)[1]);
+    await page.getByTestId("acevra-pair-lookup").click();
+    await page.getByTestId("acevra-pair-approve").click();
+    const dellOption = page.locator('[data-testid="acevra-run-target"] option', {
+      hasText: "Dell Runner",
+    });
+    const row = page.getByTestId("acevra-device-row").filter({ hasText: "Dell Runner" });
+    const refreshUntil = async (fn) => {
+      const end = Date.now() + 25000;
+      while (Date.now() < end) {
+        await page.getByTestId("acevra-devices-refresh").click();
+        if (await fn()) return;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      throw new Error("condition never met");
+    };
+    await refreshUntil(
+      async () => (await row.count()) && /Node · Online/.test(await row.first().innerText()),
+    );
+    assert.ok(
+      !/Shell/.test(await row.first().innerText()),
+      "no shell advertised without a ready service",
+    );
+    await until(
+      async () =>
+        (await dellOption.count()) > 0 && (await dellOption.evaluate((el) => el.disabled)),
+    );
+    // Restart the same node with an allowed root: shell appears only now.
+    bare.child.kill("SIGTERM");
+    await bare.exited;
+    const node = startNode(["--allow-root", project]);
+    children.push(node.child);
+    await refreshUntil(
+      async () =>
+        (await row.count()) &&
+        /Node · Online/.test(await row.first().innerText()) &&
+        /Shell/.test(await row.first().innerText()),
+    );
+    await until(async () => !(await dellOption.evaluate((el) => el.disabled)));
+    // Run on the node: pick it in the selector, then watch events arrive while it runs.
+    const target = page.getByTestId("acevra-run-target");
+    await target.selectOption({ label: (await dellOption.innerText()).trim() });
+    await page.getByLabel("Program").fill(process.execPath);
+    await page
+      .getByLabel("Arguments")
+      .fill(
+        `-e "console.log('71 tests discovered'); setTimeout(() => console.log('42 passed'), 2500)"`,
+      );
+    await page.getByLabel("Working directory").fill(join(project, "app"));
+    await page.getByTestId("acevra-run-start").click();
+    const output = page.getByTestId("acevra-task-output");
+    await output.getByText("71 tests discovered").waitFor({ timeout: 20000 });
+    assert.equal(
+      await page.getByTestId("acevra-task-row").first().getAttribute("data-state"),
+      "running",
+      "visible output while still running",
+    );
+    assert.ok(!/42 passed/.test(await output.innerText()), "later output has not arrived yet");
+    await output.getByText("42 passed").waitFor({ timeout: 20000 });
+    await output.getByText("Exited 0").waitFor({ timeout: 20000 });
+    await until(
+      async () =>
+        (await page.getByTestId("acevra-task-row").first().getAttribute("data-state")) ===
+        "completed",
+    );
+    // Longer process → Cancel → the node terminates it → the UI shows Cancelled.
+    await page
+      .getByLabel("Arguments")
+      .fill(`-e "console.log('long task started'); setInterval(() => {}, 1000)"`);
+    await page.getByTestId("acevra-run-start").click();
+    await output.getByText("long task started").waitFor({ timeout: 20000 });
+    const longTask = (
+      await backend.db.query("SELECT id FROM tasks ORDER BY created_at DESC LIMIT 1")
+    ).rows[0].id;
+    const pid = (
+      await backend.db.query(
+        "SELECT payload FROM task_events WHERE task_id = $1 AND type = 'process.started'",
+        [longTask],
+      )
+    ).rows[0].payload.pid;
+    process.kill(pid, 0);
+    await page.getByTestId("acevra-task-cancel").first().click();
+    await until(
+      async () =>
+        (await page.getByTestId("acevra-task-row").first().getAttribute("data-state")) ===
+        "cancelled",
+    );
+    await until(() => {
+      try {
+        process.kill(pid, 0);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    // Local target: same UI, same event shape, no control plane.
+    await target.selectOption({ index: 0 });
+    await page.getByLabel("Program").fill(process.execPath);
+    await page.getByLabel("Arguments").fill(`-e "console.log('ran locally')"`);
+    await page.getByLabel("Working directory").fill(ctx.roots.workspace);
+    await page.getByTestId("acevra-run-start").click();
+    await output.getByText("ran locally").waitFor({ timeout: 20000 });
+    await output.getByText("Exited 0").waitFor({ timeout: 20000 });
+    // Offline node is visible but unavailable.
+    node.child.kill("SIGTERM");
+    await node.exited;
+    await until(
+      async () => await dellOption.evaluate((el) => el.disabled && /offline/.test(el.textContent)),
+      30000,
+    );
+    // Local inference was never involved.
+    await page.keyboard.press("Escape");
+    await page.getByTestId("task-settings-button").first().waitFor({ timeout: 30000 });
+    return {
+      remote:
+        "shell only after readiness; live events; completed; cancel killed the process; local target; offline target unavailable",
+    };
+  } finally {
+    for (const child of children) child.kill("SIGKILL");
   }
 });
 

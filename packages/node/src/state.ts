@@ -17,6 +17,8 @@ export interface NodeState {
   deviceId?: string;
   keyId?: string;
   pairing?: PendingPairing;
+  /** Directories the user explicitly allowed tasks to run in (the shell consent boundary). */
+  shellRoots?: string[];
 }
 export type Connection =
   | "connecting"
@@ -31,6 +33,7 @@ export interface NodeStatus {
   updatedAt: string;
   lastConnectedAt?: string;
   sessionExpiresAt?: string;
+  capabilities?: string[];
 }
 
 /** Writes are serialized per file and use unique temp names so concurrent updates cannot collide. */

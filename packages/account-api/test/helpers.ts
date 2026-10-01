@@ -1,12 +1,11 @@
 import { createSign, generateKeyPairSync, sign as cryptoSign } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
-import { createAccountApp } from "../src/app.js";
+import { createControlPlane } from "../src/controlPlane.js";
 import { createServer, type Server } from "node:http";
 import { getRequestListener } from "@hono/node-server";
-import { createDeviceChannel, type DeviceChannelOptions } from "../src/deviceChannel.js";
-import { createPairingService } from "../src/pairing.js";
-import { createDeviceService } from "../src/devices.js";
-import { createAccountService, createAdmissionLedger } from "../src/accounts.js";
+import type { DeviceChannelOptions } from "../src/deviceChannel.js";
+import type { TaskServiceOptions } from "../src/tasks.js";
+import { createAdmissionLedger } from "../src/accounts.js";
 import { createClerkIdentityVerifier } from "../src/clerk.js";
 import { migrate } from "../src/migrate.js";
 import type { ClerkUserDirectory, ClerkUserProfile, SqlExecutor } from "../src/ports.js";
@@ -61,6 +60,7 @@ export async function createTestApp(options?: {
   nodeGraceMs?: number;
   /** Use wall-clock time (acceptance runs); default is a controllable fake clock. */
   realClock?: boolean;
+  tasks?: TaskServiceOptions;
   /** Reuse a database across "backend restarts". */
   db?: SqlExecutor;
 }) {
@@ -81,21 +81,20 @@ export async function createTestApp(options?: {
       return user;
     },
   };
-  const channel = createDeviceChannel({ db, options: options?.channel });
-  const app = createAccountApp({
-    verifier: createClerkIdentityVerifier({
-      secretKey: "sk_test_unused-networkless",
-      jwtKey: publicPem,
-      authorizedParties: options?.authorizedParties ?? [],
-    }),
-    accounts: createAccountService({ db, directory }),
-    devices: createDeviceService(db, () => clock.now, {
-      isLive: (id) => channel.isLive(id),
-      presenceWindowMs: options?.presenceWindowMs,
-      nodeGraceMs: options?.nodeGraceMs,
-    }),
-    pairings: createPairingService(db, () => clock.now),
-    onDeviceRevoked: (id) => channel.closeDevice(id, "revoked"),
+  const verifier = createClerkIdentityVerifier({
+    secretKey: "sk_test_unused-networkless",
+    jwtKey: publicPem,
+    authorizedParties: options?.authorizedParties ?? [],
+  });
+  const { app, channel, tasks } = createControlPlane({
+    db,
+    verifier,
+    directory,
+    clock: () => clock.now,
+    channel: options?.channel,
+    tasks: options?.tasks,
+    presenceWindowMs: options?.presenceWindowMs,
+    nodeGraceMs: options?.nodeGraceMs,
     rateLimit: options?.rateLimit ?? { limit: 10_000, windowMs: 60_000 },
     log: options?.log,
   });
@@ -133,7 +132,7 @@ export async function createTestApp(options?: {
       },
     };
   };
-  return { db, app, me, as, clock, channel, listen, ledger: createAdmissionLedger(db) };
+  return { db, app, me, as, clock, channel, tasks, listen, ledger: createAdmissionLedger(db) };
 }
 
 /** A node's Ed25519 identity, as the headless node generates it. */

@@ -88,6 +88,8 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
   }
 
   return {
+    /** Authenticated control-plane call (null when signed out or unreachable). Shared with tasks. */
+    call,
     /** Registers (idempotently) and starts the heartbeat. Call when the account is ready. */
     async start(): Promise<void> {
       generation += 1;
@@ -121,6 +123,7 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
         registration = "unavailable";
       }
     },
+    thisDeviceId: () => thisDeviceId,
     /** Account left `ready`: stop talking to the registry. Local identity is untouched. */
     stop(): void {
       generation += 1;

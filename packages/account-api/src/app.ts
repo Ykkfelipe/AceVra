@@ -5,6 +5,8 @@ import { createRateLimiter } from "./rateLimit.js";
 import { normalizePairingCode, parseEd25519PublicKey, type PairingService } from "./pairing.js";
 import type { createAccountService } from "./accounts.js";
 import type { HumanIdentityVerifier } from "./ports.js";
+import { parseProcessSpec } from "./processSpec.js";
+import type { TaskService } from "./tasks.js";
 import {
   DEVICE_CAPABILITIES,
   DEVICE_PLATFORMS,
@@ -30,6 +32,11 @@ export function createAccountApp(deps: {
   accounts: ReturnType<typeof createAccountService>;
   devices?: DeviceService;
   pairings?: PairingService;
+  tasks?: TaskService;
+  /** A task was queued: let the channel offer it now. */
+  onTaskQueued?: (deviceId: string) => void;
+  /** A cancel was requested for a live process: tell the node. */
+  onTaskCancel?: (deviceId: string, taskId: string) => void;
   /** Called after a revoke so live realtime connections are closed promptly. */
   onDeviceRevoked?: (deviceId: string) => void;
   /** Requests per window per client key. Defaults: 60 / minute. */
@@ -43,7 +50,7 @@ export function createAccountApp(deps: {
   const limiter = createRateLimiter(deps.rateLimit ?? { limit: 60, windowMs: 60_000 });
   // No CORS headers on purpose: the only client is the desktop main process (no Origin).
   app.use(secureHeaders());
-  app.use(bodyLimit({ maxSize: 4096, onError: (c) => c.json({ error: "too_large" }, 413) }));
+  app.use(bodyLimit({ maxSize: 16_384, onError: (c) => c.json({ error: "too_large" }, 413) }));
   app.use("/v1/*", async (c, next) => {
     const wait = limiter.check(deps.clientKey?.(c.req.raw) ?? "local");
     if (wait !== null) {
@@ -175,6 +182,106 @@ export function createAccountApp(deps: {
       const device = await devices.revoke(auth.account.id, c.req.param("id"));
       if (device) deps.onDeviceRevoked?.(device.id);
       return device ? c.json({ device }) : c.json({ error: "not_found" }, 404);
+    });
+  }
+
+  const tasks = deps.tasks;
+  if (tasks && devices) {
+    const taskIdOk = (id: string) => /^[A-Za-z0-9-]{8,64}$/.test(id);
+    /** ExecutionTarget: derived from Devices; nothing here knows machine names. */
+    app.get("/v1/targets", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      const targets = (await devices.list(auth.account.id))
+        .filter((d) => d.presence !== "revoked")
+        .map((d) => {
+          const online = d.live;
+          const remoteShell = d.type === "node" && d.capabilities.includes("shell");
+          return {
+            id: d.id,
+            type: d.type,
+            displayName: d.displayName,
+            online,
+            capabilities: d.capabilities,
+            available: remoteShell && online,
+            ...(remoteShell && online
+              ? {}
+              : {
+                  unavailableReason: !remoteShell
+                    ? d.type === "node"
+                      ? "no_shell_service"
+                      : "remote_desktop_unsupported"
+                    : "offline",
+                }),
+          };
+        });
+      return c.json({ targets });
+    });
+    app.post("/v1/tasks", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      const input = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+      const spec = parseProcessSpec(input?.process);
+      const key = input?.idempotencyKey;
+      if (
+        !input ||
+        typeof input.targetDeviceId !== "string" ||
+        !spec ||
+        (key !== undefined && (typeof key !== "string" || !/^[A-Za-z0-9_.-]{1,64}$/.test(key)))
+      ) {
+        return c.json({ error: "invalid_request" }, 400);
+      }
+      const result = await tasks.create(auth.account.id, auth.account.id, {
+        targetDeviceId: input.targetDeviceId,
+        spec,
+        idempotencyKey: key as string | undefined,
+      });
+      if (!result.ok) {
+        return c.json({ error: result.reason }, result.reason === "target_not_found" ? 404 : 409);
+      }
+      if (result.created) deps.onTaskQueued?.(result.task.targetDeviceId);
+      return c.json({ task: result.task }, result.created ? 201 : 200);
+    });
+    app.get("/v1/tasks", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      return c.json({
+        tasks: await tasks.list(auth.account.id, Number(c.req.query("limit") ?? 50) || 50),
+      });
+    });
+    app.get("/v1/tasks/:id", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      const task = taskIdOk(c.req.param("id"))
+        ? await tasks.get(auth.account.id, c.req.param("id"))
+        : null;
+      return task ? c.json({ task }) : c.json({ error: "not_found" }, 404);
+    });
+    app.get("/v1/tasks/:id/events", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      const after = Number(c.req.query("after") ?? 0);
+      const events = taskIdOk(c.req.param("id"))
+        ? await tasks.events(
+            auth.account.id,
+            c.req.param("id"),
+            Number.isFinite(after) ? after : 0,
+            Number(c.req.query("limit") ?? 200) || 200,
+          )
+        : null;
+      return events ? c.json({ events }) : c.json({ error: "not_found" }, 404);
+    });
+    app.post("/v1/tasks/:id/cancel", async (c) => {
+      const auth = await authenticate(c);
+      if (!auth.ok) return auth.response;
+      if (!taskIdOk(c.req.param("id"))) return c.json({ error: "not_found" }, 404);
+      const force = ((await c.req.json().catch(() => ({}))) as { force?: unknown })?.force === true;
+      const result = await tasks.cancel(auth.account.id, c.req.param("id"), force);
+      if (!result) return c.json({ error: "not_found" }, 404);
+      if (result.notifyDeviceId && result.task.state === "cancelling") {
+        deps.onTaskCancel?.(result.notifyDeviceId, result.task.id);
+      }
+      return c.json({ task: result.task });
     });
   }
 

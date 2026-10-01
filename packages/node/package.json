@@ -6,7 +6,8 @@
   },
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./shell": "./src/shell/index.ts"
   },
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",

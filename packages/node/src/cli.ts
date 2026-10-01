@@ -1,11 +1,21 @@
 import { hostname } from "node:os";
+import { resolve } from "node:path";
 import { ensureNodeRoot, resolveNodePaths } from "./dataRoot.js";
 import { createNodeChannel } from "./channel.js";
 import { deriveNodeCapabilities, type NodeCapability } from "./capabilities.js";
+import { createShellService } from "./shell/executor.js";
+import { createTaskRunner } from "./taskRunner.js";
 import { loadOrCreateIdentity } from "./identity.js";
 import { createLogger } from "./log.js";
 import { pairNode } from "./pair.js";
-import { clearNode, readState, readStatus, writeStatus, type NodeState } from "./state.js";
+import {
+  clearNode,
+  readState,
+  readStatus,
+  writeState,
+  writeStatus,
+  type NodeState,
+} from "./state.js";
 import { resolveEndpoints } from "./transport.js";
 
 export interface CliIO {
@@ -22,7 +32,7 @@ export interface CliIO {
 const USAGE = `AceVra Node
 
 Usage:
-  acevra node connect --api <https-url> [--name <display name>]
+  acevra node connect --api <https-url> [--name <display name>] [--allow-root <dir>]...
   acevra node status
   acevra node disconnect`;
 
@@ -36,6 +46,8 @@ function friendlyHostname(): string {
     .slice(0, 60);
   return cleaned || "AceVra Node";
 }
+const flags = (args: string[], name: string) =>
+  args.flatMap((arg, i) => (arg === name && args[i + 1] ? [args[i + 1]!] : []));
 const flag = (args: string[], name: string) => {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : undefined;
@@ -84,12 +96,29 @@ async function connect(
   }
   const identity = await loadOrCreateIdentity(paths);
   const log = createLogger(paths);
-  const capabilities: NodeCapability[] = deriveNodeCapabilities();
   state ??= {
     apiBaseUrl: httpBase,
     displayName: (flag(args, "--name") ?? friendlyHostname()).slice(0, 60),
     platform: process.platform as NodeState["platform"],
   };
+  // Shell: enabled only by explicit allowed roots and EARNED by a passing self-test.
+  const roots = [
+    ...new Set([
+      ...(state.shellRoots ?? []),
+      ...flags(args, "--allow-root").map((r) => resolve(r)),
+    ]),
+  ];
+  if (roots.length !== (state.shellRoots ?? []).length) {
+    state = { ...state, shellRoots: roots };
+    await writeState(paths, state);
+  }
+  const shell = createShellService({ roots });
+  const shellReady = roots.length > 0 && (await shell.ready());
+  if (roots.length > 0 && !shellReady)
+    ctx.err("Shell service failed its self-test; shell will not be advertised.");
+  const capabilities: NodeCapability[] = deriveNodeCapabilities([
+    { capability: "shell", available: () => shellReady },
+  ]);
   if (!state.deviceId) {
     state = await pairNode({
       paths,
@@ -113,7 +142,15 @@ async function connect(
     });
     ctx.out("Paired. Connecting…");
   }
+  const holder: { link: () => ReturnType<typeof channel.link> } = { link: () => null };
+  const runner = createTaskRunner({
+    shell,
+    shellReady: () => shellReady,
+    link: () => holder.link(),
+    log: (event, facts) => void log(event, facts),
+  });
   const channel = createNodeChannel({
+    runner,
     wsUrl,
     deviceId: state.deviceId!,
     sign: identity.sign,
@@ -121,10 +158,11 @@ async function connect(
     ...ctx.io.channel,
     log: (event, facts) => void log(event, facts),
     onStatus: (s) => {
-      lastStatus = s;
-      void writeStatus(paths, s);
+      lastStatus = { ...s, capabilities };
+      void writeStatus(paths, lastStatus);
     },
   });
+  holder.link = () => channel.link();
   // Re-stamp status so `acevra node status` can tell a live process from a stale file.
   let lastStatus: Parameters<typeof writeStatus>[1] = { connection: "connecting" };
   const stamp = setInterval(() => void writeStatus(paths, lastStatus), 30_000);
@@ -143,6 +181,7 @@ async function connect(
   });
   const terminal = channel.isTerminal();
   clearInterval(stamp);
+  runner.shutdown();
   channel.stop();
   await writeStatus(paths, { connection: terminal ? "revoked" : "stopped" });
   return terminal ? 3 : 0;
@@ -167,11 +206,16 @@ async function status(paths: ReturnType<typeof resolveNodePaths>, out: (l?: stri
       running = false;
     }
   }
-  const caps = deriveNodeCapabilities();
+  const caps = running ? (live?.capabilities ?? []) : [];
   out(`Device: ${state.displayName}`);
   out(`Account: ${state.deviceId ? "paired" : state.pairing ? "pairing pending" : "not paired"}`);
   out(`Device ID: ${abbreviate(state.deviceId)}`);
-  out(`Capabilities: ${caps.length ? caps.join(", ") : "none yet"}`);
+  out(
+    `Capabilities: ${caps.length ? caps.join(", ") : running ? "none yet" : "unknown (node not running)"}`,
+  );
+  out(
+    `Shell roots: ${state.shellRoots?.length ? state.shellRoots.join("; ") : "none (shell disabled)"}`,
+  );
   const connection = !state.deviceId
     ? "Not paired"
     : !running

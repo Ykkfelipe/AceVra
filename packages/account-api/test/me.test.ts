@@ -100,14 +100,14 @@ test("a Clerk directory outage on first sight is a 503, never an admission", asy
   assert.equal((await me(signSessionToken({ sub: "user_unknown" }))).status, 503);
 });
 
-test("only account, admission, device and pairing tables exist (no sync/task entities)", async () => {
+test("only account, admission, device, pairing and task tables exist (no sync/conversation entities)", async () => {
   const { db } = await createTestApp();
   const tables = await db.query(
     "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY 1",
   );
   assert.deepEqual(
     tables.rows.map((r: any) => r.table_name),
-    ["accounts", "admissions", "devices", "pairings"],
+    ["accounts", "admissions", "devices", "pairings", "task_events", "tasks"],
   );
 });
 
@@ -130,8 +130,8 @@ test("hardening: strict bearer, oversized token, rate limit, safe errors, no COR
   const fresh = (await createTestApp()).app;
   const big = await fresh.request("/v1/me", {
     method: "POST",
-    headers: { "content-length": "5000" },
-    body: "x".repeat(5000),
+    headers: { "content-length": "20000" },
+    body: "x".repeat(20000),
   });
   assert.equal(big.status, 413);
   assert.ok(

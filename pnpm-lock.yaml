@@ -703,6 +703,9 @@ importers:
       '@zcode/client':
         specifier: workspace:*
         version: link:../client
+      '@zcode/node':
+        specifier: workspace:*
+        version: link:../node
       '@zcode/provider':
         specifier: workspace:*
         version: link:../provider
