@@ -45,6 +45,11 @@ silently substitute for one another. A task-level target choice takes precedence
 
 ### Input and evidence rules
 
+`computer.workspace_scroll({pid, delta})` is a bounded AX scrollbar adjustment (`delta` from
+-1 to 1, positive down). It requires a unique writable scrollbar and verifies its value;
+unsupported/ambiguous targets are refused. It never synthesizes physical wheel input. Double
+click, right click, drag and key chords remain outside this background substrate's capability.
+
 The existing normalized input vocabulary is audited per producer. Capabilities are exposed only
 when the source can deliver and verify them. A delivered action is not success until a fresh
 post-action observation verifies its effect; stale observations, vanished targets, secure fields,

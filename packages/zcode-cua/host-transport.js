@@ -202,6 +202,11 @@ export function createCuaBrokerHost(options = {}) {
       return;
     }
     const method = request?.method;
+    // 持续像素读取仅供可信宿主的视觉适配器；模型客户端不能开启旁路捕获。
+    if (method === "workspace_stream" && !trusted) {
+      respondError(context, "workspace stream is host-only", "not_authorized");
+      return;
+    }
     // Defence in depth: the Helper enforces this allowlist too; refusing here keeps unregistered
     // names off the verified connection entirely.
     if (typeof method !== "string" || !isBrokerMethod(method)) {

@@ -47,6 +47,7 @@ export const COMPUTER_METHOD_CLASSES = Object.freeze({
   // foreground (pid-targeted AX actions / keyboard events).
   workspace_click: "physical",
   workspace_type_text: "physical",
+  workspace_scroll: "physical",
   // Lease lifecycle: foreground-control management is inherently takeover machinery.
   acquire_control: "lease",
   release_control: "lease",
@@ -165,7 +166,8 @@ export function createComputerBackendRouter({ backends }) {
       method === "click" ||
       method === "scroll" ||
       method === "drag" ||
-      method === "workspace_click"
+      method === "workspace_click" ||
+      method === "workspace_scroll"
     ) {
       return (
         backend.capabilities.independentPointer === true ||

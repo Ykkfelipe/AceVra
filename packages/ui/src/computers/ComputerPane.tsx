@@ -23,7 +23,6 @@ import {
   isGiveBackChord,
   mapKeyEvent,
   mapPointToRemote,
-  mapRemoteToView,
   mouseButtonName,
   wheelClicks,
   type KeyLike,
@@ -35,10 +34,12 @@ import {
   type ComputerStatusKind,
 } from "./computerPaneModel.js";
 import { ComputerCursorOverlay } from "./ComputerCursorOverlay.js";
+import { LOCAL_COMPUTER_ID } from "@/hooks/useLocalComputer.js";
 
 const MOVE_HZ = 40;
 
 interface ComputerPaneProps {
+  sessionId?: string | null;
   computerId: string | null;
   /** Visible active tab of a visible side pane: the only time the stream runs. */
   visible: boolean;
@@ -95,13 +96,11 @@ export function ComputerPane(props: ComputerPaneProps) {
   const streaming = shouldStream(computerId, visible);
   // 先拿到 view 才知道是否处于接管；接管时切到高帧率交互档位。
   const [interactive, setInteractive] = useState(false);
-  const { available, view, frame, run, sendInput, cursorRef, cursorVersionRef } = useComputer(
-    computerId,
-    { streaming, interactive },
-  );
+  const { available, view, frame, run, sendInput, cursorRef, cursorVersionRef, inputSupported } =
+    useComputer(computerId, { streaming, interactive, sessionId: props.sessionId });
   const kind = computerStatusKind(view);
   const actions = computerPaneActions(view);
-  const inControl = kind === "inControl";
+  const inControl = kind === "inControl" && inputSupported;
   useEffect(() => setInteractive(inControl), [inControl]);
 
   useEffect(() => {
@@ -110,7 +109,11 @@ export function ComputerPane(props: ComputerPaneProps) {
     onSelectComputer(only.id);
   }, [computerId, list, onSelectComputer]);
 
-  const name = view?.name ?? list?.find((item) => item.id === computerId)?.name ?? "";
+  const deviceName = view?.name ?? list?.find((item) => item.id === computerId)?.name ?? "";
+  const name =
+    view?.sourceKind === "local-mac"
+      ? [deviceName, t("thisMac")].filter(Boolean).join(" · ")
+      : deviceName;
   const runCommand = useCallback(
     async (command: "takeControl" | "giveBack" | "resume" | "stop") => {
       setBusy(true);
@@ -220,11 +223,13 @@ export function ComputerPane(props: ComputerPaneProps) {
           <h2 className="text-ui-base font-semibold text-foreground">{t("tabTitle")}</h2>
         </div>
         <div className="space-y-2 px-4 py-4">
-          {list && list.length === 0 ? (
-            <p className="text-ui-base text-foreground-subtle">{t("none")}</p>
-          ) : (
+          {
             <>
               <p className="text-ui-base text-foreground-subtle">{t("choose")}</p>
+              <Button variant="outline" onClick={() => onSelectComputer(LOCAL_COMPUTER_ID)}>
+                <MonitorIcon data-icon="inline-start" />
+                {t("thisMac")}
+              </Button>
               {(list ?? []).map((item) => (
                 <Button key={item.id} variant="outline" onClick={() => onSelectComputer(item.id)}>
                   <MonitorIcon data-icon="inline-start" />
@@ -232,7 +237,7 @@ export function ComputerPane(props: ComputerPaneProps) {
                 </Button>
               ))}
             </>
-          )}
+          }
         </div>
       </div>
     );
@@ -368,6 +373,8 @@ export function ComputerPane(props: ComputerPaneProps) {
         {frame ? (
           <img
             ref={imageRef}
+            data-computer-frame-seq={frame.seq}
+            data-frame-captured-at={frame.capturedAt}
             src={frame.url}
             alt=""
             draggable={false}

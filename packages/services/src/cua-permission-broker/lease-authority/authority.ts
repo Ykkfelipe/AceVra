@@ -30,7 +30,12 @@ const MAX_TEXT = 160;
  * M3：宿主侧维护的 mini Computer 投影只跟踪 workspace 面向的方法（observe 建立帧，
  * workspace_* 是后台动作）。原生前台动作仍由既有 bar 投影表达，不混入 workspace 视图。
  */
-const WORKSPACE_PROJECTED_METHODS = new Set(["observe", "workspace_click", "workspace_type_text"]);
+const WORKSPACE_PROJECTED_METHODS = new Set([
+  "observe",
+  "workspace_click",
+  "workspace_type_text",
+  "workspace_scroll",
+]);
 
 function workspaceTargetOf(
   target: ComputerUseTargetReport | undefined,

@@ -1302,13 +1302,16 @@ export function AnimatedSidePanePanel({
                             />
                           </ServiceProvider>
                         ) : tab.type === "computer" ? (
-                          <ComputerPane
-                            computerId={tab.computerId}
-                            visible={isVisible && tab.id === visibleActiveTabId}
-                            expanded={computerExpandRestoreSize !== null}
-                            onToggleExpand={toggleComputerExpand}
-                            onSelectComputer={onOpenComputer}
-                          />
+                          <ServiceProvider services={services}>
+                            <ComputerPane
+                              sessionId={activeTaskId}
+                              computerId={tab.computerId}
+                              visible={isVisible && tab.id === visibleActiveTabId}
+                              expanded={computerExpandRestoreSize !== null}
+                              onToggleExpand={toggleComputerExpand}
+                              onSelectComputer={onOpenComputer}
+                            />
+                          </ServiceProvider>
                         ) : tab.type === "terminal" ? (
                           <SidePaneTerminalPane
                             services={services}

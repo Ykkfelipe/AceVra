@@ -136,6 +136,9 @@ export function createComputersService(deps: {
           : "offline";
     return {
       computerId: entry.config.id,
+      sourceKind: "remote-node",
+      sourceId: entry.config.id,
+      executionTargetId: entry.config.id,
       name: entry.config.name,
       connection,
       offlineReason: connection === "offline" ? (entry.offlineReason ?? "not_connected") : null,

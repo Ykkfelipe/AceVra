@@ -82,3 +82,12 @@ test("sampler reports fps, cursor rate and p50/p95 latency per window", () => {
   // window resets
   assert.equal(sampler.sample(), null);
 });
+test("latency percentiles sort samples rather than using arrival order", () => {
+  let now = 0;
+  const sampler = createStreamSampler(() => now, 1000);
+  for (const latency of [100, 10, 90, 20, 80, 30, 70, 40, 60, 50]) sampler.onFrame(latency);
+  now = 1000;
+  const metrics = sampler.sample();
+  assert.equal(metrics?.latencyP50Ms, 60);
+  assert.equal(metrics?.latencyP95Ms, 100);
+});

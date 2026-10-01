@@ -187,6 +187,7 @@ export interface CuaHelperHost extends CuaProductHelperHost {
    * the termination code for a bounded window after the lease ended, or `unknown`. Never mutates
    * the lease and never opens a new trust path.
    */
+  queryWorkspaceStream?(params: Record<string, unknown>): Promise<Record<string, unknown>>;
   queryControlStatus(params: {
     lease_id: string;
   }): Promise<{ lease_state?: string; effect?: string; [key: string]: unknown }>;

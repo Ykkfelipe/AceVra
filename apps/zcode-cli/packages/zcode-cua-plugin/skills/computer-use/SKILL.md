@@ -37,9 +37,9 @@ Helper, open a broker socket, or synthesize native input outside this SDK.
 5. Use screenshots only when visual evidence is required. Emit SDK images through the structured
    SDK result; do not JSON-stringify the full result or manually emit image bytes.
 
-## Background work and the mini Computer
+## Background work and the Computer pane
 
-- The mini Computer panel (and its "Working in background · Show Computer" affordance) is
+- The right-side Computer pane showing the agent's target window is
   **product UI that AceVra manages automatically**. Never open AceVra/ZCode menus to find,
   enable, or resize it.
 - When the user asks you to work in another app in the background, operate **that app**
@@ -49,6 +49,18 @@ Helper, open a broker socket, or synthesize native input outside this SDK.
 - Do not narrate Computer tool calls in your reasoning language as display titles. Computer
   tool-call labels are product-owned and rendered by AceVra; your job is the action, not the
   label text.
+- "Use this Mac in the background" and "work in Notes in the background" select local
+  AgentWorkspace. Start with the target app/window observation so AceVra binds the live view.
+  Use `computer.workspace_click({pid, target_role, target_label})`,
+  `computer.workspace_type_text({pid, text, target_label?})`, and
+  `computer.workspace_scroll({pid, delta})` for supported background targets. Scroll delta is
+  a scrollbar fraction from -1 to 1 (positive down); a unique writable scrollbar is required.
+  Refusals are truthful capability limits. Do not silently retry as foreground actions.
+- "Use my Dell" selects RemoteComputer for that named remote target. Never substitute this Mac
+  when the requested computer is unavailable, or substitute Dell for a local background request.
+- Create a fresh empty document before typing. Never dismiss Save/Discard/Replace dialogs for
+  pre-existing user content. A delivered input with unknown application effect requires a fresh
+  target observation; a newer visual frame alone is not confirmation.
 
 ## Foreground control
 

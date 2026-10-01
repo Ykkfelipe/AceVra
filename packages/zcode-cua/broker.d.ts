@@ -378,6 +378,14 @@ export interface CuaObservationFrameResult {
 }
 
 export interface ICuaPermissionService {
+  /** Human visual stream; never creates model observations. Commands retain service admission. */
+  getComputerWorkspaceStream(
+    sessionId: string,
+    request: {
+      operation: "read" | "stop" | "take_control" | "give_back" | "stop_agent";
+      afterSeq?: number;
+    },
+  ): Promise<CuaWorkspaceStreamResult>;
   getStatus(
     workspacePath: string,
     workspaceIdentity?: string,
@@ -401,4 +409,26 @@ export interface ICuaPermissionService {
     sessionId: string,
     observationId: string,
   ): Promise<CuaObservationFrameResult>;
+}
+
+export interface CuaWorkspaceStreamResult {
+  sourceId: "local-mac";
+  executionTargetId: "this-device";
+  status: "available" | "unavailable";
+  reason?: string;
+  generation: string;
+  workspace?: CuaWorkspaceView;
+  paused: boolean;
+  userControl: boolean;
+  seq?: number;
+  capturedAt?: number;
+  width?: number;
+  height?: number;
+  jpeg?: string;
+  pid?: number;
+  windowId?: number;
+  originX?: number;
+  originY?: number;
+  pointWidth?: number;
+  pointHeight?: number;
 }

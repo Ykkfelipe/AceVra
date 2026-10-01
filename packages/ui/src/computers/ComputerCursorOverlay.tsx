@@ -7,7 +7,13 @@ import type { StreamCursor } from "./computerFrameStream.js";
  * rAF 循环直接改 DOM——高频更新不进入 React 渲染树；无事件时退回帧内嵌位置。
  */
 export function ComputerCursorOverlay(props: {
-  frame: { screenWidth: number; screenHeight: number; cursorX: number; cursorY: number } | null;
+  frame: {
+    screenWidth: number;
+    screenHeight: number;
+    cursorX: number;
+    cursorY: number;
+    cursorVisible?: boolean;
+  } | null;
   imageRef: React.RefObject<HTMLImageElement | null>;
   cursorRef: React.RefObject<StreamCursor | null>;
   cursorVersionRef: React.RefObject<number>;
@@ -18,11 +24,14 @@ export function ComputerCursorOverlay(props: {
   useEffect(() => {
     let raf = 0;
     let seen = -1;
+    let geometry = "";
     const tick = () => {
-      const point = cursorRef.current;
-      if (point && seen !== cursorVersionRef.current) {
+      const point = cursorRef.current ?? (frame ? { x: frame.cursorX, y: frame.cursorY } : null);
+      const image = imageRef.current;
+      const size = image ? `${image.clientWidth}:${image.clientHeight}` : "";
+      if (point && (seen !== cursorVersionRef.current || size !== geometry)) {
         seen = cursorVersionRef.current;
-        const image = imageRef.current;
+        geometry = size;
         const dot = dotRef.current;
         if (image && dot && frame) {
           const view = mapRemoteToView(
@@ -31,9 +40,10 @@ export function ComputerCursorOverlay(props: {
             { width: frame.screenWidth, height: frame.screenHeight },
           );
           if (view) {
+            dot.style.visibility = "visible";
             dot.style.left = `${image.offsetLeft + view.x}px`;
             dot.style.top = `${image.offsetTop + view.y}px`;
-          }
+          } else dot.style.visibility = "hidden";
         }
       }
       raf = requestAnimationFrame(tick);
@@ -42,16 +52,15 @@ export function ComputerCursorOverlay(props: {
     return () => cancelAnimationFrame(raf);
   }, [cursorRef, cursorVersionRef, frame, imageRef]);
 
-  if (!frame) return null;
-  const fallback = { x: frame.cursorX, y: frame.cursorY };
+  if (!frame || frame.cursorVisible === false) return null;
   return (
     <span
       ref={dotRef}
       aria-hidden="true"
+      data-testid="computer-logical-cursor"
       className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black bg-white"
       style={{
-        left: (imageRef.current?.offsetLeft ?? 0) + fallback.x,
-        top: (imageRef.current?.offsetTop ?? 0) + fallback.y,
+        visibility: "hidden",
       }}
     />
   );

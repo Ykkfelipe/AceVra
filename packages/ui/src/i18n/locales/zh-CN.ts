@@ -78,6 +78,7 @@ const zhCN: Record<string, string> = {
   "acevra.account.computers.ssh.invalid": "请输入 SSH 配置中的主机，以及 1–65535 之间的端口。",
   "computers.panel.tabTitle": "电脑",
   "computers.panel.choose": "选择要查看的电脑。",
+  "computers.panel.thisMac": "这台 Mac",
   "computers.panel.none": "还没有电脑。请在 设置 → 电脑 中添加。",
   "computers.panel.unavailable": "电脑功能仅在桌面应用中可用。",
   "computers.panel.status.connecting": "{name} · 正在连接…",

@@ -307,6 +307,10 @@ export function createProductCuaHelperHost(options = {}) {
       if (!transport) throw new CuaHelperError(UNAVAILABLE);
       return await transport.callMethod("control_status", params, { timeoutMs: 2_000 });
     },
+    queryWorkspaceStream: async (params) => {
+      if (!transport) throw new CuaHelperError(UNAVAILABLE);
+      return await transport.callMethod("workspace_stream", params, { timeoutMs: 3_000 });
+    },
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
     queryPermissionStatus: async () => await queryProductHelperPermissionStatus(transport),
@@ -334,6 +338,7 @@ function createUnavailableCuaHelperHost() {
     checkHealth: unavailableReject,
     releaseControl: unavailableReject,
     queryControlStatus: unavailableReject,
+    queryWorkspaceStream: unavailableReject,
     queryScreenCaptureProbe: async () => ({ ok: false, reason: UNAVAILABLE }),
     queryScreenRecordingPreflight: async () => undefined,
     queryPermissionStatus: unavailableReject,

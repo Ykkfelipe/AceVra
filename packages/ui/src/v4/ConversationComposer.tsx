@@ -154,7 +154,6 @@ import { useConversationSelectionReferences } from "@/v4/composer/useConversatio
 import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBackgroundWorkTrigger.js";
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
 import { ComputerUseBar } from "@/v4/composer/ComputerUseBar.js";
-import { MiniComputerPanel } from "@/v4/composer/MiniComputerPanel.js";
 import { ExecutionTaskCards } from "@/v4/composer/ExecutionTaskCards.js";
 import { useExecutionScope } from "@/hooks/useExecutionScope.js";
 import { useComputerUseSession } from "@/hooks/useComputerUseSession.js";
@@ -2349,19 +2348,9 @@ function ConversationComposerImpl({
         onChange={attachmentsApi.handleAttachmentInputChange}
       />
       {/* CUA-4 会话控制条：CUA 活动期间出现在 composer 上方；纯闲聊时不渲染、不轮询。 */}
-      {/* M3 mini Computer 画中画：workspace 活跃期间悬浮在 composer 区右上方；
-          渲染它零捕获、零偷焦点，× 只隐藏面板。 */}
-      <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 flex justify-end">
-        <MiniComputerPanel
-          session={computerUseSession}
-          sessionId={sessionId ?? null}
-          turnRunning={canStop}
-          onStop={onStop}
-        />
-      </div>
       {/* M3：大 ComputerUseBar 是「真实桌面接管」的安全面。bar 自身的 projection.visible
           已是安全专属（reserving/active/让出/停止等）——observe/background/workspace 一律
-          不渲染，由 MiniComputerPanel 呈现。这里不再叠加第二道门，避免过期逻辑误渲染。 */}
+          不渲染，由右侧统一 Computer pane 呈现。 */}
       <ComputerUseBar session={computerUseSession} turnRunning={canStop} onStop={onStop} />
       {showExecutionControls ? <ExecutionTaskCards scopeKey={executionScope} /> : null}
       {visibleError ? (

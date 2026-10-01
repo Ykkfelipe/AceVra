@@ -14,7 +14,10 @@ export type ComputerUseMethod =
   | "type_text"
   | "key_press"
   | "scroll"
-  | "drag";
+  | "drag"
+  | "workspace_click"
+  | "workspace_type_text"
+  | "workspace_scroll";
 export type ComputerUseEffect = "confirmed" | "partial" | "unknown" | "refused" | "failed";
 export type ComputerUseClassification =
   | "BACKGROUND_SAFE"

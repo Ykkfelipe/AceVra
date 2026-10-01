@@ -148,7 +148,10 @@ export function initComputersMain() {
           if (contents.isDestroyed()) return;
           const frame: ComputerFrame = {
             computerId,
+            sourceId: computerId,
+            executionTargetId: computerId,
             seq: meta.seq,
+            capturedAt: meta.capturedAt,
             width: meta.width,
             height: meta.height,
             screenWidth: meta.sw,

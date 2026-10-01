@@ -25,7 +25,11 @@
 import { normalizeBackendCapabilities, routeClassFor } from "./computer-backend.js";
 import { createWorkspaceProjection } from "./computer-workspace-projection.js";
 
-const WORKSPACE_METHODS = Object.freeze(["workspace_click", "workspace_type_text"]);
+const WORKSPACE_METHODS = Object.freeze([
+  "workspace_click",
+  "workspace_type_text",
+  "workspace_scroll",
+]);
 
 /**
  * Build the agent workspace backend.
@@ -54,8 +58,7 @@ export function createAgentWorkspaceBackend({ execute, snapshot, projection } = 
   // targets. Never the user's physical cursor. Later rendered by the mini Computer view.
   let agentPointer = { x: null, y: null, target: null, updatedAt: null };
   const workspaceProjection =
-    projection ??
-    createWorkspaceProjection({ workspaceId: `workspace:${capabilities.id}` });
+    projection ?? createWorkspaceProjection({ workspaceId: `workspace:${capabilities.id}` });
 
   const readSnapshot = async () => {
     if (typeof snapshot !== "function") return null;
@@ -174,8 +177,8 @@ function targetOf(args, result) {
   const target = body && typeof body.target === "object" ? body.target : null;
   return {
     pid: (args && args.pid) ?? (target ? target.pid : null) ?? null,
-    role: target ? target.role ?? null : null,
-    strategy: target ? target.strategy ?? null : null,
+    role: target ? (target.role ?? null) : null,
+    strategy: target ? (target.strategy ?? null) : null,
   };
 }
 

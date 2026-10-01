@@ -37,6 +37,7 @@ export const COMPUTER_ACTION_LABEL_IDS: Readonly<Record<string, string>> = Objec
   type_text: "chat.computerAction.typeText",
   type: "chat.computerAction.typeText",
   scroll: "chat.computerAction.scroll",
+  workspace_scroll: "chat.computerAction.scroll",
   press: "chat.computerAction.press",
   perform_action: "chat.computerAction.press",
   set_value: "chat.computerAction.setValue",

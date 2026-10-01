@@ -127,6 +127,8 @@ export function createStreamSampler(nowFn: () => number = Date.now, windowMs = 1
     } | null {
       const elapsed = now() - windowStart;
       if (elapsed < windowMs) return null;
+      // 延迟样本不按数值到达；分位数必须先排序，否则指标取到的是时间位置而非 p50/p95。
+      latencies.sort((a, b) => a - b);
       const p = (q: number) =>
         latencies.length
           ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * q))]

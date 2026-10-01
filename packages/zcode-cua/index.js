@@ -216,7 +216,11 @@ export function createComputerUseRuntime(options = {}) {
         typeof input?.context?.turnId === "string" && input.context.turnId
           ? input.context.turnId
           : sessionId;
-      const workspaceAction = method === "workspace_click" || method === "workspace_type_text";
+      const workspaceAction = [
+        "workspace_click",
+        "workspace_type_text",
+        "workspace_scroll",
+      ].includes(method);
       const mutating =
         method === "press" || method === "set_value" || foreground || workspaceAction;
       if (
@@ -385,8 +389,9 @@ export function createComputerUseRuntime(options = {}) {
           image && typeof image === "object" ? identityText(image.observation_id) : undefined;
         // M3：workspace 动作把目标与逻辑光标一并上报，宿主投影据此维护 mini Computer 视图；
         // target 只使用 Helper 已确认的身份（与 observe 同一来源），绝不猜测。
-        const workspaceCursor =
-          method === "workspace_click" ? workspaceCursorOf(input?.arguments, result) : undefined;
+        const workspaceCursor = workspaceAction
+          ? workspaceCursorOf(input?.arguments, result)
+          : undefined;
         reportActivity({
           ...activityBase,
           phase: "completed",

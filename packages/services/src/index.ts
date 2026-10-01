@@ -265,6 +265,7 @@ export {
   type CuaSessionTargetView,
   type CuaSessionLeaseView,
   type CuaWorkspaceView,
+  type CuaWorkspaceStreamResult,
   type CuaWorkspaceTargetView,
   type CuaWorkspaceFrameView,
   type CuaWorkspaceCursorView,

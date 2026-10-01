@@ -18,6 +18,7 @@ export const COMPUTER_USE_METHODS = Object.freeze({
   drag: "foreground",
   workspace_click: "mutation",
   workspace_type_text: "mutation",
+  workspace_scroll: "mutation",
 });
 
 export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
@@ -42,6 +43,7 @@ export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
   // user's foreground or cursor. They are NOT foreground methods: no lease, no activation.
   "computer.workspace_click": "workspace_click",
   "computer.workspace_type_text": "workspace_type_text",
+  "computer.workspace_scroll": "workspace_scroll",
 });
 
 export const COMPUTER_USE_BACKEND_SUPPORT = Object.freeze({

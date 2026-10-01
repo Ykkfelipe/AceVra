@@ -17,6 +17,8 @@ import {
   type StreamCursor,
 } from "@/computers/computerFrameStream.js";
 import { usePlatform } from "./usePlatform.js";
+import { useOptionalServices } from "./useServices.js";
+import { LOCAL_COMPUTER_ID, useLocalComputer } from "./useLocalComputer.js";
 
 export function useComputersPlatform(): IComputersPlatform | null {
   return usePlatform().computers ?? null;
@@ -68,6 +70,37 @@ export function useComputerSessionAutoOpen(
 ) {
   const computers = useComputersPlatform();
   const latest = useRef({ activeSessionId, openComputer });
+  const service = useOptionalServices()?.cuaPermissionService;
+  useEffect(() => {
+    if (!service || !activeSessionId) return;
+    let active = true;
+    let opened = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const read = async () => {
+      try {
+        const view = await service.getComputerUseSession(activeSessionId);
+        if (
+          active &&
+          !opened &&
+          view.present &&
+          view.workspace?.backendId === "agent-workspace" &&
+          view.workspace.target
+        ) {
+          opened = true;
+          latest.current.openComputer(LOCAL_COMPUTER_ID);
+        }
+      } catch {
+        // 服务正在重连时不自动打开来源；下一次读取仍由当前会话决定。
+      } finally {
+        if (active && !opened) timer = setTimeout(() => void read(), 1_000);
+      }
+    };
+    void read();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [activeSessionId, service]);
   latest.current = { activeSessionId, openComputer };
   useEffect(() => {
     if (!computers) return;
@@ -80,6 +113,8 @@ export function useComputerSessionAutoOpen(
 }
 
 export interface LiveFrame {
+  capturedAt?: number;
+  cursorVisible?: boolean;
   url: string;
   seq: number;
   screenWidth: number;
@@ -93,6 +128,20 @@ export interface LiveFrame {
  * in Main: no subscription (and no socket) unless the tab is the visible active tab.
  */
 export function useComputer(
+  computerId: string | null,
+  options: { streaming: boolean; interactive: boolean; sessionId?: string | null },
+) {
+  const local = useLocalComputer(
+    options.sessionId ?? null,
+    computerId === LOCAL_COMPUTER_ID && options.streaming,
+  );
+  const remote = useRemoteComputer(computerId === LOCAL_COMPUTER_ID ? null : computerId, options);
+  return computerId === LOCAL_COMPUTER_ID
+    ? local
+    : { ...remote, available: remote.available || local.available, inputSupported: true };
+}
+
+function useRemoteComputer(
   computerId: string | null,
   options: { streaming: boolean; interactive: boolean },
 ) {
@@ -124,6 +173,11 @@ export function useComputer(
   const cursorRef = useRef<StreamCursor | null>(null);
   const cursorVersionRef = useRef(0);
   useEffect(() => {
+    streamRef.current = createFrameStreamState();
+    cursorRef.current = null;
+    setFrame(null);
+  }, [computerId, streaming]);
+  useEffect(() => {
     if (!computers || !computerId || !streaming) return;
     const sampler = createStreamSampler();
     const unsubscribe = computers.subscribeFrames(
@@ -142,7 +196,6 @@ export function useComputer(
           new Blob([next.jpeg as Uint8Array<ArrayBuffer>], { type: "image/jpeg" }),
         );
         const previous = urlRef.current;
-        urlRef.current = url;
         const previousFrame = streamRef.current.frame;
         const accepted = acceptFrame(streamRef.current, {
           ...next,
@@ -153,7 +206,9 @@ export function useComputer(
         streamRef.current = accepted;
         // 以对象身份判定：被拒的帧不进入展示（含乱序/重复 seq），立即释放其 blob。
         if (accepted.frame !== previousFrame) {
+          urlRef.current = url;
           setFrame({
+            capturedAt: next.capturedAt,
             url,
             seq: next.seq,
             screenWidth: next.screenWidth,
@@ -180,8 +235,6 @@ export function useComputer(
     );
     return () => {
       unsubscribe();
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-      urlRef.current = null;
     };
   }, [computers, computerId, streaming, interactive]);
 

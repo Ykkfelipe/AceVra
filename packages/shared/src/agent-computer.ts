@@ -36,6 +36,9 @@ export interface ComputerJobView {
 export type ComputerControl = "agent" | "human" | "paused" | "idle";
 
 export interface ComputerView {
+  sourceKind?: "local-mac" | "remote-node";
+  sourceId?: string;
+  executionTargetId?: string;
   computerId: string;
   name: string;
   connection: ComputerConnection;
@@ -52,6 +55,9 @@ export interface ComputerView {
 
 /** One JPEG frame from the worker's view socket (ComputerFrameStream, spec §4.5). */
 export interface ComputerFrame {
+  sourceId?: string;
+  executionTargetId?: string;
+  generation?: string;
   computerId: string;
   seq: number;
   /** Producer capture timestamp (epoch ms); absent → the consumer cannot compute latency. */

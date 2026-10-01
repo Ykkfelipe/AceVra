@@ -86,7 +86,7 @@ func brokerDispatch(
         return brokerFail("semantic actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
     }
-    if ["workspace_click", "workspace_type_text"].contains(method),
+    if ["workspace_click", "workspace_type_text", "workspace_scroll"].contains(method),
        !cuaHostConnectSessionActive {
         return brokerFail("workspace actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
@@ -98,6 +98,10 @@ func brokerDispatch(
         return brokerFail("foreground request shape is invalid", code: "bad_request", id: request["id"])
     }
     switch method {
+    case "workspace_scroll":
+        return brokerOk(WorkspaceController.scroll(params), id: request["id"])
+    case "workspace_stream":
+        return brokerOk(workspaceStreamCommand(params), id: request["id"])
     case "permission_status":
         return brokerOk(permissionStatusResult(peer: peer), id: request["id"])
     case "control_status":

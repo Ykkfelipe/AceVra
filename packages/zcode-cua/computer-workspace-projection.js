@@ -25,6 +25,7 @@ export const WORKSPACE_STATES = Object.freeze([
 const ACTION_LABELS = Object.freeze({
   workspace_click: "Clicking",
   workspace_type_text: "Typing",
+  workspace_scroll: "Scrolling",
   observe: "Observing",
   list_apps: "Listing apps",
   list_windows: "Listing windows",
@@ -138,7 +139,12 @@ export function createWorkspaceProjection({
             }
           : {}),
         action: state.action
-          ? { ...state.action, completedAt: now(), effect: result?.effect ?? null, code: result?.code ?? null }
+          ? {
+              ...state.action,
+              completedAt: now(),
+              effect: result?.effect ?? null,
+              code: result?.code ?? null,
+            }
           : null,
       });
     },
@@ -193,7 +199,9 @@ export function createWorkspaceProjection({
 
     /** Explicitly note an admission pause (services may call this; UI never does). */
     notePaused(paused) {
-      touch({ state: paused === true ? "paused" : state.state === "paused" ? "idle" : state.state });
+      touch({
+        state: paused === true ? "paused" : state.state === "paused" ? "idle" : state.state,
+      });
     },
 
     /** Read-only snapshot for the UI. Pure: never captures, never mutates. */

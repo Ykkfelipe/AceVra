@@ -87,6 +87,7 @@ const enUS: Record<string, string> = {
     "Enter an SSH host from your SSH config and a port between 1 and 65535.",
   "computers.panel.tabTitle": "Computer",
   "computers.panel.choose": "Choose a computer to view.",
+  "computers.panel.thisMac": "This Mac",
   "computers.panel.none": "No computers yet. Add one in Settings → Computers.",
   "computers.panel.unavailable": "Computers are only available in the desktop app.",
   "computers.panel.status.connecting": "{name} · Connecting…",

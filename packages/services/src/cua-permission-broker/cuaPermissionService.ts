@@ -42,6 +42,7 @@ import type {
   CuaPauseComputerUseResult,
   CuaResumeComputerUseResult,
   CuaObservationFrameResult,
+  CuaWorkspaceStreamResult,
   ICuaPermissionService as BrokerICuaPermissionService,
 } from "@zcode/zcode-cua/broker";
 
@@ -70,6 +71,7 @@ export type {
   CuaPauseComputerUseResult,
   CuaResumeComputerUseResult,
   CuaObservationFrameResult,
+  CuaWorkspaceStreamResult,
 };
 
 // 只从 producer 的纯 ports subpath 复用值谓词。这里不能从 Node-only broker barrel

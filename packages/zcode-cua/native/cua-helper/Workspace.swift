@@ -51,7 +51,7 @@ struct WorkspaceController {
     }
 
     static func validTypeParams(_ params: [String: Any]) -> Bool {
-        guard Set(params.keys).isSubset(of: ["pid", "window_ordinal", "text", "owner_session", "owner_task"]),
+        guard Set(params.keys).isSubset(of: ["pid", "window_ordinal", "text", "target_label", "owner_session", "owner_task"]),
               params["pid"] is NSNumber,
               let text = params["text"] as? String,
               !text.isEmpty, text.utf16.count <= 512, !text.utf16.contains(0) else { return false }
@@ -131,7 +131,7 @@ struct WorkspaceController {
         let after = zeroStealSnapshot(pid: Int(pid))
         var result = workspaceResult(
             operation: "workspace_click",
-            effect: "confirmed",
+            effect: "unknown",
             route: "accessibility_action",
             delivery: "confirmed",
             application: "unknown")
@@ -164,7 +164,7 @@ struct WorkspaceController {
             let role = axWSString(candidate, kAXRoleAttribute as String) ?? ""
             return role == "AXTextField" || role == "AXTextArea"
         }
-        guard textFields.count >= 1, let field = textFields.first else {
+        guard !textFields.isEmpty else {
             return workspaceRefusal("no_text_target", "no text element in the target window")
         }
         // A multi-field window must be addressed explicitly to avoid typing into the wrong
@@ -180,6 +180,14 @@ struct WorkspaceController {
             }
             targetField = match
         }
+        // 安全字段即使以普通 TextField 角色暴露也不能注入；拒绝发生在 AX focus 之前。
+        guard axWSString(targetField, kAXSubroleAttribute as String) != "AXSecureTextField" else {
+            return workspaceRefusal("secure_field", "secure text input is not supported")
+        }
+        let valuesBefore = Set(elements(in: window).flatMap { candidate in
+            [axWSString(candidate, kAXValueAttribute as String), axWSString(candidate, kAXTitleAttribute as String),
+             axWSString(candidate, kAXDescriptionAttribute as String)].compactMap { $0 }
+        })
         let focusStatus = AXUIElementSetAttributeValue(targetField, kAXFocusedAttribute as CFString,
                                                        kCFBooleanTrue)
         let beforeValue = axWSString(targetField, kAXValueAttribute as String) ?? ""
@@ -209,7 +217,8 @@ struct WorkspaceController {
         // Verification is deliberately broader than one control: the field's own AX value is
         // not readable for every AppKit control, but applications that echo input (labels,
         // editors) expose the delivered text somewhere in the window tree.
-        var verifiedIn = afterValue.hasSuffix(text) ? "field_value" : ""
+        // 用户已有内容不能证明新输入生效；只有发生变化的读回才支持 confirmed。
+        var verifiedIn = afterValue != beforeValue && afterValue.hasSuffix(text) ? "field_value" : ""
         if verifiedIn.isEmpty {
             for candidate in elements(in: window) {
                 let values = [
@@ -217,7 +226,7 @@ struct WorkspaceController {
                     axWSString(candidate, kAXTitleAttribute as String),
                     axWSString(candidate, kAXDescriptionAttribute as String),
                 ].compactMap { $0 }
-                if values.contains(where: { $0.contains(text) }) {
+                if values.contains(where: { $0.contains(text) && !valuesBefore.contains($0) }) {
                     verifiedIn = "window_tree"
                     break
                 }
@@ -240,11 +249,53 @@ struct WorkspaceController {
         result["value_after"] = String(afterValue.suffix(semanticValueLimit))
         result["verification"] = verified ? verifiedIn : "unverified"
         result["focus_set_status"] = Int(focusStatus.rawValue)
+        if let frame = axWSFrame(targetField) {
+            result["element_center"] = ["x": Double(frame.midX), "y": Double(frame.midY)]
+        }
         result["zero_steal"] = zeroStealEvidence(before, after)
         return result
     }
 
     // MARK: - primitives
+
+    static func scroll(_ params: [String: Any]) -> [String: Any] {
+        guard Set(params.keys).isSubset(of: ["pid", "delta", "owner_session", "owner_task"]),
+              let pid = (params["pid"] as? NSNumber)?.int32Value, pid > 0,
+              let delta = (params["delta"] as? NSNumber)?.doubleValue,
+              delta.isFinite, abs(delta) <= 1, delta != 0 else {
+            return workspaceRefusal("bad_request", "workspace_scroll requires pid and delta (-1...1)")
+        }
+        guard AXIsProcessTrusted(), let (window, _) = resolveWindow(pid: pid, ordinal: nil) else {
+            return workspaceRefusal("target_lost", "target is unavailable")
+        }
+        let bars = elements(in: window).filter { axWSString($0, kAXRoleAttribute as String) == "AXScrollBar" }
+        guard bars.count == 1, let bar = bars.first else {
+            return workspaceRefusal("unsupported", "a unique writable scrollbar is required")
+        }
+        var raw: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(bar, kAXValueAttribute as CFString, &raw) == .success,
+              let previous = (raw as? NSNumber)?.doubleValue else {
+            return workspaceRefusal("unsupported", "scrollbar position is unreadable")
+        }
+        let before = zeroStealSnapshot(pid: Int(pid))
+        let requested = max(0, min(1, previous + delta))
+        let status = AXUIElementSetAttributeValue(bar, kAXValueAttribute as CFString, NSNumber(value: requested))
+        guard status == .success else { return workspaceRefusal("unsupported", "scrollbar is not writable") }
+        var readback: CFTypeRef?
+        AXUIElementCopyAttributeValue(bar, kAXValueAttribute as CFString, &readback)
+        // 已在边界的相同值不是滚动发生的证据。
+        let verified = requested != previous && (readback as? NSNumber)?.doubleValue == requested
+        var result = workspaceResult(operation: "workspace_scroll", effect: verified ? "confirmed" : "unknown",
+            route: "accessibility_action", delivery: "confirmed", application: verified ? "confirmed" : "unknown")
+        result["mode"] = "AGENT_WORKSPACE"; result["classification"] = "BACKGROUND_SAFE"
+        result["zero_steal"] = zeroStealEvidence(before, zeroStealSnapshot(pid: Int(pid)))
+        return result
+    }
+
+    static func targetWindowFrame(pid: pid_t) -> CGRect? {
+        guard let (window, _) = resolveWindow(pid: pid, ordinal: nil) else { return nil }
+        return axWSFrame(window)
+    }
 
     /// Resolve the target window by ordinal (default 0) against the app's AX window list.
     private static func resolveWindow(pid: pid_t, ordinal: Int?) -> (AXUIElement, Int)? {
@@ -253,8 +304,19 @@ struct WorkspaceController {
         var windowsValue: CFTypeRef?
         guard AXUIElementCopyAttributeValue(application, kAXWindowsAttribute as CFString,
                                             &windowsValue) == .success,
-              let windows = windowsValue as? [AXUIElement] else { return nil }
-        let index = max(0, min(ordinal ?? 0, windows.count - 1))
+              let rawWindows = windowsValue as? [AXUIElement] else { return nil }
+        // SCK 持续捕获时系统把 WindowSharingSessionButton 浮窗插到 AXWindows 首位。
+        // 它不是 agent 的应用窗口；按旧 ordinal 0 会把点击/输入错路由到系统分享指示器。
+        let windows = rawWindows.filter { window in
+            !elements(in: window).contains { element in
+                [axWSString(element, kAXTitleAttribute as String),
+                 axWSString(element, kAXDescriptionAttribute as String),
+                 axWSString(element, kAXIdentifierAttribute as String)].compactMap { $0 }
+                    .contains("WindowSharingSessionButton")
+            }
+        }
+        // 指定 ordinal 已消失时必须拒绝；不能夹取到另一窗口后继续输入。
+        let index = ordinal ?? 0
         guard windows.indices.contains(index) else { return nil }
         return (windows[index], index)
     }

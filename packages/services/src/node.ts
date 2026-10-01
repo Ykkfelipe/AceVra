@@ -511,6 +511,7 @@ import {
   type CuaResumeComputerUseResult,
 } from "#src/cua-permission-broker/index.js";
 import type { WorkspaceProjectionReader } from "#src/cua-permission-broker/lease-authority/workspace.js";
+import { createWorkspaceStreamAdapter } from "./cua-permission-broker/cuaWorkspaceStream.js";
 import {
   resolveWindowsCuaRuntime,
   WindowsCuaDevRuntimeResolutionError,
@@ -2195,7 +2196,41 @@ export function createLocalServices(options: {
   // 用户授权后从明确入口精确重启一次 Helper。重启**必须走 resolver.restart()**（不是裸 host.restart），
   // 因为 resolver 优先复用既有 socket/token；裸 host.restart() 可能 fresh 新凭据，使已有 Agent
   // 继续持有旧 transport，无法连接新的 broker。
+  const workspaceStream = createWorkspaceStreamAdapter({
+    workspace: (sessionId) => {
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      const workspace = (authority as WorkspaceProjectionReader | undefined)?.getWorkspace(
+        sessionId,
+      );
+      if (!workspace) return undefined;
+      return {
+        ...workspace,
+        target: workspace.target
+          ? {
+              pid: workspace.target.pid,
+              windowId: workspace.target.windowId ?? undefined,
+              app: workspace.target.appName ?? undefined,
+            }
+          : undefined,
+      };
+    },
+    paused: () => leaseAuthorityServers.get(services)?.authority.getAdmission().paused ?? true,
+    pause: async () => leaseAuthorityServers.get(services)?.authority.pause(),
+    resume: async () => leaseAuthorityServers.get(services)?.authority.resume(),
+    stop: async () => leaseAuthorityServers.get(services)?.authority.stop(),
+    call: async (params) => {
+      const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
+      if (
+        !helper ||
+        !isDefaultCuaProductHelperCurrent(helper) ||
+        !helper.macPermissionHost?.queryWorkspaceStream
+      )
+        throw new Error("Local computer capture unavailable");
+      return helper.macPermissionHost.queryWorkspaceStream(params);
+    },
+  });
   const cuaPermissionService: ICuaPermissionService = {
+    getComputerWorkspaceStream: workspaceStream,
     async getStatus(
       workspacePath: string,
       workspaceIdentity?: string,

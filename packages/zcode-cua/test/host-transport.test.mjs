@@ -808,6 +808,24 @@ describe("CUA-1.75 transport session (in-process relay)", () => {
     const result = await host.callMethod("permission_status");
     await helper.waitForRequest();
     assert.equal(result.echo, "permission_status");
+    helper.socket.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  });
+
+  it("human stream commands require the trusted host, not model credentials", async () => {
+    const helper = fakeHelper(host);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const refused = await clientCall(host, {
+      token: host.token,
+      method: "workspace_stream",
+      params: { operation: "read" },
+    });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.error.code, "not_authorized");
+    const result = await host.callMethod("workspace_stream", { operation: "read" });
+    await helper.waitForRequest();
+    assert.equal(result.echo, "workspace_stream");
+    helper.socket.destroy();
   });
 
   /** Declared late so the transport tests above read first; shared by all fake helpers. */
