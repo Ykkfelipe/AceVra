@@ -149,9 +149,36 @@ physical input yields → authority release → UI `yieldedToUser`.
 
 - **M1 — ComputerBackend abstraction**: interface, `NativeCuaBackend`, routing with
   classification-preservation tests (router cannot downgrade; escalation preserved).
-- **M2 — Workspace**: Helper virtual display + placement + workspace-scoped lease; fallback
-  mode; per-window capture stream.
-- **M3 — Mini view**: expandable panel + stream + bar reuse.
+- **M2A — Workspace substrate**: Helper `workspace_click` / `workspace_type_text`
+  (AX + pid-targeted synthesis) with zero-steal evidence; AgentWorkspaceBackend.
+- **M2B — Workspace projection**: `createWorkspaceProjection` read model (frame, logical
+  cursor, action, target, lifecycle state) fed only by real backend events.
+- **M3 — Mini Computer view (implemented on the M2A substrate, no virtual display)**:
+  a persistent floating picture-in-picture panel over the conversation, tied to the
+  session's workspace. Rules:
+
+  - **Projection only.** The panel renders the workspace projection; it is not a second
+    state machine. The host lease authority maintains the projection from the same
+    activity reports that feed the Computer Use bar, and the session view carries it
+    (`workspace` section) to the owning UI.
+  - **Zero capture from UI.** Polling reads snapshots (pure, side-effect free). Frame
+    pixels come only from the existing confined observation-frame read, one fetch per
+    frame id. UI polling never creates observations.
+  - **Zero focus steal.** Rendering the panel activates nothing, moves nothing, and
+    acquires no lease. The panel's mode label says "Working in background" for the
+    agent-workspace backend; "Exclusive control" appears only when the native lease is
+    actually active.
+  - **Persistent, not transcript-based.** New frames update the SAME panel. Hiding it
+    (×) must not stop the agent, pause execution, or discard state; a reopen affordance
+    exists while the workspace is relevant. Expanded view is another presentation of the
+    same workspace, never a second session.
+  - **Fencing.** Panel state is keyed by session; Task A's frames/cursor never leak into
+    Task B's panel.
+  - **Real controls.** Pause/resume/stop write through the existing admission/service
+    paths. Take Over (bringing the target app to the user's foreground) is explicit user
+    action only.
+  - Virtual display remains a future substrate swap (extension point), not a
+    prerequisite; snapshot-driven frame updates are acceptable for v1.
 - **M4 — Acceptance extension**: background matrix (frontmost-timeline zero-steal proof,
   background semantic pass/refusal truthfulness, escalation-yield replay, pause/stop parity).
 

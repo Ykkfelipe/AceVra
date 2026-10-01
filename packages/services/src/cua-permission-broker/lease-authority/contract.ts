@@ -58,6 +58,12 @@ export interface ComputerUseActivityReport {
   readonly applicationEffect?: string;
   readonly target?: ComputerUseTargetReport;
   readonly observation?: ComputerUseObservationReport;
+  /**
+   * M3: where a workspace click addressed, in the target window's own coordinate space
+   * (explicit point or the Helper-resolved element center). Display-only; never the
+   * physical macOS cursor.
+   */
+  readonly workspaceCursor?: { readonly x?: number; readonly y?: number };
 }
 
 export interface ComputerUseActivityRecord {

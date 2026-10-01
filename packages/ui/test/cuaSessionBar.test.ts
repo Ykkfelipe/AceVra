@@ -388,8 +388,9 @@ test("bar render: no bar for plain chat", () => {
     React.createElement(
       ZCodeIntlProvider,
       { locale: "en-US", messages: enUS },
+      // M3：bar 与 mini Computer 面板共享 composer 提升的同一份轮询结果（session prop）。
       React.createElement(ComputerUseBar, {
-        sessionId: "session-a",
+        session: { view: { visible: false } },
         turnRunning: false,
         onStop: () => undefined,
       }),

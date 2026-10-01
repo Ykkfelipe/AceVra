@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 
+import {
+  createWorkspaceProjection,
+  type WorkspaceProjection,
+} from "@zcode/zcode-cua/computer-workspace-projection";
+
 import type {
   ComputerUseObservationRecord,
   ComputerUseSessionRecord,
@@ -9,6 +14,7 @@ import type {
   LeaseRecord,
   LeaseTermination,
 } from "./contract.js";
+import type { ComputerUseWorkspaceSnapshot, WorkspaceProjectionReader } from "./workspace.js";
 
 export interface LeaseAuthorityOptions {
   /** Releases the observed native Helper lease and resolves only after terminal cleanup. */
@@ -19,6 +25,24 @@ export interface LeaseAuthorityOptions {
 
 const MAX_SESSIONS = 16;
 const MAX_TEXT = 160;
+
+/**
+ * M3：宿主侧维护的 mini Computer 投影只跟踪 workspace 面向的方法（observe 建立帧，
+ * workspace_* 是后台动作）。原生前台动作仍由既有 bar 投影表达，不混入 workspace 视图。
+ */
+const WORKSPACE_PROJECTED_METHODS = new Set(["observe", "workspace_click", "workspace_type_text"]);
+
+function workspaceTargetOf(
+  target: ComputerUseTargetReport | undefined,
+): { pid: number; windowId: number | null; appName: string | null } | undefined {
+  const pid = finiteNumber(target?.pid);
+  if (pid === undefined) return undefined;
+  return {
+    pid,
+    windowId: finiteNumber(target?.windowId) ?? null,
+    appName: boundedText(target?.app) ?? null,
+  };
+}
 
 function boundedText(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -45,7 +69,9 @@ function sanitizeTarget(
 }
 
 /** Single service-owned serial authority. Runtime maps remain projections only. */
-export function createLeaseAuthority(options: LeaseAuthorityOptions = {}): LeaseAuthority {
+export function createLeaseAuthority(
+  options: LeaseAuthorityOptions = {},
+): LeaseAuthority & WorkspaceProjectionReader {
   const now = options.now ?? Date.now;
   let current: LeaseRecord | undefined;
   let nextGeneration = 1;
@@ -54,6 +80,20 @@ export function createLeaseAuthority(options: LeaseAuthorityOptions = {}): Lease
   let lastTermination: LeaseTermination | undefined;
   // CUA-4：会话活动只是运行时上报的投影，按会话隔离并有上限，不能成为跨会话的共享事实。
   const sessions = new Map<string, ComputerUseSessionRecord>();
+  // M3：mini Computer 视图的宿主持有投影，与会话记录同生命周期、同上限。
+  const workspaces = new Map<string, WorkspaceProjection>();
+
+  const workspaceFor = (sessionId: string): WorkspaceProjection => {
+    let workspace = workspaces.get(sessionId);
+    if (!workspace) {
+      workspace = createWorkspaceProjection({
+        workspaceId: `workspace:${sessionId}`,
+        sessionId,
+      });
+      workspaces.set(sessionId, workspace);
+    }
+    return workspace;
+  };
 
   const serial = <T>(task: () => T | Promise<T>): Promise<T> => {
     const result = operation.then(task, task);
@@ -86,6 +126,7 @@ export function createLeaseAuthority(options: LeaseAuthorityOptions = {}): Lease
       const oldest = sessions.keys().next().value;
       if (oldest === undefined) break;
       sessions.delete(oldest);
+      workspaces.delete(oldest);
     }
   };
 
@@ -142,6 +183,8 @@ export function createLeaseAuthority(options: LeaseAuthorityOptions = {}): Lease
         if (admission.paused) return { status: "already_paused" as const, released: false };
         // 先关闭 admission 再释放：释放期间任何新的 begin_acquire 都必须被拒绝。
         admission = { paused: true, pausedAt: now() };
+        // M3：暂停是真实边界，workspace 投影同步进入 paused，mini Computer 视图如实呈现。
+        for (const workspace of workspaces.values()) workspace.notePaused(true);
         const released = await endActiveLease("paused");
         return { status: "paused" as const, released };
       }),
@@ -149,6 +192,7 @@ export function createLeaseAuthority(options: LeaseAuthorityOptions = {}): Lease
       serial(() => {
         if (!admission.paused) return { status: "not_paused" as const };
         admission = { paused: false };
+        for (const workspace of workspaces.values()) workspace.notePaused(false);
         return { status: "resumed" as const };
       }),
     getAdmission: () => admission,
@@ -208,12 +252,107 @@ export function createLeaseAuthority(options: LeaseAuthorityOptions = {}): Lease
         activity,
         ...(observation ? { observation } : {}),
       });
+      // M3：用同一份被接受的上报喂 mini Computer 投影（顺序、上限、乱序丢弃与活动记录
+      // 完全一致，不引入第二条事实来源）。投影只增改自身状态，绝不触发任何捕获。
+      if (WORKSPACE_PROJECTED_METHODS.has(method)) {
+        const workspace = workspaceFor(sessionId);
+        const target = workspaceTargetOf(report.target);
+        if (report.phase === "started") {
+          workspace.noteActionStart({ method, ...(target ? { target } : {}) });
+        } else if (report.observation) {
+          workspace.noteObservation({
+            ...(target ? { target } : {}),
+            result: {
+              image: {
+                observation_id: report.observation.id,
+                ...(finiteNumber(report.observation.width) !== undefined
+                  ? { width: report.observation.width }
+                  : {}),
+                ...(finiteNumber(report.observation.height) !== undefined
+                  ? { height: report.observation.height }
+                  : {}),
+              },
+            },
+          });
+        } else {
+          const cursor = report.workspaceCursor;
+          const cursorX = finiteNumber(cursor?.x);
+          const cursorY = finiteNumber(cursor?.y);
+          workspace.noteActionResult({
+            method,
+            ...(target ? { target } : {}),
+            result: {
+              ...(boundedText(report.effect) ? { effect: boundedText(report.effect) } : {}),
+              ...(boundedText(report.code) ? { code: boundedText(report.code) } : {}),
+            },
+            ...(cursorX !== undefined && cursorY !== undefined
+              ? { cursor: { x: cursorX, y: cursorY } }
+              : {}),
+          });
+        }
+      }
     },
     getSession: (sessionId) => sessions.get(sessionId),
+    // 纯读：显式映射成对外快照；重复读取不改变任何状态、不触发捕获，宿主内部的
+    // 零偷取证据等字段绝不跨界。
+    getWorkspace: (sessionId): ComputerUseWorkspaceSnapshot | undefined => {
+      const workspace = workspaces.get(sessionId);
+      if (!workspace) return undefined;
+      const snap = workspace.snapshot();
+      return {
+        workspaceId: snap.workspaceId,
+        backendId: snap.backendId,
+        state: snap.state,
+        ...(snap.target
+          ? {
+              target: {
+                pid: snap.target.pid,
+                windowId: snap.target.windowId,
+                appName: snap.target.appName,
+              },
+            }
+          : {}),
+        ...(snap.frame
+          ? {
+              frame: {
+                frameId: snap.frame.frameId,
+                capturedAt: snap.frame.capturedAt,
+                freshness: snap.frame.freshness,
+                dimensions: snap.frame.dimensions,
+              },
+            }
+          : {}),
+        ...(snap.cursor
+          ? {
+              cursor: {
+                x: snap.cursor.x,
+                y: snap.cursor.y,
+                updatedAt: snap.cursor.updatedAt,
+              },
+            }
+          : {}),
+        ...(snap.action
+          ? {
+              action: {
+                method: snap.action.method,
+                label: snap.action.label,
+                targetLabel: snap.action.targetLabel,
+                startedAt: snap.action.startedAt,
+                completedAt: snap.action.completedAt,
+                effect: snap.action.effect,
+                code: snap.action.code,
+              },
+            }
+          : {}),
+        framesCaptured: snap.framesCaptured,
+        updatedAt: snap.updatedAt,
+      };
+    },
     getStatus: () => current,
     close: async () => {
       current = undefined;
       sessions.clear();
+      workspaces.clear();
       await operation;
     },
   };

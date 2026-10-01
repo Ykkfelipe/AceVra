@@ -293,9 +293,62 @@ export type CuaComputerUseSessionView =
       pausedAt?: number;
       activity?: CuaSessionActivityView;
       observation?: CuaSessionObservationView;
+      /** M3: the session's own mini Computer workspace projection (pure read model). */
+      workspace?: CuaWorkspaceView;
       /** True while a Stop is expected to change something (lease held or action in flight). */
       stopMeaningful: boolean;
     };
+
+// ---------------------------------------------------------------------------
+// M3: mini Computer workspace view. Projected host-side from real workspace
+// activity only; the UI renders it and never captures from a poll.
+// ---------------------------------------------------------------------------
+
+export interface CuaWorkspaceTargetView {
+  pid: number;
+  windowId?: number | null;
+  app?: string | null;
+}
+
+export interface CuaWorkspaceFrameView {
+  /** Observation id of the signed Helper capture that produced this frame. */
+  frameId: string;
+  capturedAt: number;
+  dimensions?: { width: number; height: number } | null;
+  /** fresh = post-observation; superseded = a mutation happened after it; stale = target lost. */
+  freshness: "fresh" | "superseded" | "stale";
+}
+
+export interface CuaWorkspaceCursorView {
+  /** Logical agent cursor in the target window's coordinate space; display-only. */
+  x: number | null;
+  y: number | null;
+  updatedAt: number;
+}
+
+export interface CuaWorkspaceActionView {
+  method: string;
+  label: string;
+  targetLabel?: string | null;
+  startedAt?: number | null;
+  completedAt?: number | null;
+  effect?: string | null;
+  code?: string | null;
+}
+
+export interface CuaWorkspaceView {
+  workspaceId: string;
+  /** Router identity of the backend that owns this workspace (e.g. "agent-workspace"). */
+  backendId: string;
+  state: "idle" | "observing" | "acting" | "paused" | "failed" | "stale";
+  target?: CuaWorkspaceTargetView;
+  frame?: CuaWorkspaceFrameView;
+  cursor?: CuaWorkspaceCursorView;
+  action?: CuaWorkspaceActionView;
+  /** Frames produced by real observations (diagnostic evidence of the capture discipline). */
+  framesCaptured: number;
+  updatedAt: number;
+}
 
 export interface CuaPauseComputerUseResult {
   ok: boolean;

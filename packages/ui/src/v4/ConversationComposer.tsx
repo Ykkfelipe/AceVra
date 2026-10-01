@@ -154,6 +154,8 @@ import { useConversationSelectionReferences } from "@/v4/composer/useConversatio
 import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBackgroundWorkTrigger.js";
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
 import { ComputerUseBar } from "@/v4/composer/ComputerUseBar.js";
+import { MiniComputerPanel } from "@/v4/composer/MiniComputerPanel.js";
+import { useComputerUseSession } from "@/hooks/useComputerUseSession.js";
 import {
   V4ComposerModeSwitch,
   V4ComposerModelControls,
@@ -1145,6 +1147,9 @@ function ConversationComposerImpl({
     inputRoutingMode: mode,
   });
   const canStop = Boolean(snapshot?.control.canStop);
+  // M3：一个共享轮询同时喂 Computer Use bar 与 mini Computer 面板，避免第二个轮询
+  // 造成双倍宿主 RPC 与 Helper 对账；workspace 事实只来自该读模型。
+  const computerUseSession = useComputerUseSession({ sessionId, turnRunning: canStop });
   const modifiedEnterReversesDelivery = modifiedEnterSubmits && canStop;
   const hasText = text.trim().length > 0;
   const hasDraftToSubmit =
@@ -2323,7 +2328,7 @@ function ConversationComposerImpl({
       aria-hidden={isBlockedByInteraction ? true : undefined}
       style={isBlockedByInteraction ? { display: "none" } : undefined}
       className={cn(
-        "chat-composer-region z-20 w-full shrink-0 @container/composer",
+        "chat-composer-region relative z-20 w-full shrink-0 @container/composer",
         centered && "max-w-2xl",
       )}
     >
@@ -2336,7 +2341,17 @@ function ConversationComposerImpl({
         onChange={attachmentsApi.handleAttachmentInputChange}
       />
       {/* CUA-4 会话控制条：CUA 活动期间出现在 composer 上方；纯闲聊时不渲染、不轮询。 */}
-      <ComputerUseBar sessionId={sessionId ?? null} turnRunning={canStop} onStop={onStop} />
+      {/* M3 mini Computer 画中画：workspace 活跃期间悬浮在 composer 区右上方；
+          渲染它零捕获、零偷焦点，× 只隐藏面板。 */}
+      <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 flex justify-end">
+        <MiniComputerPanel
+          session={computerUseSession}
+          sessionId={sessionId ?? null}
+          turnRunning={canStop}
+          onStop={onStop}
+        />
+      </div>
+      <ComputerUseBar session={computerUseSession} turnRunning={canStop} onStop={onStop} />
       {visibleError ? (
         // 仅展示附件错误会漏掉会话级 lastError，任务失败后也应在输入框上方显示原因。
         // 这里复用旧 ChatErrorBanner 壳，只接收 SessionPane 已归一化后的当前错误。

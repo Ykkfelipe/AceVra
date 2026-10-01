@@ -24,6 +24,7 @@ import type {
 } from "@zcode/zcode-cua/broker";
 
 import type { LeaseAuthority, LeaseRecord } from "./lease-authority/contract.js";
+import type { WorkspaceProjectionReader } from "./lease-authority/workspace.js";
 
 /** The Helper answered `control_status`; its `lease_state` is the authoritative termination code. */
 export interface ControlStatusProbe {
@@ -36,6 +37,8 @@ export interface ControlStatusProbe {
 export interface CuaSessionViewDeps {
   authority: LeaseAuthority | undefined;
   host: ControlStatusProbe | undefined;
+  /** M3: mini Computer projection reader (the authority itself implements it). */
+  workspace?: WorkspaceProjectionReader;
 }
 
 const ACTIVE_STATES = new Set(["reserving", "active"]);
@@ -129,6 +132,74 @@ export async function describeComputerUseSession(
   view.paused = admission.paused;
   if (admission.pausedAt !== undefined) view.pausedAt = admission.pausedAt;
   if (activity) view.activity = { ...activity };
+  // M3：mini Computer 视图只暴露会话自己的 workspace 投影（纯读快照）；显式映射，
+  // 宿主内部的零偷取证据等字段绝不跨界。
+  const workspace = deps.workspace?.getWorkspace(sessionId);
+  if (workspace) {
+    view.workspace = {
+      workspaceId: workspace.workspaceId,
+      backendId: workspace.backendId,
+      state: workspace.state,
+      ...(workspace.target
+        ? {
+            target: {
+              pid: workspace.target.pid,
+              ...(workspace.target.windowId !== undefined && workspace.target.windowId !== null
+                ? { windowId: workspace.target.windowId }
+                : {}),
+              ...(workspace.target.appName ? { app: workspace.target.appName } : {}),
+            },
+          }
+        : {}),
+      ...(workspace.frame
+        ? {
+            frame: {
+              frameId: workspace.frame.frameId,
+              capturedAt: workspace.frame.capturedAt,
+              freshness: workspace.frame.freshness,
+              ...(workspace.frame.dimensions
+                ? {
+                    dimensions: {
+                      width: workspace.frame.dimensions.width,
+                      height: workspace.frame.dimensions.height,
+                    },
+                  }
+                : {}),
+            },
+          }
+        : {}),
+      ...(workspace.cursor
+        ? {
+            cursor: {
+              x: workspace.cursor.x,
+              y: workspace.cursor.y,
+              updatedAt: workspace.cursor.updatedAt,
+            },
+          }
+        : {}),
+      ...(workspace.action
+        ? {
+            action: {
+              method: workspace.action.method,
+              label: workspace.action.label,
+              ...(workspace.action.targetLabel !== undefined
+                ? { targetLabel: workspace.action.targetLabel }
+                : {}),
+              ...(workspace.action.startedAt !== undefined
+                ? { startedAt: workspace.action.startedAt }
+                : {}),
+              ...(workspace.action.completedAt !== undefined
+                ? { completedAt: workspace.action.completedAt }
+                : {}),
+              ...(workspace.action.effect !== undefined ? { effect: workspace.action.effect } : {}),
+              ...(workspace.action.code !== undefined ? { code: workspace.action.code } : {}),
+            },
+          }
+        : {}),
+      framesCaptured: workspace.framesCaptured,
+      updatedAt: workspace.updatedAt,
+    };
+  }
   return view;
 }
 

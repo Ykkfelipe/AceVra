@@ -22,10 +22,7 @@ import {
 } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import {
-  useComputerUseSession,
-  type UseComputerUseSessionResult,
-} from "@/hooks/useComputerUseSession.js";
+import type { UseComputerUseSessionResult } from "@/hooks/useComputerUseSession.js";
 import {
   resolveComputerUseShownState,
   stopConfirmed,
@@ -54,8 +51,11 @@ const MODE_MESSAGE_ID: Record<string, string> = {
 };
 
 export interface ComputerUseBarProps {
-  /** Task-scoped: the open conversation's session id. */
-  sessionId: string | null | undefined;
+  /**
+   * The shared `useComputerUseSession` poll hoisted by the composer. M3: the mini Computer
+   * panel reads the same poll — one poller feeds both projections.
+   */
+  session: UseComputerUseSessionResult;
   /** Low-latency turn running authority (composer snapshot `control.canStop`). */
   turnRunning: boolean;
   /** The conversation's existing turn stop command. */
@@ -63,8 +63,7 @@ export interface ComputerUseBarProps {
 }
 
 export function ComputerUseBar(props: ComputerUseBarProps) {
-  const { sessionId, turnRunning, onStop } = props;
-  const session = useComputerUseSession({ sessionId, turnRunning });
+  const { session, turnRunning, onStop } = props;
   if (!session.view.visible) return null;
   return <ComputerUseBarMounted session={session} turnRunning={turnRunning} onStop={onStop} />;
 }

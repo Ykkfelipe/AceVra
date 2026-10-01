@@ -543,6 +543,24 @@ export const TID_V4_COMPUTER_USE_BAR_PAUSE = "v4-computer-use-bar-pause";
 export const TID_V4_COMPUTER_USE_BAR_STOP = "v4-computer-use-bar-stop";
 /** CUA-4 会话控制条：最近快照预览 */
 export const TID_V4_COMPUTER_USE_BAR_PREVIEW = "v4-computer-use-bar-preview";
+/** M3 mini Computer 浮动面板（workspace 投影的画中画呈现） */
+export const TID_V4_MINI_COMPUTER = "v4-mini-computer";
+/** M3 mini Computer：关闭（仅隐藏面板，不影响任务/执行） */
+export const TID_V4_MINI_COMPUTER_CLOSE = "v4-mini-computer-close";
+/** M3 mini Computer：展开（同一 workspace 的更大呈现，非第二会话） */
+export const TID_V4_MINI_COMPUTER_EXPAND = "v4-mini-computer-expand";
+/** M3 mini Computer：workspace 帧画面 */
+export const TID_V4_MINI_COMPUTER_FRAME = "v4-mini-computer-frame";
+/** M3 mini Computer：逻辑 agent 光标覆盖层（仅显示，绝不移动物理光标） */
+export const TID_V4_MINI_COMPUTER_CURSOR = "v4-mini-computer-cursor";
+/** M3 mini Computer：当前动作说明（来自投影的真实活动） */
+export const TID_V4_MINI_COMPUTER_CAPTION = "v4-mini-computer-caption";
+/** M3 mini Computer：隐藏后的重开入口（workspace 仍相关时可见） */
+export const TID_V4_MINI_COMPUTER_REOPEN = "v4-mini-computer-reopen";
+/** M3 mini Computer：暂停（走真实 admission/pause 路径） */
+export const TID_V4_MINI_COMPUTER_PAUSE = "v4-mini-computer-pause";
+/** M3 mini Computer：停止（走真实停止路径） */
+export const TID_V4_MINI_COMPUTER_STOP = "v4-mini-computer-stop";
 /** v4 composer 发送按钮 */
 export const TID_V4_COMPOSER_SEND = "v4-composer-send";
 /** v4 暂停队列发送确认：清空队列并发送 */

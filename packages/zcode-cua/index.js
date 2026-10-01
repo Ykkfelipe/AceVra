@@ -33,6 +33,32 @@ function unavailable(text, code = "unavailable", effect = "refused") {
 }
 
 /**
+ * M3 workspace cursor report: where the click addressed, in the target window's own
+ * coordinate space — the explicit point when the model gave one, otherwise the element
+ * center the Helper resolved. Display-only facts for the mini Computer view; never the
+ * physical macOS cursor.
+ */
+function workspaceCursorOf(args, result) {
+  const point = args && typeof args.point === "object" && args.point !== null ? args.point : null;
+  if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    return { x: point.x, y: point.y };
+  }
+  // broker 回包是扁平 envelope：element_center 直接在顶层（structuredContent 是模型面包装后的形态）。
+  const body = result && typeof result === "object" ? result : null;
+  const nested =
+    body && typeof body.structuredContent === "object" && body.structuredContent !== null
+      ? body.structuredContent
+      : null;
+  const center =
+    (body && typeof body.element_center === "object" ? body.element_center : null) ??
+    (nested && typeof nested.element_center === "object" ? nested.element_center : null);
+  if (center && Number.isFinite(center.x) && Number.isFinite(center.y)) {
+    return { x: center.x, y: center.y };
+  }
+  return undefined;
+}
+
+/**
  * Computer Use runtime using the verified Helper broker.
  *
  * The broker module is imported lazily so this entry point stays free of node builtins for a
@@ -191,7 +217,8 @@ export function createComputerUseRuntime(options = {}) {
           ? input.context.turnId
           : sessionId;
       const workspaceAction = method === "workspace_click" || method === "workspace_type_text";
-      const mutating = method === "press" || method === "set_value" || foreground || workspaceAction;
+      const mutating =
+        method === "press" || method === "set_value" || foreground || workspaceAction;
       if (
         leaseAuthority &&
         typeof leaseAuthority.admission === "function" &&
@@ -225,13 +252,14 @@ export function createComputerUseRuntime(options = {}) {
         const { sanitizeObservationResult } = await import("./observe-result.js");
         // `callBrokerMethod` refuses a helper whose verified signature identity is missing or is
         // not one this build expects, so what reaches a model was produced by a verified helper.
-        const params = foreground || workspaceAction
-          ? {
-              ...input.arguments,
-              owner_session: input.context.sessionId,
-              owner_task: input.context.turnId || input.context.sessionId,
-            }
-          : (input?.arguments ?? {});
+        const params =
+          foreground || workspaceAction
+            ? {
+                ...input.arguments,
+                owner_session: input.context.sessionId,
+                owner_task: input.context.turnId || input.context.sessionId,
+              }
+            : (input?.arguments ?? {});
         let result;
         if (
           method === "acquire_control" &&
@@ -329,7 +357,8 @@ export function createComputerUseRuntime(options = {}) {
             accessibility: sanitized.accessibility,
           });
         }
-        const action = method === "press" || method === "set_value" || foreground || workspaceAction;
+        const action =
+          method === "press" || method === "set_value" || foreground || workspaceAction;
         const normalized = action ? normalizeComputerUseResult(sanitized, method) : sanitized;
         if (
           foreground &&
@@ -354,6 +383,10 @@ export function createComputerUseRuntime(options = {}) {
           method === "observe" && result && typeof result === "object" ? result.image : null;
         const observationId =
           image && typeof image === "object" ? identityText(image.observation_id) : undefined;
+        // M3：workspace 动作把目标与逻辑光标一并上报，宿主投影据此维护 mini Computer 视图；
+        // target 只使用 Helper 已确认的身份（与 observe 同一来源），绝不猜测。
+        const workspaceCursor =
+          method === "workspace_click" ? workspaceCursorOf(input?.arguments, result) : undefined;
         reportActivity({
           ...activityBase,
           phase: "completed",
@@ -367,7 +400,8 @@ export function createComputerUseRuntime(options = {}) {
           ...(typeof normalized.application_effect === "string"
             ? { applicationEffect: normalized.application_effect }
             : {}),
-          ...(method === "observe"
+          ...(workspaceCursor ? { workspaceCursor } : {}),
+          ...((method === "observe" || workspaceAction) && input?.arguments?.pid !== undefined
             ? { target: identities.target(sessionId, input?.arguments) }
             : {}),
           ...(observationId

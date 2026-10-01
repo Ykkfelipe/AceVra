@@ -508,6 +508,7 @@ import {
   type CuaPauseComputerUseResult,
   type CuaResumeComputerUseResult,
 } from "#src/cua-permission-broker/index.js";
+import type { WorkspaceProjectionReader } from "#src/cua-permission-broker/lease-authority/workspace.js";
 import {
   resolveWindowsCuaRuntime,
   WindowsCuaDevRuntimeResolutionError,
@@ -2409,7 +2410,9 @@ export function createLocalServices(options: {
       const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
       const host =
         helper && isDefaultCuaProductHelperCurrent(helper) ? helper.macPermissionHost : undefined;
-      return await describeComputerUseSession({ authority, host }, sessionId);
+      // M3：authority 自身就是 workspace 投影读者（结构化实现）；同一实例、纯读、零捕获。
+      const workspace = authority as WorkspaceProjectionReader | undefined;
+      return await describeComputerUseSession({ authority, host, workspace }, sessionId);
     },
     async pauseComputerUse(): Promise<CuaPauseComputerUseResult> {
       const authority = leaseAuthorityServers.get(services)?.authority;
