@@ -205,21 +205,60 @@ A low-level keyboard + mouse hook thread in the worker (Session 1) records **non
 jobs the control file is set to `paused` too. Mouse moves within 750 ms after agent input are
 ignored. `/agent/resume` clears the yield. Human control (`human_control`) never yields.
 
-### 4.5 Frames
+### 4.5 Frames — ComputerFrameStream (v2.2)
 
-- `GET /screen` unchanged (exact PNG; auth required).
-- `WS /ws/view` — one persistent socket per viewer for frames **and** human input (requires
-  `websockets` + Pillow). Auth: `X-AceVra-Token` header on the upgrade (or the dashboard cookie);
-  ≤ 4 viewers. One shared capture thread runs only while ≥ 1 viewer is connected, at the max fps
-  any viewer asked for (clamped 1–20).
+One capture source, two consumers with different semantics:
+
+```text
+capture source (Dell: WGC, fallback mss BitBlt)
+    ├── human watch stream  → /ws/view → Computer pane   (continuous, latest-frame, lossy)
+    └── agent observation   → GET /screen (PNG)          (sampled, converged, never dropped)
+```
+
+The contract is source-independent: any producer (Dell worker, future local Mac
+ScreenCaptureKit workspace backend, future cloud VM) that emits `ComputerFrame`s plus
+`ComputerCursor` events over the same message shapes can drive the same Computer pane. The
+renderer never assumes the Dell.
+
+- **Capture source (Dell)**: Windows Graphics Capture (`windows-capture`) is primary — measured
+  GDI BitBlt (mss) costs ≈ 180–350 ms/grab on this machine (the old ~3 fps ceiling, seq gaps
+  proved transport was NOT the bottleneck), while WGC delivers frames event-driven from the DWM
+  composition. If WGC is unavailable (denied/missing), the worker falls back to mss and says so
+  in `/health` (`stream.source = "wgc" | "gdi"`). The stream never draws the cursor into the
+  frame; the cursor is its own event stream (below). WGC probe stack: `windows-capture`,
+  installed with the same backup/rollback discipline as Pillow/websockets.
+- **Capture cadence**: one shared producer thread runs while ≥ 1 viewer exists, at the max viewer
+  fps (clamped 1–20). A tick advances `seq` and stores the newest frame only when the source
+  produced new pixels; a static desktop produces no new frames (the viewer keeps the last one).
+  Stage timings (`grab_ms`) and `capturedAt` (epoch ms) are recorded per frame.
+- `WS /ws/view` (requires `websockets` + Pillow). Auth: `X-AceVra-Token` header on the upgrade
+  (or the dashboard cookie); ≤ 4 viewers (`MAX_VIEWERS`).
   - client → server (JSON text): `{t:"view", fps, max_width, quality}`;
     `{t:"input", job_id, ev}` with `ev.kind ∈ move|down|up|dblclick|scroll|keydown|keyup|text|release`
     (`x,y` remote px; `button left|right|middle`; `dy` wheel clicks; `key` pyautogui name; `text`).
     Input is the **human** actor: it passes the §4.2 human gate (take-control acknowledged), else
     `{t:"error", code:"manual_control_inactive", reason}`.
-  - server → client: `{t:"frame", seq, width, height, sw, sh, cx, cy}` immediately followed by one
-    binary JPEG message (`sw,sh` = remote screen size, `cx,cy` = remote cursor); `{t:"state", job}`
-    on job changes; `{t:"error", …}`.
+  - server → client:
+    - `{t:"frame", seq, captured_at, width, height, sw, sh, cx, cy}` immediately followed by one
+      binary JPEG (`sw,sh` = remote screen size; `cx,cy` = cursor position at capture time,
+      advisory — the cursor event stream supersedes it).
+    - `{t:"cursor", seq, x, y}` — lightweight cursor updates from a dedicated ~24 Hz poller,
+      sent only on change, decoupled from frame fps so the pointer stays smooth between frames.
+    - `{t:"state", job}` on job changes; `{t:"error", …}`.
+- **Latest-frame semantics (no backlog)**: every stage keeps only the newest frame. The producer
+  stores one frame; each viewer's sender sends only the newest frame newer than what it last
+  sent; skipped intermediate seqs count as `dropped`. If a send would block behind transport,
+  the *next* tick supersedes it — freshness beats completeness everywhere.
+- **Ownership changes never touch the stream**: take-control / give-back only change the job
+  state (and the Mac's profile switch); the `/ws/view` socket and capture thread keep running.
+- **Profiles** (Mac side): watch 10 fps / ≤ 960 px / q60; control 15 fps / ≤ 1366 px / q65.
+- **Metrics (development only, no secrets)**: the worker logs a per-10 s stream summary to
+  `worker.log` (`capture_fps`, `sent`, `dropped`, `bytes`, `grab_ms_p50`, `source`) and exposes
+  `stream = {viewers, source, capture_fps, sent, dropped}` in `/health`. The Mac logs
+  capture→render latency at debug level. The production UI stays free of dashboards.
+- **Cursor ownership**: cursor events carry the latest position only; the renderer draws the
+  overlay dot directly from cursor events (outside React state). `owner` (agent|user) is derived
+  on the Mac from `deriveControl(job)` — the pane already knows who is driving.
 - No MJPEG endpoint (the socket replaces it).
 
 ### 4.5.1 Action → fresh observation contract
@@ -239,6 +278,13 @@ The grab itself is always fresh (`mss.grab` per call — there is no cache; the 
 `X-AceVra-Settle-Frames`, `X-AceVra-Converged` (0/1) report the observed convergence so the Mac
 can measure action → fresh-frame latency instead of guessing. Input routes themselves do not sleep
 for the UI; convergence is awaited where the observation is taken.
+
+**Stream freshness tie-in (§4.5)**: `/screen?after_frame_seq=N` additionally waits (same bounded
+deadline) until the stream producer's `seq > N` before converging. The Mac passes the relay's
+latest delivered frame seq as `preActionFrameSeq`, so a post-action observation is provably taken
+from a frame newer than the one the action was decided on. The human may watch frames N+1, N+2…
+while the agent takes only the one verified frame it needs — model vision is never invoked on
+every stream frame.
 
 ### 4.6 Health
 
