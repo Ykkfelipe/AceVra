@@ -121,6 +121,7 @@ export const remoteComputerToolEntry: ToolEntry = {
       "- Use it only when the user asked you to use that computer. Never for this Mac (local computer use stays as it is).",
       "- Start with action 'screenshot'; coordinates are pixels in that screenshot. Take another screenshot after actions to check the result.",
       "- If the user takes control or uses that computer, you are paused (error says so): wait and tell the user; do not retry in a loop.",
+      "- Unsaved-document safety (spec §3.4): the computer may show the user's restored app sessions. Never dismiss a Save / Don't save / Discard / Replace dialog for a document you did not create this turn — stop and ask the user, or choose the non-destructive option. Type only into a fresh empty document you created this turn. Never send ctrl+a, delete or alt+f4 without a fresh screenshot confirming the target.",
       "- Offline computers fail; nothing is ever done on this Mac instead.",
     ].join("\n"),
     readOnly: false,
