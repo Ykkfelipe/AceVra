@@ -1,460 +1,266 @@
-# The agent's own computer — design spec and plan
+# The agent's own computer — spec and plan (v2: SSH computers)
 
-Status: M1 (UI realignment) implemented with this change; M2–M5 proposed, awaiting user review.
-Date: 2026-10-01. Supersedes the user-facing parts of `acevra-execution-ux-m2e.md` (composer
-"Run on" control, Devices wording) and the "Run on selection" framing of
-`acevra-agent-execution-m2f.md`. Keeps their infrastructure (Task / TaskEvent / ExecutionTarget,
-`ExecutionTargets` / `RunOnTarget` / `TargetTask`). Extends `packages/zcode-cua/specs/
-computer-workspace.md` (ComputerBackend, AgentWorkspaceBackend, mini Computer).
+Status: M1 (UI realignment) implemented in `a59fdba`. **v2 (this revision)** replaces the M2–M5
+plan of revision 1 after inspecting the Dell. Date: 2026-10-01.
 
-## 1. Product direction (from the user)
+Superseded from revision 1 (kept only as history in git `263e502`): the Rust/C# Windows computer
+helper, running `packages/node` on Windows for GUI work, the account-api media relay, and
+WebRTC. The Dell **already runs its own AceVra computer-use worker**; the Mac app reuses it.
 
-The agent should get a **computer of its own** — screen, apps, browser, files, terminal — like
-Grok's and OpenAI's computer agents, not a "run commands on a target" feature. First computer: the
-user's **Dell, which runs Windows**, connected as an AceVra Node. In chat the agent simply uses its
-computer; the user can watch a **live view**, expand it, **take over**, and stop. There is no
-"Run on", "execution", "commands" or "capabilities" wording in normal UX. Settings only manage
-**Computers**: connect (pair), rename, remove, online/offline.
+Still valid from revision 1: product model (§3), wording, "never silently fall back to this Mac",
+deterministic AceVra-owned labels, and the M1 changes (§9).
 
-## 2. What is proven vs assumed today (source-verified at `612a970`)
+## 1. Product direction
 
-| Area                                           | State                                                                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pairing, device identity, presence, revocation | **Proven** (account E2E F): Ed25519 device key, code pairing, outbound WS `/v1/device-channel`, signed-nonce auth, no bearer/Clerk token on the node, revoke closes the socket (4001) and the node exits.                                                                                                                                                                                      |
-| Remote terminal work                           | **Proven** (account E2E G): structured process tasks, streamed TaskEvents, cancel, `running_unknown`, agent `RunOnTarget`.                                                                                                                                                                                                                                                                     |
-| Node on Windows                                | **Assumed, not run.** Static analysis: `win32` accepted (`packages/node/src/cli.ts`), PATHEXT resolution and safe batch invocation (`shell/windows.ts`), `taskkill /T /F` tree kill (`shell/kill.ts`), case-insensitive root policy (`shell/policy.ts`), chmod skipped on win32, no native deps. Gaps in §5.1.                                                                                 |
-| Graphical computer on a node                   | **Does not exist.** `computerUse` is a legal capability string (`packages/node/src/capabilities.ts`, `account-api/src/devices.ts`) but nothing provides it. No screen capture, input, UI tree or app launch on the node.                                                                                                                                                                       |
-| Live frame transport                           | **Does not exist.** The device channel is JSON text only, rejects binary, caps messages at 32 KiB both ways; every TaskEvent is a Postgres row; the desktop polls HTTP (UI 700 ms / 1.5 s). Unsuitable for frames.                                                                                                                                                                             |
-| Local Mac agent workspace                      | **Proven, snapshot-driven.** `ComputerUseRuntime.execute` → broker → signed Swift Helper. Mini Computer panel polls the session view every 1 s and fetches one PNG per observation id ("Snapshot, not a stream", `MiniComputerPanel.tsx`). No Take Over control yet.                                                                                                                           |
-| `ComputerBackend` abstraction                  | **Exists but is not on the live path.** `packages/zcode-cua/computer-backend.{js,d.ts}` (`perform(method,args,context)` + capabilities incl. unused `frameStream`), `computer-workspace-backend.js`, `createComputerBackendRouter` — instantiated only in tests. The live path calls `ComputerUseRuntime.execute({toolName, arguments, context})` directly, hard-gated to darwin (`index.js`). |
-| Model tool surface for Computer                | No first-class tool: the model writes JS in `node_repl` and calls `agent.computerUse["computer.*"]` (names in `capability-contract.js`). Targeting is Mac-specific (`pid`, CGWindow `window_id`, `bundle_id`, `AX*` roles, `option/command`).                                                                                                                                                  |
-| Activity labels                                | Product labels exist (`lib/computerActionLabel.ts` → `chat.computerAction.*`, en/zh). **Leak:** the `node_repl` row shows the model-authored cell `title` (e.g. Chinese "点击按钮") for computer calls (`lib/nodeReplToolDisplay.ts`, `renderers/node-repl.tsx`).                                                                                                                              |
+The agent gets a computer of its own — screen, apps, browser, files, terminal. Computers are a
+**list**: This Mac (the existing local Computer Use, unchanged), the paired AceVra Nodes (unchanged),
+and **SSH computers** — a machine running the AceVra worker that this Mac reaches over the user's
+own SSH (first: the Dell). More SSH computers (another server, a bigger machine) are added the same
+way. In chat the agent uses its computer; the user watches a live view, expands it, takes over,
+gives back, and stops. No approval prompt is needed to use the user's own computers; the worker's
+existing foreground policy (allow / ask / deny, fail-closed) still protects unsafe actions on the
+Dell.
 
-Nothing in the UI may imply a graphical remote capability before M2/M3 land.
+## 2. Verified facts (Dell, read-only inspection 2026-10-01)
+
+| Fact                                                                                                                              | Consequence                                                                      |
+| --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `ssh dell-node` works from the Mac (Tailscale, key auth, admin). SSH lands in Session 0                                           | SSH is only a transport; GUI work must happen in the worker running in Session 1 |
+| Windows 11 Pro Education 26200, AutoAdminLogon, user `notfe` in console Session 1, 1366×768                                       | The agent shares `notfe`'s desktop; the user sometimes uses it in person         |
+| `C:\agent\worker.py` (FastAPI) on `127.0.0.1:8765`, started at logon by task `AceVraWorkerInteractive`                            | The worker is the computer; only loopback; reached through an SSH tunnel         |
+| Duplicate worker on 8766 (manual start, no supervision), both share `agent-control.json`                                          | Collapse to one authoritative worker on 8765                                     |
+| Pixel routes require dashboard manual control; `CurrentBackend` posts without `job_id` → every agent pixel action 409s since 9/27 | Root cause of the Minecraft control failures; fix with an agent lease (§4.3)     |
+| `/hold` is not gated                                                                                                              | Gate it like every other input route                                             |
+| No auth on any route; no streaming; uvicorn output not logged; no watchdog; battery stop on the logon task                        | Token auth, MJPEG stream, rotating log, supervisor, battery-safe task            |
+| Cua Driver 0.29.1 (`cua-driver serve` on `\\.\pipe\cua-driver`); Hybrid backend routes AX windows to Cua                          | Unchanged; `/health` reports the pipe                                            |
 
 ## 3. Product model
 
-### 3.1 Computers
+### 3.1 Computers list
 
-A **Computer** is a machine the agent can use as its own. Kinds:
+| Kind                      | Where it runs                                    | GUI             | Terminal                  |
+| ------------------------- | ------------------------------------------------ | --------------- | ------------------------- |
+| This Mac                  | local Computer Use (`packages/zcode-cua`)        | unchanged       | Bash (unchanged)          |
+| Connected computer (Node) | paired AceVra Node via account-api               | none            | `RunOnTarget` (unchanged) |
+| **SSH computer** (new)    | AceVra worker on the remote host, via SSH tunnel | worker HTTP API | `ssh <alias>` PowerShell  |
 
-- **This Mac** — the local background agent workspace (`agent-workspace` backend). Already exists.
-- **Connected computer** — a paired AceVra Node (first: the Dell, Windows).
+Settings → Computers lists all three. **Add a computer** (SSH): enter the SSH host alias from
+`~/.ssh/config` (e.g. `dell-node`), a name ("Dell"), and the worker port (default 8765). **Test
+connection** opens the tunnel, fetches the worker token over SSH, and calls `/health`; only a
+passing test can be saved. Rows show name, "SSH computer", Online / Offline, Rename, Remove.
+Config (id, name, host alias, port) is stored locally; the token is never stored on the Mac's disk
+— it is fetched over SSH on each connect and kept in Main's memory.
 
-Computers are managed in Settings → AceVra Account → **Computers** (M1, implemented): name, "This
-computer" / "Connected computer" / "AceVra app" (another desktop install), Online / Offline /
-Removed, **Connect a computer** (existing pairing: start AceVra Node on the other computer, enter
-the code it shows, approve), Rename, Remove (= existing revoke). No capability lists.
+### 3.2 How a conversation uses a computer
 
-### 3.2 Which computer a conversation uses
+- Default: this Mac (unchanged). The UI declares `automatic` every turn (M1).
+- "Use my Dell …": the agent calls `ExecutionTargets` (now also lists SSH computers with
+  capabilities `computerUse` + `shell`), then:
+  - GUI → the **`Computer`** tool with that `targetId` (screenshot, click, double_click, move, drag,
+    scroll, type, key, hotkey, list_windows, activate_window). Screenshots come back as images.
+  - Terminal → `RunOnTarget` with that `targetId`; the process runs through `ssh <alias>` in
+    PowerShell, streams into the existing work card, and Stop kills it.
+- The local Computer Use SDK (`agent.computerUse` in `node_repl`) is **not** routed: its contract is
+  macOS-semantic (AX `semantic_ref`, `state_id`, Helper leases) and the user requires the Mac path
+  to stay unchanged. Both surfaces share the `ComputerBackend` vocabulary in `packages/zcode-cua`
+  (`remote-worker-backend.js` maps the worker API); the router is "which target the tool names".
+- Offline / tunnel down / worker down → the tool fails with `target_unavailable` /
+  `computer_offline`; nothing runs on this Mac.
 
-- **Default: this Mac**, exactly as today (Bash, files, browser, local Computer workspace). No
-  selector anywhere in chat. Rendering chat never starts work on any computer.
-- **The user asks in words**: "use my Dell", "do this on the Dell". The agent resolves the name
-  against the user's computers (today: `ExecutionTargets`; from M3: `Computers` tool) and binds
-  the conversation to that computer. Names are never hardcoded.
-- The **binding is per conversation**, owned by the CLI session record (today's
-  `record.executionTarget`, written only by user-input commands; from M3 also written by the
-  agent's `UseComputer` call after the user asked). One active computer per conversation at a
-  time; switching back ("do it here") clears it.
-- Open question Q6: an optional per-project default computer in project settings.
-
-### 3.3 What chat shows
+### 3.3 Chat surface
 
 ```text
-┌ Dell · Working ──────────────────────── [Expand] [Take over] [Stop] ┐
-│ ▣ live thumbnail (2–5 fps)   "Opening Notepad"  (AceVra-owned label)  │
-└──────────────────────────────────────────────────────────────────────┘
+┌ Dell · Working ──────────── [Expand] [Take over] [Stop] ┐
+│ ▣ live frames (MJPEG, ~5 fps, ≤640 px)    "Clicking"    │
+└────────────────────────────────────────────────────────┘
 ```
 
-- One **Computer card** per conversation, docked above the composer (same slot as today's mini
-  Computer panel). Title: `<computer name> · <status>`; status words: Working, Waiting, Needs you,
-  You're in control, Done, Stopped, Offline, Connection lost.
-- **Expand**: large live view of the same stream (10–15 fps), not a second session.
-- **Take over**: explicit user click; the agent pauses (admission closed), the user's
-  mouse/keyboard in the expanded view drive the computer; the remote screen shows a banner "You're
-  controlling this PC from AceVra". **Give back** resumes the agent. Physical input on the remote
-  computer itself always wins (agent yields, never reclaims automatically — same rule as macOS).
-- **Stop**: stops the turn and cancels the computer's in-flight work and terminal tasks.
-- Hiding the card never stops the agent; a compact "Dell · Working · Show" affordance remains.
-- Terminal work on a connected computer keeps showing as a compact work card ("Dell · Working",
-  latest output lines, Stop) — M1 wording, see §8.
-- **Offline**: card shows "Dell · Offline"; agent calls fail truthfully (`computer_offline`);
-  the agent tells the user; **never** silently falls back to this Mac. On reconnect the next
-  action proceeds; an action in flight at disconnect reports "unknown outcome" and the agent
-  re-observes before acting again.
+- The card appears for a conversation after its first `Computer` action on an SSH computer (the
+  same attach pattern as task cards: a Main push keyed by `sessionId`).
+- Live frames come from the worker's stream endpoint through the tunnel; Main parses MJPEG and
+  forwards JPEG frames to the subscribed renderer only while the card is visible (no polling of
+  `/screen` from React). Expanded view: same stream at higher fps/size.
+- **Take over** → worker `/agent/take-control`; agent paused, "You're in control" + **Give back**
+  (→ `/agent/resume`). While in control, clicks / scroll / typed keys in the expanded view are sent
+  as human input.
+- **Physical input on the Dell** → the worker pauses the job (yield). The card shows "You're using
+  the Dell — agent paused" with **Resume**. The agent's actions are refused with `user_active`
+  until resumed (same rule as macOS: never reclaim automatically).
+- **Stop** → worker `/agent/stop` and cancel of the conversation's SSH terminal tasks.
+- Agent cursor: the last agent target reported by `/status` is drawn on the frame.
+- Labels: `computers.activity.*` AceVra-owned i18n (en + zh) keyed by action name; never the model.
 
-### 3.4 Wording
+## 4. Worker HTTP contract v2 (the Dell side)
 
-| Use                                         | Never in normal UX                                                    |
-| ------------------------------------------- | --------------------------------------------------------------------- |
-| Computer, This computer, Connected computer | Device, Node, Target, Run on, Execution, Commands, Capabilities, Task |
-| Connect a computer, Remove                  | Pair a node, Revoke                                                   |
-| Dell · Working / Done / Stopped             | Task running / exit code / Tool callRunning                           |
+Single worker: `127.0.0.1:8765`. All JSON. Version string `2.0.0`.
 
-Engineering surfaces (gated `ACEVRA_ENGINEERING_TOOLS`, never in installed builds) may keep
-technical words.
+### 4.1 Auth
 
-## 4. Abstraction: one agent-computer model for Mac and Node
+- Token: 64 hex chars in `C:\ProgramData\AceVra\worker-token.txt`, ACL `notfe`, `Administrators`,
+  `SYSTEM` only (inheritance off). Created by the supervisor if missing; never logged.
+- Every route requires `X-AceVra-Token: <token>` **except** `GET /health` and the dashboard landing.
+- Dashboard: `GET /dashboard/login?token=…` sets cookie `acevra_worker` (HttpOnly,
+  SameSite=Strict, Path=/) and redirects to `/dashboard`; the cookie is accepted like the header.
+  `C:\agent\open-dashboard.cmd` opens that URL locally. `/dashboard` without auth shows a locked
+  page.
+- `Host` must be `127.0.0.1:<port>` or `localhost:<port>` (DNS-rebinding guard) → else 400.
+- Failures: `401 {"detail":{"code":"auth_required"}}`.
+- Dell-side clients (`agent.py` → `acevra_backend.CurrentBackend`, `computer.py`) send the token
+  from env `DELL_WORKER_TOKEN` (set by the worker for its children) or the file.
 
-Reuse `packages/zcode-cua` `ComputerBackend` — do not create a parallel stack.
+### 4.2 Actor-aware input gate
 
-### 4.1 Seam
+All input routes (`/move /click /doubleclick /drag /scroll /type /key /keydown /keyup /hotkey /look
+/mousedown /mouseup /hold`) take `job_id` and header `X-AceVra-Actor: agent|human` (default
+`human` — the dashboard).
 
-The live seam is `ComputerUseRuntime.execute({toolName, arguments, context})`, called by both
-`node_repl` entry points through the proxy broker (`node-repl-cua-bridge.js`). Plan:
+| Actor   | Admitted when                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------- |
+| `human` | unchanged: active job, matching `job_id`, `state == human_control`, `pause_ack`, `manual_control` |
+| `agent` | active job, matching `job_id`, `state == running`, no yield                                       |
 
-1. Put the existing `createComputerBackendRouter` on the live path: backends `native-mac`
-   (wraps today's `execute`, keeps the darwin gate inside), `agent-workspace` (today), and new
-   **`remote-node`**.
-2. Route by a new `context.computerId` (added to the bridge `requestContext` / `parseContext`),
-   resolved from the conversation's computer binding. Absent = this Mac (today's behaviour).
-3. `RemoteNodeComputerBackend.perform(method, args, ctx)` sends a reverse request
-   `interaction/computer {op: act|observe|list, sessionId, computerId, method, args}` (same
-   pattern as `interaction/executionTarget`) → services → host → Main → account-api → node →
-   Windows helper. It reports activity through the **same** `reportActivity` sideband
-   (`observation`, `workspaceCursor`, action) so the lease authority's workspace projection,
-   session view and Computer card are reused.
+Refusal: `409 {"detail":{"code":"agent_not_admitted"|"manual_control_inactive","reason":"no_active_job"|"stale_job_id"|"paused"|"human_control"|"user_active"|…}}`.
+Every admitted agent input renews an external job's lease.
 
-### 4.2 Provider-neutral types (new, `packages/shared/src/agent-computer.ts`, zod-validated)
+### 4.3 Jobs
 
-```ts
-type ComputerKind = "thisMac" | "node";
-interface ComputerRef {
-  computerId: string;
-  kind: ComputerKind;
-  displayName: string;
-  platform: "darwin" | "win32" | "linux";
-}
-interface ComputerSurface {
-  computerId: string;
-  surfaceId: string /* workspace / desktop / window */;
-  windowId?: string;
-}
-interface ComputerFrame {
-  sourceId: string; // backend instance (e.g. "remote-node:<deviceId>", "agent-workspace")
-  computerId: string;
-  surfaceId: string;
-  frameId: string;
-  seq: number;
-  capturedAt: string;
-  width: number;
-  height: number;
-  scale: number;
-  encoding: "png" | "jpeg" | "h264";
-  keyframe: boolean;
-  cursor?: { x: number; y: number; visible: boolean }; // agent's logical cursor
-}
-type ComputerActivityState =
-  | "idle"
-  | "working"
-  | "waiting"
-  | "needsUser"
-  | "userControlling"
-  | "offline"
-  | "connectionLost"
-  | "stopped";
-interface ComputerActivity {
-  computerId: string;
-  state: ComputerActivityState;
-  actionMethod?: string;
-  at: string;
-}
-```
+- Existing `/agent/start|cli-start` (worker spawns `agent.py`) unchanged, plus the child gets
+  `DELL_WORKER_TOKEN` and `CurrentBackend` sends `job_id` + `X-AceVra-Actor: agent` (409 fix).
+- **External jobs** (an outside brain, e.g. the Mac agent): `POST /agent/attach {task, controller}`
+  → `{ok, job}`; `job.mode = "external"`, no child process. Refused (`ok:false`) while another job
+  is active. `POST /agent/heartbeat {job_id}` renews; lease TTL 120 s; lapse → `stopped`,
+  `stop_reason: "lease_expired"`.
+- `/agent/pause|resume|take-control|stop` work for both; for external jobs pause is acknowledged
+  immediately (no child to acknowledge).
+- `GET /agent/job` adds `mode`, `controller`, `lease_expires_at`, `yield`, `stop_reason`.
 
-- `WorkspaceFrame` / `WorkspaceCursor` / `WorkspaceTarget` in
-  `computer-workspace-projection.d.ts` become thin adapters of these (Mac `pid`/`window_id` move
-  into an opaque `surfaceId`).
-- **ComputerFrameStream** = a subscription `subscribe(computerId, surfaceId, {maxFps, maxWidth})
-→ AsyncIterable<ComputerFrame + bytes>` with latest-frame-wins semantics. Consumers: Computer
-  card (PiP), expanded view, future web/mobile clients. Local Mac implementation: today's
-  observation frames (snapshot rate) behind the same interface; later a ScreenCaptureKit stream.
-  Remote implementation: §6.
-- UI gating changes from `backendId === "agent-workspace"` to "this session has a computer with
-  frames".
+### 4.4 Physical-input yield
 
-### 4.3 Owners and event order
+A low-level keyboard + mouse hook thread in the worker (Session 1) records **non-injected** input
+(`LLKHF_INJECTED` / `LLMHF_INJECTED` clear). If a job is `running`, the worker pauses it:
+`state = paused`, `pause_ack = true`, `yield = {reason: "physical_input", input, at}`; for `agent.py`
+jobs the control file is set to `paused` too. Mouse moves within 750 ms after agent input are
+ignored. `/agent/resume` clears the yield. Human control (`human_control`) never yields.
+
+### 4.5 Frames
+
+- `GET /screen` unchanged (exact PNG; auth required).
+- `GET /stream.mjpeg?fps=5&max_width=960&quality=60` → `multipart/x-mixed-replace; boundary=frame`;
+  each part `Content-Type: image/jpeg` + `X-Frame-Seq`, `X-Screen-Width`, `X-Screen-Height`. One
+  shared capture thread runs only while ≥1 viewer is connected; fps clamped 1–15; ≤4 viewers;
+  the physical cursor ring is drawn. Requires Pillow.
+
+### 4.6 Health
+
+`GET /health` (no auth, no secrets): `status, version, started_at, pid, port, width, height,
+mouse_x, mouse_y, auth: "token", job: {job_id, state, mode, controller, yield}|null,
+cua_pipe: "present"|"absent", stream: {viewers}`.
+
+### 4.7 Operations
+
+- Supervisor `C:\agent\supervise_worker.py` (logon task `AceVraWorkerInteractive`, Session 1,
+  runs `pythonw` directly, no battery conditions, no time limit) starts `run_worker.py`, checks
+  `/health` every 10 s, restarts with backoff 2→60 s (reset after 5 min healthy).
+- `run_worker.py` runs uvicorn with a rotating log `C:\agent\logs\worker.log` (5 MB × 5);
+  supervisor log `C:\agent\logs\supervisor.log`.
+- `cua-driver-serve` task runs `cua-driver.exe serve` directly (restart-on-failure effective).
+- The 8766 duplicate is retired (scripts moved to `backups/`; route strings no longer say 8766).
+- Every changed file is backed up first to `C:\agent\backups\computer-v2-<timestamp>\`; change log
+  `C:\agent\backups\computer-v2-<timestamp>\CHANGELOG.md` with rollback steps.
+
+## 5. Mac side architecture
 
 ```mermaid
 flowchart LR
-  subgraph Desktop
-    R[Renderer: Computer card / expanded view<br/>projection only] -->|IPC subscribe frames| M[Main: account + stream client<br/>no business state]
-    S[Services lease authority<br/>activity + workspace projection<br/>admission/pause] --> R
-    C[CLI session record<br/>computer binding owner] --> X[Computer router<br/>native-mac / agent-workspace / remote-node]
-    X -->|reportActivity| S
-    X -->|interaction/computer| M
+  subgraph Mac
+    R[Renderer<br/>Computers settings · live card<br/>presentation only] -- IPC computers.* --> M
+    CLI[Agent CLI<br/>Computer / RunOnTarget tools] -- interaction/executionTarget --> S[Services relay] --> M
+    M[Main: SSH computers infra<br/>store · tunnels · token in memory ·<br/>worker client · ssh process runner · MJPEG reader]
   end
-  M -->|HTTPS + WSS, Clerk| A[account-api<br/>device registry, stream relay in memory]
-  N[AceVra Node on Windows<br/>device key] -->|outbound WSS| A
-  N <-->|named pipe| H[Windows computer helper<br/>WGC capture, SendInput, UIA, launch]
+  M -- "ssh -N -L 127.0.0.1:P:127.0.0.1:8765" --> D[Dell worker 8765<br/>job / lease / yield owner]
+  M -- "ssh alias powershell -EncodedCommand" --> P[Dell PowerShell]
 ```
 
-| Fact                                       | Single owner                                          |
-| ------------------------------------------ | ----------------------------------------------------- |
-| Conversation ↔ computer binding            | CLI session record                                    |
-| Agent activity, pause/admission, take-over | Services lease authority (extended with `computerId`) |
-| Device identity, presence, revocation      | account-api device registry                           |
-| Live frames                                | The node's helper (source); never persisted anywhere  |
-| Hide/expand                                | Renderer presentation store (never touches execution) |
+| Fact                                      | Single owner                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------ |
+| SSH computer list (id, name, alias, port) | Main `sshComputersStore` (`userData/computers/ssh-computers.json`) |
+| Tunnel process, token                     | Main `sshComputerConnections` (memory; process infrastructure)     |
+| Job, lease, pause, take-over, yield       | **The worker** (Main only correlates `sessionId → job_id`)         |
+| Terminal task view/events                 | Main `sshProcessRunner` (same shape as `localProcessRunner`)       |
+| Which computer a tool call uses           | The tool call's `targetId` (agent decides after the user asks)     |
+| Card visibility / expand                  | Renderer presentation store                                        |
 
-Action event order (remote):
+Main is used because it already schedules processes (local runner, account tasks); it holds no
+conversation business state beyond the ephemeral correlation and attach push, like M2F.
+
+Event order (agent GUI action):
 
 ```mermaid
 sequenceDiagram
   participant Model
-  participant CLI as CLI (router)
-  participant Auth as Lease authority
+  participant CLI as CLI Computer tool
   participant Main
-  participant API as account-api
-  participant Node
-  participant Helper
-  Model->>CLI: computer click(elementRef | point)
-  CLI->>Auth: admission(sessionId, computerId)
-  Auth-->>CLI: open (not paused, not user-controlling)
-  CLI->>Main: interaction/computer {op: act, requestId}
-  Main->>API: POST /v1/computers/:id/actions (Clerk)
-  API->>Node: computer.act {requestId, method, args} (device WS)
-  Node->>Helper: act
-  Helper-->>Node: result + observationRef
-  Node-->>API: computer.result {requestId}
-  API-->>Main: result
-  Main-->>CLI: result (+ downscaled screenshot for the model)
-  CLI->>Auth: reportActivity(observation, cursor, method)
-  Auth-->>Main: projection → Renderer card "Dell · Working"
-```
-
-Idempotency: `requestId` per action; the node de-duplicates a replayed `requestId` and never
-re-executes it; a result arriving after the turn was stopped is dropped (stale). Disconnect while
-an action is in flight → `outcome_unknown`, never retried automatically.
-
-## 5. Windows computer on the Node
-
-### 5.1 Node runtime on Windows (gaps to close in M2)
-
-| Gap                                                                                           | Fix                                                                                                     |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| No installable build: `bin/acevra.mjs` runs TS through `tsx`, needs the repo + Node 24 + pnpm | Bundle (esbuild) + Node single-executable or bundled `node.exe`; MSI/MSIX installer                     |
-| No startup integration                                                                        | Per-user Scheduled Task "at logon" (runs in the interactive session, see §5.3); not a Session-0 service |
-| `SIGTERM` is never delivered on Windows; no `SIGBREAK` handler; children not in a Job Object  | Handle `SIGBREAK` + a stop pipe; put children in a kill-on-close Job Object                             |
-| Data root `%USERPROFILE%\.acevra-node`, `key.pem` inherits profile ACL                        | Move to `%LOCALAPPDATA%\AceVra\Node`; set an owner-only ACL on the key                                  |
-| Tests never run on Windows                                                                    | Add a Windows CI job for `packages/node` tests                                                          |
-
-### 5.2 Computer helper (new, Windows)
-
-A small signed helper process `acevra-computer-helper.exe`, spawned by the node inside the
-interactive user session, talking over a per-session named pipe (JSON control + binary frames).
-Recommended language: **Rust** (`windows` crate: Graphics Capture, Direct3D11, Media Foundation,
-UI Automation, SendInput; static binary, no runtime, crash-isolated from the node). Alternative:
-C# .NET 8 NativeAOT (faster UIA development, larger binary). Not a Node native addon (ABI
-rebuilds per Node version, harder signing, a crash takes the node down).
-
-| Capability     | Windows API                                                                                                                                                                                                                              |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Screen frames  | **Windows.Graphics.Capture** (Win10 1903+; per-monitor or per-window; Win11 can hide the yellow border) ; **DXGI Desktop Duplication** fallback; JPEG via WIC (v1), H.264 via Media Foundation HW encoder (v2)                           |
-| Input          | `SendInput` (pointer, keyboard, wheel). UIPI blocks input into elevated windows unless the helper is `uiAccess` (signed + installed under Program Files). Secure desktop (UAC, lock screen, Ctrl+Alt+Del) cannot be driven → `needsUser` |
-| Semantic UI    | **UI Automation** tree → neutral roles (`button`, `textField`, …), opaque element refs, Invoke/Value/Toggle patterns (works without moving the cursor)                                                                                   |
-| Apps/windows   | Enumerate top-level windows, launch via `ShellExecuteEx`, focus via UIA/`SetForegroundWindow` rules                                                                                                                                      |
-| Files/terminal | Existing node shell service (`RunOnTarget`) — unchanged                                                                                                                                                                                  |
-
-Zero-capture invariant (same as macOS): the helper captures only while a viewer is subscribed or
-the agent requested an observation.
-
-### 5.3 Session 0 and "the agent's own desktop" — feasibility verdict
-
-A Windows **service runs in Session 0** and cannot capture or inject into a user's desktop, so the
-helper must run inside an interactive session. Options:
-
-| Option                                                               | Own desktop?                                    | Feasibility                                                                                                                                                                                                                                                |
-| -------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A. Run in whoever is logged in at the console (logon task)           | No — shares the human's desktop                 | **Simplest, works on any edition.** Fine when the Dell is mostly unattended; physical input on the Dell makes the agent yield.                                                                                                                             |
-| B. Dedicated local user "AceVra Agent" with autologon to the console | Yes, while no human uses the console            | **Viable v1 for a dedicated server.** Autologon stores a password (LSA secret); a human logging in at the console replaces the session.                                                                                                                    |
-| C. Agent user in its own **RDP session** concurrent with the human   | Yes, truly concurrent                           | **Windows Server only** (2 admin sessions without RDS CALs). Windows 10/11 Pro allow one interactive session and block RDP loopback. Capture in a _disconnected_ RDP session is not proven (DXGI fails without a display; WGC unverified) — needs a spike. |
-| D. Virtual monitor (IddCx indirect display driver)                   | Partially — separate screen, shared input/focus | Needs a signed driver; keyboard focus is still session-global (same "focus war" as macOS). Not v1.                                                                                                                                                         |
-| E. Hyper-V / Windows Sandbox VM                                      | Yes, fully isolated                             | Heavy; Pro+; separate install and lifecycle. Future option.                                                                                                                                                                                                |
-
-**Verdict:** a truly separate agent desktop _concurrent_ with a human on the same Windows PC is
-only realistic on **Windows Server (option C, unproven capture-while-disconnected)** or in a VM.
-The **simplest viable v1 is B (dedicated agent user, autologon) if the Dell is a dedicated
-machine, otherwise A** with a visible "AceVra is using this PC" banner and yield-to-human. This
-depends on Q1 (Dell's Windows edition and whether someone uses it at the console).
-
-### 5.4 Packaging and signing
-
-- Authenticode certificate (OV or EV) for the node installer and helper, otherwise SmartScreen
-  warnings and no `uiAccess`. Q3.
-- Installer: per-user MSI/MSIX; installs node + helper under Program Files (required for
-  `uiAccess`), creates the logon task; uninstall removes the task and the data root on request.
-- Updates: signed manifest, same channel as the desktop alpha (later).
-
-## 6. Transport
-
-- **Control** (actions, results, element trees, model screenshots): new `computer.*`
-  request/response family. Small messages ride the existing device channel; model screenshots
-  (100–400 KB) do not fit the 32 KiB cap, so they go over the media channel below as a one-shot
-  frame referenced by `observationId`.
-- **Live frames**: a separate **media WebSocket**, outbound from the node
-  (`wss://…/v1/computer-stream`), authenticated by the device key plus a short-lived stream
-  ticket minted by account-api for `(accountId, deviceId, sessionId, viewerId)`. The desktop Main
-  opens the matching viewer socket with its Clerk session. account-api relays **binary frames in
-  memory** (no Postgres, no disk), latest-frame-wins per viewer.
-- **Encoding**: v1 JPEG frames (≤1280 px wide, q≈60, ~60–120 KB) at adaptive 2–5 fps for the card
-  and 8–10 fps expanded (~0.5–1 MB/s). v2 H.264 (hardware encode on Windows, WebCodecs decode in
-  the renderer) at 10–15 fps ≈ 1–2 Mbit/s.
-- **Latency targets**: card ≤1 s glass-to-glass; expanded/take-over input-to-photon ≤300 ms in the
-  same region.
-- **Backpressure**: credit-based — at most 2 frames in flight per viewer; the node captures the
-  next frame only on credit; nobody watching and no pending observation → no capture.
-- **WebRTC** (P2P with TURN) is the long-term low-latency path but adds signalling/TURN
-  infrastructure; deferred (Q7). Multi-instance account-api needs sticky routing of a node's
-  stream (today `live` sockets are per process).
-- **Security**:
-  - No inbound ports on the node; no human Clerk token on the node; device auth only.
-  - Removing (revoking) a computer closes its control and media sockets (extend `closeDevice`)
-    and the helper exits; tickets are invalidated.
-  - Take-over input is accepted by the node only during an explicit, user-initiated grant scoped
-    to `(sessionId, viewerId)`, shown on the remote screen, revocable from either side.
-  - Frames are never stored server-side; model screenshots live in the desktop's confined
-    observation directory like macOS frames.
-  - Agent actions on a remote computer go through the same approval policy as local Computer
-    actions (Q8 for the default).
-
-```mermaid
-sequenceDiagram
-  participant R as Renderer card
-  participant M as Main
-  participant API as account-api relay
-  participant N as Node + helper
-  R->>M: subscribe(computerId, maxFps)
-  M->>API: POST /v1/computers/:id/stream-tickets (Clerk)
-  API->>N: computer.stream.open {ticket} (device WS)
-  N->>API: WSS /v1/computer-stream (device sig + ticket)
-  M->>API: WSS viewer (Clerk + ticket)
-  loop latest-frame-wins
-    N->>API: binary frame (credit permitting)
-    API->>M: frame
-    M->>R: frame (IPC)
-    R-->>N: credit (via M, API)
+  participant Tun as SSH tunnel
+  participant W as Dell worker
+  Model->>CLI: Computer {targetId: ssh:dell, action: click 400,300}
+  CLI->>Main: interaction/executionTarget {op: computer}
+  Main->>Tun: ensure tunnel + token (ssh -N -L / ssh type token)
+  Main->>W: POST /agent/attach (first action of this session) → job_id
+  Main-->>Main: push ComputerSessionStarted(sessionId, computerId) → card
+  Main->>W: POST /click {job_id} X-AceVra-Actor: agent
+  alt admitted
+    W-->>Main: {ok:true}
+    Main-->>CLI: ok (+ screenshot for screenshot actions)
+  else paused / human_control / user_active
+    W-->>Main: 409 agent_not_admitted(reason)
+    Main-->>CLI: ok:false reason=computer_paused detail=reason
   end
-  R->>M: unsubscribe / card hidden
-  M->>API: close → API->>N: computer.stream.close (capture stops)
 ```
 
-## 7. Agent tools
+Tunnel lifecycle: `connecting → online → (exit) → backoff 1,2,4…30 s → connecting`; `stop` on
+remove/app quit. Readiness = `/health` 200 through the forwarded port. `ExitOnForwardFailure`,
+`ServerAliveInterval=15`, `ServerAliveCountMax=3`, `BatchMode=yes`; the local port is chosen free
+on `127.0.0.1`.
 
-- **One method vocabulary for every computer**, generalized from `capability-contract.js`:
-  `observe` (screenshot + element tree), `click` (point | elementRef), `type_text`, `key_press`
-  (neutral keys; modifiers `shift|ctrl|alt|meta`), `scroll`, `drag`, `list_apps`, `list_windows`,
-  `launch_app`, `press` / `set_value` (elementRef). The Mac backend maps these to existing Helper
-  methods; the Windows helper maps them to SendInput/UIA. Platform-specific detail stays inside
-  backends (opaque refs, no `AX*` roles or `pid` in the schema).
-- **Surface:** recommended a first-class `Computer` tool (JSON schema, provider computer-use
-  shape) backed by the same router, with `agent.computerUse` kept for existing `node_repl` code.
-  Alternative: only extend the `node_repl` facade with `computerId`. Q5.
-- **Selection tools:** `Computers` (list; replaces the model-facing name of `ExecutionTargets`)
-  and `UseComputer {computerId | "this"}` to bind the conversation after the user asked.
-- **Deterministic labels:** card captions and transcript rows for computer actions come only from
-  `computerActionLabel` → `chat.computerAction.*` (en/zh), optionally "… on {computer}". For
-  `node_repl` cells that call computer methods, the row shows the product label, not the
-  model-authored cell `title` (fixes the Chinese title leak). Labels never come from the model.
+Idempotency and fencing: tool calls carry `requestId`; the job lease belongs to one session; a
+second conversation using the same computer while a job is active gets `computer_busy`. The
+heartbeat runs every 30 s while the session's job is active and stops after 10 min without
+actions (lease then lapses on the worker).
 
-## 8. What happens to Run on / ExecutionTargets / RunOnTarget (M1, implemented)
+## 6. Protocol changes
 
-- The composer **Run on control and its caption are removed**, with its dead UI code
-  (`V4ComposerRunOnControl`, selection state in `executionTargetStore`, target-option
-  presentation helpers). Task attachment per conversation stays.
-- **Default target with no selector:** user turns always send `executionTarget: {kind:
-"automatic"}` (local workspaces with an account bridge), so Bash and every other tool run on this
-  Mac exactly as before. The CLI session record stays the single owner of the binding; declaring
-  `automatic` each turn guarantees no remote binding is left behind that the UI could not undo.
-  The wire `target` variant stays for the future conversation-computer binding (§3.2).
-- **Remote terminal work only when asked:** `ExecutionTargets`, `RunOnTarget`, `TargetTask` stay
-  registered (Desktop + local workspace), so "use my Dell to run the tests" keeps working until the
-  computer milestones land. Their descriptions no longer mention a UI "Run on" selection and say
-  to use them only when the user asked to work on another of their computers; the
-  `not_signed_in` message no longer suggests switching Run on. The provider-only context block
-  (only emitted when a session is bound) is reworded as "this conversation is set to use another
-  computer" (`source="conversation-computer"`).
-- **Settings → Computers** replaces Devices (en/zh): This computer / Connected computer / AceVra
-  app, Online / Offline / Removed, Connect a computer (with a one-line how-to), Rename, Remove.
-- **Work cards** keep the TaskView/TaskEvent projection with plain words: `Dell · Working`,
-  Waiting, Starting, Connection lost, Stopping, Done, Couldn't finish (`code N`), Stopped.
-- **Bug fix:** the generic tool row read "Tool callRunning": two adjacent plain strings in a flex
-  container merge into one anonymous flex item, so `gap-2` never applied. Strings are now wrapped
-  in their own spans (`QueuedSummaryContent.tsx`).
-- The engineering runner (gated, never in installed builds) defaults to this computer.
+- `packages/shared/src/execution-target-protocol.ts`: op `computer` `{sessionId, targetId,
+action}` → `{op:"computer", ok:true, result, image?: {base64, mimeType, width, height}}`; new
+  reasons `computer_paused`, `computer_busy`, `computer_offline`. Capabilities already include
+  `computerUse`.
+- `packages/shared/src/agent-computer.ts`: SSH computer config, status, session view, frame and
+  `IComputersPlatform` (optional on `IPlatformService`; Web has none).
+- CLI `Computer` tool (Desktop, local workspaces only), same registration as `RunOnTarget`.
 
-Later (M3) `RunOnTarget` becomes the terminal capability of a bound Computer; `ExecutionTargets`
-is presented to the model as `Computers`.
+## 7. Milestones
 
-## 9. Milestones (dependency order)
+- **M1** UI realignment — done (`a59fdba`).
+- **M2 (this change)** Dell worker v2 (§4) + SSH computers on the Mac (§5): settings add/test,
+  `Computer` + `RunOnTarget` on SSH computers, live card, take over / give back, step-aside, stop.
+- **M3** Polish: H.264 / WebSocket frames if MJPEG bandwidth hurts; multiple simultaneous
+  computers per conversation; per-project default computer.
+- **M4** This Mac as the same card model (mini Computer panel fed by the same frame interface).
 
-```mermaid
-flowchart LR
-  M1[M1 UI realignment<br/>done] --> M2[M2 Windows node runs<br/>+ view-only live stream]
-  M2 --> M3[M3 input + agent tools<br/>on the Dell]
-  M3 --> M4[M4 expand / take over<br/>polish, H.264]
-  M2 --> M5[M5 local Mac as the<br/>same Computer model]
-```
+Acceptance (M2, live): add `dell-node`; in a chat "use the Dell to open Notepad and type a line"
+and "run `python --version` on the Dell"; live frames visible; Take over / Give back; Stop; the
+Mac's frontmost app and cursor unchanged. Deterministic tests: fake worker HTTP server (mapping,
+lease, offline, take-over, yield, MJPEG consumer) and fake `ssh` (tunnel lifecycle, backoff,
+process runner, cancel).
 
-**M1 — UI realignment (this change).** Acceptance: no Run-on control or execution wording in the
-composer with or without a connected computer; Settings shows Computers with connect/rename/
-remove and online/offline; agent "use my Dell" still runs a terminal command on the node with a
-`Dell · Working` → `Done` card and working Stop; offline fails truthfully with nothing run locally;
-generic tool row shows "Tool call" and "Running" separately. Tests: UI unit tests
-(`executionTargetStore`, `submissionExecutionTarget`, `executionTaskCard`, `toolSummaryContent`,
-`executionPresentation`, `agentTaskAttachBridge`), CLI `execution-target-tools`, account E2E A/F/G.
+## 8. Risks
 
-**M2 — Windows node runs + view-only live stream.** Node Windows fixes (§5.1); Rust helper
-skeleton with WGC capture + JPEG; `computerView` capability advertised only when the helper is
-running in an interactive session; media relay in account-api; Main stream client; Computer card
-in chat showing the Dell screen when the conversation is bound ("show me my Dell"). Acceptance:
-pair the Dell on Windows 11; card shows its screen at ≥2 fps; no capture when nobody watches
-(helper capture counter stays flat); Remove closes the stream within 5 s; Session-0 install is
-refused with a clear message. Tests: node unit tests on Windows CI, helper integration test
-(capture one frame), account-api relay tests (ticket scope, no persistence, revocation), desktop
-E2E with a fake node frame source.
+- Tunnel or worker restart mid-action → `outcome_unknown`; the agent must re-screenshot.
+- Lock screen / UAC secure desktop / monitor sleep break capture and input on the Dell.
+- Low-level hooks are removed by Windows if the callback stalls; the callback only stamps time.
+- `SetCursorPos`-driven moves may or may not appear as injected; the 750 ms window covers agent moves.
+- Cua-eval scripts on the Dell that call the worker without a token stop working (documented).
 
-**M3 — Input + agent tools on the Dell.** SendInput, UIA tree + element refs, launch/list;
-`computer.*` control family; `Computers` / `UseComputer` / `Computer` tools; router on the live
-path; activity labels; offline/`outcome_unknown` semantics. Acceptance: "Use my Dell to open
-Notepad and type hello" completes with the card "Dell · Working" and product labels (en/zh, no
-model titles); Stop cancels mid-action; offline → truthful failure, nothing on this Mac; another
-conversation never sees Dell frames. Tests: router contract tests (no classification downgrade,
-fencing), helper tests per method, CLI tool tests, E2E with a scripted model against a fake helper,
-manual live acceptance on the real Dell.
+## 9. M1 (implemented in `a59fdba`) — unchanged
 
-**M4 — Expand / take over / polish.** Expanded view, take-over grant + remote banner, give back,
-physical-input yield on Windows, H.264 + WebCodecs, reconnect UX. Acceptance: take over → agent
-paused, user's clicks land on the Dell, give back resumes; Dell physical mouse → agent yields;
-latency targets met on LAN.
-
-**M5 — Local Mac as the same model.** The mini Computer panel becomes the Computer card fed by
-the same `ComputerFrameStream` (snapshot adapter first, ScreenCaptureKit stream later); "This
-Mac" appears as a computer the agent can bind; Take Over for the Mac workspace. Acceptance: the
-same card, controls and labels for Mac and Dell; zero-steal matrix stays green.
-
-## 10. Open questions for the user (decision-ready)
-
-1. **Dell's Windows edition** (10/11 Pro vs Windows Server) and **does anyone use it at the
-   console?** Decides own-desktop option B (dedicated autologon user) vs A (shared) vs C (Server
-   RDP session).
-2. OK to create a **dedicated Windows user "AceVra Agent" with autologon** on the Dell (password
-   stored by Windows as an LSA secret)?
-3. **Code-signing certificate** for Windows (OV ≈ cheaper, EV avoids SmartScreen ramp-up) — buy
-   now for M2?
-4. Helper language: **Rust (recommended)** or C# .NET AOT?
-5. Model tool surface: **first-class `Computer` tool (recommended)** or only the `node_repl`
-   `agent.computerUse` facade?
-6. Per-project **default computer** setting, or always "ask in words"?
-7. Frames **relayed through account-api** (simple, costs server bandwidth ~0.5–2 Mbit/s per
-   viewer) for v1, WebRTC later — agree?
-8. Approvals on the remote computer: **per-session grant on first use (recommended)** or per
-   action?
-
-## 11. Risks
-
-- Capture in a disconnected RDP session and WGC on Server editions are unproven (spike in M2).
-- UIPI/secure desktop limit what the agent can do without `uiAccess`; some apps expose poor UIA.
-- account-api single-process stream relay does not scale horizontally without sticky routing.
-- Bandwidth cost of relayed JPEG until H.264/WebRTC.
-- The node has never run on real Windows; M2 starts with that proof before any helper work.
+Composer Run-on control removed; user turns declare `automatic`; Settings → Computers; plain work
+card wording; agent tool descriptions reworded; "Tool callRunning" separator fixed.
