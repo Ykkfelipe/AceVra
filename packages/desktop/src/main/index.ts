@@ -251,14 +251,18 @@ import {
   WINDOWS_UPDATE_LOCK_RELEASE_GRACE_MS,
 } from "./windowsInstallResourceLocks.js";
 import { mainMemoryDiagnosticsRegistry } from "./mainMemoryDiagnostics.js";
-import { createAccountClerkBridge } from "./account/accountClerkBridge.js";
 import { initAccountMain, resolveAccountRuntime } from "./account/accountMain.js";
 import { registerPrivilegedSchemes } from "./account/accountScheme.js";
 
 // AceVra Account：Clerk bridge 须在 app ready 前创建，并早于统一的特权 scheme 注册——
 // registerSchemesAsPrivileged 会整体替换先前注册，所以两类 scheme 必须同一次声明。
 const accountRuntime = resolveAccountRuntime(process.env, app.isPackaged);
-if (accountRuntime.clerkEnabled) createAccountClerkBridge();
+if (accountRuntime.clerkEnabled) {
+  // 修复：Clerk bridge 及其 electron-store 依赖曾被静态导入，安装包缺 `conf` 时未配置账号的用户也在
+  // 启动时崩溃。改为仅在配置了账号时才动态加载——可选的账号依赖绝不能阻断本地启动。
+  const { createAccountClerkBridge } = await import("./account/accountClerkBridge.js");
+  createAccountClerkBridge();
+}
 registerPrivilegedSchemes(protocol, { accountEnabled: accountRuntime.clerkEnabled });
 const localMediaPreviewPathRegistry = createLocalMediaPreviewPathRegistry();
 

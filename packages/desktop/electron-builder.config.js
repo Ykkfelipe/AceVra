@@ -138,6 +138,10 @@ const REQUIRED_ASAR_RUNTIME_MODULES = [
   // pnpm hoisted 布局下 yazl 可能进了 app.asar，但子依赖 buffer-crc32 没有稳定随包进入产物；
   // 这里显式以 yazl 作为闭包根注入，让递归依赖收集把 ZIP 打包链路所需依赖一起补齐。
   "yazl",
+  // AceVra Account 会话持久化：@clerk/electron/storage 运行时 require("electron-store")，
+  // 而 electron-store 依赖 conf/atomically/dot-prop/type-fest 等；hoisted 布局下这些子依赖未随包进入
+  // app.asar，安装包启动即报 Cannot find module 'conf'。以 electron-store 为闭包根整体注入。
+  "electron-store",
   // yauzl 成为 desktop/services 的直接生产依赖后，pnpm list --prod 会把顶层 yauzl 节点
   // 去重成没有子依赖的空节点；electron-builder 的 pnpm collector 以先登记的空节点为准，
   // 跳过后面带完整子树的那个，于是 app.asar 里有 yauzl 却没有它的运行时依赖 pend，

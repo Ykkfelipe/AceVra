@@ -3,10 +3,11 @@ import { createClerkBridge } from "@clerk/electron";
 import { storage } from "@clerk/electron/storage";
 import { ACCOUNT_RENDERER_HOST, ACCOUNT_RENDERER_SCHEME } from "@zcode/shared";
 import { ACCOUNT_SCHEME } from "./accountScheme.js";
+import {
+  ACCOUNT_TOKEN_STORE_NAME,
+  setAccountSessionPersistent,
+} from "./accountSessionPersistence.js";
 import { selectAccountTokenStorage } from "./accountTokenStorage.js";
-
-/** electron-store file (under userData) holding Clerk's OS-encrypted tokens. */
-export const ACCOUNT_TOKEN_STORE_NAME = "acevra-account-tokens";
 
 /**
  * Official Clerk Electron bridge (main side). Persistence uses Clerk's supported
@@ -16,10 +17,6 @@ export const ACCOUNT_TOKEN_STORE_NAME = "acevra-account-tokens";
  *
  * Must run before app ready and BEFORE registerPrivilegedSchemes (see accountScheme.ts).
  */
-let sessionPersistent = false;
-/** Whether this launch persists the Clerk session (set when the bridge is created). */
-export const isAccountSessionPersistent = () => sessionPersistent;
-
 export function createAccountClerkBridge(): { cleanup(): void } {
   // Decide BEFORE any Clerk persistence runs: an unavailable keystore must never be touched.
   const selected = selectAccountTokenStorage({
@@ -27,7 +24,7 @@ export function createAccountClerkBridge(): { cleanup(): void } {
     createSecure: () => storage({ name: ACCOUNT_TOKEN_STORE_NAME }),
     diagnostic: (message) => console.warn(`[account] ${message}`),
   });
-  sessionPersistent = selected.persistent;
+  setAccountSessionPersistent(selected.persistent);
   return createClerkBridge({
     storage: selected.storage,
     renderer: {

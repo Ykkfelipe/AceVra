@@ -10,7 +10,10 @@ import { deriveDesktopCapabilities } from "./accountCapabilities.js";
 import { createAccountTasks } from "./accountTasks.js";
 import { createLocalProcessRunner } from "./localProcessRunner.js";
 import { createInstallationStore } from "./accountInstallation.js";
-import { ACCOUNT_TOKEN_STORE_NAME, isAccountSessionPersistent } from "./accountClerkBridge.js";
+import {
+  ACCOUNT_TOKEN_STORE_NAME,
+  isAccountSessionPersistent,
+} from "./accountSessionPersistence.js";
 import { resolveAccountConfig } from "./accountConfig.js";
 import { createAccountPreferenceStore } from "./accountPreference.js";
 import { createAccountSessionController } from "./accountSessionController.js";
