@@ -12,8 +12,10 @@ const log = createServiceLogger("computers");
 export async function captureConvergedScreenshot(
   client: WorkerClient | null,
   encode: (png: Buffer) => ComputerImage | null,
+  /** 直播流最新帧 seq：作为 preActionFrameSeq 传给 /screen（spec 4.5.1），0 = 无流。 */
+  afterFrameSeq = 0,
 ): Promise<WorkerResponse | { ok: true; image: ComputerImage | null }> {
-  const shot = client ? await client.screenPng() : null;
+  const shot = client ? await client.screenPng(afterFrameSeq) : null;
   if (!shot)
     return { ok: false, status: 0, code: "offline", reason: "screen_unavailable", json: null };
   log.debug(

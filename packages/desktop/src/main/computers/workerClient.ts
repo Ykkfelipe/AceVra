@@ -70,15 +70,17 @@ export function createWorkerClient(deps: {
       request("POST", path, body ?? {}, actor, timeoutMs),
     /**
      * GET /screen。worker 侧已按 spec 4.5.1 做了收敛等待：返回的是“最近一次输入之后、
-     * 连续两帧一致”的画面；settle 头用于测量 action→fresh-frame 延迟（不进 agent 载荷）。
+     * 连续两帧一致”的画面；`afterFrameSeq` 传入直播流的 preActionFrameSeq（spec 4.5.1），
+     * worker 会额外等到流 seq 越过该值。settle 头用于测量（不进 agent 载荷）。
      */
-    async screenPng(): Promise<{
+    async screenPng(afterFrameSeq = 0): Promise<{
       png: Buffer;
       settleMs: number | null;
       converged: boolean | null;
     } | null> {
       try {
-        const response = await deps.fetch(`${base}/screen`, {
+        const suffix = afterFrameSeq > 0 ? `?after_frame_seq=${Math.floor(afterFrameSeq)}` : "";
+        const response = await deps.fetch(`${base}/screen${suffix}`, {
           headers: headers(),
           signal: AbortSignal.timeout(20_000),
         });

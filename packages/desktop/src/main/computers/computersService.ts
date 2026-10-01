@@ -257,7 +257,9 @@ export function createComputersService(deps: {
 
   const runAction = (entry: Entry, jobId: string, action: ComputerAction) =>
     action.kind === "screenshot"
-      ? connect(entry).then((client) => captureConvergedScreenshot(client, deps.encodeScreenshot))
+      ? connect(entry).then((client) =>
+          captureConvergedScreenshot(client, deps.encodeScreenshot, entry.view.lastFrameSeq()),
+        )
       : runInputAction(action, (path, body) =>
           call(entry, (client) => client.post(path, { job_id: jobId, ...body }, "agent")),
         );

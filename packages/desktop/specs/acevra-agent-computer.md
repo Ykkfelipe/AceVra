@@ -256,7 +256,9 @@ renderer never assumes the Dell.
   the *next* tick supersedes it — freshness beats completeness everywhere.
 - **Ownership changes never touch the stream**: take-control / give-back only change the job
   state (and the Mac's profile switch); the `/ws/view` socket and capture thread keep running.
-- **Profiles** (Mac side): watch 10 fps / ≤ 960 px / q60; control 15 fps / ≤ 1366 px / q65.
+- **Profiles** (Mac side): watch 5 fps / ≤ 960 px / q60; control 15 fps / ≤ 1366 px / q65
+  (requested bounds; delivered fps is the capture ceiling above, ~3–4 under activity on the
+  current machine).
 - **Metrics (development only, no secrets)**: the worker logs a per-10 s stream summary to
   `worker.log` (`capture_fps`, `sent`, `dropped`, `bytes`, `grab_ms_p50`, `source`) and exposes
   `stream = {viewers, source, capture_fps, sent, dropped}` in `/health`. The Mac logs
