@@ -220,13 +220,18 @@ ScreenCaptureKit workspace backend, future cloud VM) that emits `ComputerFrame`s
 `ComputerCursor` events over the same message shapes can drive the same Computer pane. The
 renderer never assumes the Dell.
 
-- **Capture source (Dell)**: Windows Graphics Capture (`windows-capture`) is primary — measured
-  GDI BitBlt (mss) costs ≈ 180–350 ms/grab on this machine (the old ~3 fps ceiling, seq gaps
-  proved transport was NOT the bottleneck), while WGC delivers frames event-driven from the DWM
-  composition. If WGC is unavailable (denied/missing), the worker falls back to mss and says so
-  in `/health` (`stream.source = "wgc" | "gdi"`). The stream never draws the cursor into the
-  frame; the cursor is its own event stream (below). WGC probe stack: `windows-capture`,
-  installed with the same backup/rollback discipline as Pillow/websockets.
+- **Capture source (Dell)**: GDI BitBlt (mss) is the default producer. Measured on the target
+  machine (Latitude 3190, Intel UHD 605, driver 31.0.101.2141): BitBlt ≈ 180–240 ms p50 and
+  ≈ 700–740 ms p95 **with or without CAPTUREBLT, and equal at reduced size** — a fixed driver
+  cost, not Python/GIL overhead (raw-shot pipelining moved PIL decode out of the capture path).
+  Windows Graphics Capture (`windows-capture`) exists behind `ACEVRA_CAPTURE_SOURCE=wgc` for
+  machines with working GPU capture, but on this driver it delivered only ~2 fps (and DXGI
+  Desktop Duplication is access-denied), so it is not the default. `/health` reports
+  `stream.source = "gdi" | "wgc"`. The stream never draws the cursor into the frame; the cursor
+  is its own event stream (below). Honest ceiling: this machine delivers ~3–4 fps under activity
+  (the requested profile fps only bounds pacing); the latest-frame + cursor-event design keeps
+  the pane feeling live within that budget, and a future Windows capture stack (WGC on a fixed
+  driver, or hardware-encoded WebRTC) is the way past it — not more GDI tuning.
 - **Capture cadence**: one shared producer thread runs while ≥ 1 viewer exists, at the max viewer
   fps (clamped 1–20). A tick advances `seq` and stores the newest frame only when the source
   produced new pixels; a static desktop produces no new frames (the viewer keeps the last one).
