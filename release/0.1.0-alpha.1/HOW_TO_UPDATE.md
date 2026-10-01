@@ -113,10 +113,15 @@ Paths no longer include the label — everything goes into the fixed workspace.
 rm -rf "release/0.1.0-alpha.1/build"
 mkdir -p "release/0.1.0-alpha.1/build"
 
+ZCODE_ENV=production \
 ZCODE_DESKTOP_RELEASE_PROFILE=local-engineering-alpha \
 ZCODE_DESKTOP_DIST_DIR="/Users/felipemore/Projects/AceVra/release/0.1.0-alpha.1/build" \
 mise exec -- node scripts/mise-run.mjs pnpm --filter @zcode/desktop bundle -- --os mac --arch arm64
 ```
+
+`ZCODE_ENV=production` is required: no `.env*` file sets it, and an unset value falls back to
+`test`, which builds the Preview identity (different product name / bundle ID, `_TEST` artifact
+suffix) instead of `AceVra` / `com.acevra.desktop`.
 
 This creates:
 
@@ -182,6 +187,9 @@ Make sure these fields exist at the top and match `build-meta.json`:
 
 ## 7. Assemble the exact handoff
 
+Always clear `handoff/` first: it still holds the previous candidate's five files, and assembly
+refuses (or the installer rejects) anything other than the exact five-file set.
+
 ```bash
 rm -rf "release/0.1.0-alpha.1/handoff"
 
@@ -222,10 +230,12 @@ Quit AceVra normally with **Cmd+Q** or **AceVra → Quit AceVra**.
 Confirm it is fully closed:
 
 ```bash
-pgrep -fl 'AceVra Local Engineering Alpha|/Applications/AceVra.app/Contents/MacOS' || true
+pgrep -fl '^/Applications/AceVra\.app/Contents/' || true
 ```
 
-No output means it is closed. Do not install while AceVra is running.
+No output means it is closed. The pattern is anchored to processes executing from inside the
+bundle (main app and helpers) — the same rule the installer uses — so a shell or the installer
+that merely mentions the path as an argument does not count. Do not install while AceVra is running.
 
 ## 9. Install with backup and rollback
 
