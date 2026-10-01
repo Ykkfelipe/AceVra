@@ -67,28 +67,55 @@ Config (id, name, host alias, port) is stored locally; the token is never stored
 - Offline / tunnel down / worker down → the tool fails with `target_unavailable` /
   `computer_offline`; nothing runs on this Mac.
 
-### 3.3 Chat surface
+### 3.3 Chat surface — the Computer side panel
+
+No above-composer card for computers (terminal task cards stay as they are). The computer lives in
+the existing right-side panel (the tab host for Review/Browser/Terminal/Files) as a **Computer**
+tab, opened from the panel's "+" launcher, from Settings → Computers, or automatically (once per
+conversation) on the first `Computer` action on an SSH computer.
 
 ```text
-┌ Dell · Working ──────────── [Expand] [Take over] [Stop] ┐
-│ ▣ live frames (MJPEG, ~5 fps, ≤640 px)    "Clicking"    │
-└────────────────────────────────────────────────────────┘
+┌ Review │ Browser │ Computer ×                              ┐
+│ Dell · Working                     [Take control] [⤢] [■]  │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ live screen (letterboxed, remote cursor drawn)          │ │
+│ └─────────────────────────────────────────────────────────┘ │
+│ Typing text                                                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-- The card appears for a conversation after its first `Computer` action on an SSH computer (the
-  same attach pattern as task cards: a Main push keyed by `sessionId`).
-- Live frames come from the worker's stream endpoint through the tunnel; Main parses MJPEG and
-  forwards JPEG frames to the subscribed renderer only while the card is visible (no polling of
-  `/screen` from React). Expanded view: same stream at higher fps/size.
-- **Take over** → worker `/agent/take-control`; agent paused, "You're in control" + **Give back**
-  (→ `/agent/resume`). While in control, clicks / scroll / typed keys in the expanded view are sent
-  as human input.
-- **Physical input on the Dell** → the worker pauses the job (yield). The card shows "You're using
-  the Dell — agent paused" with **Resume**. The agent's actions are refused with `user_active`
-  until resumed (same rule as macOS: never reclaim automatically).
-- **Stop** → worker `/agent/stop` and cancel of the conversation's SSH terminal tasks.
-- Agent cursor: the last agent target reported by `/status` is drawn on the frame.
-- Labels: `computers.activity.*` AceVra-owned i18n (en + zh) keyed by action name; never the model.
+- Status line (i18n, AceVra-owned): `Working`, `Idle`, `Offline`, `Connecting`, `You're in
+control`, `You're using the Dell — agent paused` (+ **Resume**), `Paused`.
+- Activity line: `computers.activity.<action>` keyed by the last agent action; never model text.
+- **Live screen** streams only while the Computer tab is the visible tab of a visible panel (or the
+  expanded view is open). Hidden → the renderer unsubscribes → Main closes the stream → the worker's
+  capture thread stops when it has no viewers.
+- **Expand (⤢)** opens the same view as a full-window overlay (Esc/⤡ collapses back). The local
+  floating mini Computer for This Mac is untouched; unifying This Mac into this panel is M4.
+- **Take control** (AnyDesk-like): worker `/agent/take-control` (agent paused, acknowledged), then
+  mouse move/down/up/double-click/drag/scroll and key down/up/text from the focused view are sent
+  as human input over the stream socket. **Give back** or the `Ctrl+Option+Esc` chord →
+  `/agent/resume`. Keys are captured only while the view is focused and in control; captured keys
+  call `preventDefault` + `stopPropagation` so AceVra shortcuts never fire.
+- Take control with no active job (computer idle) first attaches an external job owned by the
+  panel (`controller: "acevra-mac:panel"`) so the worker's human gate has a job; Give back then
+  stops that job instead of resuming. While it exists, agent attaches get `computer_busy`.
+- **Physical input on the Dell** → the worker pauses the job (yield) and the panel shows "You're
+  using the Dell — agent paused" with **Resume**; never reclaimed automatically.
+- **Stop (■)** → worker `/agent/stop` and cancel of the conversation's SSH terminal tasks.
+
+Input mapping (pure functions, unit-tested):
+
+- Coordinates: the frame is drawn with `object-fit: contain`; a pointer at view `(vx, vy)` maps to
+  `scale = min(viewW / remoteW, viewH / remoteH)`, `offX = (viewW − remoteW·scale)/2`, `x =
+round((vx − offX)/scale)`; points in the letterbox bars are dropped (no clamp-to-edge clicks).
+- Mouse move throttled to ≤ 40 Hz (latest-wins); buttons/keys never dropped.
+- Modifiers (Mac → Windows, documented in Settings help): `Cmd → ctrl`, `Option → alt`, `Control →
+ctrl`, `Shift → shift`. Printable characters without Cmd/Control/Option → `text`; everything else
+  → `keydown`/`keyup` with pyautogui names (`enter`, `backspace`, `tab`, `esc`, arrows, `f1`…,
+  `delete`, `home`, `end`, `pageup`, `pagedown`). On blur / give back all held keys and buttons are
+  released. Ctrl+Alt+Del is not supported.
+- Frame rate: 5 fps / ≤ 960 px while watching; 15 fps / ≤ 1366 px while in control.
 
 ## 4. Worker HTTP contract v2 (the Dell side)
 
@@ -145,10 +172,19 @@ ignored. `/agent/resume` clears the yield. Human control (`human_control`) never
 ### 4.5 Frames
 
 - `GET /screen` unchanged (exact PNG; auth required).
-- `GET /stream.mjpeg?fps=5&max_width=960&quality=60` → `multipart/x-mixed-replace; boundary=frame`;
-  each part `Content-Type: image/jpeg` + `X-Frame-Seq`, `X-Screen-Width`, `X-Screen-Height`. One
-  shared capture thread runs only while ≥1 viewer is connected; fps clamped 1–15; ≤4 viewers;
-  the physical cursor ring is drawn. Requires Pillow.
+- `WS /ws/view` — one persistent socket per viewer for frames **and** human input (requires
+  `websockets` + Pillow). Auth: `X-AceVra-Token` header on the upgrade (or the dashboard cookie);
+  ≤ 4 viewers. One shared capture thread runs only while ≥ 1 viewer is connected, at the max fps
+  any viewer asked for (clamped 1–20).
+  - client → server (JSON text): `{t:"view", fps, max_width, quality}`;
+    `{t:"input", job_id, ev}` with `ev.kind ∈ move|down|up|dblclick|scroll|keydown|keyup|text|release`
+    (`x,y` remote px; `button left|right|middle`; `dy` wheel clicks; `key` pyautogui name; `text`).
+    Input is the **human** actor: it passes the §4.2 human gate (take-control acknowledged), else
+    `{t:"error", code:"manual_control_inactive", reason}`.
+  - server → client: `{t:"frame", seq, width, height, sw, sh, cx, cy}` immediately followed by one
+    binary JPEG message (`sw,sh` = remote screen size, `cx,cy` = remote cursor); `{t:"state", job}`
+    on job changes; `{t:"error", …}`.
+- No MJPEG endpoint (the socket replaces it).
 
 ### 4.6 Health
 
@@ -173,9 +209,9 @@ cua_pipe: "present"|"absent", stream: {viewers}`.
 ```mermaid
 flowchart LR
   subgraph Mac
-    R[Renderer<br/>Computers settings · live card<br/>presentation only] -- IPC computers.* --> M
+    R[Renderer<br/>Computers settings · Computer side panel<br/>presentation only] -- IPC computers.* --> M
     CLI[Agent CLI<br/>Computer / RunOnTarget tools] -- interaction/executionTarget --> S[Services relay] --> M
-    M[Main: SSH computers infra<br/>store · tunnels · token in memory ·<br/>worker client · ssh process runner · MJPEG reader]
+    M[Main: SSH computers infra<br/>store · tunnels · token in memory ·<br/>worker client · ssh process runner · view stream socket]
   end
   M -- "ssh -N -L 127.0.0.1:P:127.0.0.1:8765" --> D[Dell worker 8765<br/>job / lease / yield owner]
   M -- "ssh alias powershell -EncodedCommand" --> P[Dell PowerShell]
@@ -188,7 +224,8 @@ flowchart LR
 | Job, lease, pause, take-over, yield       | **The worker** (Main only correlates `sessionId → job_id`)         |
 | Terminal task view/events                 | Main `sshProcessRunner` (same shape as `localProcessRunner`)       |
 | Which computer a tool call uses           | The tool call's `targetId` (agent decides after the user asks)     |
-| Card visibility / expand                  | Renderer presentation store                                        |
+| Computer tab open / expanded / focused    | Renderer side-pane tab state (presentation only)                   |
+| Stream socket                             | Main `computerViewStreams` (ref-counted by renderer subscriptions) |
 
 Main is used because it already schedules processes (local runner, account tasks); it holds no
 conversation business state beyond the ephemeral correlation and attach push, like M2F.
@@ -206,7 +243,7 @@ sequenceDiagram
   CLI->>Main: interaction/executionTarget {op: computer}
   Main->>Tun: ensure tunnel + token (ssh -N -L / ssh type token)
   Main->>W: POST /agent/attach (first action of this session) → job_id
-  Main-->>Main: push ComputerSessionStarted(sessionId, computerId) → card
+  Main-->>Main: push ComputerSessionStarted(sessionId, computerId) → opens Computer tab once
   Main->>W: POST /click {job_id} X-AceVra-Actor: agent
   alt admitted
     W-->>Main: {ok:true}
@@ -215,6 +252,66 @@ sequenceDiagram
     W-->>Main: 409 agent_not_admitted(reason)
     Main-->>CLI: ok:false reason=computer_paused detail=reason
   end
+```
+
+Control lease ownership — one authority (the worker), three requesters:
+
+```mermaid
+stateDiagram-v2
+  [*] --> running: attach / start (agent lease)
+  running --> paused: physical input (yield) / pause
+  running --> human_control: Take control (Mac panel or dashboard)
+  paused --> human_control: Take control
+  human_control --> running: Give back (/agent/resume)
+  paused --> running: Resume
+  running --> stopped: Stop / lease_expired
+  paused --> stopped: Stop / lease_expired
+  human_control --> stopped: Stop
+```
+
+Take control / give back ordering:
+
+```mermaid
+sequenceDiagram
+  participant U as User (panel)
+  participant R as Renderer
+  participant Main
+  participant W as Dell worker
+  participant A as Agent (CLI Computer tool)
+  U->>R: Take control
+  R->>Main: computers.takeControl(computerId)
+  Main->>W: POST /agent/take-control {job_id}
+  W-->>W: state=human_control, pause_ack (external job: immediate)
+  W-->>Main: {ok, job}
+  Main-->>R: session view: control=human (fps 15)
+  A->>Main: Computer click
+  Main->>W: POST /click actor=agent → 409 human_control
+  Main-->>A: computer_paused (agent waits / tells user)
+  U->>R: mouse / keys (focused view)
+  R->>Main: input batch (throttled moves)
+  Main->>W: WS {t:"input", job_id, ev} (human gate)
+  U->>R: Give back / Ctrl+Option+Esc
+  R->>Main: release held inputs → computers.giveBack
+  Main->>W: WS {ev:release} → POST /agent/resume
+  W-->>Main: state=running
+  Main-->>R: control=agent (fps 5)
+```
+
+Stream lifecycle:
+
+```mermaid
+sequenceDiagram
+  participant P as Computer tab
+  participant Main
+  participant W as Worker /ws/view
+  P->>Main: subscribe(computerId) when tab visible (ref-count 0→1)
+  Main->>W: open WS (token header) + {t:"view", fps:5}
+  W-->>W: capture thread starts (viewers 0→1)
+  W-->>Main: frame meta + JPEG …
+  Main-->>P: computers.frame push (latest-wins, base64 JPEG)
+  P->>Main: unsubscribe when tab hidden / panel closed (ref-count 1→0)
+  Main->>W: close WS
+  W-->>W: capture thread stops (viewers 1→0)
 ```
 
 Tunnel lifecycle: `connecting → online → (exit) → backoff 1,2,4…30 s → connecting`; `stop` on
@@ -241,16 +338,19 @@ action}` → `{op:"computer", ok:true, result, image?: {base64, mimeType, width,
 
 - **M1** UI realignment — done (`a59fdba`).
 - **M2 (this change)** Dell worker v2 (§4) + SSH computers on the Mac (§5): settings add/test,
-  `Computer` + `RunOnTarget` on SSH computers, live card, take over / give back, step-aside, stop.
-- **M3** Polish: H.264 / WebSocket frames if MJPEG bandwidth hurts; multiple simultaneous
-  computers per conversation; per-project default computer.
-- **M4** This Mac as the same card model (mini Computer panel fed by the same frame interface).
+  `Computer` + `RunOnTarget` on SSH computers, Computer side panel (live view, expand, Take
+  control with mouse/keyboard, give back, step-aside, stop).
+- **M3** Polish: H.264 if JPEG bandwidth hurts; multiple simultaneous computers per conversation;
+  per-project default computer; clipboard sync.
+- **M4** This Mac in the same Computer panel (fed by the local frame interface).
 
 Acceptance (M2, live): add `dell-node`; in a chat "use the Dell to open Notepad and type a line"
-and "run `python --version` on the Dell"; live frames visible; Take over / Give back; Stop; the
-Mac's frontmost app and cursor unchanged. Deterministic tests: fake worker HTTP server (mapping,
-lease, offline, take-over, yield, MJPEG consumer) and fake `ssh` (tunnel lifecycle, backoff,
-process runner, cancel).
+and "run `python --version` on the Dell"; open the Computer panel, expand it, Take control, move
+the mouse and type into Notepad from the Mac view, Give back, the agent resumes; Stop; the Mac's
+frontmost app and cursor unchanged. Deterministic tests: fake worker HTTP + WS server (action
+mapping, attach/lease, offline, take-control, yield, stream start/stop with subscriptions, human
+input over the socket), fake `ssh` (tunnel lifecycle, backoff, process runner, cancel), and UI
+pure functions (letterbox mapping, modifier/key mapping, throttling, no subscription when hidden).
 
 ## 8. Risks
 
