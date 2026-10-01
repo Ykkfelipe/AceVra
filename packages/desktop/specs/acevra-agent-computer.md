@@ -70,9 +70,11 @@ Config (id, name, host alias, port) is stored locally; the token is never stored
 ### 3.3 Chat surface — the Computer side panel
 
 No above-composer card for computers (terminal task cards stay as they are). The computer lives in
-the existing right-side panel (the tab host for Review/Browser/Terminal/Files) as a **Computer**
-tab, opened from the panel's "+" launcher, from Settings → Computers, or automatically (once per
-conversation) on the first `Computer` action on an SSH computer.
+the existing toggled right side pane as **one more tab type**, `computer`, registered exactly like
+Terminal and Browser (side-pane tab model, "Open tab" launcher entry **Computer** next to Review /
+Terminal / Browser, tab trigger icon + title, persistence, i18n). It is opened from that launcher,
+from Settings → Computers, or automatically (once per conversation) on the first `Computer` action
+on an SSH computer. No new layout framework, no agent identity header, no extra tabs.
 
 ```text
 ┌ Review │ Browser │ Computer ×                              ┐
@@ -87,11 +89,13 @@ conversation) on the first `Computer` action on an SSH computer.
 - Status line (i18n, AceVra-owned): `Working`, `Idle`, `Offline`, `Connecting`, `You're in
 control`, `You're using the Dell — agent paused` (+ **Resume**), `Paused`.
 - Activity line: `computers.activity.<action>` keyed by the last agent action; never model text.
-- **Live screen** streams only while the Computer tab is the visible tab of a visible panel (or the
-  expanded view is open). Hidden → the renderer unsubscribes → Main closes the stream → the worker's
-  capture thread stops when it has no viewers.
-- **Expand (⤢)** opens the same view as a full-window overlay (Esc/⤡ collapses back). The local
-  floating mini Computer for This Mac is untouched; unifying This Mac into this panel is M4.
+- **Live screen** streams only while the Computer tab is the active tab of a visible side pane.
+  Hidden → the renderer unsubscribes → Main closes the stream → the worker's capture thread stops
+  when it has no viewers.
+- **Expand (⤢)** reuses the pane's own sizing: it resizes the existing side-pane panel to its
+  maximum width (the pane's `maxSize`) and remembers the previous width; **Collapse (⤡)** restores
+  it. No new window or overlay. The local floating mini Computer for This Mac is untouched;
+  unifying This Mac into this tab is M4.
 - **Take control** (AnyDesk-like): worker `/agent/take-control` (agent paused, acknowledged), then
   mouse move/down/up/double-click/drag/scroll and key down/up/text from the focused view are sent
   as human input over the stream socket. **Give back** or the `Ctrl+Option+Esc` chord →
