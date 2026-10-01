@@ -1,0 +1,164 @@
+# Background-first Computer Workspace (agent works while the user keeps the foreground)
+
+Status: proposed. Owner: CUA (packages/zcode-cua + packages/services + packages/ui).
+Date: 2026-10-01. Supersedes nothing; extends `specs/computer-use.md`.
+
+## Goal
+
+A persistent agent uses the computer **while the user keeps their own foreground**: the user
+watches a video, works, or chats, and never loses focus to the agent. The agent's work happens
+in a dedicated **workspace** rendered as a live mini view ("little screen") inside AceVra,
+expandable on demand. When an action genuinely cannot run in the background, the agent
+escalates through the existing exclusive-foreground lease — visibly, with the proven
+instant-yield-to-user semantics.
+
+Reference behavior the product is measured against: Codex / Claude desktop computer use.
+
+## What is already proven (foundation this spec builds on)
+
+Live on the installed `963a9007` candidate, through the sanctioned node_repl cell path:
+
+- Observation → `foreground_geometry` registry id → `acquire_control` confirmed by the Helper
+  with the verified `requirement` attestation → lease-authority commit succeeds →
+  lease `active`.
+- The Computer Use bar renders `exclusiveActive` only after the authority commit, with
+  Pause and Stop enabled.
+- A genuine physical mouse move by the user interrupts the lease; the bar reports
+  `yieldedToUser` with "Your physical input took over. The agent won't reclaim control
+  automatically." — no automatic reacquisition.
+- Background-safe semantic classification (`BACKGROUND_SAFE`, `BEST_EFFORT_BACKGROUND`,
+  `REQUIRES_FOREGROUND`, `EXCLUSIVE_FOREGROUND`) already exists in the Helper contract.
+
+Defect fixes this depends on (committed): uppercase Helper UUID acceptance (`9b70edd`) and
+the short-identity `requirement` field (`963a900`).
+
+## The macOS input truth this design must respect
+
+Real synthesized keyboard/pointer events (Quartz/CGEvent) are delivered to the session's
+frontmost surface. There is no supported API to deliver them to a background window. Therefore
+"background" can only mean one of:
+
+1. **Background semantic actions** — AX-level `press` / `set_value` on background windows
+   (already implemented; classification-owned by the Helper). Works for AX-writable targets;
+   honestly refused otherwise (e.g. TextEdit's AXValue write refusal observed live).
+2. **Workspace-frontmost actions** — the target app is frontmost *on the agent's own virtual
+display*, so synthesized events land on it while the user's physical display keeps the user's
+frontmost app and focus.
+
+The workspace (2) is the mechanism that makes "the agent just works in the background" true
+for arbitrary apps, and it is what the mini view shows.
+
+## Architecture
+
+### ComputerBackend (packages/zcode-cua)
+
+Single interface, two implementations, no second protocol stack:
+
+```
+interface ComputerBackend {
+  capabilities(): BackgroundCapabilityReport;        // per-method, from the Helper
+  observe(target: TargetRef): Promise<Observation>;  // existing observe contract
+  act(action: Action): Promise<ActionResult>;         // classified, envelope-preserving
+}
+```
+
+- `NativeCuaBackend` — wraps the current runtime unchanged (background semantics +
+  foreground escalation). This is the only backend that talks to the Helper.
+- `WorkspaceBackend` — composes `NativeCuaBackend` with the agent workspace: target
+  placement, workspace-scoped observation, and background-first routing. It never invents a
+  second Helper, broker, lease authority, or credential surface.
+
+### Agent workspace (Helper-owned, macOS)
+
+- A **virtual display** created by the signed Helper (`CGVirtualDisplay`). Apps the agent
+  drives are placed on it. The user's physical display, focus, and Spaces are untouched.
+- Fallback if the virtual display path is rejected at review: a dedicated offscreen
+  Space + AX-only actions (no synthesized events in background mode; escalation still
+  available). The routing layer treats the fallback as a capability downgrade, not a
+  behavior change.
+- **Per-window live capture** via ScreenCaptureKit (existing capture rung) streams the
+  workspace surface to the UI for the mini view. Frames reuse the existing observation
+  pipeline (`observation_id`, sanitization, preview reader) — no new artifact channel.
+
+### Routing policy (single owner: services layer, classification stays Helper-owned)
+
+For every action, in order:
+
+1. Helper classifies the method/target (`BACKGROUND_SAFE` … `EXCLUSIVE_FOREGROUND`).
+2. `BACKGROUND_SAFE` / `BEST_EFFORT_BACKGROUND` → execute as a background semantic action on
+   the workspace target.
+3. Workspace-frontmost synthesis is permitted only for targets placed on the agent's virtual
+   display, and only under an **active exclusive lease scoped to the workspace** — the same
+   lease, admission, pause, and yield semantics as today, never a parallel mechanism.
+4. `REQUIRES_FOREGROUND` / `EXCLUSIVE_FOREGROUND` on a user-visible target → the existing
+   foreground lease flow, unchanged (visible takeover, instant physical yield).
+5. Anything else → refuse with the honest envelope. **The router never downgrades a
+   classification.** No timeouts papering over classification.
+
+### Mini Computer view (packages/ui)
+
+- An expandable panel in the conversation surface that renders the workspace stream and
+  reuses the existing Computer Use bar semantics (`pause`, `stop`, yield states).
+- The bar remains the single projection of authoritative state (lease authority + Helper
+  activity); the mini view adds pixels, not state. No second state machine in the UI.
+
+## State owners and event order
+
+- Helper: ground truth for classification, observation registry, identity.
+- Lease authority: admission (pause/resume), lease lifecycle, activity projection input.
+- Services: routing decisions, backend selection, workspace lifecycle.
+- UI: projection only (existing bar + new stream view).
+
+Event order for a background action: classify → admission check → workspace-targeted
+semantic call → activity report → bar/mini-view projection. For escalation: classify →
+begin_acquire → Helper confirm (with `requirement`) → authority commit → UI exclusive →
+physical input yields → authority release → UI `yieldedToUser`.
+
+## Security invariants
+
+- No new credential, socket, token, or env surface. The workspace rides the existing broker,
+  hardened transport, and lease authority.
+- The virtual display is **not** a TCC bypass: capture and AX use the Helper's existing
+  grants; nothing observes the user's physical display beyond today's contract.
+- Synthesized events require an active exclusive lease exactly as today, regardless of which
+  display the target sits on.
+- node_repl cells, Bash, and tool env see nothing new (presence-checked in the acceptance
+  matrix).
+
+## Acceptance scenarios
+
+1. **Background while user works**: user plays a video in the foreground; the agent types
+   into a workspace-placed editor; the user's frontmost app and focus never change
+   (InvariantProbe frontmost timeline shows zero steals); the bar shows background activity;
+   the mini view streams the workspace.
+2. **Escalation with yield**: an action classified `EXCLUSIVE_FOREGROUND` on a user-visible
+   target takes the proven lease path; the user's physical input returns control instantly
+   (`yieldedToUser`, no reacquisition).
+3. **Honest refusal**: a background semantic action against an AX-unwritable target returns
+   the refused envelope (as observed with TextEdit AXValue) — surfaced, never faked.
+4. **Controls unchanged**: Pause closes admission and releases leases; Stop cleans held
+   input; both from the real UI, in background and foreground modes alike.
+
+## Non-goals
+
+- Mobile / `web-remote-replayable` semantics changes.
+- Remote sessions, external relay changes.
+- Any change to the credential capture, lease-authority policy, or Helper identity model.
+
+## Milestones
+
+- **M1 — ComputerBackend abstraction**: interface, `NativeCuaBackend`, routing with
+  classification-preservation tests (router cannot downgrade; escalation preserved).
+- **M2 — Workspace**: Helper virtual display + placement + workspace-scoped lease; fallback
+  mode; per-window capture stream.
+- **M3 — Mini view**: expandable panel + stream + bar reuse.
+- **M4 — Acceptance extension**: background matrix (frontmost-timeline zero-steal proof,
+  background semantic pass/refusal truthfulness, escalation-yield replay, pause/stop parity).
+
+## Risks
+
+- `CGVirtualDisplay` is a private API; behavior across macOS upgrades is the main risk and
+  the reason the fallback mode is part of the spec, not an afterthought.
+- AX coverage varies per app; background mode is honest about coverage rather than
+  approximating with foreground synthesis.
+- Capture perf on the mini view is bounded by the existing observation limits.
