@@ -107,4 +107,5 @@ consumer).
 
 No file sync: the project must already exist on the node. Task events are polled (no push to the
 desktop yet). Liveness assumes one control-plane instance. Executables are unrestricted inside
-allowed roots. The agent harness does not yet call `startRemoteProcess`.
+allowed roots. The agent harness calls `startRemoteProcess` since M2F
+(`acevra-agent-execution-m2f.md`).

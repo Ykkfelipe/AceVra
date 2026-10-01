@@ -25,6 +25,9 @@ table, task protocol, IPC task command, remote service or agent tool. Reuses `Ex
 
 ## Honest gap (unchanged from M2D)
 
+Superseded by M2F (`acevra-agent-execution-m2f.md`): process-execution tools now follow the Run-on
+selection and the menu caption describes that. The text below records the M2E state.
+
 The main agent's tool registry does not call `startRemoteProcess`; agent tools always run where the
 agent runs (this desktop or the remote workspace host). Therefore the Run-on selection today:
 
