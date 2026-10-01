@@ -63,7 +63,16 @@ const KNOWN_OFFLINE = new Set([
   "worker_unreachable",
   "forward_failed",
 ]);
-const KNOWN_ACTIVITY = new Set(["screenshot", "click", "move", "drag", "scroll", "type", "key"]);
+const KNOWN_ACTIVITY = new Set([
+  "screenshot",
+  "click",
+  "move",
+  "drag",
+  "scroll",
+  "type",
+  "key",
+  "terminal",
+]);
 
 /**
  * Computer tab (acevra-agent-computer.md §3.3): live screen of one SSH computer, status, activity,

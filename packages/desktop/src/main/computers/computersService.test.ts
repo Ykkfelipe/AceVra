@@ -123,7 +123,11 @@ function fakeWorker(opts: { unreachable?: boolean } = {}) {
       case "/screen":
         return new Response(new Uint8Array([137, 80, 78, 71]), {
           status: 200,
-          headers: { "x-acevra-settle-ms": "620", "x-acevra-settle-frames": "2", "x-acevra-converged": "1" },
+          headers: {
+            "x-acevra-settle-ms": "620",
+            "x-acevra-settle-frames": "2",
+            "x-acevra-converged": "1",
+          },
         });
       default:
         if (!job || body.job_id !== job.job_id)
@@ -220,6 +224,18 @@ async function until(check: () => boolean, label: string) {
   assert.fail(`timed out waiting for ${label}`);
 }
 
+test("noteActivity pushes a real terminal event into the view", async (t) => {
+  const { service, views } = setup();
+  t.after(() => service.dispose());
+  await service.getView("dell");
+  await until(() => views.length > 0, "initial view");
+  service.noteActivity("dell", "terminal");
+  await until(() => views.at(-1)?.lastAction === "terminal", "terminal activity");
+  // 相同动作不重复改变状态：最后一次 view 的 lastAction 保持 terminal。
+  service.noteActivity("dell", "terminal");
+  await tick(20);
+  assert.equal(views.at(-1)?.lastAction, "terminal");
+});
 test("first action attaches a session-owned job and reuses it afterwards", async (t) => {
   const { service, worker } = setup();
   t.after(() => service.dispose());

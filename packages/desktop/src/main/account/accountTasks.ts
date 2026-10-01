@@ -10,6 +10,7 @@ import type {
 import { SSH_TARGET_PREFIX } from "@zcode/shared";
 import { LOCAL_TARGET_ID, type LocalProcessRunner } from "./localProcessRunner.js";
 import { SSH_TASK_PREFIX, type SshProcessRunner } from "../computers/sshProcessRunner.js";
+import { computerIdOf } from "../computers/computerJob.js";
 
 type Call = (
   method: string,
@@ -67,6 +68,8 @@ export function createAccountTasks(deps: {
     listTargets(): Promise<ExecutionTarget[]>;
     hostAliasFor(targetId: string): Promise<string | null>;
     runner: SshProcessRunner;
+    /** 真实事件推进 Computer pane 活动行（spec §3.3），如终端命令启动。 */
+    noteActivity?(computerId: string, action: string): void;
   };
 }): AccountTasksApi {
   const isLocal = (id: string) => id === LOCAL_TARGET_ID || id.startsWith("local-");
@@ -121,6 +124,9 @@ export function createAccountTasks(deps: {
           hostAlias,
           process: input.process,
         });
+        // 活动行只报告真实事件：终端任务真的启动了才显示（spec §3.3，不做周期性“仍在工作”文本）。
+        const computerId = computerIdOf(input.targetId);
+        if (computerId) deps.ssh.noteActivity?.(computerId, "terminal");
         return { ok: true, taskId: started.taskId, targetId: input.targetId };
       }
       if (!deps.accountReady()) return { ok: false, reason: "not_signed_in" };

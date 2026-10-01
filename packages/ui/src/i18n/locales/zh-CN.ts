@@ -100,6 +100,7 @@ const zhCN: Record<string, string> = {
   "computers.panel.activity.scroll": "正在滚动",
   "computers.panel.activity.type": "正在输入",
   "computers.panel.activity.key": "正在按键",
+  "computers.panel.activity.terminal": "正在运行终端命令",
   "computers.panel.activity.other": "工作中",
   "computers.panel.takeControl": "接管",
   "computers.panel.giveBack": "交还",

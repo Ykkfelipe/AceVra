@@ -109,6 +109,7 @@ const enUS: Record<string, string> = {
   "computers.panel.activity.scroll": "Scrolling",
   "computers.panel.activity.type": "Typing",
   "computers.panel.activity.key": "Pressing keys",
+  "computers.panel.activity.terminal": "Running a terminal command",
   "computers.panel.activity.other": "Working",
   "computers.panel.takeControl": "Take control",
   "computers.panel.giveBack": "Give back",

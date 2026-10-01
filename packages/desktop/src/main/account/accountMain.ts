@@ -105,6 +105,7 @@ export function initAccountMain(options: {
       listTargets: () => computers.service.listTargets(),
       hostAliasFor: (targetId) => computers.service.hostAliasFor(targetId),
       runner: computers.runner,
+      noteActivity: (computerId, action) => computers.service.noteActivity(computerId, action),
     },
     call: (method, path, body) => devices?.call(method, path, body) ?? Promise.resolve(null),
     accountReady: () => controller.getView().phase === "ready",

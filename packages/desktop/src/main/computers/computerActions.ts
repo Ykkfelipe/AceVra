@@ -1,6 +1,27 @@
 import type { ComputerAction, ComputerImage } from "@zcode/shared";
+import { createServiceLogger } from "@zcode/services/node";
 import { PAUSED_REASONS } from "./computerJob.js";
-import type { WorkerResponse } from "./workerClient.js";
+import type { WorkerClient, WorkerResponse } from "./workerClient.js";
+
+const log = createServiceLogger("computers");
+
+/**
+ * screenshot：worker 侧已按 spec 4.5.1 收敛后才返回画面；这里只编码并记录
+ * action→fresh-frame 延迟测量值（settle 头不进 agent 载荷）。
+ */
+export async function captureConvergedScreenshot(
+  client: WorkerClient | null,
+  encode: (png: Buffer) => ComputerImage | null,
+): Promise<WorkerResponse | { ok: true; image: ComputerImage | null }> {
+  const shot = client ? await client.screenPng() : null;
+  if (!shot)
+    return { ok: false, status: 0, code: "offline", reason: "screen_unavailable", json: null };
+  log.debug(
+    `screen settle=${shot.settleMs ?? "?"}ms converged=${shot.converged ?? "?"} ${shot.png.length}B`,
+  );
+  if (shot.converged === false) log.warn("screen did not converge within the worker settle window");
+  return { ok: true, image: encode(shot.png) };
+}
 
 export type ComputerActionOutcome =
   | {

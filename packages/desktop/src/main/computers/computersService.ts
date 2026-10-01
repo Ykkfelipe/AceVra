@@ -20,6 +20,7 @@ import {
   toJobView,
 } from "./computerJob.js";
 import {
+  captureConvergedScreenshot,
   classifyActionFailure,
   runInputAction,
   type ComputerActionOutcome,
@@ -31,9 +32,6 @@ import { testComputer } from "./computerHealth.js";
 import { createViewRelay, type FrameSink, type ViewRelay } from "./computerViewRelay.js";
 import type { SshComputersStore } from "./sshComputersStore.js";
 import { createWorkerClient, type WorkerClient, type WorkerResponse } from "./workerClient.js";
-import { createServiceLogger } from "@zcode/services/node";
-
-const log = createServiceLogger("computers");
 
 interface Entry {
   config: SshComputerConfig;
@@ -257,29 +255,12 @@ export function createComputersService(deps: {
     return { ok: true, jobId, started };
   }
 
-  async function runAction(
-    entry: Entry,
-    jobId: string,
-    action: ComputerAction,
-  ): Promise<WorkerResponse | { ok: true; image: ComputerImage | null }> {
-    if (action.kind === "screenshot") {
-      const client = await connect(entry);
-      const shot = client ? await client.screenPng() : null;
-      if (!shot)
-        return { ok: false, status: 0, code: "offline", reason: "screen_unavailable", json: null };
-      // action→fresh-frame 延迟测量（spec 4.5.1）：worker 已保证画面收敛后再返回。
-      log.debug(
-        `screen settle=${shot.settleMs ?? "?"}ms converged=${shot.converged ?? "?"} ` +
-          `${shot.png.length}B`,
-      );
-      if (shot.converged === false)
-        log.warn(`screen did not converge within the worker settle window`);
-      return { ok: true, image: deps.encodeScreenshot(shot.png) };
-    }
-    return runInputAction(action, (path, body) =>
-      call(entry, (client) => client.post(path, { job_id: jobId, ...body }, "agent")),
-    );
-  }
+  const runAction = (entry: Entry, jobId: string, action: ComputerAction) =>
+    action.kind === "screenshot"
+      ? connect(entry).then((client) => captureConvergedScreenshot(client, deps.encodeScreenshot))
+      : runInputAction(action, (path, body) =>
+          call(entry, (client) => client.post(path, { job_id: jobId, ...body }, "agent")),
+        );
 
   async function computerAction(input: {
     sessionId: string;
@@ -367,6 +348,13 @@ export function createComputersService(deps: {
       return computerId ? ((await deps.store.get(computerId))?.hostAlias ?? null) : null;
     },
     computerAction,
+    /** Terminal 等真实事件也推进活动行（spec §3.3）：由 RunOnTarget 的 ssh 分支调用。 */
+    noteActivity(computerId: string, action: string) {
+      const entry = entries.get(computerId);
+      if (!entry || entry.lastAction === action) return;
+      entry.lastAction = action;
+      emit(entry);
+    },
     async getView(computerId: string): Promise<ComputerView | null> {
       const entry = await entryFor(computerId);
       if (!entry) return null;
