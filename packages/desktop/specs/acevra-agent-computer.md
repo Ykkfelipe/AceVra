@@ -56,8 +56,9 @@ Config (id, name, host alias, port) is stored locally; the token is never stored
 - Default: this Mac (unchanged). The UI declares `automatic` every turn (M1).
 - "Use my Dell …": the agent calls `ExecutionTargets` (now also lists SSH computers with
   capabilities `computerUse` + `shell`), then:
-  - GUI → the **`Computer`** tool with that `targetId` (screenshot, click, double_click, move, drag,
-    scroll, type, key, hotkey, list_windows, activate_window). Screenshots come back as images.
+  - GUI → the **`RemoteComputer`** tool with that `targetId` (screenshot, click, double_click, move,
+    drag, scroll, type, key ≤ 4 keys). Screenshots come back as images. The tool prompt forbids
+    casually dismissing destructive dialogs (unsaved-document safety, §3.4).
   - Terminal → `RunOnTarget` with that `targetId`; the process runs through `ssh <alias>` in
     PowerShell, streams into the existing work card, and Stop kills it.
 - The local Computer Use SDK (`agent.computerUse` in `node_repl`) is **not** routed: its contract is
@@ -102,6 +103,23 @@ control`, `You're using the Dell — agent paused` (+ **Resume**), `Paused`.
   as human input over the stream socket. **Give back** or the `Ctrl+Option+Esc` chord →
   `/agent/resume`. Keys are captured only while the view is focused and in control; captured keys
   call `preventDefault` + `stopPropagation` so AceVra shortcuts never fire.
+- **Keyboard capture has two layers** (the renderer DOM capture listener cannot stop Electron
+  native menu accelerators such as Cmd+Q / Cmd+W):
+  1. While the view is focused and in control, the renderer tells Main
+     (`acevra-computers:key-capture {active}`); Main installs `before-input-event` on that
+     `webContents`, `preventDefault`s **every** key event, and forwards a plain
+     `{type, key, code, modifiers}` object back over `acevra-computers:captured-key`. The renderer
+     feeds that object into the same `mapKeyEvent` → `sendInput` path (single mapping owner); the
+     DOM listener no longer sees prevented events, so nothing is sent twice.
+  2. The give-back chord `Ctrl+Option+Esc` never contains Cmd, stays renderer-handled, and is
+     never forwarded — the local escape hatch in both layers.
+  Known platform limits (documented, not hackable): macOS system shortcuts (Cmd+Tab, Cmd+Space,
+  Mission Control) are not interceptable; `before-input-event` cannot see events consumed by the
+  system. `Ctrl+Alt+Del` is not supported.
+- **Punctuation key names**: chorded punctuation (e.g. `Ctrl+Shift+;`) maps `event.code` to its
+  character (`;`, `/`, `[`, …). The renderer allowlist and the relay `sanitizeInputEvent` accept the
+  same explicit safe punctuation set (single printable ASCII symbols only — pyautogui accepts
+  single-character names); modifier state travels as separate keydown/keyup events.
 - Take control with no active job (computer idle) first attaches an external job owned by the
   panel (`controller: "acevra-mac:panel"`) so the worker's human gate has a job; Give back then
   stops that job instead of resuming. While it exists, agent attaches get `computer_busy`.
@@ -121,6 +139,19 @@ ctrl`, `Shift → shift`. Printable characters without Cmd/Control/Option → `t
   `delete`, `home`, `end`, `pageup`, `pagedown`). On blur / give back all held keys and buttons are
   released. Ctrl+Alt+Del is not supported.
 - Frame rate: 5 fps / ≤ 960 px while watching; 15 fps / ≤ 1366 px while in control.
+
+### 3.4 Unsaved-document safety (narrow)
+
+The agent operates a machine with the user's real sessions (Windows restores Notepad tabs with
+unsaved buffers). Rules for the `RemoteComputer` tool prompt and the agent:
+
+- Never casually dismiss destructive dialogs (Save / Don't save / Discard / Replace). When the
+  post-action screenshot shows an unsaved-changes prompt for a document the agent did not create
+  this turn: stop and ask the user, or pick the non-destructive option. Never choose Don't save
+  merely as cleanup.
+- Type only into a fresh, known-empty document the agent created this turn (Ctrl+N / new tab;
+  verify an empty buffer before typing).
+- Never send Ctrl+A / Delete / Alt+F4 without a fresh (§4.5.1 converged) post-action screenshot.
 
 ## 4. Worker HTTP contract v2 (the Dell side)
 
@@ -190,6 +221,24 @@ ignored. `/agent/resume` clears the yield. Human control (`human_control`) never
     binary JPEG message (`sw,sh` = remote screen size, `cx,cy` = remote cursor); `{t:"state", job}`
     on job changes; `{t:"error", …}`.
 - No MJPEG endpoint (the socket replaces it).
+
+### 4.5.1 Action → fresh observation contract
+
+Two separate concepts, one capture source:
+
+- **Human live stream** (`WS /ws/view`) is never gated: continuous frames at the viewer's fps.
+- **Agent observation** (`GET /screen`) must be *converged*: the worker records the finish time of
+  every admitted input (agent or human); `/screen` returns only a frame that is
+  1. captured at least `SCREEN_MIN_SETTLE` (0.25 s) after the last admitted input finished, and
+  2. pixel-identical to the immediately preceding grab (bounded stability check, deadline
+     `SCREEN_STABLE_TIMEOUT` = 2 s; on deadline the freshest grab is returned and the header says
+     `converged=0`).
+
+The grab itself is always fresh (`mss.grab` per call — there is no cache; the earlier
+"screenshot cache" hypothesis was wrong). Response headers `X-AceVra-Settle-Ms`,
+`X-AceVra-Settle-Frames`, `X-AceVra-Converged` (0/1) report the observed convergence so the Mac
+can measure action → fresh-frame latency instead of guessing. Input routes themselves do not sleep
+for the UI; convergence is awaited where the observation is taken.
 
 ### 4.6 Health
 
