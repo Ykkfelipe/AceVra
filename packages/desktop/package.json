@@ -22,6 +22,7 @@
     "build": "pnpm prepare:runtime-assets && pnpm run build:no-runtime-assets",
     "build:pinned": "node ../../scripts/mise-run.mjs pnpm run build",
     "bundle": "node scripts/bundle.mjs",
+    "e2e:onboarding": "node scripts/run-provider-onboarding-e2e.mjs",
     "e2e:cua-alpha": "node scripts/run-cua-alpha-e2e.mjs",
     "audit:bundle-size": "node scripts/audit-bundle-size.mjs",
     "postinstall": "node scripts/node-pty-rebuild.mjs",

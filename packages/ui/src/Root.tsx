@@ -1,3 +1,4 @@
+import { AceVraFirstRun } from "./onboarding/AceVraFirstRun.js";
 /* eslint-disable max-lines -- Root 当前集中编排启动和 workspace shell wiring，先保持入口收口避免跨层状态拆散。 */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LucideProvider, RefreshCw } from "lucide-react";
@@ -419,9 +420,8 @@ function RootInner({
   const { startupCheckCompleted: providerAvailabilityStartupCheckCompleted } =
     useProviderAvailabilityLoginEntryGuard({
       enabled: providerAvailabilityLoginEntryGuardEnabled,
-      user,
+      setupService: services.acevraSetupService,
       isRestoringOAuthSession: isResolvingStartupAuthState || providerStartupSyncPending,
-      providerFamilyDomain: appSettings?.providerFamilyDomain,
       modelSelectionView: rootModelSelectionView,
       modelSelectionError:
         rootModelSelectionRead.state.status === "error"
@@ -969,7 +969,11 @@ function RootInner({
         {rootModelSelectionErrorNode}
         {remoteConnectionDialog}
         {directoryBrowserDialog}
-        <WelcomeScreen onComplete={handleWelcomeScreenComplete} />
+        {welcomeScreenOpenReason === "startup-provider-required" && services.acevraSetupService ? (
+          <AceVraFirstRun onComplete={handleWelcomeScreenComplete} />
+        ) : (
+          <WelcomeScreen onComplete={handleWelcomeScreenComplete} />
+        )}
       </RootShell>
     );
   }

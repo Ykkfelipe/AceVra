@@ -1,3 +1,4 @@
+import type { IAceVraSetupService } from "./onboarding/acevraSetup.js";
 import { IOffPeakTaskService } from "./session/offPeakTask.js";
 import type { IFileService } from "./file/file.js";
 import type { IMediaPreviewService } from "./media-preview/mediaPreview.js";
@@ -53,6 +54,7 @@ export interface IServiceAccessor {
   readonly terminalService: ITerminalService;
   readonly settingService: ISettingService;
   /** Onboarding 完成记录（本地持久化）；旧测试 double / 不支持的 host 可不提供。 */
+  readonly acevraSetupService?: IAceVraSetupService;
   readonly onboardingRecordService?: IOnboardingRecordService;
   readonly credentialService: ICredentialService;
   /** Accounts & Imports：脱敏账号状态与历史导入；旧 host / 测试 double 可不提供。 */

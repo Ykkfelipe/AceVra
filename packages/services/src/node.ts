@@ -1,3 +1,5 @@
+import { IAceVraSetupService } from "./onboarding/acevraSetup.js";
+import { createAceVraSetupService } from "./onboarding/acevraSetupService.js";
 /* eslint-disable max-lines -- host process 服务注册和启动装配需要集中维护，拆散后会更难追踪依赖注入顺序 */
 // Node.js service implementations — NOT safe to import in browser code
 import { randomBytes } from "node:crypto";
@@ -1901,6 +1903,14 @@ export function createLocalServices(options: {
       accountProviderConfigSource.dispose();
     },
   });
+  const acevraSetupService = createAceVraSetupService({
+    statePath: join(resolveAppConfigDir(), "acevra-setup.json"),
+    models: providerRuntime.modelSelection,
+    providers: providerRuntime.providerSettings,
+    saveDefault: (selection) =>
+      modelSelectionConfiguredDefaultSource.saveConfiguredDefault(selection),
+    readLegacyFamily: async () => (await settingService.get()).providerFamilyDomain,
+  });
   handleOAuthProviderLogout = createOAuthProviderLogoutHandler({
     accountProviderCredentialStore,
     refreshAccountProviders: (reason: string) => accountProviderConfigSource.refresh(reason),
@@ -3049,6 +3059,7 @@ export function createLocalServices(options: {
     .register(ISystemService, systemService)
     .register(ITerminalService, createTerminalService({ settingService }))
     .register(ISettingService, settingService)
+    .register(IAceVraSetupService, acevraSetupService)
     .register(IOnboardingRecordService, onboardingRecordService)
     .register(ICredentialService, credentialService)
     .register(

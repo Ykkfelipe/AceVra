@@ -31,7 +31,6 @@ import { logger } from "@/logger.js";
 import { renderOAuthProviderIcon } from "@/lib/oauthProviderIcon.js";
 import {
   buildLoginApiKeyDefaultModelPreferenceFromSelection,
-  buildLoginApiKeySkipSettings,
   resolveLoginApiKeyDefaultProvider,
   resolveLoginApiKeyTemplateId,
   resolveLoginApiKeyProviderLabel,
@@ -49,7 +48,7 @@ interface LoginApiKeyFormProps {
 export function LoginApiKeyForm({ onCancel, onSaved, onSkipped }: LoginApiKeyFormProps) {
   const { intl, locale } = useZCodeIntl();
   const platform = usePlatform();
-  const { modelSelectionService, providerSettingsService, settingService } = useServices();
+  const { modelSelectionService, providerSettingsService, acevraSetupService } = useServices();
   const markApiKeyLoginSuccess = useZCodeStore((state) => state.markApiKeyLoginSuccess);
   const [providerChoice, setProviderChoice] = useState<ApiKeyProviderChoice>(() =>
     resolveLoginApiKeyDefaultProvider(locale),
@@ -126,9 +125,9 @@ export function LoginApiKeyForm({ onCancel, onSaved, onSkipped }: LoginApiKeyFor
     setSkipping(true);
     setError(null);
     try {
-      // 跳过只表示用户确认当前 provider family 运行域，不能写入空 API Key
-      // 或触发 API Key 登录成功事件，否则后续模型选择会误以为已有可用凭据。
-      await settingService.update(buildLoginApiKeySkipSettings(providerChoice, Date.now()));
+      // 跳过只持久化 AceVra deferred，不再伪造 provider family。
+      if (!acevraSetupService) throw new Error("Setup service is unavailable");
+      await acevraSetupService.defer();
       await onSkipped();
     } catch (skipError) {
       logger.error("[LoginEntry] 跳过 API Key 登录失败", {

@@ -390,3 +390,79 @@ catalog model metadata drift; inherited update/force-update authority; and accid
 from real source profiles. Native Azure Entra auth would need an additional adapter, while its
 API-compatible key path does not block the initial independence milestone. No migration or
 provider endpoint registration is assumed to be complete by writing this specification.
+
+## M1 implementation contract
+
+The local Host exposes `IAceVraSetupService` on `acevra-setup`. `getView()` derives
+readiness and selected model from the existing ModelSelection service;
+`configureConnection()` delegates ordinary API-key writes to ProviderSettings and
+default selection to its existing Personal repository; `getProviderRoute()` maps
+Z.ai to the existing provider-specific OAuth entry. `defer()` serializes an atomic
+write of `{version: 1, deferred: true}` in `.zcode/v2/acevra-setup.json` under the
+configured data directory. It never writes credentials, family, user, or model.
+WebSocket attachments refuse credential-bearing setup configuration just as they
+refuse existing ProviderSettings credential writes.
+
+Readiness is usable registry models OR explicit deferred setup. Existing legacy
+family selections are conservatively imported once as deferred setup (origin
+`legacy`), preserving shell access without manufacturing provider availability.
+A family value created after this import is not a readiness prerequisite. Missing
+or corrupt AceVra state requires setup unless the existing registry is usable.
+A deferred profile without models receives a connection-required action state.
+
+The first-run screen routes OpenAI and Anthropic to their existing templates,
+Z.ai to existing OAuth, and compatible endpoints to the existing custom API
+configuration. Compatible setup truthfully supports the existing API-key HTTP
+formats; native Azure Entra authentication is outside M1.
+
+```mermaid
+sequenceDiagram
+  participant UI as First-run UI
+  participant Host as AceVra setup service
+  participant Providers as Existing provider services
+  participant File as AceVra setup file
+  UI->>Host: getView
+  Host->>Providers: registry/model selection view
+  Host-->>UI: required / connected / deferred
+  alt Configure later
+    UI->>Host: defer
+    Host->>File: atomic serialized write
+  else Ordinary connection
+    UI->>Host: configureConnection
+    Host->>Providers: create provider, add model, save default
+  end
+  Host-->>UI: readiness view
+  UI->>UI: enter workspace shell
+```
+
+Acceptance runs use intentionally short, newly created `/tmp/av-*` roots with
+separate Electron userData, HOME, profile, ZCODE_HOME and workspace directories.
+No provider-login skip flags, profile imports, or real credentials are permitted.
+A local HTTP fixture serves ordinary model inference with a non-secret sentinel;
+control-plane requests are redirected to loopback and unavailable responses are
+explicit. Tests exercise first-run buttons and the normal conversation composer,
+then inspect only isolated state and runtime evidence. Required regression cases
+cover readiness, deferred persistence, legacy import, provider routing, compatible
+registry/default selection and socket-path length.
+
+### Supported M1 acceptance command
+
+Run `mise exec -- pnpm --filter @zcode/desktop e2e:onboarding` from the repository
+root after installing repository dependencies/runtime assets normally. The runner
+builds the current CLI and desktop source, removes inherited setup-skip/profile
+import flags, then exercises Configure later and compatible-provider first-run.
+It retains only newly isolated `/tmp/av-*` evidence roots for inspection; it never
+copies an existing profile. Each root contains `h` (HOME), `p` (profile/data), `u`
+(Electron userData), and `w` (reserved workspace). The normal conversation workspace
+is created by the product under `p/.zcode/workspace/default`. The runner reports
+roots, null family, deferred state or inference result, session creation, and
+startup of the saved configured profile. Loopback control-plane responses are 503;
+model responses are deterministic SSE/JSON and require only the test sentinel.
+
+Compatible setup exposes the existing `Authorization: Bearer` or `api-key` header
+configuration. Azure endpoints must implement the selected existing HTTP format;
+there is no new Azure adapter or Entra flow. Registry readiness means structurally
+configured/selectable, not verified remote credentials. Existing preference/occupation
+onboarding remains separate and is completed through its normal Skip button in the
+harness. OAuth-based product user, record ownership, account UI, provider-family
+migration and control-plane coupling remain M2 work.

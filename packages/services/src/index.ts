@@ -330,3 +330,11 @@ export type { CodexAppServerPort, CodexTaskIndexPort } from "./codex/contract.js
 // task-artifacts 同款纪律：只导出通道 descriptor（browser-safe：仅 zod + descriptors）。
 // TaskArtifactRegistry（node:fs）留在 ./task-artifacts/contract.js 供 host 内部 import。
 export { ITaskArtifactDeliveryService } from "./task-artifacts/app/taskArtifactService.js";
+
+export { IAceVraSetupService, createRemoteAceVraSetupGuard } from "./onboarding/acevraSetup.js";
+export type {
+  AceVraSetupView,
+  AceVraProviderChoice,
+  AceVraProviderRoute,
+  AceVraConnectionInput,
+} from "./onboarding/acevraSetup.js";

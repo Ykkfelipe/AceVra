@@ -1,5 +1,18 @@
 /** 中文翻译 */
 const zhCN: Record<string, string> = {
+  "acevra.setup.welcome": "欢迎使用 AceVra",
+  "acevra.setup.choose": "选择连接方式",
+  "acevra.setup.saveError": "连接未能保存，请检查接口地址、API Key 和模型。",
+  "acevra.setup.endpoint": "API 接口地址",
+  "acevra.setup.key": "API Key",
+  "acevra.setup.model": "模型 ID / 部署名称",
+  "acevra.setup.credentialHeader": "凭据请求头",
+  "acevra.setup.format": "API 格式",
+  "acevra.setup.azure": "请使用所选格式支持的 API Key 接口，此处不支持 Azure Entra 登录。",
+  "acevra.setup.connect": "连接",
+  "acevra.setup.back": "返回",
+  "acevra.setup.later": "稍后配置",
+
   "startPlan.recommendation.subagentDescription":
     "你的体验套餐中，{model} 仍有可用额度，是否将此子智能体的模型切换到体验套餐？",
   "startPlan.recommendation.preferenceSaveFailed": "未能保存“不再提示”，本次仍按你的选择继续。",
@@ -5367,7 +5380,7 @@ const zhCN: Record<string, string> = {
   "chat.error.collapseDetails": "收起详情",
   "chat.error.feedback": "反馈问题",
   "chat.error.feedbackOpened": "已打开反馈，并自动带上报错现场",
-  "chat.error.noAvailableModel": "当前没有可用模型。请开通编程套餐或配置自定义模型。",
+  "chat.error.noAvailableModel": "请在设置中连接供应商并选择模型，然后开始对话。",
   "chat.error.sendFailed": "发送失败，请稍后重试。",
   "chat.error.modelSettings": "模型设置",
   "chat.error.setModels": "配置",

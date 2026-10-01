@@ -145,6 +145,7 @@ export const ServiceChannels = {
   /** 闲时任务管理服务（与 automation 服务面独立） */
   OffPeakTask: "off-peak-task",
   /** Onboarding 完成记录服务（本地持久化，后续上传服务器） */
+  AceVraSetup: "acevra-setup",
   OnboardingRecord: "onboarding-record",
   /** Accounts & Imports：外部 coding agent 的账号桥接与历史导入（仅传输脱敏状态） */
   Accounts: "accounts",

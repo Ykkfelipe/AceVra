@@ -1,5 +1,20 @@
 /** English translations */
 const enUS: Record<string, string> = {
+  "acevra.setup.welcome": "Welcome to AceVra",
+  "acevra.setup.choose": "Choose how you want to connect",
+  "acevra.setup.saveError":
+    "Connection could not be saved. Check your endpoint, API key and model.",
+  "acevra.setup.endpoint": "API endpoint",
+  "acevra.setup.key": "API key",
+  "acevra.setup.model": "Model ID / deployment name",
+  "acevra.setup.credentialHeader": "Credential header",
+  "acevra.setup.format": "API format",
+  "acevra.setup.azure":
+    "Use an API-key endpoint supported by the selected format. Azure Entra sign-in is not supported here.",
+  "acevra.setup.connect": "Connect",
+  "acevra.setup.back": "Back",
+  "acevra.setup.later": "Configure later",
+
   "startPlan.recommendation.subagentDescription":
     "Your Start Plan has quota available for {model}. Switch this subagent’s model to the Start Plan?",
   "startPlan.recommendation.preferenceSaveFailed":
@@ -5604,7 +5619,8 @@ const enUS: Record<string, string> = {
   "chat.error.collapseDetails": "Hide details",
   "chat.error.feedback": "Report issue",
   "chat.error.feedbackOpened": "Feedback opened with the error context attached",
-  "chat.error.noAvailableModel": "No model available. Upgrade or set a custom model.",
+  "chat.error.noAvailableModel":
+    "Connect a provider and select a model in Settings to start a conversation.",
   "chat.error.sendFailed": "Failed to send. Try again later.",
   "chat.error.modelSettings": "Model settings",
   "chat.error.setModels": "Set",

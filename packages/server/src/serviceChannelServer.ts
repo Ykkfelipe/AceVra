@@ -1,3 +1,4 @@
+import { IAceVraSetupService, createRemoteAceVraSetupGuard } from "@zcode/services";
 import { randomUUID } from "node:crypto";
 import {
   ChannelServer,
@@ -91,12 +92,19 @@ export function setupChannelServer(
       createRemoteProviderSettingsCredentialGuard(providerSettings),
     );
   }
-  if (clientMode !== "desktop-continuous" && services.getOptional(IProviderProvisioningTargetService)) {
+  if (
+    clientMode !== "desktop-continuous" &&
+    services.getOptional(IProviderProvisioningTargetService)
+  ) {
     overrides.set(IProviderProvisioningTargetService.channelName, {
       apply: async () => {
         throw new Error("Provider Provisioning 仅支持受信 Desktop Host");
       },
     });
+  }
+  const setup = services.getOptional(IAceVraSetupService);
+  if (setup) {
+    overrides.set(IAceVraSetupService.channelName, createRemoteAceVraSetupGuard(setup));
   }
   services.exposeOnChannelServer(server, overrides);
   socket.onClose(() => {
