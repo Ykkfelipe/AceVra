@@ -1,6 +1,8 @@
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { app, ipcMain, type WebContents } from "electron";
 import { AccountChannels, type AccountView } from "@zcode/shared";
+import { ACCOUNT_TOKEN_STORE_NAME, isAccountSessionPersistent } from "./accountClerkBridge.js";
 import { resolveAccountConfig } from "./accountConfig.js";
 import { createAccountPreferenceStore } from "./accountPreference.js";
 import { createAccountSessionController } from "./accountSessionController.js";
@@ -42,6 +44,7 @@ export function initAccountMain(options: {
     tokenSource: testSource ?? windowSource,
     preference: createAccountPreferenceStore(join(app.getPath("userData"), "acevra-account.json")),
     fetch: options.fetch ?? fetch,
+    rememberSession: !windowSource || isAccountSessionPersistent(),
   });
 
   const subscribers = new Map<number, WebContents>();
@@ -65,9 +68,20 @@ export function initAccountMain(options: {
   ipcMain.handle(AccountChannels.Refresh, () => controller.refresh());
   ipcMain.handle(AccountChannels.ChooseLocal, () => controller.chooseLocal());
 
+  // Restore only when Clerk has persisted tokens (OS-encrypted); otherwise stay idle.
+  const restored = started.then(async () => {
+    if (!windowSource || !isAccountSessionPersistent()) return;
+    const raw = await readFile(
+      join(app.getPath("userData"), `${ACCOUNT_TOKEN_STORE_NAME}.json`),
+      "utf8",
+    ).catch(() => "{}");
+    const keys = Object.keys(JSON.parse(raw || "{}"));
+    if (keys.length > 0) await windowSource.restore();
+  });
+
   return {
     controller,
-    start: () => started,
+    start: () => restored.catch(() => undefined),
     dispose() {
       controller.dispose();
       windowSource?.dispose();

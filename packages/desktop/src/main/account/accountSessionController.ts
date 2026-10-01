@@ -27,6 +27,8 @@ export interface AccountSessionControllerDeps {
   preference: AccountPreferenceStore;
   fetch: typeof fetch;
   requestTimeoutMs?: number;
+  /** False when the session cannot survive a restart (no secure storage). Default true. */
+  rememberSession?: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -37,7 +39,12 @@ const DEFAULT_TIMEOUT_MS = 10_000;
  */
 export function createAccountSessionController(deps: AccountSessionControllerDeps) {
   const configured = Boolean(deps.apiBaseUrl && deps.tokenSource);
-  let view: AccountView = { configured, choice: "undecided", phase: "signedOut" };
+  let view: AccountView = {
+    configured,
+    choice: "undecided",
+    phase: "signedOut",
+    ...(deps.rememberSession === false ? { rememberSession: false } : {}),
+  };
   let generation = 0;
   const listeners = new Set<(view: AccountView) => void>();
   let disposeSession: (() => void) | null = null;

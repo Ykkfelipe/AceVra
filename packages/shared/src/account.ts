@@ -30,6 +30,8 @@ export interface AccountView {
   /** Present in `ready`; kept as a clearly stale hint in `offline`. Never authorizes. */
   profile?: AccountProfile;
   detail?: AccountDetail;
+  /** Present and false when the session won't be remembered after quitting. */
+  rememberSession?: false;
 }
 
 export const SIGNED_OUT_VIEW: AccountView = {

@@ -49,6 +49,8 @@ export const foreignKey = generateKeyPairSync("rsa", { modulusLength: 2048 }).pr
 export async function createTestApp(options?: {
   users?: Record<string, ClerkUserProfile>;
   authorizedParties?: string[];
+  rateLimit?: { limit: number; windowMs: number };
+  log?: (line: string) => void;
 }) {
   const db = await createTestDb();
   const users = options?.users ?? {};
@@ -66,6 +68,8 @@ export async function createTestApp(options?: {
       authorizedParties: options?.authorizedParties ?? [],
     }),
     accounts: createAccountService({ db, directory }),
+    rateLimit: options?.rateLimit ?? { limit: 10_000, windowMs: 60_000 },
+    log: options?.log,
   });
   const me = (token?: string, headers: Record<string, string> = {}) =>
     app.request("/v1/me", {

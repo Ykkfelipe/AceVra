@@ -23,7 +23,7 @@ export function createAccountWindowTokenSource(options: {
   publishableKey: string;
   rendererDir: string;
   preloadPath: string;
-}): AccountTokenSource & { dispose(): void } {
+}): AccountTokenSource & { dispose(): void; restore(): Promise<void> } {
   let window: BrowserWindow | null = null;
   let signedIn = false;
   let quitting = false;
@@ -56,7 +56,7 @@ export function createAccountWindowTokenSource(options: {
     });
   }
 
-  function ensureWindow(): BrowserWindow {
+  function ensureWindow(visible = true): BrowserWindow {
     if (window && !window.isDestroyed()) return window;
     const win = new BrowserWindow({
       width: 460,
@@ -81,7 +81,9 @@ export function createAccountWindowTokenSource(options: {
       if (url.startsWith("https://")) void shell.openExternal(url);
       return { action: "deny" };
     });
-    win.once("ready-to-show", () => win.show());
+    win.once("ready-to-show", () => {
+      if (visible) win.show();
+    });
     win.on("close", (event) => {
       // A signed-in window keeps serving token requests; hide it instead of closing.
       if (signedIn && !quitting) {
@@ -123,7 +125,11 @@ export function createAccountWindowTokenSource(options: {
   });
   ipcMain.on(AccountChannels.WindowSession, (event, state: unknown) => {
     if (!fromWindow(event) || typeof state !== "boolean") return;
-    if (state === signedIn) return;
+    if (state === signedIn) {
+      // A hidden restore attempt that found no session leaves nothing running.
+      if (!state && window && !window.isVisible()) window.destroy();
+      return;
+    }
     if (state) window?.hide();
     emit(state);
   });
@@ -143,6 +149,10 @@ export function createAccountWindowTokenSource(options: {
       if (signedIn) emit(true);
       else if (win.isVisible()) win.focus();
       else if (!win.webContents.isLoading()) win.show();
+    },
+    /** Boot a hidden window so Clerk can restore a persisted session; no UI unless needed. */
+    async restore() {
+      if (!window) ensureWindow(false);
     },
     async getToken() {
       if (!signedIn) return null;

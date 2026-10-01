@@ -67,6 +67,14 @@ export function AceVraAccountSection() {
               </Button>
             )}
           </div>
+          {view.phase === "ready" && view.rememberSession === false && (
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="acevra-account-not-remembered"
+            >
+              {text("notRemembered", "Account session won't be remembered on this device.")}
+            </p>
+          )}
           {view.phase === "ready" && (
             <p className="text-xs text-muted-foreground">
               {text(

@@ -6,6 +6,9 @@ export interface AccountApiConfig {
   clerkJwtKey?: string;
   databaseUrl: string;
   port: number;
+  host: string;
+  /** Honour X-Forwarded-For for rate-limit keys (only behind a trusted proxy). */
+  trustProxy: boolean;
   seedEmails: string[];
   seedClerkUserIds: string[];
 }
@@ -28,6 +31,8 @@ export function readAccountApiConfig(env: NodeJS.ProcessEnv = process.env): Acco
     clerkJwtKey: env.ACEVRA_CLERK_JWT_KEY?.trim() || undefined,
     databaseUrl: env.ACEVRA_DATABASE_URL!.trim(),
     port: Number(env.PORT ?? env.ACEVRA_API_PORT ?? 8787),
+    host: env.ACEVRA_API_HOST?.trim() || "0.0.0.0",
+    trustProxy: env.ACEVRA_TRUST_PROXY === "1",
     seedEmails: list(env.ACEVRA_ADMISSION_SEED_EMAILS),
     seedClerkUserIds: list(env.ACEVRA_ADMISSION_SEED_CLERK_USER_IDS),
   };

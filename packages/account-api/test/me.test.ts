@@ -110,3 +110,52 @@ test("only account and admission tables exist in M2A (no future entities)", asyn
     ["accounts", "admissions"],
   );
 });
+
+test("hardening: strict bearer, oversized token, rate limit, safe errors, no CORS, no token logging", async () => {
+  const lines: string[] = [];
+  const { app } = await createTestApp({
+    rateLimit: { limit: 3, windowMs: 60_000 },
+    log: (l) => lines.push(l),
+  });
+  const token = signSessionToken({ sub: "user_x" });
+  const call = (authorization: string) => app.request("/v1/me", { headers: { authorization } });
+  assert.equal((await call(`Bearer ${token} extra`)).status, 401);
+  assert.equal((await call(`Basic ${token}`)).status, 401);
+  assert.equal((await call(`Bearer ${"a".repeat(5000)}`)).status, 401);
+  const limited = await call(`Bearer ${token}`);
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get("retry-after")) > 0);
+  assert.equal(limited.headers.get("access-control-allow-origin"), null);
+  assert.equal(limited.headers.get("x-content-type-options"), "nosniff");
+  const fresh = (await createTestApp()).app;
+  const big = await fresh.request("/v1/me", {
+    method: "POST",
+    headers: { "content-length": "5000" },
+    body: "x".repeat(5000),
+  });
+  assert.equal(big.status, 413);
+  assert.ok(
+    lines.length > 0 && lines.every((l) => /^[A-Z]+ \/\S* \d{3}$/.test(l)),
+    "log lines carry no tokens",
+  );
+});
+
+test("a thrown handler error becomes a generic 503 with no detail", async () => {
+  const { app } = await createTestApp({ users: {} });
+  const response = await app.request("/v1/me", {
+    headers: { authorization: `Bearer ${signSessionToken({ sub: "boom" })}` },
+  });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "unavailable" });
+});
+
+test("repeated and concurrent sign-ins never create a duplicate account row", async () => {
+  const { me, ledger, db } = await createTestApp({
+    users: { user_dup: profile("dup@example.test") },
+  });
+  await ledger.approve({ clerkUserId: "user_dup" });
+  await Promise.all([1, 2, 3, 4].map(() => me(signSessionToken({ sub: "user_dup" }))));
+  await me(signSessionToken({ sub: "user_dup" }));
+  const rows = await db.query("SELECT count(*)::int AS n FROM accounts");
+  assert.equal((rows.rows[0] as any).n, 1);
+});

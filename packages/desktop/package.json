@@ -52,6 +52,7 @@
     "@zcode/shared": "workspace:*",
     "@zcode/ui": "workspace:*",
     "@zcode/zcode-cua": "workspace:*",
+    "electron-store": "^8.2.0",
     "electron-updater": "^6.8.3",
     "module-details-from-path": "^1.0.4",
     "node-forge": "^1.4.0",

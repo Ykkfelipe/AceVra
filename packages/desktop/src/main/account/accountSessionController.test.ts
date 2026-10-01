@@ -249,3 +249,17 @@ test("the test token source is refused for packaged builds", () => {
   assert.equal(resolveTestTokenSource(env, { isPackaged: true }), null);
   assert.ok(resolveTestTokenSource(env, { isPackaged: false }));
 });
+
+test("the view discloses a non-remembered session only when persistence is unavailable", async () => {
+  const make = (rememberSession?: boolean) =>
+    createAccountSessionController({
+      apiBaseUrl: null,
+      tokenSource: null,
+      preference: memoryPreference().store,
+      fetch,
+      rememberSession,
+    });
+  assert.equal(make(false).getView().rememberSession, false);
+  assert.equal(make(true).getView().rememberSession, undefined);
+  assert.equal(make().getView().rememberSession, undefined);
+});
