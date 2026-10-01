@@ -3,6 +3,82 @@
 Status: proposed. Owner: CUA (packages/zcode-cua + packages/services + packages/ui).
 Date: 2026-10-01. Supersedes nothing; extends `specs/computer-use.md`.
 
+## Finish-and-polish milestone (2026-10-01)
+
+The visually accepted Dell Computer pane remains the canonical Computer surface. This milestone
+adds the local Mac AgentWorkspace as another producer for that surface; it does not create a
+second computer UI or capture the user's arbitrary frontmost desktop.
+
+### Stream contract and source identity
+
+The renderer consumes source-independent latest-frame state. Every source identifies itself as
+`local-mac` or `remote-node` and supplies a device/workspace identity, connection/freshness,
+monotonic frame sequence, capture timestamp, current frame, logical agent cursor, ownership, and
+activity. The source owns capture and reconnect; the shared Computer surface owns presentation
+and user input gestures. Dell-specific worker details stay in its adapter.
+
+For `local-mac`, the producer captures the actual AgentWorkspace target window using the signed
+Helper's existing ScreenCaptureKit permission and window-scoped capture path. It must not request
+or publish a whole-display capture of the user's foreground. Capture lifecycle is bound to the
+target window identity: disappearance clears the current frame and reports unavailable; a newly
+resolved target starts a fresh sequence/generation so pixels from a prior target cannot flash.
+Input routing continues through the existing AgentWorkspace/Helper seam. Background actions must
+not acquire the native exclusive foreground lease. Explicit Take control pauses admission and
+activates the positively identified target for the user; it does not grant the agent an exclusive
+lease or forward pane gestures into the Mac. Give back lifts admission only; it does not move the
+user's cursor or automatically reactivate AceVra. Background work resumes through normal routing.
+
+The Helper owns a ScreenCaptureKit `SCStream` per active visual target, nominally 12 fps, with
+`showsCursor=false` and a bounded capture queue. A host-only `workspace_stream` broker command
+starts/reads/stops that stream through the existing authenticated transport. Untrusted broker
+clients cannot call this command. Latest JPEG bytes and metadata are held in memory, not appended
+to the observation store. The services adapter validates the session's current pid/window before
+each read and supplies a source generation; stale generation responses are discarded. One request
+at a time and one retained frame at every stage bound memory and prevent playback backlog.
+Closing/hiding the pane stops its capture demand; a Helper-side viewer timeout also stops orphaned
+capture. Target selection never falls back to the physical desktop or a different app.
+
+The right pane reports device/workspace and target app, connection and freshness, Idle/Working/
+You're in control, real activity, ownership controls supported by that source, and truthful
+unavailable states. Product-owned localized labels are used. Local and remote routes never
+silently substitute for one another. A task-level target choice takes precedence over defaults.
+
+### Input and evidence rules
+
+The existing normalized input vocabulary is audited per producer. Capabilities are exposed only
+when the source can deliver and verify them. A delivered action is not success until a fresh
+post-action observation verifies its effect; stale observations, vanished targets, secure fields,
+and unsaved/destructive dialogs preserve truthful refusal or uncertainty. Foreground escalation
+is an explicit request/decision surfaced to the user, never an automatic retry after a background
+failure. Activity labels derive from real action/task events and AceVra-owned i18n.
+
+### State and event order
+
+```text
+AgentWorkspace target ── Helper window capture ──┐
+                                                  ├─ latest-frame source adapter ─ Computer pane
+Dell worker ── remote stream adapter ────────────┘
+Agent action → existing owner/admission/router → source adapter → fresh evidence → activity projection
+```
+
+Helper remains the local capture/input authority; the remote worker remains the Dell authority;
+services retain session ownership/admission and task target routing; each source adapter owns its
+connection, frame sequence, target generation, and freshness; the pane is a projection and sends
+commands through that adapter's existing service path. Desktop remains continuous; no mobile
+replay semantics are changed.
+
+### Acceptance added
+
+- The same right-side Computer pane can select/display local Mac workspace or Dell without
+  exposing source-specific engineering controls.
+- Local frames always identify and show the AgentWorkspace target window, with visible logical
+  cursor/activity and no physical cursor/frontmost-app change during background work.
+- Target disappearance/reopen and Dell disconnect/reconnect clear stale frames and restore only
+  the current source generation; no cross-device or cross-task frame leakage.
+- Local/Dell normalized input and safety matrix reports only measured capabilities. Fixture and
+  deterministic checks precede packaging; normal-chat acceptance is required on the installed
+  candidate on both sources before alpha-complete status.
+
 ## Goal
 
 A persistent agent uses the computer **while the user keeps their own foreground**: the user
