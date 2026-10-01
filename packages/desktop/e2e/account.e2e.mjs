@@ -40,7 +40,7 @@ const backendOrigin = () => listener.url;
 const DEAD_ORIGIN = "http://127.0.0.1:9"; // discard port: connection refused
 
 const results = [];
-function launchEnv(roots, { apiBase, user }) {
+function launchEnv(roots, { apiBase, user, engineering = false }) {
   const env = {
     ...process.env,
     HOME: roots.home,
@@ -65,6 +65,8 @@ function launchEnv(roots, { apiBase, user }) {
     env.ACEVRA_API_BASE_URL = apiBase;
     env.ACEVRA_ACCOUNT_TEST_TOKEN = signSessionToken({ sub: user, expOffsetSec: 3600 });
   }
+  // M2E：原始进程表单只是工程 harness，仅在显式开启（且未打包）时出现。
+  if (engineering) env.ACEVRA_ENGINEERING_TOOLS = "1";
   return env;
 }
 const launch = (env) =>
@@ -111,6 +113,21 @@ async function openAccountSection(page) {
   await page.getByTestId("task-settings-button").first().click();
   await page.getByTestId("settings-section-nav-aceVraAccount").click();
   await page.getByTestId("acevra-account-section").waitFor({ timeout: 10000 });
+}
+// Optional visual-review evidence (isolated profile only): E2E_SCREENSHOT_DIR=<dir>.
+async function snap(target, name) {
+  const dir = process.env.E2E_SCREENSHOT_DIR;
+  if (!dir) return;
+  await mkdir(dir, { recursive: true });
+  await target.screenshot({ path: join(dir, `${name}.png`) });
+}
+async function backToWorkspace(page) {
+  await page.keyboard.press("Escape");
+  await page
+    .getByText("Back to workspace")
+    .click({ timeout: 3000 })
+    .catch(() => {});
+  await page.getByTestId("v4-composer-input").waitFor({ timeout: 30000 });
 }
 const readJson = async (path) => JSON.parse(await readFile(path, "utf8"));
 
@@ -301,7 +318,15 @@ await scenario("E-device-registry", async (ctx) => {
   await row.waitFor({ timeout: 20000 });
   assert.equal(await row.getAttribute("data-this-device"), "true");
   assert.match(await row.innerText(), /This device · Online/);
-  assert.match(await row.innerText(), /Files, Shell, Git/);
+  // Capabilities are registry facts, not admin text in the normal Devices UI.
+  const capabilities = (await row.getAttribute("data-capabilities")).split(",");
+  for (const capability of ["files", "shell", "git"]) assert.ok(capabilities.includes(capability));
+  assert.doesNotMatch(await row.innerText(), /Shell|Files|Git|Computer Use/);
+  // M2E: the raw process runner is not part of normal Account UX.
+  await snap(page.getByTestId("acevra-account-section"), "account-devices");
+  assert.equal(await page.getByTestId("acevra-tasks-section").count(), 0);
+  assert.equal(await page.getByLabel("Program").count(), 0);
+  assert.equal(await page.getByLabel("Working directory").count(), 0);
   const rows1 = await deviceRows();
   assert.equal(rows1.length, before.size + 1);
   const deviceId = rows1.find((r) => !before.has(r.id)).id;
@@ -551,13 +576,29 @@ await scenario("G-remote-process", async (ctx) => {
     throw new Error("timeout");
   };
   const children = [];
-  const { page } = await open(ctx, { apiBase: backendOrigin(), user: "user_admitted" });
+  const { page } = await open(ctx, {
+    apiBase: backendOrigin(),
+    user: "user_admitted",
+    engineering: true,
+  });
+  const hasShell = async (locator) =>
+    (await locator.first().getAttribute("data-capabilities")).split(",").includes("shell");
+  const runOn = page.getByTestId("v4-composer-run-on");
+  const runOnOption = (id) =>
+    page.locator(`[data-testid="v4-composer-run-on-option"][data-target-id="${id}"]`);
   try {
     await connectProvider(page);
     await page.getByTestId("acevra-account-choice").waitFor({ timeout: 30000 });
     await page.getByTestId("acevra-account-signin").click();
     await page.getByTestId("acevra-account-choice").waitFor({ state: "hidden", timeout: 30000 });
     await skipPreferences(page);
+    // Composer: secondary Run-on control defaults to Automatic and lists this device by name.
+    await runOn.waitFor({ timeout: 30000 });
+    assert.equal(await runOn.getAttribute("data-run-on"), "auto");
+    await runOn.click();
+    await runOnOption("local").waitFor({ timeout: 10000 });
+    assert.equal(await runOnOption("local").getAttribute("data-target-status"), "available");
+    await page.keyboard.press("Escape");
     await openAccountSection(page);
     // Pair a node that has NO allowed root: it connects, but shell is not advertised.
     const bare = startNode();
@@ -585,10 +626,7 @@ await scenario("G-remote-process", async (ctx) => {
     await refreshUntil(
       async () => (await row.count()) && /Node · Online/.test(await row.first().innerText()),
     );
-    assert.ok(
-      !/Shell/.test(await row.first().innerText()),
-      "no shell advertised without a ready service",
-    );
+    assert.ok(!(await hasShell(row)), "no shell advertised without a ready service");
     await until(
       async () =>
         (await dellOption.count()) > 0 && (await dellOption.evaluate((el) => el.disabled)),
@@ -602,12 +640,33 @@ await scenario("G-remote-process", async (ctx) => {
       async () =>
         (await row.count()) &&
         /Node · Online/.test(await row.first().innerText()) &&
-        /Shell/.test(await row.first().innerText()),
+        (await hasShell(row)),
     );
     await until(async () => !(await dellOption.evaluate((el) => el.disabled)));
-    // Run on the node: pick it in the selector, then watch events arrive while it runs.
+    const nodeId = (
+      await backend.db.query(
+        "SELECT id FROM devices WHERE type = 'node' AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
+      )
+    ).rows[0].id;
+    // Composer: the paired node appears by its user-given name; choosing it is per conversation
+    // and honestly states that agent tools still run on this device.
+    await backToWorkspace(page);
+    await snap(page, "composer-run-on-automatic");
+    await runOn.click();
+    await runOnOption(nodeId).waitFor({ timeout: 10000 });
+    await snap(page, "composer-run-on-menu");
+    assert.match(await runOnOption(nodeId).innerText(), /Dell Runner/);
+    await runOnOption(nodeId).click();
+    assert.equal(await runOn.getAttribute("data-run-on"), nodeId);
+    await runOn.click();
+    await page.getByTestId("v4-composer-run-on-gap").waitFor({ timeout: 5000 });
+    await snap(page, "composer-run-on-node-selected");
+    await page.keyboard.press("Escape");
+    await openAccountSection(page);
+    await snap(page.getByTestId("acevra-devices-section"), "devices-with-node");
+    // Run on the node: the engineering runner defaults to the conversation's Run-on choice.
     const target = page.getByTestId("acevra-run-target");
-    await target.selectOption({ label: (await dellOption.innerText()).trim() });
+    assert.equal(await target.inputValue(), nodeId, "runner follows the conversation's Run on");
     await page.getByLabel("Program").fill(process.execPath);
     await page
       .getByLabel("Arguments")
@@ -647,12 +706,21 @@ await scenario("G-remote-process", async (ctx) => {
       )
     ).rows[0].payload.pid;
     process.kill(pid, 0);
-    await page.getByTestId("acevra-task-cancel").first().click();
-    await until(
-      async () =>
-        (await page.getByTestId("acevra-task-row").first().getAttribute("data-state")) ===
-        "cancelled",
-    );
+    // The conversation shows the attached task as a live card driven by TaskEvents; Stop uses the
+    // real cancellation path. The card never shows the command line.
+    await backToWorkspace(page);
+    const card = page.locator(`[data-testid="acevra-task-card"][data-task-id="${longTask}"]`);
+    await card.waitFor({ timeout: 20000 });
+    await until(async () => (await card.getAttribute("data-task-status")) === "running");
+    assert.match(await card.innerText(), /Dell Runner · Running/);
+    await card.getByText("long task started").waitFor({ timeout: 20000 });
+    assert.doesNotMatch(await card.innerText(), /setInterval|node|-e /);
+    // The first (completed) task is attached to this conversation too, shown as Done.
+    assert.equal(await page.getByTestId("acevra-task-card").count(), 2);
+    await snap(page, "conversation-task-card-running");
+    await card.getByTestId("acevra-task-card-stop").click();
+    await until(async () => (await card.getAttribute("data-task-status")) === "cancelled");
+    await snap(page, "conversation-task-card-stopped");
     await until(() => {
       try {
         process.kill(pid, 0);
@@ -661,6 +729,14 @@ await scenario("G-remote-process", async (ctx) => {
         return true;
       }
     });
+    await card.getByTestId("acevra-task-card-dismiss").click();
+    await card.waitFor({ state: "detached", timeout: 5000 });
+    await openAccountSection(page);
+    await until(
+      async () =>
+        (await page.getByTestId("acevra-task-row").first().getAttribute("data-state")) ===
+        "cancelled",
+    );
     // Local target: same UI, same event shape, no control plane.
     await target.selectOption({ index: 0 });
     await page.getByLabel("Program").fill(process.execPath);
@@ -676,12 +752,23 @@ await scenario("G-remote-process", async (ctx) => {
       async () => await dellOption.evaluate((el) => el.disabled && /offline/.test(el.textContent)),
       30000,
     );
-    // Local inference was never involved.
+    // Composer shows the offline node truthfully (listed, disabled, labelled), keeping the choice.
+    await backToWorkspace(page);
+    await runOn.click();
+    await until(
+      async () => (await runOnOption(nodeId).getAttribute("data-target-status")) === "offline",
+    );
+    assert.equal(await runOnOption(nodeId).getAttribute("aria-disabled"), "true");
+    assert.match(await runOnOption(nodeId).innerText(), /Offline/);
+    await snap(page, "composer-run-on-offline");
+    assert.equal(await runOn.getAttribute("data-run-on"), nodeId);
     await page.keyboard.press("Escape");
-    await page.getByTestId("task-settings-button").first().waitFor({ timeout: 30000 });
     return {
       remote:
-        "shell only after readiness; live events; completed; cancel killed the process; local target; offline target unavailable",
+        "shell only after readiness; live events; completed; local target; offline target unavailable",
+      composer:
+        "Run on lists real targets, per-conversation choice, honest agent-tools note, offline shown disabled",
+      card: "TaskEvent-driven card in the attached conversation, Stop cancelled and killed the process",
     };
   } finally {
     for (const child of children) child.kill("SIGKILL");

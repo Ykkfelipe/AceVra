@@ -15,6 +15,7 @@ import {
   isAccountSessionPersistent,
 } from "./accountSessionPersistence.js";
 import { resolveAccountConfig } from "./accountConfig.js";
+import { resolveEngineeringTools } from "./accountEngineeringTools.js";
 import { createAccountPreferenceStore } from "./accountPreference.js";
 import { createAccountSessionController } from "./accountSessionController.js";
 import { resolveTestTokenSource } from "./accountTestTokenSource.js";
@@ -28,6 +29,7 @@ export function resolveAccountRuntime(env: NodeJS.ProcessEnv, isPackaged: boolea
     config,
     testSource,
     clerkEnabled: Boolean(config?.publishableKey) && !testSource,
+    engineeringTools: resolveEngineeringTools(env, { isPackaged }),
   };
 }
 
@@ -164,6 +166,7 @@ export function initAccountMain(options: {
     typeof id === "string" && id.length <= 80 ? tasksApi.cancelTask(id, force === true) : null,
   );
   ipcMain.handle(AccountChannels.ChooseLocal, () => controller.chooseLocal());
+  ipcMain.handle(AccountChannels.EngineeringTools, () => options.runtime.engineeringTools);
 
   // Restore only when Clerk has persisted tokens (OS-encrypted); otherwise stay idle.
   const restored = started.then(async () => {
@@ -200,6 +203,7 @@ export function initAccountMain(options: {
         AccountChannels.PairingDecide,
         AccountChannels.DeviceRename,
         AccountChannels.DeviceRevoke,
+        AccountChannels.EngineeringTools,
       ]) {
         ipcMain.removeHandler(channel);
       }

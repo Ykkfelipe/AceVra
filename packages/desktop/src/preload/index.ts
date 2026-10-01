@@ -613,6 +613,7 @@ contextBridge.exposeInMainWorld("zcode", {
     renameDevice: (id: string, name: string) =>
       ipcRenderer.invoke(AccountChannels.DeviceRename, id, name),
     revokeDevice: (id: string) => ipcRenderer.invoke(AccountChannels.DeviceRevoke, id),
+    engineeringTools: () => ipcRenderer.invoke(AccountChannels.EngineeringTools),
     onViewChanged: (callback: (view: AccountView) => void): (() => void) => {
       const handler = (_event: unknown, view: AccountView) => callback(view);
       ipcRenderer.on(AccountChannels.ViewChanged, handler);

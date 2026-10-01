@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
+import { RefreshCwIcon } from "lucide-react";
 import type { AccountDevice, AccountDevicesView, AccountPairingPreview } from "@zcode/shared";
+import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { describeDeviceRole } from "./executionPresentation.js";
 import { useAccountText } from "./useAccountText.js";
 
-const CAPABILITY_LABELS: Record<string, string> = {
-  computerUse: "Computer Use",
-  shell: "Shell",
-  files: "Files",
-  git: "Git",
-  longTasks: "Long tasks",
-  minecraft: "Minecraft",
-};
 const REFRESH_MS = 30_000;
+const PLATFORM_LABEL: Record<AccountDevice["platform"], string> = {
+  darwin: "macOS",
+  win32: "Windows",
+  linux: "Linux",
+};
 
-/** Real registered devices only; nothing is hardcoded or implied to exist. */
+/** Device management only (name, presence, role, pair/rename/revoke). Devices run work; they aren't operated here. */
 export function AceVraDevicesSection() {
   const account = usePlatform().account;
   const text = useAccountText();
@@ -37,12 +37,20 @@ export function AceVraDevicesSection() {
   }, [refresh]);
   if (!account || !view) return null;
 
-  const status = (device: AccountDevice) =>
+  const presence = (device: AccountDevice) =>
     device.presence === "revoked"
       ? text("devices.revoked", "Revoked")
       : device.presence === "online"
         ? text("devices.online", "Online")
         : text("devices.offline", "Offline");
+  const role = (device: AccountDevice) => {
+    const kind = describeDeviceRole(device, view.thisDeviceId);
+    return kind === "thisDevice"
+      ? text("devices.thisDevice", "This device")
+      : kind === "node"
+        ? text("devices.node", "Node")
+        : text("devices.desktop", "Desktop");
+  };
   const lookup = async () => {
     setPairNote(null);
     const result = await account?.lookupPairing(code);
@@ -76,22 +84,26 @@ export function AceVraDevicesSection() {
   };
 
   return (
-    <div className="space-y-3" data-testid="acevra-devices-section">
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium">{text("devices.title", "Devices")}</h3>
-        <div className="flex gap-2">
+    <div className="space-y-2" data-testid="acevra-devices-section">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-ui-base font-medium text-foreground">
+          {text("devices.title", "Devices")}
+        </h3>
+        <div className="flex items-center gap-1">
           <Button
-            size="sm"
+            size="icon-sm"
             variant="ghost"
             data-testid="acevra-devices-refresh"
+            aria-label={text("devices.refresh", "Refresh")}
             onClick={() => void refresh()}
           >
-            {text("devices.refresh", "Refresh")}
+            <RefreshCwIcon className="size-3.5" />
           </Button>
           <Button
             size="sm"
             variant="outline"
             data-testid="acevra-pair-open"
+            aria-expanded={pairOpen}
             onClick={() => setPairOpen((open) => !open)}
           >
             {text("pair.open", "Pair a node")}
@@ -99,7 +111,10 @@ export function AceVraDevicesSection() {
         </div>
       </div>
       {pairOpen && (
-        <div className="space-y-2 rounded-md border p-3 text-sm" data-testid="acevra-pair-panel">
+        <div
+          className="space-y-2 rounded-xl border border-card-border bg-card p-3 text-ui-base"
+          data-testid="acevra-pair-panel"
+        >
           {!pending ? (
             <form
               className="flex gap-2"
@@ -123,12 +138,8 @@ export function AceVraDevicesSection() {
           ) : (
             <div data-testid="acevra-pair-pending" className="space-y-2">
               <p className="font-medium">{pending.displayName}</p>
-              <p className="text-muted-foreground">
-                {pending.platform === "darwin"
-                  ? "macOS"
-                  : pending.platform === "win32"
-                    ? "Windows"
-                    : "Linux"}
+              <p className="text-ui-sm text-foreground-subtle">
+                {PLATFORM_LABEL[pending.platform]}
                 {" · "}
                 {text("pair.review", "Only approve a node you started yourself.")}
               </p>
@@ -154,12 +165,12 @@ export function AceVraDevicesSection() {
         </div>
       )}
       {pairNote && (
-        <p className="text-sm text-muted-foreground" data-testid="acevra-pair-note">
+        <p className="text-ui-sm text-foreground-subtle" data-testid="acevra-pair-note">
           {pairNote}
         </p>
       )}
       {view.registration === "conflict" && (
-        <p className="text-sm text-muted-foreground" data-testid="acevra-device-conflict">
+        <p className="text-ui-sm text-foreground-subtle" data-testid="acevra-device-conflict">
           {text(
             "devices.conflict",
             "This installation is registered to a different AceVra account. Local features still work.",
@@ -167,101 +178,112 @@ export function AceVraDevicesSection() {
         </p>
       )}
       {view.registration === "unavailable" && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-ui-sm text-foreground-subtle">
           {text("devices.unavailable", "Devices are temporarily unavailable.")}
         </p>
       )}
       {view.devices.length === 0 && view.registration === "registered" && (
-        <p className="text-sm text-muted-foreground">{text("devices.none", "No devices yet.")}</p>
+        <p className="text-ui-sm text-foreground-subtle">
+          {text("devices.none", "No devices yet.")}
+        </p>
       )}
-      <ul className="space-y-2">
-        {view.devices.map((device) => {
-          const isThis = device.id === view.thisDeviceId;
-          return (
-            <li
-              key={device.id}
-              className="rounded-md border p-3 text-sm"
-              data-testid="acevra-device-row"
-              data-this-device={isThis ? "true" : "false"}
-            >
-              <div className="flex items-center gap-2">
-                <span aria-hidden>{device.presence === "online" ? "●" : "○"}</span>
-                {editing?.id === device.id ? (
-                  <form
-                    className="flex gap-2"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const name = editing.name;
-                      setEditing(null);
-                      void act(() => account.renameDevice(device.id, name));
-                    }}
-                  >
-                    <Input
-                      autoFocus
-                      aria-label={text("devices.name", "Device name")}
-                      value={editing.name}
-                      maxLength={60}
-                      onChange={(event) => setEditing({ id: device.id, name: event.target.value })}
-                    />
-                    <Button type="submit" size="sm" data-testid="acevra-device-rename-save">
-                      {text("devices.save", "Save")}
-                    </Button>
-                  </form>
-                ) : (
-                  <span className="font-medium" data-testid="acevra-device-name">
-                    {device.displayName}
-                  </span>
-                )}
-              </div>
-              <p className="text-muted-foreground">
-                {isThis
-                  ? `${text("devices.thisDevice", "This device")} · `
-                  : device.type === "node"
-                    ? `${text("devices.node", "Node")} · `
-                    : ""}
-                {status(device)}
-                {device.capabilities.length > 0 &&
-                  ` · ${device.capabilities.map((c) => CAPABILITY_LABELS[c] ?? c).join(", ")}`}
-              </p>
-              {device.presence !== "revoked" && (
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    data-testid="acevra-device-rename"
-                    onClick={() => setEditing({ id: device.id, name: device.displayName })}
-                  >
-                    {text("devices.rename", "Rename")}
-                  </Button>
-                  {revoking === device.id ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      data-testid="acevra-device-revoke-confirm"
-                      onClick={() => {
-                        setRevoking(null);
-                        void act(() => account.revokeDevice(device.id));
+      {view.devices.length > 0 && (
+        <ul className="divide-y divide-border rounded-xl border border-card-border bg-card">
+          {view.devices.map((device) => {
+            const isThis = device.id === view.thisDeviceId;
+            const revoked = device.presence === "revoked";
+            return (
+              <li
+                key={device.id}
+                className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-ui-base"
+                data-testid="acevra-device-row"
+                data-this-device={isThis ? "true" : "false"}
+                data-presence={device.presence}
+                data-capabilities={device.capabilities.join(",")}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "size-2 shrink-0 rounded-full",
+                    device.presence === "online" ? "bg-success" : "bg-foreground-subtlest",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  {editing?.id === device.id ? (
+                    <form
+                      className="flex gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        const name = editing.name;
+                        setEditing(null);
+                        void act(() => account.renameDevice(device.id, name));
                       }}
                     >
-                      {text("devices.revokeConfirm", "Confirm revoke")}
-                    </Button>
+                      <Input
+                        autoFocus
+                        aria-label={text("devices.name", "Device name")}
+                        value={editing.name}
+                        maxLength={60}
+                        onChange={(event) =>
+                          setEditing({ id: device.id, name: event.target.value })
+                        }
+                      />
+                      <Button type="submit" size="sm" data-testid="acevra-device-rename-save">
+                        {text("devices.save", "Save")}
+                      </Button>
+                    </form>
                   ) : (
+                    <p
+                      className={cn("truncate font-medium", revoked && "text-foreground-subtle")}
+                      data-testid="acevra-device-name"
+                    >
+                      {device.displayName}
+                    </p>
+                  )}
+                  <p className="text-ui-sm text-foreground-subtle">
+                    {`${role(device)} · ${presence(device)}`}
+                  </p>
+                </div>
+                {!revoked && editing?.id !== device.id && (
+                  <div className="flex shrink-0 items-center gap-1">
                     <Button
                       size="sm"
                       variant="ghost"
-                      data-testid="acevra-device-revoke"
-                      onClick={() => setRevoking(device.id)}
+                      data-testid="acevra-device-rename"
+                      onClick={() => setEditing({ id: device.id, name: device.displayName })}
                     >
-                      {text("devices.revoke", "Revoke")}
+                      {text("devices.rename", "Rename")}
                     </Button>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <p className="text-xs text-muted-foreground">
+                    {revoking === device.id ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="acevra-device-revoke-confirm"
+                        onClick={() => {
+                          setRevoking(null);
+                          void act(() => account.revokeDevice(device.id));
+                        }}
+                      >
+                        {text("devices.revokeConfirm", "Confirm revoke")}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        data-testid="acevra-device-revoke"
+                        onClick={() => setRevoking(device.id)}
+                      >
+                        {text("devices.revoke", "Revoke")}
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="text-ui-sm text-foreground-subtle">
         {text(
           "devices.note",
           "Revoking removes a device's account association. Local features on it keep working.",

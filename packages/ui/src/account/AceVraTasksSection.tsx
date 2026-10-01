@@ -3,6 +3,7 @@ import type { ExecutionTarget, TaskEvent, TaskView } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { AUTO_TARGET, useExecutionTargetStore } from "@/store/executionTargetStore.js";
 import { splitArgs } from "./splitArgs.js";
 import { useAccountText } from "./useAccountText.js";
 import { useAceVraAccount } from "./useAceVraAccount.js";
@@ -70,14 +71,22 @@ function describeEvent(event: TaskEvent): { text: string; tone: "out" | "err" | 
   }
 }
 
-/** Run a process on an execution target and watch it live. Local runs need no account. */
+/**
+ * Engineering-only harness (gated by `engineeringTools`): run a process on an execution target and
+ * watch it live. Started tasks are attached to the last active conversation so its live card shows
+ * them; the conversation's Run-on choice is the default target.
+ */
 export function AceVraTasksSection() {
   const account = usePlatform().account;
   const text = useAccountText();
   const phase = useAceVraAccount().view?.phase;
   const [targets, setTargets] = useState<ExecutionTarget[]>([]);
   const [tasks, setTasks] = useState<TaskView[]>([]);
-  const [targetId, setTargetId] = useState("local");
+  const [targetId, setTargetId] = useState(() => {
+    const { activeScope, selectionOf } = useExecutionTargetStore.getState();
+    const selection = activeScope ? selectionOf(activeScope) : AUTO_TARGET;
+    return selection === AUTO_TARGET ? "local" : selection;
+  });
   const [executable, setExecutable] = useState("");
   const [argLine, setArgLine] = useState("");
   const [cwd, setCwd] = useState("");
@@ -150,6 +159,8 @@ export function AceVraTasksSection() {
       process: { executable: executable.trim(), args: splitArgs(argLine), cwd: cwd.trim() },
     });
     if (result.ok) {
+      const { activeScope, attachTask } = useExecutionTargetStore.getState();
+      if (activeScope) attachTask(activeScope, result.taskId);
       setSelected(result.taskId);
       await refreshTasks();
     } else {
@@ -164,7 +175,7 @@ export function AceVraTasksSection() {
 
   return (
     <div className="space-y-3" data-testid="acevra-tasks-section">
-      <h3 className="font-medium">{text("tasks.title", "Run a process")}</h3>
+      <h3 className="font-medium">{text("tasks.title", "Engineering: run a process")}</h3>
       <p className="text-xs text-muted-foreground">
         {text(
           "tasks.note",

@@ -183,6 +183,8 @@ export interface IAccountPlatform extends IRemoteProcessService {
   listDevices(): Promise<AccountDevicesView>;
   renameDevice(id: string, displayName: string): Promise<AccountDevicesView>;
   revokeDevice(id: string): Promise<AccountDevicesView>;
+  /** Engineering-only raw process runner UI; never true in packaged builds. */
+  engineeringTools(): Promise<boolean>;
 }
 
 /** Runtime validation of the backend `/v1/me` body; anything else is a failure. */
@@ -221,6 +223,7 @@ export const AccountChannels = {
   PairingDecide: "acevra-account:pairing-decide",
   DeviceRename: "acevra-account:device-rename",
   DeviceRevoke: "acevra-account:device-revoke",
+  EngineeringTools: "acevra-account:engineering-tools",
   /** main → main renderer */
   ViewChanged: "acevra-account:view-changed",
   /** account window → main */

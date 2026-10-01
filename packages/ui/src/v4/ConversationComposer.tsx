@@ -155,6 +155,9 @@ import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBac
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
 import { ComputerUseBar } from "@/v4/composer/ComputerUseBar.js";
 import { MiniComputerPanel } from "@/v4/composer/MiniComputerPanel.js";
+import { ExecutionTaskCards } from "@/v4/composer/ExecutionTaskCards.js";
+import { V4ComposerRunOnControl } from "@/v4/composer/V4ComposerRunOnControl.js";
+import { useExecutionScope } from "@/hooks/useExecutionScope.js";
 import { useComputerUseSession } from "@/hooks/useComputerUseSession.js";
 import {
   V4ComposerModeSwitch,
@@ -598,6 +601,12 @@ function ConversationComposerImpl({
   const draftScopeId = sessionId ?? V4_DRAFT_SCOPE_ROOT;
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
   const configPickerScopeKey = `${workspaceKey}\0${draftScopeId}`;
+  const executionScope = useExecutionScope(
+    { workspacePath, ...(workspaceIdentity ? { workspaceIdentity } : {}) },
+    sessionId ?? null,
+  );
+  // 远程 workspace 的 agent 不在本机运行，「Run on」与本机发起的任务卡不适用。
+  const showExecutionControls = !workspaceIdentity?.trim();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const [configPickerState, setConfigPickerState] = useState<{
@@ -2283,6 +2292,9 @@ function ConversationComposerImpl({
           remoteSessionId={remoteSessionId}
           currentSessionBusy={canStop}
         />
+        {showExecutionControls ? (
+          <V4ComposerRunOnControl scopeKey={executionScope} disabled={disabled} />
+        ) : null}
         <ConversationBackgroundWorkTrigger
           backgroundWorks={snapshot?.backgroundWorks ?? []}
           runningSubagentCount={runningSubagentCount}
@@ -2295,6 +2307,7 @@ function ConversationComposerImpl({
       activeConfigPicker,
       canStop,
       disabled,
+      executionScope,
       intl,
       draftConfig,
       handleConfigPickerOpenChange,
@@ -2304,6 +2317,7 @@ function ConversationComposerImpl({
       provider,
       remoteSessionId,
       runningSubagentCount,
+      showExecutionControls,
       snapshot?.backgroundWorks,
       workspaceIdentity,
       workspacePath,
@@ -2355,6 +2369,7 @@ function ConversationComposerImpl({
           已是安全专属（reserving/active/让出/停止等）——observe/background/workspace 一律
           不渲染，由 MiniComputerPanel 呈现。这里不再叠加第二道门，避免过期逻辑误渲染。 */}
       <ComputerUseBar session={computerUseSession} turnRunning={canStop} onStop={onStop} />
+      {showExecutionControls ? <ExecutionTaskCards scopeKey={executionScope} /> : null}
       {visibleError ? (
         // 仅展示附件错误会漏掉会话级 lastError，任务失败后也应在输入框上方显示原因。
         // 这里复用旧 ChatErrorBanner 壳，只接收 SessionPane 已归一化后的当前错误。
