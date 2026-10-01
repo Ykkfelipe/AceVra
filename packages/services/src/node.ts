@@ -2220,7 +2220,7 @@ export function createLocalServices(options: {
     stop: async (sessionId) => {
       await leaseAuthorityServers.get(services)?.authority.stop();
       // 原 mini 面板同时停止 Computer 和当前回合；统一右栏不能丢失回合停止路径。
-      await services.zcodeTaskService.stopGeneration({ taskId: sessionId });
+      await services.get(IZCodeTaskService).stopGeneration({ taskId: sessionId });
     },
     call: async (params) => {
       const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
