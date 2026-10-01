@@ -28,8 +28,12 @@ register("./uiAssetStubLoader.mjs", import.meta.url);
 
 const { ZCodeIntlProvider } = await import("../src/i18n/IntlProvider.js");
 const enUS = (await import("../src/i18n/locales/en-US.js")).default;
-const { MiniComputerPanel, MiniComputerPanelMounted, workspaceCursorPercent } =
-  await import("../src/v4/composer/MiniComputerPanel.js");
+const {
+  isAgentWorkspaceActive,
+  MiniComputerPanel,
+  MiniComputerPanelMounted,
+  workspaceCursorPercent,
+} = await import("../src/v4/composer/MiniComputerPanel.js");
 const { useMiniComputerStore } = await import("../src/store/miniComputerStore.js");
 
 const FRAME_URL = "data:image/png;base64,QUJD";
@@ -352,4 +356,85 @@ test("rendering is pure: no frame fetch, no capture, identical markup across ren
     ),
   );
   assert.ok(bare.includes(TID_V4_MINI_COMPUTER));
+});
+
+// ---------------------------------------------------------------------------
+// M3 cleanup: the mini panel is the canonical Computer UI for background work.
+// ---------------------------------------------------------------------------
+
+/** Wraps the fake workspace into a present session view (as the shared poll returns it). */
+function activeView(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const ws = workspace({ updatedAt: Date.now(), ...overrides });
+  const rest = { ...overrides };
+  delete rest.updatedAt;
+  return {
+    present: true,
+    paused: false,
+    lease: { state: "inactive" },
+    workspace: ws,
+    ...rest,
+  };
+}
+
+test("agent-workspace active: the large Computer Use bar is suppressed, the panel is canonical", () => {
+  resetStore();
+  // The composer gates the bar on this exact predicate.
+  assert.equal(isAgentWorkspaceActive(activeView(), true), true);
+  const html = renderWired({ turnRunning: true });
+  assert.ok(html.includes(TID_V4_MINI_COMPUTER));
+});
+
+test("mini hidden: only the compact reopen chip shows; the bar stays suppressed", () => {
+  resetStore();
+  assert.equal(isAgentWorkspaceActive(activeView(), true), true);
+  useMiniComputerStore.getState().hide("session-a");
+  // Helper truth unchanged by a visual preference: the composer still suppresses the bar.
+  assert.equal(isAgentWorkspaceActive(activeView(), true), true);
+  const mounted = renderMounted(
+    mountedData({
+      hidden: true,
+      turnRunning: true,
+      workspace: workspace({ updatedAt: Date.now() }),
+    }),
+  );
+  assert.equal(mounted.includes(TID_V4_MINI_COMPUTER_STOP), false);
+  assert.ok(mounted.includes(TID_V4_MINI_COMPUTER_REOPEN));
+  assert.ok(mounted.includes("Working in background · Show Computer"));
+});
+
+test("native exclusive control: the large bar stays visible (safety surface)", () => {
+  assert.equal(
+    isAgentWorkspaceActive(
+      {
+        present: true,
+        paused: false,
+        lease: { state: "reserving" },
+        workspace: workspace({ updatedAt: Date.now() }),
+      },
+      true,
+    ),
+    false,
+    "even an active workspace never suppresses the bar during native lease activity",
+  );
+  assert.equal(isAgentWorkspaceActive(null, true), false);
+  assert.equal(isAgentWorkspaceActive({ present: false }, true), false);
+  // Native observe-only activity without a workspace projection keeps the bar too.
+  assert.equal(
+    isAgentWorkspaceActive({ present: true, paused: false, lease: { state: "inactive" } }, true),
+    false,
+  );
+});
+
+test("switching tasks: suppression is per session view, no state leakage", () => {
+  resetStore();
+  // Task A's active workspace does not leak into Task B's (workspace-less) view.
+  assert.equal(isAgentWorkspaceActive(activeView(), true), true);
+  assert.equal(
+    isAgentWorkspaceActive({ present: true, paused: false, lease: { state: "inactive" } }, false),
+    false,
+  );
+  // And hiding task A's panel does not hide task B's (store-level, session-keyed).
+  useMiniComputerStore.getState().hide("session-a");
+  assert.equal(useMiniComputerStore.getState().hiddenBySession["session-a"], true);
+  assert.equal(useMiniComputerStore.getState().hiddenBySession["session-b"] ?? false, false);
 });

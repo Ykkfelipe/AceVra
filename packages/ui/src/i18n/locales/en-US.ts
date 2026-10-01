@@ -4678,7 +4678,7 @@ const enUS: Record<string, string> = {
   "chat.miniComputer.expand": "Expand",
   "chat.miniComputer.exitExpand": "Collapse",
   "chat.miniComputer.hide": "Hide mini Computer",
-  "chat.miniComputer.reopen": "Mini Computer",
+  "chat.miniComputer.reopen": "Working in background · Show Computer",
   "chat.toolbar.mode.description":
     "Switch the task's permission and execution mode, such as default, plan, or accept edits.",
   "chat.composer.leadingActions.label": "Conversation actions",

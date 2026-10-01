@@ -154,7 +154,7 @@ import { useConversationSelectionReferences } from "@/v4/composer/useConversatio
 import { ConversationBackgroundWorkTrigger } from "@/v4/composer/ConversationBackgroundWorkTrigger.js";
 import { V4ComposerCuaEntry } from "@/v4/composer/V4ComposerCuaEntry.js";
 import { ComputerUseBar } from "@/v4/composer/ComputerUseBar.js";
-import { MiniComputerPanel } from "@/v4/composer/MiniComputerPanel.js";
+import { isAgentWorkspaceActive, MiniComputerPanel } from "@/v4/composer/MiniComputerPanel.js";
 import { useComputerUseSession } from "@/hooks/useComputerUseSession.js";
 import {
   V4ComposerModeSwitch,
@@ -2351,7 +2351,12 @@ function ConversationComposerImpl({
           onStop={onStop}
         />
       </div>
-      <ComputerUseBar session={computerUseSession} turnRunning={canStop} onStop={onStop} />
+      {/* M3：agent-workspace 活跃期间 mini Computer 面板是唯一 Computer UI，不再渲染
+          大控制条（避免帧/光标/Pause/Stop 双份呈现）；原生前台/独占租约仍保留大控制条。
+          隐藏任一视觉绝不改变执行状态。 */}
+      {!isAgentWorkspaceActive(computerUseSession.session, canStop) ? (
+        <ComputerUseBar session={computerUseSession} turnRunning={canStop} onStop={onStop} />
+      ) : null}
       {visibleError ? (
         // 仅展示附件错误会漏掉会话级 lastError，任务失败后也应在输入框上方显示原因。
         // 这里复用旧 ChatErrorBanner 壳，只接收 SessionPane 已归一化后的当前错误。

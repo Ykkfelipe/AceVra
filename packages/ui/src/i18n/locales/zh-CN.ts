@@ -4389,7 +4389,7 @@ const zhCN: Record<string, string> = {
   "chat.miniComputer.expand": "展开",
   "chat.miniComputer.exitExpand": "收起",
   "chat.miniComputer.hide": "隐藏迷你电脑",
-  "chat.miniComputer.reopen": "迷你电脑",
+  "chat.miniComputer.reopen": "后台工作中 · 显示电脑",
   "chat.toolbar.mode.description": "切换当前任务的权限/执行模式，例如默认、计划或接受编辑。",
   "chat.composer.leadingActions.label": "会话操作",
   "chat.composer.taskOptions.label": "任务选项",

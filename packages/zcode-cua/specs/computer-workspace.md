@@ -41,9 +41,9 @@ frontmost surface. There is no supported API to deliver them to a background win
 1. **Background semantic actions** — AX-level `press` / `set_value` on background windows
    (already implemented; classification-owned by the Helper). Works for AX-writable targets;
    honestly refused otherwise (e.g. TextEdit's AXValue write refusal observed live).
-2. **Workspace-frontmost actions** — the target app is frontmost *on the agent's own virtual
-display*, so synthesized events land on it while the user's physical display keeps the user's
-frontmost app and focus.
+2. **Workspace-frontmost actions** — the target app is frontmost _on the agent's own virtual
+   display_, so synthesized events land on it while the user's physical display keeps the user's
+   frontmost app and focus.
 
 The workspace (2) is the mechanism that makes "the agent just works in the background" true
 for arbitrary apps, and it is what the mini view shows.
@@ -156,7 +156,6 @@ physical input yields → authority release → UI `yieldedToUser`.
 - **M3 — Mini Computer view (implemented on the M2A substrate, no virtual display)**:
   a persistent floating picture-in-picture panel over the conversation, tied to the
   session's workspace. Rules:
-
   - **Projection only.** The panel renders the workspace projection; it is not a second
     state machine. The host lease authority maintains the projection from the same
     activity reports that feed the Computer Use bar, and the session view carries it
@@ -174,11 +173,19 @@ physical input yields → authority release → UI `yieldedToUser`.
     same workspace, never a second session.
   - **Fencing.** Panel state is keyed by session; Task A's frames/cursor never leak into
     Task B's panel.
+  - **One canonical Computer UI for background work.** While the session's agent-workspace
+    projection is relevant, the floating panel is the Computer UI: the large Computer Use
+    bar is not rendered alongside it. If the user hides the panel, only the compact
+    reopen affordance ("Working in background · Show Computer") remains. The bar stays
+    available for native foreground/exclusive control — including escalation during an
+    active workspace — where a prominent safety surface is appropriate. Hiding either
+    visual never changes execution state.
   - **Real controls.** Pause/resume/stop write through the existing admission/service
     paths. Take Over (bringing the target app to the user's foreground) is explicit user
     action only.
   - Virtual display remains a future substrate swap (extension point), not a
     prerequisite; snapshot-driven frame updates are acceptable for v1.
+
 - **M4 — Acceptance extension**: background matrix (frontmost-timeline zero-steal proof,
   background semantic pass/refusal truthfulness, escalation-yield replay, pause/stop parity).
 

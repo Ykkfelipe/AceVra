@@ -30,7 +30,7 @@ import {
   TID_V4_MINI_COMPUTER_REOPEN,
   TID_V4_MINI_COMPUTER_STOP,
 } from "@zcode/shared";
-import type { CuaWorkspaceView } from "@zcode/services";
+import type { CuaComputerUseSessionView, CuaWorkspaceView } from "@zcode/services";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type {
@@ -335,6 +335,34 @@ export function MiniComputerPanelMounted(props: {
 const MINI_COMPUTER_RELEVANCE_MS = 15_000;
 
 /**
+ * True while the session's agent-workspace projection is the relevant Computer UI.
+ *
+ * The composer uses this to suppress the large Computer Use bar for background workspace
+ * activity: the mini panel is the canonical surface there, and a second banner would
+ * duplicate frame/cursor/Pause/Stop. Native lease activity (reserving/active) always
+ * keeps the bar — a prominent safety surface is exactly right during escalation, even
+ * when a workspace exists. Pure predicate; rendering or hiding either visual never
+ * touches execution state.
+ */
+export function isAgentWorkspaceActive(
+  view: CuaComputerUseSessionView | null | undefined,
+  turnRunning: boolean,
+  clock: number = Date.now(),
+): boolean {
+  if (!view?.present) return false;
+  // 原生租约（前台/独占）期间永远保留大控制条：这是显式安全面，规则不允许折叠它。
+  if (view.lease.state === "active" || view.lease.state === "reserving") return false;
+  const workspace = view.workspace;
+  if (!workspace || workspace.backendId !== "agent-workspace") return false;
+  return (
+    turnRunning ||
+    view.paused === true ||
+    workspace.state !== "idle" ||
+    clock - workspace.updatedAt < MINI_COMPUTER_RELEVANCE_MS
+  );
+}
+
+/**
  * Wired component: one shared `useComputerUseSession` poll (hoisted by the composer) feeds
  * both the Computer Use bar and this panel — a second poller would double the host RPC and
  * the Helper reconciliation for no benefit. Presentation preferences (hidden/expanded) come
@@ -369,12 +397,7 @@ export function MiniComputerPanel(props: {
   const paused = view?.present ? view.paused : false;
   const leaseActive = view?.present ? view.lease.state === "active" : false;
 
-  const relevant =
-    workspace !== null &&
-    (turnRunning ||
-      paused ||
-      workspace.state !== "idle" ||
-      clock - workspace.updatedAt < MINI_COMPUTER_RELEVANCE_MS);
+  const relevant = isAgentWorkspaceActive(view, turnRunning, clock);
 
   if (!sessionId || !workspace || !relevant) return null;
 
