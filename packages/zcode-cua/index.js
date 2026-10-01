@@ -190,7 +190,8 @@ export function createComputerUseRuntime(options = {}) {
         typeof input?.context?.turnId === "string" && input.context.turnId
           ? input.context.turnId
           : sessionId;
-      const mutating = method === "press" || method === "set_value" || foreground;
+      const workspaceAction = method === "workspace_click" || method === "workspace_type_text";
+      const mutating = method === "press" || method === "set_value" || foreground || workspaceAction;
       if (
         leaseAuthority &&
         typeof leaseAuthority.admission === "function" &&
@@ -224,7 +225,7 @@ export function createComputerUseRuntime(options = {}) {
         const { sanitizeObservationResult } = await import("./observe-result.js");
         // `callBrokerMethod` refuses a helper whose verified signature identity is missing or is
         // not one this build expects, so what reaches a model was produced by a verified helper.
-        const params = foreground
+        const params = foreground || workspaceAction
           ? {
               ...input.arguments,
               owner_session: input.context.sessionId,
@@ -328,7 +329,7 @@ export function createComputerUseRuntime(options = {}) {
             accessibility: sanitized.accessibility,
           });
         }
-        const action = method === "press" || method === "set_value" || foreground;
+        const action = method === "press" || method === "set_value" || foreground || workspaceAction;
         const normalized = action ? normalizeComputerUseResult(sanitized, method) : sanitized;
         if (
           foreground &&

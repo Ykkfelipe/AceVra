@@ -18,6 +18,10 @@
       "types": "./computer-backend.d.ts",
       "import": "./computer-backend.js"
     },
+    "./computer-workspace-backend": {
+      "types": "./computer-workspace-backend.d.ts",
+      "import": "./computer-workspace-backend.js"
+    },
     "./frame-contract": {
       "types": "./frame-contract.d.ts",
       "import": "./frame-contract.js"

@@ -16,6 +16,8 @@ export const COMPUTER_USE_METHODS = Object.freeze({
   key_press: "foreground",
   scroll: "foreground",
   drag: "foreground",
+  workspace_click: "mutation",
+  workspace_type_text: "mutation",
 });
 
 export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
@@ -36,6 +38,10 @@ export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
   "computer.key_press": "key_press",
   "computer.scroll": "scroll",
   "computer.drag": "drag",
+  // Agent workspace substrate (M2A): pid-targeted background actions that never touch the
+  // user's foreground or cursor. They are NOT foreground methods: no lease, no activation.
+  "computer.workspace_click": "workspace_click",
+  "computer.workspace_type_text": "workspace_type_text",
 });
 
 export const COMPUTER_USE_BACKEND_SUPPORT = Object.freeze({

@@ -199,11 +199,11 @@ private func safeValue(_ element: AXUIElement) -> Any? {
     return nil
 }
 
-private func frontmostPid() -> Int {
+func frontmostPid() -> Int {
     Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0)
 }
 
-private func cursorLocation() -> [String: Double]? {
+func cursorLocation() -> [String: Double]? {
     guard let point = CGEvent(source: nil)?.location else { return nil }
     return ["x": Double(point.x), "y": Double(point.y)]
 }

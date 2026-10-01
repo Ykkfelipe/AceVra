@@ -23,6 +23,7 @@ let supportedBrokerMethods: Set<String> = [
     "permission_status", "list_apps", "list_windows", "observe", "control_status", "press", "set_value",
     "acquire_control", "release_control", "activate_target", "move_pointer", "click",
     "type_text", "key_press", "scroll", "drag",
+    "workspace_click", "workspace_type_text",
 ]
 
 // MARK: - Observation bounds

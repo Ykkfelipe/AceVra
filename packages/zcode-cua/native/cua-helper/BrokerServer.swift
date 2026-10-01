@@ -86,6 +86,11 @@ func brokerDispatch(
         return brokerFail("semantic actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
     }
+    if ["workspace_click", "workspace_type_text"].contains(method),
+       !cuaHostConnectSessionActive {
+        return brokerFail("workspace actions require the peer-bound host session",
+                          code: "not_authorized", id: request["id"])
+    }
     let params = request["params"] as? [String: Any] ?? [:]
     if ["acquire_control", "release_control", "activate_target", "move_pointer", "click",
         "type_text", "key_press", "scroll", "drag"].contains(method),
@@ -151,6 +156,18 @@ func brokerDispatch(
         return brokerOk(ForegroundController.shared.scroll(params), id: request["id"])
     case "drag":
         return brokerOk(ForegroundController.shared.drag(params), id: request["id"])
+    case "workspace_click":
+        guard WorkspaceController.validClickParams(params) else {
+            return brokerFail("workspace_click request shape is invalid", code: "bad_request",
+                              id: request["id"])
+        }
+        return brokerOk(WorkspaceController.click(params), id: request["id"])
+    case "workspace_type_text":
+        guard WorkspaceController.validTypeParams(params) else {
+            return brokerFail("workspace_type_text request shape is invalid", code: "bad_request",
+                              id: request["id"])
+        }
+        return brokerOk(WorkspaceController.typeText(params), id: request["id"])
     default:
         return brokerFail("unreachable", code: "internal", id: request["id"])
     }

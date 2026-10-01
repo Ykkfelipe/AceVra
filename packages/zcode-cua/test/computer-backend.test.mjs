@@ -220,7 +220,13 @@ describe("user-foreground invariant (permanent)", () => {
           assert.equal(backend.capabilities.requiresUserForegroundForPhysicalInput, true);
         }
         if (routeClass === "workspace") {
-          assert.equal(backend.capabilities.ownsForegroundWorkspace, true);
+          // "workspace" = the backend performs the physical work independently of the
+          // user's foreground (owned surface or pid-targeted synthesis).
+          assert.notEqual(
+            backend.capabilities.requiresUserForegroundForPhysicalInput,
+            true,
+            `${method}: workspace routes require foreground-independent delivery`,
+          );
         }
       }
     }

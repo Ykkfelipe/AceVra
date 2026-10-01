@@ -43,6 +43,10 @@ export const COMPUTER_METHOD_CLASSES = Object.freeze({
   key_press: "physical",
   scroll: "physical",
   drag: "physical",
+  // Agent-workspace methods: physical work delivered independently of the user's
+  // foreground (pid-targeted AX actions / keyboard events).
+  workspace_click: "physical",
+  workspace_type_text: "physical",
   // Lease lifecycle: foreground-control management is inherently takeover machinery.
   acquire_control: "lease",
   release_control: "lease",
@@ -92,9 +96,10 @@ export function routeClassFor(method, capabilities) {
   // physical-input requirement only governs physical routes.
   if (methodClass === "background") return "background";
   if (methodClass === "lease") return "foreground";
-  // Physical input: an independent workspace owns its own foreground, so synthesis there
-  // is "workspace"; on any other backend it disturbs the user's real foreground.
-  return capabilities.ownsForegroundWorkspace === true ? "workspace" : "foreground";
+  // Physical input: a backend that needs the user's real foreground delivers it as
+  // takeover ("foreground"); any backend that can act independently of the user's
+  // foreground — owned workspace surface or pid-targeted synthesis — routes "workspace".
+  return capabilities.requiresUserForegroundForPhysicalInput === true ? "foreground" : "workspace";
 }
 
 function modelToolNameFor(brokerMethod) {
@@ -159,12 +164,16 @@ export function createComputerBackendRouter({ backends }) {
       method === "move_pointer" ||
       method === "click" ||
       method === "scroll" ||
-      method === "drag"
+      method === "drag" ||
+      method === "workspace_click"
     ) {
       return (
         backend.capabilities.independentPointer === true ||
         backend.capabilities.requiresUserForegroundForPhysicalInput === true
       );
+    }
+    if (method === "workspace_type_text") {
+      return backend.capabilities.independentTextInput === true;
     }
     return (
       backend.capabilities.independentTextInput === true ||
@@ -186,8 +195,11 @@ export function createComputerBackendRouter({ backends }) {
       const methodClass = COMPUTER_METHOD_CLASSES[method];
       let chosen = candidates[0];
       if (methodClass === "physical") {
+        // Prefer an owned workspace surface, then any independent (non-user-foreground)
+        // delivery, and only then the native takeover route.
         chosen =
           candidates.find((b) => b.capabilities.ownsForegroundWorkspace === true) ??
+          candidates.find((b) => b.capabilities.requiresUserForegroundForPhysicalInput !== true) ??
           candidates.find((b) => b.capabilities.requiresUserForegroundForPhysicalInput === true) ??
           chosen;
       } else if (methodClass === "background") {

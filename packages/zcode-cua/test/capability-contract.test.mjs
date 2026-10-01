@@ -37,6 +37,8 @@ describe("canonical Computer Use contract", () => {
       "computer.key_press": "key_press",
       "computer.scroll": "scroll",
       "computer.drag": "drag",
+      "computer.workspace_click": "workspace_click",
+      "computer.workspace_type_text": "workspace_type_text",
     });
     for (const [publicName, method] of Object.entries(COMPUTER_USE_MODEL_TO_METHOD)) {
       assert.equal(resolveComputerUseMethod(publicName), method);

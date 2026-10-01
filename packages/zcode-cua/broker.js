@@ -208,6 +208,8 @@ const BROKER_METHOD_KINDS = Object.freeze({
   key_press: "mutating",
   scroll: "mutating",
   drag: "mutating",
+  workspace_click: "mutating",
+  workspace_type_text: "mutating",
 });
 
 export function isBrokerMethod(method) {
