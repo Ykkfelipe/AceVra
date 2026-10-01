@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { installCandidate, validateHandoff } from "./accept-local-alpha-installed.mjs";
+import {
+  installCandidate,
+  installedAppProcessPattern,
+  validateHandoff,
+} from "./accept-local-alpha-installed.mjs";
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -122,4 +126,23 @@ test("backs up an existing app and rolls back an ambiguous target", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("running-app check only matches processes executing from inside the installed bundle", () => {
+  const pattern = new RegExp(installedAppProcessPattern("/Applications/AceVra.app"));
+  assert.ok(pattern.test("/Applications/AceVra.app/Contents/MacOS/AceVra"));
+  assert.ok(
+    pattern.test(
+      "/Applications/AceVra.app/Contents/Frameworks/AceVra Helper (Renderer).app/Contents/MacOS/AceVra Helper (Renderer) --type=renderer",
+    ),
+  );
+  // The installer itself (and shells/greps) only mention the path as an argument.
+  assert.ok(
+    !pattern.test(
+      "node scripts/release/accept-local-alpha-installed.mjs --app /Applications/AceVra.app",
+    ),
+  );
+  assert.ok(!pattern.test("/usr/bin/pgrep -f /Applications/AceVra.app"));
+  assert.ok(!pattern.test("/Applications/.AceVra.app.backup-1/Contents/MacOS/AceVra"));
+  assert.ok(!pattern.test("/Applications/AceVraXapp/Contents/MacOS/AceVra"));
 });

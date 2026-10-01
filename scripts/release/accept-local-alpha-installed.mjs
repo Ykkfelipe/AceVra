@@ -117,9 +117,21 @@ export function verifyLocalAlphaApp(appPath, expectedVersion = version) {
   return { bundleId, shortVersion, executable, treeHash: walkTree(appPath) };
 }
 
+/**
+ * Bug 原因：旧实现 `pgrep -f <targetPath>` 匹配整条命令行里任意位置的路径子串，安装器自身
+ * （参数含 `--app /Applications/AceVra.app`）、tail/grep 等都会被误判为“应用正在运行”。
+ * 修复依据：只认可执行文件位于该 bundle 内的进程——命令行以 `<targetPath>/Contents/` 开头
+ * （主进程 MacOS/ 与 Frameworks/ 下的 Helper），路径按 ERE 转义，`.` 不再匹配任意字符。
+ */
+export function installedAppProcessPattern(targetPath) {
+  return `^${targetPath.replace(/[.[\]()*+?{}|^$\\]/g, "\\$&")}/Contents/`;
+}
+
 function defaultIsRunning(targetPath) {
   try {
-    execFileSync("/usr/bin/pgrep", ["-f", targetPath], { stdio: "ignore" });
+    execFileSync("/usr/bin/pgrep", ["-f", installedAppProcessPattern(targetPath)], {
+      stdio: "ignore",
+    });
     return true;
   } catch {
     return false;
