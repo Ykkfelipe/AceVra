@@ -399,8 +399,9 @@ export function captureComputerUseRuntimeFromEnvironment(
       ? { brokerToken: env.ZCODE_CUA_PERMISSION_BROKER_TOKEN.trim() }
       : {}),
     refreshMarkerPath: env.ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER?.trim(),
-    // This process is the authenticated stdio host. Request metadata remains routing data only.
-    allowForegroundControl: () => true,
+    // 与 core 内置 handler 同一产品规则（见 node-repl-cua.ts）：本地 Mac 不提供模型
+    // 自行发起的前台接管，安全条绝不由模型动作升起；用户主动入口出现前 fail closed。
+    allowForegroundControl: () => false,
     leaseAuthority: createLeaseAuthorityClient(env),
   });
 }

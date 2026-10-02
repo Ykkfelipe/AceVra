@@ -36,8 +36,12 @@ export function createCoreNodeReplCuaBroker(): NodeReplCuaBroker | undefined {
     brokerSocketPath: socketPath,
     ...(capabilityToken ? { brokerToken: capabilityToken } : {}),
     ...(refreshMarker ? { refreshMarkerPath: refreshMarker } : {}),
-    // 与 MCP 宿主同一判断：本进程就是已鉴权的 stdio host（模型工具调用在此进程内执行）。
-    allowForegroundControl: () => true,
+    // 修复依据（Felipe 实测 preview-ux-0050f95c）：此前这里恒为 true，模型可自行
+    // computer.acquire_control 抢走用户前台，安全条（v4-computer-use-bar）随之出现——
+    // 它只是通知，不是同意门。本地 Mac 的产品规则是：代理只在自己的后台环境工作
+    // （窗口预览 + 后台语义动作），绝不打断用户的鼠标与前台；前台接管必须有用户主动
+    // 发起的入口，而该入口尚未存在，因此在有了用户授权来源之前 fail closed。
+    allowForegroundControl: () => false,
     // lease 凭据成对才给；只经内存对象传给 client，绝不读写进程 env。
     leaseAuthority:
       leaseSocket && leaseToken

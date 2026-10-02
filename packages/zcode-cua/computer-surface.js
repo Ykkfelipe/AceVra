@@ -119,9 +119,9 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
 
 /** Known limits the model must know before planning (stated once, not discovered by failure). */
 export const COMPUTER_USE_LIMITS = Object.freeze([
-  "Background actions cannot press keys: there is no background Enter/Tab/shortcut. To submit a field in the background, press an observed submit/search control, or set a full value that does not need Enter. Keys need foreground control (computer.acquire_control → lease_id → computer.key_press).",
+  "Background actions cannot press keys: there is no background Enter/Tab/shortcut. To submit a field in the background, press an observed submit/search control, or set a full value that does not need Enter. Foreground key control is NOT available to you here — when a step needs keys, say so to the user and stop; never take over their screen.",
   "Every state-changing call uses a semantic_ref or pid from the LATEST get_app_state of that app; refs from older observations are refused as stale_target.",
-  "Do not drive apps with osascript/AppleScript, shell `open`, or other scripting from Bash for a Computer Use task: it bypasses the background guarantees and can steal the user's foreground. If a step is unsupported in the background, say so and ask whether to use foreground control.",
+  "Do not drive apps with osascript/AppleScript, shell `open`, or other scripting from Bash for a Computer Use task: it bypasses the background guarantees and can steal the user's foreground. If a step is unsupported in the background, say so and stop — foreground takeover is not available to you.",
 ]);
 
 /** Unambiguous historical spellings accepted for the two semantic actions. */

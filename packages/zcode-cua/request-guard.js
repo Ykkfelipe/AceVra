@@ -50,7 +50,7 @@ export function validateComputerUseRequest({ toolName, input, platform, allowFor
   if (foreground) {
     if (!foregroundComputerUseAvailable(input?.context, allowForegroundControl)) {
       return refusal(
-        "Foreground Computer Use requires a local desktop task; background tools still work (see `await agent.computerUse.describe()`)",
+        "Foreground desktop control is not available to Computer Use here: work in the background (the user keeps their screen and cursor), and if a step truly needs keys or the user's own hands, say so and stop instead of taking over. Background tools still work (see `await agent.computerUse.describe()`).",
         "local_only",
       );
     }

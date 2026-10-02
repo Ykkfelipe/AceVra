@@ -99,12 +99,11 @@ Background limits — plan around them up front:
 
 ## Foreground control
 
-`computer.acquire_control({ observation_id })` returns a `lease_id`; `computer.activate_target`,
-`computer.move_pointer`, `computer.click`, `computer.type_text`, `computer.key_press`,
-`computer.scroll` and `computer.drag` then each need `{ lease_id, observation_id, … }` (see
-`describe()`). These take over the user's screen: use them only when the user agreed or asked.
-They require the host-approved local desktop lease. Never use them in remote replayable/mobile or
-subagent contexts. A foreground method fails when the target, geometry, focus, permissions, or lease
-is stale; refresh with observations instead of retrying the same unchanged call. Release control
-when the user-requested sequence is complete. The service-owned lease and signed Helper remain the
-only authority; this skill cannot override them.
+Foreground control is **not available to you** on this Mac: `computer.acquire_control` and every
+method that needs a lease are refused. AceVra's local product rule is that the agent works only
+in its own background environment — it never takes the user's screen, cursor, or keyboard. When
+a step truly needs keys or the user's hands (e.g. submitting a search that has no background
+submit control), say so plainly and stop; the user decides what happens next. Never claim you
+have control, and never retry a refused foreground call with different arguments — the refusal is
+a product boundary, not an argument error. Release/lease language in older notes is kept only for
+remote (Dell) sessions, which have their own control flow.

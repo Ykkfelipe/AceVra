@@ -153,7 +153,11 @@ when the source can deliver and verify them. A delivered action is not success u
 post-action observation verifies its effect; stale observations, vanished targets, secure fields,
 and unsaved/destructive dialogs preserve truthful refusal or uncertainty. Foreground escalation
 is an explicit request/decision surfaced to the user, never an automatic retry after a background
-failure. The LLM never consumes every preview frame: the human preview is continuous/sampled for
+failure. **本地 Mac 不提供模型自行发起的前台接管（2026-10-02 产品规则）**：`acquire_control`
+及全部租约方法在本地会话一律拒绝（host 的 `allowForegroundControl` fail closed，用户主动入口
+出现前不放开）；代理只在自己的后台环境工作，绝不打断用户的鼠标与前台，安全条
+（v4-computer-use-bar）不由模型动作升起。需要按键或用户亲手完成的步骤，模型如实说明后停止。
+The LLM never consumes every preview frame: the human preview is continuous/sampled for
 display, agent observations remain the sampled/verified channel, and post-action verification
 waits for a frame/observation fresher than the action. Activity labels derive from real
 action/task events through one central normalization boundary (ActivityEventNormalizer): known
