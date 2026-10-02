@@ -71,6 +71,7 @@ describe("method registry", () => {
       "key_press",
       "scroll",
       "drag",
+      "open_app",
     ]) {
       assert.equal(isBrokerMethod(method), true);
       assert.equal(isReadOnlyBrokerMethod(method), false);

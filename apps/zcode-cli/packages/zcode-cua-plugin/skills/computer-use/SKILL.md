@@ -43,6 +43,14 @@ there is no `state.text` or `state.state_id`). If a call is refused, its message
 expected arguments; fix the call once instead of probing variants. `Object.keys(agent.computerUse)`
 lists the real methods.
 
+Two ways to call the same operation — both land on the same runtime method, and `describe()`
+gives you both spellings for every entry (`name` and `mcp_tool`):
+
+- Inside a `node_repl` cell: `agent.computerUse["computer.open_app"]({ bundle_id })`.
+- As an MCP tool: the name is the same with every non-alphanumeric character replaced by `_`
+  and the `mcp__computer-use__` prefix, e.g. `mcp__computer-use__computer_open_app`. Do not grep
+  the runtime or plugin sources to discover call syntax; `describe()` already answers it.
+
 Background (never takes the user's foreground): `computer.press`, `computer.set_value`,
 `computer.workspace_click({ pid, target_role, target_label })`,
 `computer.workspace_type_text({ pid, text, target_label? })`,

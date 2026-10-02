@@ -99,6 +99,12 @@ test("open_app is documented background capability and refuses a missing bundle_
   assert.equal(openApp.kind, "background");
   assert.equal(openApp.available, true);
   assert.match(openApp.note, /running windowless/u);
+  // 两种拼写同源：点号名与 MCP 工具名都由 describe() 给出（实测模型曾耗整回合猜调用方式）。
+  assert.equal(openApp.mcp_tool, "mcp__computer-use__computer_open_app");
+  assert.equal(
+    described.structuredContent.methods.find((entry) => entry.name === "computer.press").mcp_tool,
+    "mcp__computer-use__computer_press",
+  );
 
   const missing = await runtime.execute({
     toolName: "computer.open_app",

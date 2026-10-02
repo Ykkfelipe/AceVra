@@ -146,6 +146,11 @@ export function computerUseArgsHint(modelToolName) {
 /**
  * Canonical discovery payload for `await agent.computerUse.describe()`: the exact surface, this
  * session's real availability and the known limits.
+ *
+ * `mcp_tool` 修复依据（preview-ux-946d1e2 实测）：模型同时看到两种拼写——技能文档里的
+ * 点号名（computer.open_app）与 MCP 工具的合法名字（点号被 sanitize 成下划线）。找不到
+ * 对应关系时模型会去 grep 运行时源码找"raw bridge"，把整个回合耗在猜调用方式上。这里在
+ * describe() 里直接给出每个方法对应的 MCP 工具名，消除第二次猜名。
  */
 export function describeComputerUseSurface({ platform, foregroundAvailable }) {
   const surface = {
@@ -155,6 +160,7 @@ export function describeComputerUseSurface({ platform, foregroundAvailable }) {
     foregroundAvailable,
     methods: COMPUTER_USE_SURFACE.map((entry) => ({
       ...entry,
+      mcp_tool: `mcp__computer-use__${entry.name.replace(/[^a-zA-Z0-9_-]/gu, "_")}`,
       available: platform === "darwin" && (entry.kind !== "foreground" || foregroundAvailable),
     })),
     limits: COMPUTER_USE_LIMITS,

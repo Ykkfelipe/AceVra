@@ -212,6 +212,8 @@ const BROKER_METHOD_KINDS = Object.freeze({
   workspace_type_text: "mutating",
   workspace_stream: "mutating",
   workspace_scroll: "mutating",
+  // 本地后台打开应用 / 为无窗口运行中的应用重建窗口（Helper open_app）。
+  open_app: "mutating",
 });
 
 export function isBrokerMethod(method) {
