@@ -1810,6 +1810,11 @@ only through an explicit, per-task user approval; the model can request it but n
    hit-test ignores them. The overlay is presentation only: the renderer drives it from the
    global control status, and Electron main hides it if no heartbeat arrives for 4 s.
 7. Remote/mobile and subagent contexts keep refusing foreground control (unchanged).
+8. Composer surfaces (product decision after installed acceptance): the persistent
+   "Computer Use · Observing · Control…" status bar is removed in every state; only the Allow/Deny
+   card remains. The mini Computer preview hides for the whole takeover — while the request is
+   pending, while the same task's grant is in force, and while the lease is reserving/active — and
+   shows again for background work of a later task or after a Deny.
 
 ### Ownership and event order
 

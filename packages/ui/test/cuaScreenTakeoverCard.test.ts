@@ -80,8 +80,6 @@ test("card renders Allow and Deny instead of the bar", () => {
       React.createElement(ComputerUseBar, {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         session: { view, decideTakeover: (d: string) => decisions.push(d) } as any,
-        turnRunning: true,
-        onStop: () => undefined,
       }),
     ),
   );

@@ -538,14 +538,11 @@ export const TID_V4_COMPOSER_CUA_ENTRY = "v4-composer-cua-entry";
 /** CUA-4 会话控制条（CUA 活动期间出现在 composer 上方） */
 export const TID_V4_COMPUTER_USE_BAR = "v4-computer-use-bar";
 /** CUA-4 会话控制条：暂停/恢复按钮 */
-export const TID_V4_COMPUTER_USE_BAR_PAUSE = "v4-computer-use-bar-pause";
 /** CUA-4 会话控制条：停止按钮 */
-export const TID_V4_COMPUTER_USE_BAR_STOP = "v4-computer-use-bar-stop";
 export const TID_V4_COMPUTER_USE_BAR_TAKEOVER = "v4-computer-use-bar-takeover";
 export const TID_V4_COMPUTER_USE_BAR_TAKEOVER_ALLOW = "v4-computer-use-bar-takeover-allow";
 export const TID_V4_COMPUTER_USE_BAR_TAKEOVER_DENY = "v4-computer-use-bar-takeover-deny";
 /** CUA-4 会话控制条：最近快照预览 */
-export const TID_V4_COMPUTER_USE_BAR_PREVIEW = "v4-computer-use-bar-preview";
 /** M3 mini Computer 浮动面板（workspace 投影的画中画呈现） */
 export const TID_V4_MINI_COMPUTER = "v4-mini-computer";
 /** M3 mini Computer：关闭（仅隐藏面板，不影响任务/执行） */

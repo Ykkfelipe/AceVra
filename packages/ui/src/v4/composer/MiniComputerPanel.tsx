@@ -38,12 +38,10 @@ const MINI_COMPUTER_RELEVANCE_MS = 8_000;
 /**
  * True while the session's agent-workspace projection is the relevant Computer UI.
  *
- * The composer uses this to suppress the large Computer Use bar for background workspace
- * activity: the mini panel is the canonical surface there, and a second banner would
- * duplicate frame/cursor/Pause/Stop. Native lease activity (reserving/active) always
- * keeps the bar — a prominent safety surface is exactly right during escalation, even
- * when a workspace exists. Pure predicate; rendering or hiding either visual never
- * touches execution state.
+ * The mini panel is the canonical surface for background workspace activity. During a screen
+ * takeover (lease reserving/active, or the same task's takeover pending/granted) it hides: the
+ * user is looking at the real screen and the glow overlay carries the status. Pure predicate;
+ * rendering or hiding never touches execution state.
  */
 export function isAgentWorkspaceActive(
   view: CuaComputerUseSessionView | null | undefined,
@@ -51,8 +49,19 @@ export function isAgentWorkspaceActive(
   clock: number = Date.now(),
 ): boolean {
   if (!view?.present) return false;
-  // 原生租约（前台/独占）期间永远保留大控制条：这是显式安全面，规则不允许折叠它。
+  // 屏幕接管期间（租约 reserving/active）代理控制的是用户整块屏幕，用户直接看着真实屏幕，
+  // 小窗预览多余且会遮挡；发光层与提示条承担状态提示。
   if (view.lease.state === "active" || view.lease.state === "reserving") return false;
+  // 同一任务正在请求或已获准接管（Allow/Deny 卡片等待、或两次前台动作之间）：同样不显示小窗。
+  // 只认与最近活动同一任务的授权，新任务里的后台工作照常显示。
+  const takeover = view.takeover;
+  if (
+    takeover &&
+    (takeover.state === "pending" || takeover.state === "granted") &&
+    takeover.task === view.activity?.task
+  ) {
+    return false;
+  }
   const workspace = view.workspace;
   if (!workspace || workspace.backendId !== "agent-workspace") return false;
   return (

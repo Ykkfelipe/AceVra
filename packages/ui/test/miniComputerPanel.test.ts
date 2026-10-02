@@ -555,3 +555,38 @@ test("presentation is per session: moving/resizing one preview never affects ano
   useMiniComputerStore.getState().markStopped("session-a", 1);
   assert.equal(useMiniComputerStore.getState().expandedBySession["session-a"], false);
 });
+
+// ---------------------------------------------------------------------------
+// Screen takeover: the agent drives the real screen, so the mini preview hides.
+// ---------------------------------------------------------------------------
+
+test("screen takeover hides the mini panel: active lease, pending or granted for the same task", () => {
+  const takeoverView = (lease: string, takeover?: Record<string, unknown>) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    activeView({
+      lease: { state: lease },
+      activity: { task: "turn-1", method: "acquire_control", phase: "started" },
+      ...(takeover ? { takeover } : {}),
+    }) as any;
+  assert.equal(isAgentWorkspaceActive(takeoverView("active"), true), false);
+  assert.equal(
+    isAgentWorkspaceActive(takeoverView("inactive", { state: "pending", task: "turn-1" }), true),
+    false,
+    "waiting for Allow/Deny",
+  );
+  assert.equal(
+    isAgentWorkspaceActive(takeoverView("inactive", { state: "granted", task: "turn-1" }), true),
+    false,
+    "between foreground actions of the granted task",
+  );
+  assert.equal(
+    isAgentWorkspaceActive(takeoverView("inactive", { state: "granted", task: "turn-0" }), true),
+    true,
+    "an old task's grant does not hide new background work",
+  );
+  assert.equal(
+    isAgentWorkspaceActive(takeoverView("inactive", { state: "denied", task: "turn-1" }), true),
+    true,
+    "declined: background work continues in the mini panel",
+  );
+});

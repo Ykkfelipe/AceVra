@@ -2359,10 +2359,8 @@ function ConversationComposerImpl({
           onStop={onStop}
         />
       </div>
-      {/* M3：大 ComputerUseBar 是「真实桌面接管」的安全面。bar 自身的 projection.visible
-          已是安全专属（reserving/active/让出/停止等）——observe/background/workspace 一律
-          不渲染，由 MiniComputerPanel 呈现。这里不再叠加第二道门，避免过期逻辑误渲染。 */}
-      <ComputerUseBar session={computerUseSession} turnRunning={canStop} onStop={onStop} />
+      {/* 只剩屏幕接管 Allow/Deny 授权卡；常驻状态条已按产品决定移除。 */}
+      <ComputerUseBar session={computerUseSession} />
       {showExecutionControls ? <ExecutionTaskCards scopeKey={executionScope} /> : null}
       {visibleError ? (
         // 仅展示附件错误会漏掉会话级 lastError，任务失败后也应在输入框上方显示原因。

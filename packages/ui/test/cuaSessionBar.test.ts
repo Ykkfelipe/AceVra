@@ -351,7 +351,7 @@ test("token fence drops late responses from previous tasks", () => {
   assert.equal(fence.isCurrent(taskIdA), false, "a late response from a prior task is ignored");
 });
 
-test("bar buttons write through the real service operations; stop composes both truths", async () => {
+test("session controls write through the real service operations", async () => {
   const { readFile } = await import("node:fs/promises");
   const hookSource = await readFile(
     new URL("../src/hooks/useComputerUseSession.js", import.meta.url),
@@ -367,11 +367,6 @@ test("bar buttons write through the real service operations; stop composes both 
     /stopComputerControl\(\)/u,
     "Stop reuses the existing service operation",
   );
-  const barSource = await readFile(
-    new URL("../src/v4/composer/ComputerUseBar.tsx", import.meta.url),
-    "utf8",
-  );
-  assert.match(barSource, /onStop\(\);/u, "Stop also fires the conversation turn stop command");
 });
 
 test("preview is fetched once per observation id and re-fetched for a new one", () => {
@@ -382,146 +377,35 @@ test("preview is fetched once per observation id and re-fetched for a new one", 
 });
 
 // ---------------------------------------------------------------------------
-// Render tests (static markup): what the user actually sees per state.
+// Render tests (static markup). Product decision: no Computer Use status bar in any state;
+// the composer shows only the takeover Allow/Deny card (cuaScreenTakeoverCard.test.ts).
 // ---------------------------------------------------------------------------
 
-const { ComputerUseBar, ComputerUseBarMounted } =
-  await import("../src/v4/composer/ComputerUseBar.js");
+const { ComputerUseBar } = await import("../src/v4/composer/ComputerUseBar.js");
 const { ZCodeIntlProvider } = await import("../src/i18n/IntlProvider.js");
 const enUS = (await import("../src/i18n/locales/en-US.js")).default;
 
-function fakeSessionResult(overrides: {
-  view: Partial<ReturnType<typeof projectComputerUseBar>>;
-  preview?: { status: "idle" | "loading" | "available" | "unavailable"; dataUrl?: string };
-  pending?: "pause" | "resume" | "stop" | null;
-  calls?: string[];
-}): Record<string, unknown> {
-  const calls = overrides.calls ?? [];
-  return {
-    session: null,
-    view: {
-      visible: true,
-      state: "observing",
-      mode: "observe",
-      targetApp: null,
-      targetWindow: null,
-      targetStale: false,
-      observation: null,
-      observationStale: false,
-      effectUnverified: false,
-      lastCode: null,
-      terminationReason: null,
-      pauseAvailable: true,
-      stopMeaningful: true,
-      ...overrides.view,
-    },
-    preview: overrides.preview ?? { status: "idle" },
-    pending: overrides.pending ?? null,
-    pause: () => calls.push("pause"),
-    resume: () => calls.push("resume"),
-    stopComputerControl: () => calls.push("stopControl"),
-  };
-}
-
-function renderBar(sessionResult: Record<string, unknown>, turnRunning = false): string {
-  return renderToStaticMarkup(
-    React.createElement(
-      ZCodeIntlProvider,
-      { locale: "en-US", messages: enUS },
-      React.createElement(ComputerUseBarMounted, {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        session: sessionResult as any,
-        turnRunning,
-        onStop: () => undefined,
-      }),
-    ),
-  );
-}
-
-test("bar render: no bar for plain chat", () => {
-  const html = renderToStaticMarkup(
-    React.createElement(
-      ZCodeIntlProvider,
-      { locale: "en-US", messages: enUS },
-      // M3：bar 与 mini Computer 面板共享 composer 提升的同一份轮询结果（session prop）。
-      React.createElement(ComputerUseBar, {
-        session: { view: { visible: false } },
-        turnRunning: false,
-        onStop: () => undefined,
-      }),
-    ),
-  );
-  assert.equal(html.includes(TID_V4_COMPUTER_USE_BAR), false);
-});
-
-test("bar render: observing with target app + window and a fresh snapshot", () => {
-  const html = renderBar(
-    fakeSessionResult({
-      view: {
-        state: "observing",
-        mode: "observe",
-        targetApp: "Notes",
-        targetWindow: "Shopping list",
-        observation: { id: "obs-1", capturedAt: 5, blank: false },
-        stopMeaningful: true,
-      },
-      preview: { status: "available", dataUrl: "data:image/png;base64,QUJD" },
-    }),
-    true,
-  );
-  assert.equal(html.includes(TID_V4_COMPUTER_USE_BAR), true);
-  assert.equal(html.includes("Computer Use"), true);
-  assert.equal(html.includes("Notes — Shopping list"), true);
-  assert.equal(html.includes("Observing"), true);
-  assert.equal(html.includes("data:image/png;base64,QUJD"), true, "the real snapshot bytes render");
-  assert.equal(html.includes("Pause"), true);
-  assert.equal(html.includes("Stop"), true, "Stop shows while the turn runs");
-});
-
-test("bar render: yield shows the returned-control notice; paused shows Resume", () => {
-  const yielded = renderBar(
-    fakeSessionResult({
-      view: { state: "yieldedToUser", terminationReason: "interrupted" },
-    }),
-  );
-  assert.equal(yielded.includes("Control returned to you"), true);
-  assert.equal(yielded.includes("reclaim control automatically"), true);
-  const paused = renderBar(fakeSessionResult({ view: { state: "paused", pauseAvailable: false } }));
-  assert.equal(paused.includes("Paused"), true);
-  assert.equal(paused.includes("Resume"), true);
-});
-
-test("bar render: stale preview is dimmed and labelled; unverified result is flagged", () => {
-  const html = renderBar(
-    fakeSessionResult({
-      view: {
-        state: "backgroundAction",
-        mode: "background",
-        observationStale: true,
-        effectUnverified: true,
-        observation: { id: "obs-1", capturedAt: 5, blank: false },
-      },
-      preview: { status: "available", dataUrl: "data:image/png;base64,QUJD" },
-    }),
-    true,
-  );
-  assert.equal(html.includes("Stale"), true);
-  assert.equal(html.includes("Could not verify the result"), true);
-  assert.equal(html.includes("Background action"), true);
-});
-
-test("bar render: stopping disables the stop button and keeps the bar visible", () => {
-  const html = renderBar(
-    fakeSessionResult({
-      view: { state: "exclusiveActive", stopMeaningful: true },
-      pending: "stop",
-    }),
-    true,
-  );
-  assert.equal(html.includes("Stopping…"), true);
-  assert.equal(
-    html.includes("Controlling (exclusive)"),
-    false,
-    "stopping supersedes the lease state",
-  );
+test("no status bar renders in any Computer Use state", () => {
+  for (const state of [
+    "observing",
+    "backgroundAction",
+    "exclusiveActive",
+    "paused",
+    "yieldedToUser",
+    "stopped",
+    "failed",
+  ]) {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        ZCodeIntlProvider,
+        { locale: "en-US", messages: enUS },
+        React.createElement(ComputerUseBar, {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          session: { view: { visible: true, state, takeoverPending: false } } as any,
+        }),
+      ),
+    );
+    assert.equal(html, "", `${state} renders nothing`);
+    assert.equal(html.includes(TID_V4_COMPUTER_USE_BAR), false);
+  }
 });
