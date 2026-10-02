@@ -168,6 +168,7 @@ export function createComputerUseRuntime(options = {}) {
     helperCall,
     leaseAuthority,
     foregroundObservations,
+    leaseRenewIntervalMs: options.leaseRenewIntervalMs,
   });
 
   // Canonical discovery (`await agent.computerUse.describe()`), answered without the Helper.

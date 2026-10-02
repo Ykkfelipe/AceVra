@@ -7,6 +7,9 @@ import Foundation
 
 private let foregroundObservationAge: TimeInterval = 3
 private let foregroundLeaseLifetime: TimeInterval = 15
+/// Absolute cap on any exclusive lease regardless of renewals (matches the documented
+/// grant lifetime: Allow covers "up to 15 minutes" of a task).
+private let foregroundLeaseHardCap: TimeInterval = 15 * 60
 
 private struct ForegroundDisplay: Equatable {
     let id: CGDirectDisplayID
@@ -35,7 +38,12 @@ private final class ForegroundLease {
     let ownerSession: String
     let ownerTask: String
     let acquired: Date
-    let deadline: Date
+    /// Soft deadline: how long the lease survives WITHOUT a renewal. The runtime heartbeats and
+    /// every successful protected action renews it, so a live task holds the lease across thinking
+    /// gaps; if renewal stops (runtime gone), the lease dies within one window — fail-open.
+    var deadline: Date
+    /// Hard cap from acquire regardless of renewals: a takeover may never outlive this.
+    let hardDeadline: Date
     var observation: ForegroundObservation
     let marker: Int64
     var heldMouse = false
@@ -51,8 +59,16 @@ private final class ForegroundLease {
         ownerTask = task
         acquired = Date()
         deadline = acquired.addingTimeInterval(foregroundLeaseLifetime)
+        hardDeadline = acquired.addingTimeInterval(foregroundLeaseHardCap)
         self.observation = observation
         marker = Int64.random(in: 1...Int64.max)
+    }
+
+    /// Renew the no-renewal window. Never past the hard cap (proven installed 78256d1f:
+    /// a fixed 15 s lifetime with no renewal made every exclusive task longer than one
+    /// quick action collapse into a reacquiring loop).
+    func renew(now: Date = Date()) {
+        deadline = min(now.addingTimeInterval(foregroundLeaseLifetime), hardDeadline)
     }
 }
 
@@ -359,7 +375,27 @@ final class ForegroundController {
             }
             current.observation = refreshed
         }
+        // Every verified protected action renews the no-renewal window: a task that acts
+        // regularly must never lose its lease to the 15 s safety timer (proven installed
+        // 78256d1f: fixed lifetime collapsed longer tasks into a reacquiring loop).
+        renewCurrentLeaseLocked()
         return (current, nil)
+    }
+
+    /// Renew the current lease's soft window. Caller may hold or drop the lock; this takes it.
+    func renewCurrentLeaseLocked() {
+        lock.lock()
+        lease?.renew()
+        lock.unlock()
+    }
+
+    /// Runtime heartbeat for `renew_lease`: proves the owning runtime is alive and re-arms the
+    /// safety timer without delivering any input. Ownership-fenced, observation not required.
+    func renewLease(_ params: [String: Any]) -> [String: Any] {
+        let (current, code) = checkedLease(params, observationRequired: false)
+        guard let current else { return foregroundRefusal(code ?? "invalid_lease") }
+        return foregroundResult("renew_lease", effect: "confirmed", current: current,
+                                evidence: [["kind": "lease_renewed", "state": "active"]])
     }
 
     func release(_ params: [String: Any]) -> [String: Any] {

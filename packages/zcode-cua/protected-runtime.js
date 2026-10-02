@@ -84,7 +84,39 @@ export function createProtectedForegroundController(deps) {
       native: acquired.native,
     };
     bindings.set(sessionId, binding);
+    ensureRenewTimer();
     return withoutNativeLease(acquired.result, binding);
+  }
+
+  /**
+   * Heartbeat for the Helper's no-renewal safety window (`renew_lease`): a task that only thinks
+   * for a while must not lose its lease (proven installed 78256d1f — a fixed 15 s lifetime turned
+   * any thinking gap into a reacquiring loop). Delivery failures are ignored here on purpose: the
+   * typed failure surfaces on the next real action, where recovery belongs. Never logs ids.
+   */
+  const renewIntervalMs = deps.leaseRenewIntervalMs ?? 10_000;
+  let renewTimer;
+  function ensureRenewTimer() {
+    if (renewTimer || !(renewIntervalMs > 0)) return;
+    renewTimer = setInterval(() => {
+      for (const [sessionId, binding] of bindings.entries()) {
+        if (!binding.native?.helperLeaseId) continue;
+        void helperCall(
+          "renew_lease",
+          { ...ownerParams(sessionId, binding), lease_id: binding.native.helperLeaseId },
+          5_000,
+        ).catch(() => undefined);
+      }
+    }, renewIntervalMs);
+    renewTimer.unref?.();
+  }
+  function stopRenewTimerWhenIdle() {
+    if (!renewTimer) return;
+    for (const binding of bindings.values()) {
+      if (binding.native?.helperLeaseId) return;
+    }
+    clearInterval(renewTimer);
+    renewTimer = undefined;
   }
 
   /** computer.release_control: the model gives control back (the grant stays for this task). */
@@ -97,6 +129,7 @@ export function createProtectedForegroundController(deps) {
       });
     }
     bindings.delete(sessionId);
+    stopRenewTimerWhenIdle();
     const native = binding.native;
     let result;
     if (native) {

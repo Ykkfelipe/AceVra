@@ -75,6 +75,8 @@ export function createProtectedGrantBindings() {
     set: (sessionId, binding) => bindings.set(sessionId, binding),
     delete: (sessionId) => bindings.delete(sessionId),
     sessions: () => [...bindings.keys()],
+    entries: () => [...bindings.entries()],
+    values: () => [...bindings.values()],
   };
 }
 

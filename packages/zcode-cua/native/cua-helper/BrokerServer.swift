@@ -165,6 +165,10 @@ func brokerDispatch(
         return brokerOk(result, id: request["id"])
     case "acquire_control":
         return brokerOk(ForegroundController.shared.acquire(params), id: request["id"])
+    case "renew_lease":
+        // Runtime-only heartbeat: re-arms the no-renewal safety window without input delivery.
+        // Not part of the model-visible surface; the runtime fence (lease_id + owner) applies.
+        return brokerOk(ForegroundController.shared.renewLease(params), id: request["id"])
     case "release_control":
         return brokerOk(ForegroundController.shared.release(params), id: request["id"])
     case "activate_target":
@@ -210,6 +214,7 @@ private func validForegroundBrokerParams(_ method: String, _ params: [String: An
     let fields: Set<String>
     switch method {
     case "acquire_control": fields = ["observation_id"]
+    case "renew_lease": fields = ["lease_id"]
     case "release_control": fields = ["lease_id"]
     case "activate_target": fields = ["lease_id", "observation_id"]
     case "move_pointer", "click": fields = ["lease_id", "observation_id", "point"]
