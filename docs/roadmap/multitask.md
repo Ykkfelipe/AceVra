@@ -203,3 +203,20 @@ Goal: dramatically lower overhead while preserving the useful scheduler/journal/
 - Do not remove the existing Workflow feature.
 - Do not make Multitask activate automatically without explicit user intent.
 - Do not redesign current in-progress work around this roadmap yet.
+
+## Parallel development / build policy
+
+When implementation begins:
+
+- create a fresh `feature/...` branch from the latest good `main`
+- give the implementing worker its own Git worktree
+- do not point multiple code-writing workers at the same checkout
+- prefer targeted tests/checks during development
+- do not create persistent packaged desktop builds from feature worktrees
+- let the integration/main workspace own the single canonical packaged AceVra build
+- clean temporary feature build outputs after validation
+- remove the worktree after the feature is merged
+
+Full details: `docs/roadmap/parallel-development-policy.md`.
+
+The roadmap branch itself is documentation/reference only; do not use it as a long-lived implementation base.
