@@ -23,6 +23,7 @@ import { createConnection, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveComputerUseMethod } from "./capability-contract.js";
+import { COMPUTER_USE_COMPAT_ALIASES, COMPUTER_USE_SURFACE } from "./computer-surface.js";
 
 export const NODE_REPL_CUA_BRIDGE_SYMBOL = Symbol.for("zcode.node-repl.computer-use-bridge");
 export const CUA_UNAVAILABLE_IN_SUBAGENT_MESSAGE = "Computer Use is not available in subagent";
@@ -55,18 +56,46 @@ function readNodeReplCuaRuntimeBridge(globals) {
   return candidate;
 }
 
-/** 与 plugin 兼容 bootstrap 同形：任何属性都映射为一次 bridge 调用。 */
+/** 可枚举的 canonical 方法名（含 describe）；兼容别名可调用但不枚举。 */
+const FACADE_METHOD_NAMES = Object.freeze([
+  "describe",
+  ...COMPUTER_USE_SURFACE.map((entry) => entry.name),
+]);
+const FACADE_CALLABLE = new Set([
+  ...FACADE_METHOD_NAMES,
+  ...Object.keys(COMPUTER_USE_COMPAT_ALIASES),
+]);
+
+/**
+ * 修复依据（实测 agent 花数分钟猜 API）：旧 facade 把任意属性都映射成函数、却枚举不出任何键，
+ * `typeof computerUse.press === "function"` 与 `Object.keys(computerUse) → []` 都在误导模型。
+ * 现在只有 canonical 名字（+ 两个历史别名）是函数，`Object.keys` 列出真实方法，未知名字为
+ * undefined；`describe()` 返回带参数形状与本会话可用性的完整清单。
+ */
 function createComputerUseFacade(bridge) {
+  const call = (name) => async (input) => {
+    bridge.assertAvailable?.();
+    return await bridge.call(name, input ?? {});
+  };
   return new Proxy(
     {},
     {
       get(_target, property) {
         if (typeof property !== "string") return undefined;
         if (property === "documentationRoot") return bridge.documentationRoot;
-        return async (input) => {
-          bridge.assertAvailable?.();
-          return await bridge.call(property, input);
-        };
+        return FACADE_CALLABLE.has(property) ? call(property) : undefined;
+      },
+      has(_target, property) {
+        return typeof property === "string" && FACADE_CALLABLE.has(property);
+      },
+      ownKeys() {
+        return [...FACADE_METHOD_NAMES];
+      },
+      getOwnPropertyDescriptor(_target, property) {
+        if (typeof property !== "string" || !FACADE_METHOD_NAMES.includes(property)) {
+          return undefined;
+        }
+        return { configurable: true, enumerable: true, writable: false, value: call(property) };
       },
     },
   );

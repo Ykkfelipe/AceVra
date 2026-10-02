@@ -1,3 +1,5 @@
+import { canonicalComputerUseName } from "./computer-surface.js";
+
 /** The single model-independent Computer Use capability vocabulary. */
 export const COMPUTER_USE_METHODS = Object.freeze({
   permission_status: "read",
@@ -303,11 +305,11 @@ export function validSemanticActionInput(method, input) {
 }
 
 export function resolveComputerUseMethod(modelToolName) {
-  return Object.hasOwn(COMPUTER_USE_MODEL_TO_METHOD, modelToolName)
-    ? COMPUTER_USE_MODEL_TO_METHOD[modelToolName]
+  const name = canonicalComputerUseName(modelToolName);
+  return Object.hasOwn(COMPUTER_USE_MODEL_TO_METHOD, name)
+    ? COMPUTER_USE_MODEL_TO_METHOD[name]
     : undefined;
 }
-
 function validSemanticRef(value) {
   return typeof value === "string" && value.length > 0 && value.length <= 256;
 }

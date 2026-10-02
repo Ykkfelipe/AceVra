@@ -19,8 +19,9 @@ unavailable; do not fall back to shell input, browser automation, or a second He
 ## Safe workflow
 
 1. Call `list_apps` and `list_windows` to identify a real target.
-2. Call `get_app_state` and keep the returned `state_id` and element indices as the observation
-   boundary.
+2. Call `get_app_state({ pid })` and use `JSON.parse(result.content[0].text).tree` (its
+   `observation_id` and element `semantic_ref`s) as the observation boundary.
+   `await agent.computerUse.describe()` lists every exact tool name, argument shape and limit.
 3. Use only semantic methods such as `computer.press` and `computer.set_value` with an observed
    `semantic_ref`; never invent coordinates, AX paths, or raw native handles.
 4. Observe again after each action. Treat `unknown` as unknown, not success.

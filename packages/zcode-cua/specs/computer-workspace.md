@@ -122,6 +122,25 @@ action/task events through one central normalization boundary (ActivityEventNorm
 system operations render AceVra-owned locale labels and never model-authored titles; assistant
 prose is untouched; no hidden chain-of-thought is rendered.
 
+### Model-visible API surface (2026-10-01)
+
+Measured on f4fdd904: Computer tools ran ~7 s of a ~300 s turn; the rest was the model guessing
+names and shapes. Causes: the skill showed `computer.press(...)` as if `computer` were an object
+and told the model to read `state.text` / `state.state_id` (neither exists); the facade Proxy made
+every property look like a function while `Object.keys` listed nothing; refusals said only
+"arguments are invalid"; nothing said that background work has no key presses, so the model
+probed `key_press`/`type_text` shapes and then fell back to AppleScript.
+
+One table, `COMPUTER_USE_SURFACE` (capability-contract.js), owns the exact names, kinds
+(read / background / foreground) and argument shapes. It feeds: the facade's enumerable keys
+(only canonical names plus the `press`/`set_value` compatibility aliases are callable; unknown
+names are `undefined`); `await agent.computerUse.describe()`, answered by the runtime without the
+Helper, returning the surface with this session's real availability (foreground only in a local
+main desktop-continuous task with the host capability) and `COMPUTER_USE_LIMITS`; and every
+refusal, which now names the expected arguments and the lease step. The skill documents the exact
+call syntax, the MCP result shape, the no-background-keys limit, and the product rule not to drive
+apps with osascript/AppleScript during a Computer task.
+
 ### Transcript labeling for js-executed Computer actions
 
 Computer Use actions execute as `mcp__node_repl__js` cells, so their normal-chat row is rendered

@@ -24,38 +24,59 @@ adapts the host bridge and never constructs a second runtime. If the host did no
 `agent.computerUse`, report unavailable and stop. Never construct a second CUA runtime, launch a
 Helper, open a broker socket, or synthesize native input outside this SDK.
 
+## Exact API (read this before the first call)
+
+Call tools by their exact names on the facade; names with a dot need bracket syntax:
+
+```js
+const cu = agent.computerUse;
+const surface = await cu.describe();   // exact names, argument shapes, availability, limits
+const apps = await cu.list_apps();
+const state = await cu.get_app_state({ pid });                  // pid from list_apps
+const tree = JSON.parse(state.content[0].text).tree;            // { elements: [...] }
+await cu["computer.press"]({ semantic_ref });                   // observed button/tab/menu item
+await cu["computer.set_value"]({ semantic_ref, value: "cats" }); // observed writable field
+```
+
+There is no global `computer` object, and results are MCP-shaped (`content[0].text` holds JSON;
+there is no `state.text` or `state.state_id`). If a call is refused, its message states the
+expected arguments; fix the call once instead of probing variants. `Object.keys(agent.computerUse)`
+lists the real methods.
+
+Background (never takes the user's foreground): `computer.press`, `computer.set_value`,
+`computer.workspace_click({ pid, target_role, target_label })`,
+`computer.workspace_type_text({ pid, text, target_label? })`,
+`computer.workspace_scroll({ pid, delta })` (delta −1…1, positive down).
+
+Background limits — plan around them up front:
+
+- **No background key presses.** There is no background Enter/Tab/shortcut. To submit a search,
+  press an observed submit/search control or a suggestion row, or set a value that needs no Enter.
+  Keys need foreground control (below), which takes the user's screen: ask first.
+- Use `semantic_ref`/`pid` only from the latest `get_app_state` of that app; older refs are refused.
+- **Do not script apps** with `osascript`/AppleScript, `open`, or other shell automation for a
+  Computer Use task. It bypasses the background guarantees and can steal the user's foreground.
+  If a step is unsupported in the background, say so.
+
 ## Observation-first workflow
 
-1. `await computerUse.list_apps()` and `await computerUse.list_windows()` identify current targets.
-2. `const state = await computerUse.get_app_state(...)`; always surface `state.text` and retain
-   `state.state_id` plus element `index` values from that exact observation.
-3. Prefer semantic `computer.press({ semantic_ref })` and
-   `computer.set_value({ semantic_ref, value })`. Never pass raw coordinates, AX paths, PIDs,
-   guessed element titles, or IDs from an earlier observation.
-4. Observe again after an action. One state-changing action follows one fresh observation.
-   `unknown` is not success, and a missing `action_sent` metadata field is not a failure.
-5. Use screenshots only when visual evidence is required. Emit SDK images through the structured
-   SDK result; do not JSON-stringify the full result or manually emit image bytes.
+1. `list_apps()` (and `list_windows()` when the window matters) to find the target `pid`.
+2. `get_app_state({ pid })`, then pick elements by `role`/`label` from `tree.elements`.
+3. One state-changing action per fresh observation. Observe again after acting; `unknown` is not
+   success, and a missing `action_sent` field is not a failure.
+4. Use `screenshot({ pid })` only when visual evidence is required. Emit SDK images through the
+   structured SDK result; do not JSON-stringify the full result or manually emit image bytes.
 
-## Background work and the Computer pane
+## Background work and the live preview
 
-- The right-side Computer pane showing the agent's target window is
-  **product UI that AceVra manages automatically**. Never open AceVra/ZCode menus to find,
-  enable, or resize it.
-- When the user asks you to work in another app in the background, operate **that app**
-  through Computer Use (`list_apps` → `get_app_state` → semantic `press` / `set_value`, or the
-  workspace background actions). Do **not** inspect AceVra's own View/Window menus to reach it.
-- Only inspect AceVra's own UI when the user explicitly asks a question about AceVra UI.
+- When you work in another app on this Mac, AceVra shows a small floating live preview of
+  **that app's window** in the conversation. It is product UI that AceVra manages
+  automatically: never open AceVra/ZCode menus to find, enable, or resize it, and only inspect
+  AceVra's own UI when the user asks about AceVra.
+- "Use this Mac in the background" / "work in Notes in the background" select the local
+  background workspace: start with that app's `get_app_state` so the preview binds to it.
 - Do not narrate Computer tool calls in your reasoning language as display titles. Computer
-  tool-call labels are product-owned and rendered by AceVra; your job is the action, not the
-  label text.
-- "Use this Mac in the background" and "work in Notes in the background" select local
-  AgentWorkspace. Start with the target app/window observation so AceVra binds the live view.
-  Use `computer.workspace_click({pid, target_role, target_label})`,
-  `computer.workspace_type_text({pid, text, target_label?})`, and
-  `computer.workspace_scroll({pid, delta})` for supported background targets. Scroll delta is
-  a scrollbar fraction from -1 to 1 (positive down); a unique writable scrollbar is required.
-  Refusals are truthful capability limits. Do not silently retry as foreground actions.
+  tool-call labels are product-owned and rendered by AceVra.
 - "Use my Dell" selects RemoteComputer for that named remote target. Never substitute this Mac
   when the requested computer is unavailable, or substitute Dell for a local background request.
 - Create a fresh empty document before typing. Never dismiss Save/Discard/Replace dialogs for
@@ -64,8 +85,11 @@ Helper, open a broker socket, or synthesize native input outside this SDK.
 
 ## Foreground control
 
-`computer.acquire_control`, `activate_target`, pointer, click, typing, key, scroll, and drag paths
-require the host-approved local desktop lease. Never use them in remote replayable/mobile or
+`computer.acquire_control({ observation_id })` returns a `lease_id`; `computer.activate_target`,
+`computer.move_pointer`, `computer.click`, `computer.type_text`, `computer.key_press`,
+`computer.scroll` and `computer.drag` then each need `{ lease_id, observation_id, … }` (see
+`describe()`). These take over the user's screen: use them only when the user agreed or asked.
+They require the host-approved local desktop lease. Never use them in remote replayable/mobile or
 subagent contexts. A foreground method fails when the target, geometry, focus, permissions, or lease
 is stale; refresh with observations instead of retrying the same unchanged call. Release control
 when the user-requested sequence is complete. The service-owned lease and signed Helper remain the

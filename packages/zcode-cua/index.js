@@ -6,6 +6,17 @@ import {
   validForegroundInput,
   COMPUTER_USE_FOREGROUND_METHODS,
 } from "./capability-contract.js";
+import {
+  argsRefusal,
+  describeComputerUseSurface,
+  foregroundComputerUseAvailable,
+  MODEL_TOOL_HINT,
+} from "./computer-surface.js";
+import {
+  rememberSemanticGeometry,
+  semanticTargetOf,
+  workspaceCursorOf,
+} from "./semantic-geometry.js";
 import { createSessionIdentityRegistry, identityText } from "./session-identity.js";
 
 /**
@@ -14,9 +25,6 @@ import { createSessionIdentityRegistry, identityText } from "./session-identity.
  * The explicit foreground names remain separate from CUA-2 semantic operations. Old arbitrary
  * input names, application launch, clipboard, zoom and process control stay unmapped.
  */
-const MODEL_TOOL_HINT =
-  "supported tools: list_apps, list_windows, get_app_state, screenshot, request_access, computer.press, computer.set_value, computer.control_status, computer.acquire_control, computer.release_control, computer.activate_target, computer.move_pointer, computer.click, computer.type_text, computer.key_press, computer.scroll, computer.drag.";
-
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
 /** CUA-4: methods that stay available while the user has paused Computer Use. */
@@ -30,56 +38,6 @@ function unavailable(text, code = "unavailable", effect = "refused") {
     structuredContent: { effect, route: "none", evidence: [], code },
     isError: true,
   };
-}
-
-/**
- * M3 workspace cursor report: where the click addressed, in the target window's own
- * coordinate space — the explicit point when the model gave one, otherwise the element
- * center the Helper resolved. Display-only facts for the mini Computer view; never the
- * physical macOS cursor.
- */
-function workspaceCursorOf(args, result) {
-  const point = args && typeof args.point === "object" && args.point !== null ? args.point : null;
-  if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
-    return { x: point.x, y: point.y };
-  }
-  // broker 回包是扁平 envelope：element_center 直接在顶层（structuredContent 是模型面包装后的形态）。
-  const body = result && typeof result === "object" ? result : null;
-  const nested =
-    body && typeof body.structuredContent === "object" && body.structuredContent !== null
-      ? body.structuredContent
-      : null;
-  const center =
-    (body && typeof body.element_center === "object" ? body.element_center : null) ??
-    (nested && typeof nested.element_center === "object" ? nested.element_center : null);
-  if (center && Number.isFinite(center.x) && Number.isFinite(center.y)) {
-    return { x: center.x, y: center.y };
-  }
-  return undefined;
-}
-
-const SEMANTIC_GEOMETRY_LIMIT = 4000;
-
-/**
- * 语义动作（press / set_value）只带 semantic_ref，没有坐标与 pid。修复依据（f4fdd904 实测
- * 逻辑光标从未出现）：agent 全程用语义动作，光标只由 workspace_* 产生。semantic_ref 由同一
- * 会话最近一次 observe 的树铸造，树里带每个元素的全局 AX frame 与 pid；这里记住
- * ref → {pid, 中心点}，供语义动作完成时上报目标与逻辑光标。每次 observe 同一 pid 时整体替换，
- * 过期 ref 不会把光标画到别处（Helper 也会以 stale_target 拒绝过期 ref）。
- */
-function rememberSemanticGeometry(store, sessionId, result) {
-  const pid = Number.isInteger(result?.pid) ? result.pid : undefined;
-  const elements = Array.isArray(result?.tree?.elements) ? result.tree.elements : null;
-  if (!sessionId || pid === undefined || !elements) return;
-  const geometry = new Map();
-  for (const element of elements) {
-    const frame = element?.frame;
-    if (typeof element?.semantic_ref !== "string" || !frame) continue;
-    if (![frame.x, frame.y, frame.w, frame.h].every(Number.isFinite)) continue;
-    geometry.set(element.semantic_ref, { pid, x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 });
-    if (geometry.size >= SEMANTIC_GEOMETRY_LIMIT) break;
-  }
-  store.set(sessionId, geometry);
 }
 
 /**
@@ -184,9 +142,19 @@ export function createComputerUseRuntime(options = {}) {
     }
   }
 
+  // Canonical discovery (`await agent.computerUse.describe()`), answered without the Helper.
+  const foregroundAvailableFor = (context) =>
+    foregroundComputerUseAvailable(context, options.allowForegroundControl);
+
   return {
     async execute(input) {
       const toolName = typeof input?.toolName === "string" ? input.toolName : "";
+      if (toolName === "describe") {
+        return describeComputerUseSurface({
+          platform,
+          foregroundAvailable: foregroundAvailableFor(input?.context),
+        });
+      }
       const method = resolveComputerUseMethod(toolName);
       if (platform !== "darwin") {
         return unavailable(
@@ -204,7 +172,7 @@ export function createComputerUseRuntime(options = {}) {
         (method === "press" || method === "set_value") &&
         !validSemanticActionInput(method, input?.arguments)
       ) {
-        return unavailable(`${method} requires an observation-derived semantic_ref`, "bad_request");
+        return unavailable(argsRefusal(toolName, method), "bad_request");
       }
       const foreground = COMPUTER_USE_FOREGROUND_METHODS.includes(method);
       if (
@@ -218,21 +186,14 @@ export function createComputerUseRuntime(options = {}) {
         return unavailable("control_status requires a lease_id", "bad_request");
       }
       if (foreground) {
-        const foregroundControlAllowed = options.allowForegroundControl;
-        const context = input?.context;
-        const hostOwnsForegroundCapability =
-          typeof foregroundControlAllowed === "function" && foregroundControlAllowed() === true;
-        if (
-          !hostOwnsForegroundCapability ||
-          context?.runtimeScope !== "main" ||
-          context?.clientMode !== "desktop-continuous" ||
-          context?.deliveryKind !== "desktop-continuous" ||
-          context?.remoteSessionId
-        ) {
-          return unavailable("Foreground Computer Use requires a local desktop task", "local_only");
+        if (!foregroundAvailableFor(input?.context)) {
+          return unavailable(
+            "Foreground Computer Use requires a local desktop task; background tools still work (see `await agent.computerUse.describe()`)",
+            "local_only",
+          );
         }
         if (!validForegroundInput(method, input?.arguments)) {
-          return unavailable(`${method} arguments are invalid`, "bad_request");
+          return unavailable(argsRefusal(toolName, method), "bad_request");
         }
       }
 
@@ -410,11 +371,7 @@ export function createComputerUseRuntime(options = {}) {
         }
         identities.remember(sessionId, method, result);
         if (method === "observe") rememberSemanticGeometry(semanticGeometry, sessionId, result);
-        const semanticTarget =
-          (method === "press" || method === "set_value") &&
-          typeof input?.arguments?.semantic_ref === "string"
-            ? semanticGeometry.get(sessionId)?.get(input.arguments.semantic_ref)
-            : undefined;
+        const semantic = semanticTargetOf(semanticGeometry, sessionId, method, input?.arguments);
         const image =
           method === "observe" && result && typeof result === "object" ? result.image : null;
         const observationId =
@@ -423,9 +380,7 @@ export function createComputerUseRuntime(options = {}) {
         // target 只使用 Helper 已确认的身份（与 observe 同一来源），绝不猜测。
         const workspaceCursor = workspaceAction
           ? workspaceCursorOf(input?.arguments, result)
-          : semanticTarget
-            ? { x: semanticTarget.x, y: semanticTarget.y }
-            : undefined;
+          : semantic && { x: semantic.x, y: semantic.y };
         reportActivity({
           ...activityBase,
           phase: "completed",
@@ -442,8 +397,8 @@ export function createComputerUseRuntime(options = {}) {
           ...(workspaceCursor ? { workspaceCursor } : {}),
           ...((method === "observe" || workspaceAction) && input?.arguments?.pid !== undefined
             ? { target: identities.target(sessionId, input?.arguments) }
-            : semanticTarget
-              ? { target: identities.target(sessionId, { pid: semanticTarget.pid }) }
+            : semantic
+              ? { target: identities.target(sessionId, { pid: semantic.pid }) }
               : {}),
           ...(observationId
             ? {

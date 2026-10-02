@@ -45,7 +45,7 @@ function fakeBroker() {
     runtime: {
       async execute(input) {
         calls.push(input.toolName);
-        if (input.toolName === "observe") {
+        if (input.toolName === "get_app_state") {
           return {
             content: [{ type: "text", text: "observed" }],
             _meta: {
@@ -97,11 +97,11 @@ test("core handler cells expose the shared Computer Use bridge and wire the faca
     // transport) to the runtime — the same path the official bootstrap binds.
     const call = await runCell(
       session,
-      `const r = await globalThis.agent.computerUse.observe({ target: "Fake" });
+      `const r = await globalThis.agent.computerUse.get_app_state({ pid: 1 });
        return JSON.stringify(r?.content?.[0]?.text ?? null);`,
     );
     assert.match(String(call.result ?? ""), /observed/u, `facade round-trip failed: ${JSON.stringify(call.result)}`);
-    assert.deepEqual(calls, ["observe"]);
+    assert.deepEqual(calls, ["get_app_state"]);
   } finally {
     disposeNodeReplSession(SESSION_ID);
     setCoreCuaBrokerFactoryForTest(undefined);

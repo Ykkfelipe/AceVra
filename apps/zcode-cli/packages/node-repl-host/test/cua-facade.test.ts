@@ -80,3 +80,21 @@ test("a session without a broker still exposes the facade and fails closed on us
     /Computer Use is unavailable for this node_repl session/,
   );
 });
+
+test("the facade exposes the canonical surface: real keys, describe(), no phantom methods", () => {
+  const globals = globalsWithBroker(undefined);
+  prepareComputerUseRuntimeGlobals(globals);
+  const computerUse = (globals.agent as { computerUse: Record<string, unknown> }).computerUse;
+  const keys = Object.keys(computerUse);
+  assert.equal(keys[0], "describe");
+  for (const name of ["list_apps", "get_app_state", "computer.press", "computer.set_value", "computer.workspace_click", "computer.key_press"]) {
+    assert.ok(keys.includes(name), name);
+    assert.equal(typeof computerUse[name], "function", name);
+  }
+  // 历史别名可调用但不枚举；不存在的名字不再伪装成函数，await 也不会误判为 thenable。
+  assert.equal(typeof computerUse.press, "function");
+  assert.equal(keys.includes("press"), false);
+  assert.equal(computerUse.computer, undefined);
+  assert.equal(computerUse.type_text, undefined);
+  assert.equal(computerUse.then, undefined);
+});
