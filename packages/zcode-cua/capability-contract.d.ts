@@ -56,6 +56,7 @@ export declare const COMPUTER_USE_ACTION_CLASSIFICATIONS: Readonly<
     >
 >;
 export declare const COMPUTER_USE_FOREGROUND_METHODS: readonly ComputerUseMethod[];
+export declare const COMPUTER_USE_KEY_NAMES: readonly string[];
 export declare const COMPUTER_USE_MODEL_GUIDANCE: string;
 export declare function normalizeComputerUseResult(
   value: unknown,

@@ -103,6 +103,23 @@ export const COMPUTER_USE_ACTION_CLASSIFICATIONS = Object.freeze({
   drag: "REQUIRES_FOREGROUND",
 });
 
+/**
+ * Keys `computer.key_press` may name. Letters and digits exist for shortcuts such as Command+L;
+ * the Helper maps each to its ANSI virtual key code and refuses anything else (invalid_key).
+ */
+export const COMPUTER_USE_KEY_NAMES = Object.freeze([
+  "return",
+  "tab",
+  "space",
+  "delete",
+  "escape",
+  "left",
+  "right",
+  "down",
+  "up",
+  ..."abcdefghijklmnopqrstuvwxyz0123456789".split(""),
+]);
+
 export const COMPUTER_USE_FOREGROUND_METHODS = Object.freeze([
   "acquire_control",
   "release_control",
@@ -219,12 +236,9 @@ export function validForegroundInput(method, input) {
     Array.isArray(input)
   )
     return false;
-  const common =
-    method === "acquire_control"
-      ? ["observation_id"]
-      : method === "release_control"
-        ? ["lease_id"]
-        : ["lease_id", "observation_id"];
+  // Phase 4：原生租约 id 归运行时（ProtectedForegroundGrant 绑定）所有，模型不再传 lease_id。
+  // 旧调用仍可附带 lease_id（必须形如 UUID），运行时一律忽略、改注入当前代际的租约。
+  const common = method === "release_control" ? [] : ["observation_id"];
   const extras =
     method === "move_pointer" || method === "click"
       ? ["point"]
@@ -238,7 +252,16 @@ export function validForegroundInput(method, input) {
               ? ["start", "end"]
               : [];
   const wanted = [...common, ...extras].sort();
-  const actual = Object.keys(input).sort();
+  if (
+    Object.hasOwn(input, "lease_id") &&
+    (method === "acquire_control" ||
+      typeof input.lease_id !== "string" ||
+      !/^[0-9a-f-]{36}$/iu.test(input.lease_id))
+  )
+    return false;
+  const actual = Object.keys(input)
+    .filter((key) => key !== "lease_id")
+    .sort();
   if (wanted.length !== actual.length || wanted.some((key, index) => key !== actual[index]))
     return false;
   // Helper 签发的 observation/lease id 是大写 UUID（如 A40170B2-…）；这里必须按
@@ -267,9 +290,7 @@ export function validForegroundInput(method, input) {
     return false;
   if (
     method === "key_press" &&
-    (!["return", "tab", "space", "delete", "escape", "left", "right", "down", "up"].includes(
-      input.key,
-    ) ||
+    (!COMPUTER_USE_KEY_NAMES.includes(input.key) ||
       !Array.isArray(input.modifiers) ||
       input.modifiers.length > 4 ||
       new Set(input.modifiers).size !== input.modifiers.length ||

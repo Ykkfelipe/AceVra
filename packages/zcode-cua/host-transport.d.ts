@@ -142,11 +142,23 @@ export interface CreateCuaBrokerHostOptions {
   peerProbeRequirement?: string;
   /** Test/diagnostic seam: replaces the native probe spawn entirely. */
   bindPeerIdentity?: (socket: import("node:net").Socket) => Promise<PeerBindingReport | null>;
+  /** Diagnostic: called once each time an admitted Helper connection ends, with the reason. */
+  onHelperDrop?: (drop: HelperDropReport) => void;
+}
+
+export interface HelperDropReport {
+  /** helper_closed | socket_error | malformed_line | empty_line | oversized_line | host_stopped */
+  reason: string;
+  at: number;
+  connectionGeneration: number;
+  /** Requests forwarded to the Helper and not yet answered when it dropped (delivery unknown). */
+  inFlight: number;
 }
 
 export interface AdmittedHelper {
   pid: number;
   identifier: string;
+  connectionGeneration: number;
 }
 
 export interface CuaBrokerHost {
@@ -155,6 +167,9 @@ export interface CuaBrokerHost {
   readonly sessionDir: string | null;
   readonly helperConnected: boolean;
   readonly admittedHelper: AdmittedHelper | null;
+  /** Current Helper connection generation (0 = never admitted); fences native leases. */
+  readonly connectionGeneration: number;
+  readonly lastHelperDrop: HelperDropReport | null;
   start(): Promise<void>;
   stop(): Promise<void>;
   callMethod<T = Record<string, unknown>>(

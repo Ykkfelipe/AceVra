@@ -8,7 +8,11 @@ import {
   validForegroundInput,
   COMPUTER_USE_FOREGROUND_METHODS,
 } from "./capability-contract.js";
-import { argsRefusal, foregroundComputerUseAvailable, MODEL_TOOL_HINT } from "./computer-surface.js";
+import {
+  argsRefusal,
+  foregroundComputerUseAvailable,
+  MODEL_TOOL_HINT,
+} from "./computer-surface.js";
 
 /**
  * 校验一个非 describe 的 execute 请求。
@@ -37,15 +41,18 @@ export function validateComputerUseRequest({ toolName, input, platform, allowFor
     return refusal(argsRefusal(toolName, method), "bad_request");
   }
   const foreground = COMPUTER_USE_FOREGROUND_METHODS.includes(method);
+  // Phase 4：control_status 读的是本任务 ProtectedForegroundGrant 的状态，不再要求模型持有
+  // lease_id；旧调用附带的 lease_id 仍须形如 UUID（大小写不敏感），运行时忽略它。
   if (
     method === "control_status" &&
-    (!input?.arguments ||
-      Object.keys(input.arguments).length !== 1 ||
-      // Helper 签发的 lease id 是大写 UUID；大小写不敏感校验，原样透传（Helper 侧
-      // 租约登记按原样字符串精确匹配，归一化反而会破坏后续 release/中断匹配）。
-      !/^[0-9a-f-]{36}$/iu.test(input.arguments.lease_id ?? ""))
+    input?.arguments !== undefined &&
+    (typeof input.arguments !== "object" ||
+      input.arguments === null ||
+      Object.keys(input.arguments).some((key) => key !== "lease_id") ||
+      (input.arguments.lease_id !== undefined &&
+        !/^[0-9a-f-]{36}$/iu.test(String(input.arguments.lease_id))))
   ) {
-    return refusal("control_status requires a lease_id", "bad_request");
+    return refusal("control_status takes no arguments", "bad_request");
   }
   if (foreground) {
     if (!foregroundComputerUseAvailable(input?.context, allowForegroundControl)) {

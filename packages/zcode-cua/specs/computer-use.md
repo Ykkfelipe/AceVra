@@ -1838,3 +1838,96 @@ model js cell ── computer.acquire_control ──▶ runtime (zcode-cua)
 
 Single owners: the lease authority owns the grant record (keyed by session, scoped to one task);
 the Helper owns the lease; Electron main owns only overlay windows.
+
+## Helper lifetime and protected recovery (installed 92454874 finding)
+
+Measured on installed `92454874`: Helper pid 94296 (connect mode, launched 11:42:32 by
+LaunchServices "launch job demand") exited cleanly at 11:46:57 (`termination reported by launchd
+(0, 0, 0)`, CoreAnalytics exit handler on the main thread, no crash report). The product launches
+only connect mode, where `idleMs` is not applied, so the exit path that fired is
+`runBrokerHostClient` → `serveBrokerRequests` returned (host EOF or read error) → `shutdown()` →
+`exit(0)`. The host relay recorded nothing about why it closed the connection, and every later
+Computer call reached the model as `(unknown): failed` (an uncoded lease-authority error).
+
+### Structured transport errors
+
+Every layer keeps a stable code; `transport-errors.js` is the single place that maps a layer code
+to the canonical, model-facing code and keeps `original_code`, `recoverable` and `delivery`.
+
+| Canonical code                                                           | Meaning                                                      | Delivery |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------ | -------- |
+| `helper_disconnected`                                                    | no Helper attached / socket gone; request never forwarded    | not_sent |
+| `helper_exited`                                                          | Helper dropped with this request in flight                   | unknown  |
+| `connection_closed`                                                      | broker connection closed before an answer                    | unknown  |
+| `connection_generation_changed`                                          | answer/lease belongs to another Helper connection generation | not_sent |
+| `invalid_lease` / `lease_expired` / `lease_not_owned` / `exclusive_busy` | native lease                                                 | not_sent |
+| `protected_grant_expired`                                                | the runtime grant reached its expiry                         | not_sent |
+| `user_takeover`                                                          | physical input, Esc, Stop or Pause took the screen back      | not_sent |
+| `injection_failed` / `unsupported_action`                                | actuation                                                    | —        |
+| `effect_unverified`                                                      | Helper restarted mid-action; action NOT replayed             | unknown  |
+
+The relay (`host-transport.js`) answers with `delivery` and `connection_generation`, records each
+connection end (`lastHelperDrop.reason`: `helper_closed`, `socket_error`, `malformed_line`,
+`empty_line`, `oversized_line`, `host_stopped`) and logs it through `onHelperDrop`. The Helper's
+serializer never writes an empty line any more (an unserializable result becomes a coded
+`invalid_result` response): the old empty line was itself a host-drop cause.
+
+### Helper lifetime states (`HelperLifecycle.swift`)
+
+| State               | Idle timer (bind mode) | Host EOF (connect mode)                             |
+| ------------------- | ---------------------- | --------------------------------------------------- |
+| `IDLE`              | exits (unchanged)      | exits (unchanged)                                   |
+| `BACKGROUND_ACTIVE` | does not exit          | exits (unchanged)                                   |
+| `PROTECTED_ACTIVE`  | never exits on idle    | release held input, keep lease, reconnect grace 8 s |
+| `PROTECTED_ENDING`  | never exits on idle    | finish cleanup (bounded 3 s), then exit             |
+
+Reconnect grace is 8 s: shorter than the host's 10 s admission wait, and the Helper has already
+posted key-up/button-up for everything it held, so the user's input is never blocked while AceVra
+is unreachable. A reconnect is authenticated exactly like a first connection (fresh listener
+verification, same launch token) and is a **new connection generation**: the old native lease is
+ended with `connection_generation_changed`. Grace expiry ends the lease with `host_disconnected`
+(held input released, event tap stopped, desktop lock released) and exits. AceVra failure → the
+user regains control; never the reverse.
+
+### Protected foreground grant (runtime-owned)
+
+```text
+ProtectedForegroundGrant (authority, services)     NativeHelperLease (Helper, one generation)
+  grantId, (session, task), approvedAt, expiresAt    lease_id, 15 s deadline, dies with the process
+  created by the user's Allow                        never reused across generations
+  ended by Stop / Pause / user takeover / expiry     ended by expiry, reconnect, focus, shutdown
+
+runtime binding (protected-runtime.js, private): grantId → { helperLeaseId, authorityLeaseId,
+  connectionGeneration, target pid/window }. The model sees only protectedForeground.
+```
+
+- The authority's granted takeover record is the grant (`grantId`, `expiresAt` = Allow + 15 min).
+  Only user reclaim (`interrupted`, `interrupted_or_focus_lost`, `user_takeover`, `secure_field`),
+  Stop and Pause revoke it. Native-lease lifecycle endings (15 s deadline, Helper restart/reconnect,
+  stale geometry, focus mismatch) keep it.
+- The model never passes a lease id: `computer.click/key_press/…` take only the observation and the
+  action. The runtime resolves task → grant (checked with the authority on every protected call) →
+  connection generation → native lease, and strips `lease_id` from every result.
+
+### Helper restart / reacquire and generation fencing
+
+```text
+action ──▶ grant check (authority) ──▶ inject native lease ──▶ Helper(gen G)
+   ├─ not_sent (no Helper / lease ended before posting / answer from gen ≠ G)
+   │     recover_helper (lifecycle owner relaunch) → observe target → begin/acquire/commit NEW
+   │     lease (gen G') → grant re-checked after commit (Stop wins) → resend once only if the
+   │     window geometry is unchanged; otherwise return not_sent and ask to re-observe
+   └─ unknown (Helper died mid-request) → recover + reacquire, return effect_unverified, never replay
+```
+
+Every protected operation is fenced by task/session, the authority grant (`grantId`), the relay
+connection generation stamped on each answer, and the native lease generation recorded at commit
+(`helperConnectionGeneration`). An answer from another generation never updates the binding.
+
+### Stop / user takeover
+
+Stop revokes the grant **first** (inside the authority's serial queue), then marks the lease
+stopped and releases the native lease through the hardened session that actually holds it
+(`releaseHelper` previously looked only at the legacy managed host and always failed on the product
+path). An unreachable Helper does not fail Stop (`helperRelease: "unreachable"`); the runtime's next
+call sees the revoked grant, releases what it can, and reports `user_takeover`.

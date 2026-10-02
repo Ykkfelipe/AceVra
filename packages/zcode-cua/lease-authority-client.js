@@ -43,7 +43,16 @@ export function createLeaseAuthorityClient(env = process.env) {
           try {
             const response = JSON.parse(buffer.slice(0, newline));
             if (response.ok === true) resolve(response.result);
-            else reject(new Error(response.error?.code ?? "lease_authority_failed"));
+            else {
+              // Phase 2：保留 authority 的 code。以前只放进 message，上层读 error.code 得到
+              // undefined，最终在模型侧变成 "(unknown)"。
+              const code = response.error?.code ?? "lease_authority_failed";
+              reject(
+                Object.assign(new Error(response.error?.message ?? code), {
+                  code,
+                }),
+              );
+            }
           } catch (error) {
             reject(error);
           }
@@ -54,8 +63,13 @@ export function createLeaseAuthorityClient(env = process.env) {
     beginAcquire(owner) {
       return this.request("begin_acquire", owner);
     },
-    commitAcquire(leaseId, helperLeaseId, helperRequirement) {
-      return this.request("commit_acquire", { leaseId, helperLeaseId, helperRequirement });
+    commitAcquire(leaseId, helperLeaseId, helperRequirement, helperConnectionGeneration) {
+      return this.request("commit_acquire", {
+        leaseId,
+        helperLeaseId,
+        helperRequirement,
+        ...(Number.isInteger(helperConnectionGeneration) ? { helperConnectionGeneration } : {}),
+      });
     },
     release(leaseId, reason) {
       return this.request("release", { leaseId, reason });
@@ -70,8 +84,13 @@ export function createLeaseAuthorityClient(env = process.env) {
     requestTakeover(owner) {
       return this.request("request_takeover", owner, { timeoutMs: 1500 });
     },
+    // 返回 ProtectedForegroundGrant 视图：{ state, grantId?, expiresAt?, expired? }。
     takeoverStatus(owner) {
       return this.request("takeover_status", owner, { timeoutMs: 1500 });
+    },
+    // Helper 恢复只经 services 的既有生命周期所有者；运行时无法自行拉起 Helper。
+    recoverHelper() {
+      return this.request("recover_helper", {}, { timeoutMs: 10_000 });
     },
     reportActivity(report) {
       return this.request("report_activity", report, { timeoutMs: 1500 });

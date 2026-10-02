@@ -17,15 +17,31 @@ const FOREGROUND_OBSERVATION_LIMIT = 64;
  * the Helper refuses it (stale_geometry), so it must never open the approval gate.
  */
 export function rememberForegroundObservations(store, sessionId, result) {
-  const observationId = result?.foreground_geometry?.observation_id;
+  const geometry = result?.foreground_geometry;
+  const observationId = geometry?.observation_id;
   if (!sessionId || typeof observationId !== "string" || !observationId) return;
-  const seen = store.get(sessionId) ?? new Set();
-  seen.add(observationId);
+  // 同时记下目标与窗口几何：Helper 重启后运行时据此为 ProtectedForegroundGrant 重新获取原生租约，
+  // 并判断模型的旧观察与新观察是否同一窗口状态（不同则不重放动作）。
+  const seen = store.get(sessionId) ?? new Map();
+  seen.set(observationId, {
+    pid: Number.isInteger(geometry.target_pid) ? geometry.target_pid : undefined,
+    window_id: Number.isInteger(geometry.target_window_id) ? geometry.target_window_id : undefined,
+    window_bounds:
+      geometry.window_bounds && typeof geometry.window_bounds === "object"
+        ? { ...geometry.window_bounds }
+        : undefined,
+  });
   while (seen.size > FOREGROUND_OBSERVATION_LIMIT) {
-    const oldest = seen.values().next().value;
+    const oldest = seen.keys().next().value;
     seen.delete(oldest);
   }
   store.set(sessionId, seen);
+}
+
+/** The target and window geometry a Helper-issued foreground observation described. */
+export function foregroundObservationGeometry(store, sessionId, observationId) {
+  if (!sessionId || typeof observationId !== "string") return undefined;
+  return store.get(sessionId)?.get(observationId);
 }
 
 /** True when this observation id came from a Helper-issued foreground geometry. */

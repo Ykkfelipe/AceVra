@@ -30,6 +30,7 @@ test("authenticated lease authority sideband serializes acquire and stop", async
   assert.deepEqual(await client.stop(), {
     status: "released",
     record: { ...active, state: "stopped" },
+    helperRelease: "confirmed",
   });
   assert.deepEqual(releasedHelperLeases, ["helper-lease-1"]);
   assert.deepEqual(await client.stop(), {
@@ -70,7 +71,8 @@ test("CUA-4 sideband exposes admission and activity reports but never pause or r
   );
   assert.equal(server.authority.getSession("session-a")?.observation?.id, "obs-1");
   // The model-facing runtime cannot resume (or pause/stop) itself through the sideband.
-  await assert.rejects(() => client.request("resume"), /bad_request/u);
-  await assert.rejects(() => client.request("pause"), /bad_request/u);
+  // Phase 2: the client keeps the authority's code instead of folding it into the message.
+  await assert.rejects(() => client.request("resume"), { code: "bad_request" });
+  await assert.rejects(() => client.request("pause"), { code: "bad_request" });
   assert.equal(server.authority.getAdmission().paused, true);
 });

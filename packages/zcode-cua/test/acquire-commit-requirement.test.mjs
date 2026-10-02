@@ -194,10 +194,11 @@ describe("acquire commit consumes the verified helper requirement", () => {
     assert.equal(recorder.stopped, undefined, "acquisition must not be torn down");
     assert.deepEqual(releaseCalls, [], "confirmed acquire must not be force-released");
     assert.equal(result.structuredContent?.mode, "EXCLUSIVE_FOREGROUND");
-    assert.ok(
-      JSON.stringify(result.structuredContent).includes("lease_authority_generation"),
-      "committed generation is surfaced",
-    );
+    // Phase 4: the native lease belongs to the runtime grant binding, not to the model.
+    assert.equal(result.structuredContent?.protectedForeground, "active");
+    const text = JSON.stringify(result);
+    assert.equal(text.includes(LEASE_ID), false, "the native lease id never reaches the model");
+    assert.equal(text.includes("lease_authority_generation"), false);
   });
 
   it("a declined screen takeover never reaches the authority or the Helper", async () => {

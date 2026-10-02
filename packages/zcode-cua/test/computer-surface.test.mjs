@@ -77,7 +77,9 @@ test("refusals name the expected arguments instead of 'arguments are invalid'", 
     arguments: { key: "return" },
     context: LOCAL,
   });
-  assert.match(key.content[0].text, /lease_id, observation_id, key: return/u);
+  // Phase 4: the model contract has no lease_id; AceVra keeps the native lease.
+  assert.match(key.content[0].text, /\{ observation_id, key: return/u);
+  assert.doesNotMatch(key.content[0].text, /lease_id/u);
   assert.match(key.content[0].text, /acquire_control/u);
   const press = await runtime.execute({
     toolName: "computer.press",

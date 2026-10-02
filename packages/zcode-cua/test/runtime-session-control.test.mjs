@@ -137,29 +137,29 @@ describe("CUA-4 runtime session control", () => {
               helper_identity: VERIFIED_IDENTITY,
             }
           : clickResult.value === "interrupted"
-          ? {
-              operation: "click",
-              effect: "refused",
-              route: "none",
-              classification: "REQUIRES_FOREGROUND",
-              mode: "EXCLUSIVE_FOREGROUND",
-              code: "interrupted",
-              input_delivery: "none",
-              application_effect: "unknown",
-              evidence: [],
-              helper_identity: VERIFIED_IDENTITY,
-            }
-          : {
-              operation: "click",
-              effect: "unknown",
-              route: "quartz_input",
-              classification: "REQUIRES_FOREGROUND",
-              mode: "EXCLUSIVE_FOREGROUND",
-              input_delivery: "confirmed",
-              application_effect: "unknown",
-              evidence: [],
-              helper_identity: VERIFIED_IDENTITY,
-            },
+            ? {
+                operation: "click",
+                effect: "refused",
+                route: "none",
+                classification: "REQUIRES_FOREGROUND",
+                mode: "EXCLUSIVE_FOREGROUND",
+                code: "interrupted",
+                input_delivery: "none",
+                application_effect: "unknown",
+                evidence: [],
+                helper_identity: VERIFIED_IDENTITY,
+              }
+            : {
+                operation: "click",
+                effect: "unknown",
+                route: "quartz_input",
+                classification: "REQUIRES_FOREGROUND",
+                mode: "EXCLUSIVE_FOREGROUND",
+                input_delivery: "confirmed",
+                application_effect: "unknown",
+                evidence: [],
+                helper_identity: VERIFIED_IDENTITY,
+              },
       release_control: async () => ({
         operation: "release_control",
         effect: "confirmed",
@@ -381,11 +381,13 @@ describe("CUA-4 runtime session control", () => {
       arguments: { observation_id: OBSERVATION_ID },
       context: LOCAL,
     });
-    assert.equal(acquired.structuredContent.lease_id, LEASE_ID);
+    // Phase 4: the model gets protectedForeground, never the native lease id.
+    assert.equal(acquired.structuredContent.protectedForeground, "active");
+    assert.equal(acquired.structuredContent.lease_id, undefined);
     clickResult.value = "unknown";
     const clicked = await cua.execute({
       toolName: "computer.click",
-      arguments: { observation_id: OBSERVATION_ID, lease_id: LEASE_ID, point: { x: 1, y: 2 } },
+      arguments: { observation_id: OBSERVATION_ID, point: { x: 1, y: 2 } },
       context: LOCAL,
     });
     await settle();
@@ -400,11 +402,14 @@ describe("CUA-4 runtime session control", () => {
     clickResult.value = "interrupted";
     const interrupted = await cua.execute({
       toolName: "computer.click",
-      arguments: { observation_id: OBSERVATION_ID, lease_id: LEASE_ID, point: { x: 1, y: 2 } },
+      arguments: { observation_id: OBSERVATION_ID, point: { x: 1, y: 2 } },
       context: LOCAL,
     });
     await settle();
-    assert.equal(interrupted.structuredContent.code, "interrupted");
+    // Phase 2: canonical code for the model, the Helper's own code kept beside it.
+    assert.equal(interrupted.structuredContent.code, "user_takeover");
+    assert.equal(interrupted.structuredContent.original_code, "interrupted");
+    assert.equal(interrupted.structuredContent.recoverable, false);
     assert.deepEqual(recorder.releases, [{ leaseId: "authority-lease-1", reason: "interrupted" }]);
     clickResult.value = "unknown";
   });
@@ -427,7 +432,7 @@ describe("CUA-4 runtime session control", () => {
     clickResult.value = "lease_ended";
     const refused = await cua.execute({
       toolName: "computer.click",
-      arguments: { observation_id: OBSERVATION_ID, lease_id: LEASE_ID, point: { x: 1, y: 2 } },
+      arguments: { observation_id: OBSERVATION_ID, point: { x: 1, y: 2 } },
       context: LOCAL,
     });
     await settle();

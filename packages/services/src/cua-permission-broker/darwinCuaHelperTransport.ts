@@ -56,6 +56,7 @@ export interface HardenedCuaHelperSessionOptions {
   env?: NodeJS.ProcessEnv;
   logger?: {
     warn: (contextId: undefined, message: string, fields?: Record<string, unknown>) => void;
+    info?: (contextId: undefined, message: string, fields?: Record<string, unknown>) => void;
   };
   /** Total budget for Helper launch + hello admission. */
   admissionTimeoutMs?: number;
@@ -161,6 +162,15 @@ export async function startHardenedCuaHelperSession(
     },
     peerProbePath,
     peerProbeRequirement,
+    // 修复依据（installed 92454874）：Helper 在 connect 模式下只因宿主端 EOF 退出，而宿主断开连接时
+    // 没有任何日志，退出原因无从取证。每次已准入连接结束都记录原因与在途请求数。
+    onHelperDrop: (drop) => {
+      options.logger?.info?.(undefined, "[cua-host-transport] Helper connection ended", {
+        reason: drop.reason,
+        connectionGeneration: drop.connectionGeneration,
+        inFlight: drop.inFlight,
+      });
+    },
   });
   await host.start();
   // 与 admission 侧同源：launch args 由同一个 builder 生成，contract 等值检查才能成立。

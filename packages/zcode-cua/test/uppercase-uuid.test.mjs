@@ -210,8 +210,11 @@ describe("control_status accepts a Helper-native uppercase lease UUID", () => {
     });
   }
 
-  it("dispatches control_status with the uppercase lease id unchanged", async () => {
+  it("control_status reads the runtime grant; a legacy uppercase lease id is accepted and ignored", async () => {
+    // Phase 4: native lease ids belong to the runtime's ProtectedForegroundGrant binding. The
+    // model's legacy argument is still validated case-insensitively, then ignored.
     const cua = runtime();
+    const before = seen.length;
     const result = await cua.execute({
       toolName: "computer.control_status",
       arguments: { lease_id: UPPER_LEASE_ID },
@@ -219,9 +222,9 @@ describe("control_status accepts a Helper-native uppercase lease UUID", () => {
     });
     assert.equal(result.isError, undefined, JSON.stringify(result.content?.[0]));
     const body = JSON.parse(result.content[0].text);
-    assert.equal(body.lease_state, "active");
-    assert.equal(body.lease_id, UPPER_LEASE_ID, "id must not be normalized");
-    assert.ok(seen.includes("control_status"), "uppercase lease id must reach the Helper");
+    assert.equal(body.protectedForeground, "inactive");
+    assert.equal(body.lease_id, undefined, "no native lease id is ever shown to the model");
+    assert.equal(seen.length, before, "without a grant binding nothing reaches the Helper");
   });
 
   it("keeps rejecting malformed lease ids before any dispatch", async () => {
@@ -233,7 +236,7 @@ describe("control_status accepts a Helper-native uppercase lease UUID", () => {
       context: LOCAL,
     });
     assert.equal(result.isError, true);
-    assert.match(result.content[0].text, /control_status requires a lease_id/u);
+    assert.match(result.content[0].text, /control_status takes no arguments/u);
     assert.equal(seen.length, before, "malformed id must not reach the Helper");
   });
 });

@@ -279,9 +279,7 @@ export async function dispatchRequest(backend, request) {
     return errorResponse("request has no method", { code: "bad_request" });
   }
   if (!isBrokerMethod(request.method)) {
-    return errorResponse(`method '${request.method}' is not available`, {
-      code: "not_authorized",
-    });
+    return errorResponse(`method '${request.method}' is not available`, { code: "not_authorized" });
   }
   const handler = backend?.[request.method];
   if (typeof handler !== "function") {
@@ -398,7 +396,11 @@ export async function callBrokerMethod(args) {
     timer.unref?.();
 
     socket.setEncoding("utf8");
-    socket.on("connect", () => socket.write(encodeRequestLine(method, params, "1", token)));
+    let requestWritten = false;
+    socket.on("connect", () => {
+      requestWritten = true;
+      socket.write(encodeRequestLine(method, params, "1", token));
+    });
     socket.on("data", (chunk) => {
       buffer += chunk;
       const newline = buffer.indexOf("\n");
@@ -423,19 +425,52 @@ export async function callBrokerMethod(args) {
         return;
       }
       const failure = response?.error;
+      // 中继附带的安全元数据（delivery / connection_generation / layer）逐层保留，不能在这里丢掉。
+      const relayed = {};
+      if (failure && typeof failure === "object") {
+        if (typeof failure.delivery === "string") relayed.delivery = failure.delivery;
+        if (typeof failure.layer === "string") relayed.layer = failure.layer;
+        if (Number.isInteger(failure.connection_generation)) {
+          relayed.connection_generation = failure.connection_generation;
+        }
+      }
       settle(
         reject,
         new BrokerError(
           typeof failure === "string" ? failure : (failure?.message ?? "broker request failed"),
-          { code: failure?.code ?? "broker_error" },
+          {
+            code: failure?.code ?? "broker_error",
+            ...(Object.keys(relayed).length > 0 ? { details: relayed } : {}),
+          },
         ),
       );
     });
     socket.on("error", (error) =>
       settle(
         reject,
+        // Phase 2：保留原始 code（connect_failed）与安全的 errno，分类交给 transport-errors.js；
+        // 以前这里只剩一条消息，上层无法区分"Helper 不在"与其它故障。
         new BrokerError(`broker connection failed: ${error.message}`, {
           code: "connect_failed",
+          details: {
+            layer: "broker_client",
+            errno: typeof error?.code === "string" ? error.code : undefined,
+            delivery: requestWritten ? "unknown" : "not_sent",
+          },
+        }),
+      ),
+    );
+    // 修复依据（installed 92454874）：Helper/relay 在应答前关闭连接时，这里没有任何处理，
+    // 请求只能等到超时才失败，且被报成 timeout。连接关闭是独立且可恢复的事实，立即如实报告。
+    socket.on("close", () =>
+      settle(
+        reject,
+        new BrokerError("the broker connection closed before it answered", {
+          code: "connection_closed",
+          details: {
+            layer: "broker_client",
+            delivery: requestWritten ? "unknown" : "not_sent",
+          },
         }),
       ),
     );

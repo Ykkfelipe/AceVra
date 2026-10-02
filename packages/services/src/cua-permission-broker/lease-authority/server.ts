@@ -67,6 +67,9 @@ export async function startLeaseAuthorityServer(
             String(params.leaseId),
             String(params.helperLeaseId),
             String(params.helperRequirement),
+            Number.isInteger(params.helperConnectionGeneration)
+              ? Number(params.helperConnectionGeneration)
+              : undefined,
           );
           break;
         case "release":
@@ -92,7 +95,18 @@ export async function startLeaseAuthorityServer(
           result = { state: authority.takeover.request(takeoverOwner(params)) };
           break;
         case "takeover_status":
-          result = { state: authority.takeover.status(takeoverOwner(params)) };
+          // ProtectedForegroundGrant 的运行时视图：state + grantId + expiresAt（+ expired）。
+          // 旧调用方只读 state，字段增量兼容。
+          result = authority.takeover.grant(takeoverOwner(params));
+          break;
+        // Helper 恢复：经既有生命周期所有者（hardened session）重启，有界、单飞、不换凭据。
+        case "recover_helper":
+          if (!options.recoverHelper) {
+            throw Object.assign(new Error("helper recovery is unavailable"), {
+              code: "helper_disconnected",
+            });
+          }
+          result = await options.recoverHelper();
           break;
         case "report_activity":
           authority.reportActivity(params as unknown as ComputerUseActivityReport);
@@ -104,7 +118,14 @@ export async function startLeaseAuthorityServer(
       socket.write(`${JSON.stringify({ ok: true, result })}\n`);
     } catch (error) {
       socket.write(
-        `${JSON.stringify({ ok: false, error: { code: (error as { code?: string }).code ?? "failed" } })}\n`,
+        `${JSON.stringify({
+          ok: false,
+          error: {
+            code: (error as { code?: string }).code ?? "lease_authority_failed",
+            message:
+              error instanceof Error ? error.message.slice(0, 200) : "lease authority failed",
+          },
+        })}\n`,
       );
     }
   }

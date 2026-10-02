@@ -5,7 +5,6 @@ import {
 import { describeComputerUseSurface, foregroundComputerUseAvailable } from "./computer-surface.js";
 import {
   forgetForegroundObservations,
-  hasForegroundObservation,
   rememberForegroundObservations,
 } from "./foreground-observations.js";
 import {
@@ -15,7 +14,9 @@ import {
 } from "./semantic-geometry.js";
 import { createSessionIdentityRegistry, identityText } from "./session-identity.js";
 import { validateComputerUseRequest } from "./request-guard.js";
-import { assertForegroundObservationId, requireTakeoverGrant } from "./takeover-grant.js";
+import { assertForegroundObservationId } from "./takeover-grant.js";
+import { createProtectedForegroundController } from "./protected-runtime.js";
+import { annotateHelperFailure, classifyThrownFailure, failureHint } from "./transport-errors.js";
 
 /**
  * Model-facing provider-independent tool name to broker method.
@@ -62,7 +63,6 @@ export function createComputerUseRuntime(options = {}) {
       : env?.ZCODE_CUA_PERMISSION_BROKER_TOKEN?.trim();
   const explicitSocketPath =
     typeof options.brokerSocketPath === "string" ? options.brokerSocketPath.trim() : "";
-  const activeLeases = new Map();
   const leaseAuthority = options.leaseAuthority;
   // CUA-4：只记录 Helper 在本运行时会话中实际列出的 pid/窗口，用于把观察目标命名；
   // 未被列出的目标只保留已知部分，绝不猜测名称。
@@ -105,42 +105,50 @@ export function createComputerUseRuntime(options = {}) {
     });
   }
 
-  async function releaseAuthorityLease(sessionId, reason) {
-    const current = activeLeases.get(sessionId);
-    if (!current) return;
+  /** One Helper call through the captured transport (used by the protected controller too). */
+  async function helperCall(method, params, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+    const broker = await import("./broker.js");
+    return await callBroker(broker, {
+      socketPath: await resolveSocketPath(),
+      method,
+      params,
+      timeoutMs,
+      expectedHelperIdentifiers: options.expectedHelperIdentifiers,
+    });
+  }
+
+  /**
+   * Background/read call with one bounded recovery. A failure that provably never reached the
+   * Helper (`delivery: not_sent`, e.g. the relay had no Helper attached) is retried once after the
+   * lifecycle owner relaunched the Helper; a read-only method is also retried when the Helper died
+   * mid-request. A mutating call whose delivery is unknown is never replayed.
+   */
+  async function callWithRecovery(broker, method, params) {
     try {
-      if (leaseAuthority && current.authorityLeaseId) {
-        await leaseAuthority.release(current.authorityLeaseId, reason);
+      return await helperCall(method, params);
+    } catch (error) {
+      const failure = classifyThrownFailure(error);
+      const retryable =
+        failure.recoverable &&
+        ["helper_disconnected", "helper_exited", "connection_closed"].includes(failure.code) &&
+        (failure.delivery === "not_sent" || broker.isReadOnlyBrokerMethod(method));
+      if (!retryable || typeof leaseAuthority?.recoverHelper !== "function") throw error;
+      let recovered;
+      try {
+        recovered = await leaseAuthority.recoverHelper();
+      } catch {
+        recovered = undefined;
       }
-    } catch {
-      // The service authority fences independently; the runtime projection is still disposable.
-    } finally {
-      activeLeases.delete(sessionId);
+      if (!recovered?.connected) throw error;
+      return await helperCall(method, params);
     }
   }
 
-  async function releaseKnownLease(sessionId, reason = "runtime_cleanup") {
-    const current = activeLeases.get(sessionId);
-    if (!current) return;
-    try {
-      const broker = await import("./broker.js");
-      await callBroker(broker, {
-        socketPath: await resolveSocketPath(),
-        method: "release_control",
-        params: {
-          lease_id: current.helperLeaseId,
-          owner_session: sessionId,
-          owner_task: current.task,
-        },
-        timeoutMs: 2000,
-        expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-      });
-    } catch {
-      // The Helper also releases on disconnect and at its bounded deadline.
-    } finally {
-      await releaseAuthorityLease(sessionId, reason);
-    }
-  }
+  const protectedForeground = createProtectedForegroundController({
+    helperCall,
+    leaseAuthority,
+    foregroundObservations,
+  });
 
   // Canonical discovery (`await agent.computerUse.describe()`), answered without the Helper.
   const foregroundAvailableFor = (context) =>
@@ -213,127 +221,42 @@ export function createComputerUseRuntime(options = {}) {
         if (typeof options.ensureBrokerAvailable === "function") {
           await options.ensureBrokerAvailable();
         }
-        // 屏幕接管只能由用户在 AceVra 里批准（specs "Screen takeover"）：Helper 租约之前先等授权。
-        if (method === "acquire_control") {
-          // 修复依据（installed 9eb4f148 实测）：模型传了语义树的 tree.observation_id，Helper 只认
-          // get_app_state 结果里的 foreground_geometry.observation_id（Helper 以小写 UUID 签发，
-          // 语义树 id 为大写），于是每次都是 stale_geometry。弹卡之前就如实指出，避免无效授权往返。
-          assertForegroundObservationId(input?.arguments?.observation_id);
-          // 修复依据（installed be1b1348 实测）：Helper 只在观察带 window_id 时才签发
-          // foreground_geometry，所以没有该几何的观察根本不可能拿到租约。以前这里直接弹卡，
-          // 用户批准之后请求必然失败——用真实的同意换一次注定失败的授权。先核对台账再问用户。
-          if (
-            !hasForegroundObservation(
-              foregroundObservations,
-              sessionId,
-              input?.arguments?.observation_id,
-            )
-          ) {
-            throw Object.assign(
-              new Error(
-                "this observation carries no foreground geometry, so the Helper cannot grant a lease. Call list_windows, then get_app_state with that window's window_id (foreground_geometry is only issued for an explicit window), and pass its foreground_geometry.observation_id straight to computer.acquire_control. The user was not asked for approval.",
-              ),
-              { code: "foreground_geometry_unavailable" },
-            );
-          }
-          await requireTakeoverGrant(leaseAuthority, { session: sessionId, task });
-        }
         const broker = await import("./broker.js");
         const { sanitizeObservationResult } = await import("./observe-result.js");
-        // `callBrokerMethod` refuses a helper whose verified signature identity is missing or is
-        // not one this build expects, so what reaches a model was produced by a verified helper.
-        const params =
-          foreground || workspaceAction
+        let result;
+        if (method === "acquire_control") {
+          // 修复依据（installed 9eb4f148 实测）：模型传了语义树的 tree.observation_id，Helper 只认
+          // get_app_state 结果里的 foreground_geometry.observation_id。弹卡之前就如实指出。
+          assertForegroundObservationId(input?.arguments?.observation_id);
+          // 屏幕接管只能由用户在 AceVra 里批准；批准后由运行时持有 ProtectedForegroundGrant 绑定，
+          // 模型拿到的是 protectedForeground 状态，不是原生租约 id（protected-runtime.js）。
+          result = await protectedForeground.acquire({
+            sessionId,
+            task,
+            observationId: input?.arguments?.observation_id,
+          });
+        } else if (method === "release_control") {
+          result = await protectedForeground.release({ sessionId, task });
+        } else if (method === "control_status") {
+          result = await protectedForeground.status({ sessionId, task });
+        } else if (foreground) {
+          result = await protectedForeground.act({
+            sessionId,
+            task,
+            method,
+            args: input?.arguments ?? {},
+          });
+        } else {
+          // `callBrokerMethod` refuses a helper whose verified signature identity is missing or is
+          // not one this build expects, so what reaches a model was produced by a verified helper.
+          const params = workspaceAction
             ? {
                 ...input.arguments,
                 owner_session: input.context.sessionId,
                 owner_task: input.context.turnId || input.context.sessionId,
               }
             : (input?.arguments ?? {});
-        let result;
-        if (
-          method === "acquire_control" &&
-          (!leaseAuthority || typeof input?.context?.sessionId !== "string")
-        ) {
-          throw Object.assign(new Error("foreground lease authority is unavailable"), {
-            code: "lease_authority_unavailable",
-          });
-        }
-        const reservation =
-          method === "acquire_control" && leaseAuthority
-            ? await leaseAuthority.beginAcquire({
-                session: input.context.sessionId,
-                task: input.context.turnId || input.context.sessionId,
-              })
-            : null;
-        try {
-          result = await callBroker(broker, {
-            socketPath: await resolveSocketPath(),
-            method,
-            params,
-            timeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
-            expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-          });
-          if (
-            reservation &&
-            result?.effect === "confirmed" &&
-            typeof result?.lease_id === "string"
-          ) {
-            const requirement = result?.helper_identity?.requirement;
-            if (typeof requirement !== "string" || requirement.length === 0) {
-              await callBroker(broker, {
-                socketPath: await resolveSocketPath(),
-                method: "release_control",
-                params: {
-                  lease_id: result.lease_id,
-                  owner_session: input.context.sessionId,
-                  owner_task: params.owner_task,
-                },
-                timeoutMs: 2000,
-                expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-              }).catch(() => undefined);
-              throw Object.assign(new Error("verified Helper requirement is unavailable"), {
-                code: "lease_authority_unavailable",
-              });
-            }
-            const committed = await leaseAuthority.commitAcquire(
-              reservation.leaseId,
-              result.lease_id,
-              requirement,
-            );
-            result = { ...result, lease_authority_generation: committed.generation };
-          } else if (reservation) {
-            await leaseAuthority.stop().catch(() => undefined);
-            if (result?.lease_id)
-              await callBroker(broker, {
-                socketPath: await resolveSocketPath(),
-                method: "release_control",
-                params: {
-                  lease_id: result.lease_id,
-                  owner_session: input.context.sessionId,
-                  owner_task: params.owner_task,
-                },
-                timeoutMs: 2000,
-                expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-              }).catch(() => undefined);
-          }
-        } catch (error) {
-          if (reservation) await leaseAuthority.stop().catch(() => undefined);
-          if (result?.lease_id)
-            await broker
-              .callBrokerMethod({
-                socketPath: await resolveSocketPath(),
-                method: "release_control",
-                params: {
-                  lease_id: result.lease_id,
-                  owner_session: input.context.sessionId,
-                  owner_task: params.owner_task,
-                },
-                timeoutMs: 2000,
-                expectedHelperIdentifiers: options.expectedHelperIdentifiers,
-              })
-              .catch(() => undefined);
-          throw error;
+          result = await callWithRecovery(broker, method, params);
         }
         // The model-facing boundary. `observe` answers with a host path to the frame it wrote;
         // that path is a host-internal detail, so it is replaced here by the opaque reference and
@@ -349,35 +272,11 @@ export function createComputerUseRuntime(options = {}) {
         }
         const action =
           method === "press" || method === "set_value" || foreground || workspaceAction;
-        const normalized = action ? normalizeComputerUseResult(sanitized, method) : sanitized;
-        if (
-          foreground &&
-          method === "acquire_control" &&
-          normalized.effect === "confirmed" &&
-          typeof normalized.lease_id === "string"
-        ) {
-          activeLeases.set(input.context.sessionId, {
-            authorityLeaseId: reservation.leaseId,
-            helperLeaseId: normalized.lease_id,
-            task: params.owner_task,
-          });
-        }
-        if (foreground && method === "release_control") {
-          await releaseAuthorityLease(input.context.sessionId, "model_release");
-        }
-        if (
-          foreground &&
-          (normalized.code === "interrupted" ||
-            normalized.lease_state === "inactive" ||
-            normalized.lease_state === "interrupted")
-        ) {
-          // 修复依据（installed 70e348e1 实测）：Helper 自己结束租约时（例如 key_press 的
-          // security_state_unreadable、focus_mismatch）只回了 lease_state: inactive，而这里
-          // 只认 code === "interrupted"。authority 侧的租约因此一直 active：UI 的控制状态不灭，
-          // 发光层不会自己消失，下一次 acquire 还会撞上"仍然有效"的租约。
-          // Helper 用 lease_state 表达"租约已结束"，就按它同步，不再维护另一份 code 清单。
-          await releaseKnownLease(input.context.sessionId, normalized.code ?? "helper_ended_lease");
-        }
+        // Phase 2：Helper 的拒绝码映射为 canonical code（保留 original_code 与 recoverable），
+        // 例如 interrupted → user_takeover；未知码原样保留。
+        const normalized = action
+          ? annotateHelperFailure(normalizeComputerUseResult(sanitized, method))
+          : sanitized;
         identities.remember(sessionId, method, result);
         if (method === "observe") {
           rememberSemanticGeometry(semanticGeometry, sessionId, result);
@@ -441,38 +340,42 @@ export function createComputerUseRuntime(options = {}) {
         // thrown: the caller needs the code in order to decide what to do. The text is redacted
         // like any other model-facing string — a `connect_failed` message carries the socket path,
         // and "no Helper running yet" is the ordinary first-use case, not an edge case.
-        const code = error && typeof error.code === "string" ? error.code : "unknown";
-        // Phase 2（proven installed 92454874）：Helper 进程退出后，传输层抛出的错误没有 typed
-        // code，模型看到的是 "(unknown): failed"，无法行动也无法恢复。会话 socket 已消失时，
-        // 如实命名 helper_disconnected：下一次调用会经既有生命周期所有者重启 Helper，可恢复。
-        let typedCode = code;
-        let hint = "";
-        if (code === "unknown" || code === "connect_failed" || code === "connection_closed") {
-          try {
-            const { existsSync } = await import("node:fs");
-            if (!existsSync(await resolveSocketPath())) {
-              typedCode = "helper_disconnected";
-              hint =
-                " The Computer Helper process is no longer running (it exited while no request was in flight, or the host session was recycled). This failure is recoverable: the next call relaunches the Helper; a still-valid screen-takeover approval is not lost.";
-            }
-          } catch {
-            // 探测失败就保留原 code，绝不把分类错误伪装成成功路径。
-          }
+        // Phase 2（proven installed 92454874）：每一层的 code 都保留到这里，由 transport-errors.js
+        // 统一映射为 canonical code；original_code / recoverable / delivery 一并交给模型，
+        // 绝不再出现 "(unknown): failed"。会话 socket 已消失时如实命名 helper_disconnected。
+        let socketGone = false;
+        try {
+          const { existsSync } = await import("node:fs");
+          socketGone = !existsSync(await resolveSocketPath());
+        } catch {
+          // 探测失败就保留原 code，绝不把分类错误伪装成成功路径。
         }
+        const failure = classifyThrownFailure(error, { socketGone });
+        const hint = failureHint(failure.code);
         reportActivity({
           ...activityBase,
           phase: "completed",
           at: Date.now(),
           effect: "failed",
-          code: typedCode,
+          code: failure.code,
         });
         const message = error instanceof Error ? error.message : String(error);
         const { redactHostPaths } = await import("./observe-result.js");
-        return unavailable(
-          `Computer Use request failed (${typedCode}): ${redactHostPaths(message)}${hint}`,
-          typedCode,
-          "failed",
-        );
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Computer Use request failed (${failure.code}): ${redactHostPaths(message)}${hint ? ` ${hint}` : ""}`,
+            },
+          ],
+          structuredContent: {
+            effect: "failed",
+            route: "none",
+            evidence: [],
+            ...failure,
+          },
+          isError: true,
+        };
       }
     },
     async closeSession(context) {
@@ -480,11 +383,11 @@ export function createComputerUseRuntime(options = {}) {
         identities.forget(context.sessionId);
         semanticGeometry.delete(context.sessionId);
         forgetForegroundObservations(foregroundObservations, context.sessionId);
-        await releaseKnownLease(context.sessionId);
+        await protectedForeground.closeSession(context.sessionId);
       }
     },
     async dispose() {
-      for (const sessionId of activeLeases.keys()) await releaseKnownLease(sessionId);
+      await protectedForeground.dispose();
     },
   };
 }

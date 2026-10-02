@@ -82,44 +82,49 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
     name: "computer.acquire_control",
     kind: "foreground",
     args: "{ observation_id: string /* foreground_geometry.observation_id, not tree.observation_id */ }",
-    note: "asks the user to Allow screen takeover (an Allow/Deny card appears in AceVra; waits up to 25 s, so give that js call timeout_ms of at least 40000) and returns lease_id. The id must come from a get_app_state taken with an explicit window_id (see get_app_state): without one the Helper issues no foreground_geometry and this call is refused with foreground_geometry_unavailable WITHOUT asking the user. If it had to wait for the user it returns takeover_allowed_reobserve: call get_app_state again and immediately repeat acquire_control with the new observation_id (no second card). Only when a step cannot be done in the background. While you hold it the user's screen glows; any real mouse/keyboard input or Esc ends it",
+    note: 'asks the user to Allow screen takeover (an Allow/Deny card appears in AceVra; waits up to 25 s, so give that js call timeout_ms of at least 40000) and returns lease_id. The id must come from a get_app_state taken with an explicit window_id (see get_app_state): without one the Helper issues no foreground_geometry and this call is refused with foreground_geometry_unavailable WITHOUT asking the user. If it had to wait for the user it returns takeover_allowed_reobserve: call get_app_state again and immediately repeat acquire_control with the new observation_id (no second card). On success it returns protectedForeground: "active" — there is no lease id to keep: AceVra holds the approval for this task and re-establishes the native control itself if its Helper restarts. Only when a step cannot be done in the background. While you hold it the user\'s screen glows; any real mouse/keyboard input, Esc or Stop ends it',
   },
-  { name: "computer.control_status", kind: "read", args: "{ lease_id: string }" },
-  { name: "computer.release_control", kind: "foreground", args: "{ lease_id: string }" },
+  {
+    name: "computer.control_status",
+    kind: "read",
+    args: "{}",
+    returns: "protectedForeground: active | reacquiring | inactive",
+  },
+  { name: "computer.release_control", kind: "foreground", args: "{}" },
   {
     name: "computer.activate_target",
     kind: "foreground",
-    args: "{ lease_id: string, observation_id: string }",
+    args: "{ observation_id: string }",
   },
   {
     name: "computer.move_pointer",
     kind: "foreground",
-    args: "{ lease_id, observation_id, point: { x, y } }",
+    args: "{ observation_id, point: { x, y } }",
   },
   {
     name: "computer.click",
     kind: "foreground",
-    args: "{ lease_id, observation_id, point: { x, y } }",
+    args: "{ observation_id, point: { x, y } }",
   },
   {
     name: "computer.type_text",
     kind: "foreground",
-    args: "{ lease_id, observation_id, text: string (1–512 chars) }",
+    args: "{ observation_id, text: string (1–512 chars) }",
   },
   {
     name: "computer.key_press",
     kind: "foreground",
-    args: "{ lease_id, observation_id, key: return|tab|space|delete|escape|left|right|down|up, modifiers: (shift|control|option|command)[] }",
+    args: "{ observation_id, key: return|tab|space|delete|escape|left|right|down|up|a-z|0-9, modifiers: (shift|control|option|command)[] }",
   },
   {
     name: "computer.scroll",
     kind: "foreground",
-    args: "{ lease_id, observation_id, point: { x, y }, delta_x, delta_y }",
+    args: "{ observation_id, point: { x, y }, delta_x, delta_y }",
   },
   {
     name: "computer.drag",
     kind: "foreground",
-    args: "{ lease_id, observation_id, start: { x, y }, end: { x, y } }",
+    args: "{ observation_id, start: { x, y }, end: { x, y } }",
   },
 ]);
 
@@ -183,7 +188,7 @@ export function argsRefusal(toolName, method) {
     method === "press" || method === "set_value"
       ? " with a semantic_ref from the latest get_app_state"
       : method !== "acquire_control"
-        ? " (foreground: first `computer.acquire_control({ observation_id })` returns the lease_id)"
+        ? " (foreground: first `computer.acquire_control({ observation_id })`; no lease id is passed — AceVra keeps it)"
         : "";
   return `${toolName || method} expects ${hint ?? "different arguments"}${extra}. See \`await agent.computerUse.describe()\`.`;
 }

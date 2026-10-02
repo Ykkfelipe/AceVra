@@ -362,7 +362,9 @@ describe("Computer Use runtime", () => {
         // pid-only 的观察没有这个字段，于是也不可能拿到租约。
         ...(params.window_id === undefined
           ? {}
-          : { foreground_geometry: { observation_id: FOREGROUND_OBSERVATION_ID } }),
+          : {
+              foreground_geometry: { observation_id: FOREGROUND_OBSERVATION_ID },
+            }),
         image: {
           ok: true,
           path: "/Users/someone/.zcode/computer-use/observations/abc.png",
@@ -546,14 +548,12 @@ describe("Computer Use runtime", () => {
       arguments: { observation_id },
       context,
     });
-    assert.equal(acquired.structuredContent.lease_id, "00000000-0000-0000-0000-000000000001");
+    // Phase 4: no native lease id crosses to the model; the runtime injects it.
+    assert.equal(acquired.structuredContent.lease_id, undefined);
+    assert.equal(acquired.structuredContent.protectedForeground, "active");
     const clicked = await runtime.execute({
       toolName: "computer.click",
-      arguments: {
-        observation_id,
-        lease_id: acquired.structuredContent.lease_id,
-        point: { x: -80, y: 40 },
-      },
+      arguments: { observation_id, point: { x: -80, y: 40 } },
       context,
     });
     assert.equal(clicked.structuredContent.input_delivery, "confirmed");
@@ -561,7 +561,7 @@ describe("Computer Use runtime", () => {
     assert.equal(clicked.structuredContent.effect, "unknown");
     const released = await runtime.execute({
       toolName: "computer.release_control",
-      arguments: { lease_id: acquired.structuredContent.lease_id },
+      arguments: {},
       context,
     });
     assert.equal(released.structuredContent.effect, "confirmed");

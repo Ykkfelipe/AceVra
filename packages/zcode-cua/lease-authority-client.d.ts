@@ -34,9 +34,22 @@ export interface ComputerUseActivityReport {
   };
 }
 
+/** The runtime view of the ProtectedForegroundGrant for one task (owned by the authority). */
+export interface ProtectedGrantView {
+  state: string;
+  grantId?: string;
+  expiresAt?: number;
+  expired?: boolean;
+}
+
 export interface LeaseAuthorityClient {
   beginAcquire(owner: { session: string; task: string }): Promise<LeaseRecord>;
-  commitAcquire(leaseId: string, helperRequirement: string): Promise<LeaseRecord>;
+  commitAcquire(
+    leaseId: string,
+    helperLeaseId: string,
+    helperRequirement: string,
+    helperConnectionGeneration?: number,
+  ): Promise<LeaseRecord>;
   release(leaseId: string, reason?: string): Promise<LeaseRecord>;
   stop(): Promise<{ status: "released" | "already_stopped"; record?: LeaseRecord }>;
   /** CUA-4: read-only desktop admission (pause gate). Bounded. */
@@ -44,7 +57,12 @@ export interface LeaseAuthorityClient {
   /** Screen takeover: ask for this task (never grants). Bounded. */
   requestTakeover(owner: { session: string; task: string }): Promise<{ state: string }>;
   /** Screen takeover: the user's decision for exactly this task. Bounded. */
-  takeoverStatus(owner: { session: string; task: string }): Promise<{ state: string }>;
+  takeoverStatus(owner: { session: string; task: string }): Promise<ProtectedGrantView>;
+  /** Relaunch the Helper through its existing lifecycle owner; bounded and single-flight. */
+  recoverHelper(): Promise<{
+    connected: boolean;
+    connectionGeneration?: number;
+  }>;
   /** CUA-4: best-effort activity projection. Bounded; never authorizes anything. */
   reportActivity(report: ComputerUseActivityReport): Promise<{ accepted: true }>;
 }

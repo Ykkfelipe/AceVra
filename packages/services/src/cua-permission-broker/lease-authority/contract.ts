@@ -10,6 +10,8 @@ export interface LeaseRecord {
   readonly state: LeaseState;
   readonly helperLeaseId?: string;
   readonly helperRequirement?: string;
+  /** Host relay connection generation that issued `helperLeaseId` (fences stale generations). */
+  readonly helperConnectionGeneration?: number;
 }
 
 /** Why the most recent lease ended (CUA-4). Kept beside the record so its shape stays stable. */
@@ -97,7 +99,12 @@ export interface ComputerUseSessionRecord {
   readonly observation?: ComputerUseObservationRecord;
 }
 
-export type { TakeoverPort, TakeoverRecord, TakeoverState } from "./takeover.js";
+export type {
+  ProtectedGrantView,
+  TakeoverPort,
+  TakeoverRecord,
+  TakeoverState,
+} from "./takeover.js";
 import type { TakeoverPort } from "./takeover.js";
 
 export interface LeaseAuthority {
@@ -106,15 +113,19 @@ export interface LeaseAuthority {
     leaseId: string,
     helperLeaseId: string,
     helperRequirement: string,
+    helperConnectionGeneration?: number,
   ): Promise<LeaseRecord>;
   release(leaseId: string, reason?: string): Promise<LeaseRecord>;
   /**
    * `keepTakeover` is only for the runtime's own reservation cleanup (sideband): a Helper refusal
    * must not throw away the user's Allow. User Stop/Pause always revoke it.
    */
-  stop(options?: {
-    keepTakeover?: boolean;
-  }): Promise<{ status: "released" | "already_stopped"; record?: LeaseRecord }>;
+  stop(options?: { keepTakeover?: boolean }): Promise<{
+    status: "released" | "already_stopped";
+    record?: LeaseRecord;
+    /** Whether the Helper confirmed releasing the native lease; the Stop holds either way. */
+    helperRelease?: "confirmed" | "unreachable";
+  }>;
   /** Gate new Computer Use work and release an active lease through the Helper. */
   pause(): Promise<{ status: "paused" | "already_paused"; released: boolean }>;
   /** Lift the gate only; foreground work must acquire again through normal admission. */

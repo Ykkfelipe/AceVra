@@ -47,8 +47,24 @@ export interface ComputerUseRuntimeOptions {
   expectedHelperIdentifiers?: readonly string[];
   leaseAuthority?: {
     beginAcquire(owner: { session: string; task: string }): Promise<{ leaseId: string }>;
-    commitAcquire(leaseId: string, helperRequirement: string): Promise<unknown>;
+    commitAcquire(
+      leaseId: string,
+      helperLeaseId: string,
+      helperRequirement: string,
+      helperConnectionGeneration?: number,
+    ): Promise<unknown>;
+    release?(leaseId: string, reason?: string): Promise<unknown>;
     stop(): Promise<unknown>;
+    requestTakeover?(owner: { session: string; task: string }): Promise<{ state?: string }>;
+    takeoverStatus?(owner: {
+      session: string;
+      task: string;
+    }): Promise<import("./lease-authority-client.js").ProtectedGrantView>;
+    /** Relaunch the Helper through its lifecycle owner after helper_disconnected/helper_exited. */
+    recoverHelper?(): Promise<{
+      connected: boolean;
+      connectionGeneration?: number;
+    }>;
     /** CUA-4: pause admission; when present, it gates every method except status reads. */
     admission?(): Promise<{ paused: boolean; pausedAt?: number }>;
     /** CUA-4: best-effort activity projection; never awaited by the action path. */

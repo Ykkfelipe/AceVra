@@ -727,16 +727,24 @@ describe("CUA-1.75 transport session (in-process relay)", () => {
     const first = fakeHelper(host);
     await new Promise((resolve) => setTimeout(resolve, 120));
     assert.equal(host.helperConnected, true);
+    const firstGeneration = host.connectionGeneration;
     first.socket.destroy();
     await new Promise((resolve) => setTimeout(resolve, 120));
     assert.equal(host.helperConnected, false);
+    assert.equal(host.lastHelperDrop?.reason, "helper_closed");
+    assert.equal(host.lastHelperDrop?.connectionGeneration, firstGeneration);
     const second = fakeHelper(host);
     await new Promise((resolve) => setTimeout(resolve, 120));
     assert.equal(host.helperConnected, true);
     assert.equal(host.admittedHelper?.pid, process.pid);
+    // Generation fencing: every admitted connection (restart or reconnect) is a new generation,
+    // and each relayed answer is stamped with the generation that produced it.
+    assert.equal(host.connectionGeneration, firstGeneration + 1);
+    assert.equal(host.admittedHelper?.connectionGeneration, firstGeneration + 1);
     const response = await clientCall(host, { token: host.token });
     await second.waitForRequest();
     assert.equal(response.ok, true);
+    assert.equal(response.result?.connection_generation, firstGeneration + 1);
     second.socket.destroy();
     await new Promise((resolve) => setTimeout(resolve, 80));
   });
@@ -777,12 +785,18 @@ describe("CUA-1.75 transport session (in-process relay)", () => {
     // the misbehaving helper connection.
     const response = await pendingCall;
     assert.equal(response.ok, false);
-    assert.ok(
-      ["helper_disconnected", "bad_response", "connect_failed"].includes(response.error?.code),
-      `unexpected error code: ${response.error?.code}`,
-    );
+    // Phase 2: a request already forwarded when the Helper dropped is `helper_exited` with
+    // delivery unknown (it may have run), stamped with the generation that dropped.
+    assert.equal(response.error?.code, "helper_exited");
+    assert.equal(response.error?.delivery, "unknown");
+    assert.equal(response.error?.connection_generation, host.lastHelperDrop?.connectionGeneration);
     await new Promise((resolve) => setTimeout(resolve, 80));
     assert.equal(host.helperConnected, false);
+    assert.equal(host.lastHelperDrop?.reason, "malformed_line", "the drop reason is recorded");
+    // With no Helper attached, a new request is refused as never sent (safe to retry later).
+    const afterDrop = await clientCall(host, { token: host.token, id: "10" });
+    assert.equal(afterDrop.error?.code, "helper_disconnected");
+    assert.equal(afterDrop.error?.delivery, "not_sent");
     rogue.destroy();
   });
 

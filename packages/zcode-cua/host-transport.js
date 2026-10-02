@@ -43,6 +43,15 @@ import {
 } from "./host-transport-policy.js";
 import { createPeerIdentityBinder } from "./host-transport-peer.js";
 import { startSessionServer, stopSessionServer } from "./host-transport-session.js";
+import {
+  CuaHostTransportError,
+  attachLineFraming,
+  notSentDetails,
+  refuseHello,
+  relayFailureDetails,
+  respondError,
+  stampConnectionGeneration,
+} from "./host-transport-frames.js";
 
 /** Agent-facing env keys. The socket path existed in CUA-1; the token is CUA-1.5. Re-exported
  * from broker.js, which owns the env-name namespace, so importers have one source. */
@@ -67,13 +76,7 @@ const MAX_REQUEST_LINE_BYTES = 1024 * 1024;
 /** Responses flow through unmodified; the node_repl bridge's 32 MiB cap stays the ceiling. */
 const MAX_RESPONSE_LINE_BYTES = 32 * 1024 * 1024;
 
-export class CuaHostTransportError extends Error {
-  constructor(message, options = {}) {
-    super(message);
-    this.name = "CuaHostTransportError";
-    this.code = options.code ?? "unavailable";
-  }
-}
+export { CuaHostTransportError } from "./host-transport-frames.js";
 
 /**
  * Create the host side of the hardened transport. One instance = one session. The session owns
@@ -122,34 +125,52 @@ export function createCuaBrokerHost(options = {}) {
   let undecidedSockets = new Set();
   let helperSequence = 0;
 
-  const state = { helperConnected: false, admitted: null };
+  // connectionGeneration：每准入一次 Helper 连接（含同一进程宽限期内重连）加一。它是原生租约的
+  // 代际边界：旧代际的应答或租约绝不能作用于新代际的受保护会话（spec "Generation fencing"）。
+  const state = {
+    helperConnected: false,
+    admitted: null,
+    connectionGeneration: 0,
+  };
+  /** @type {{reason: string, at: number, connectionGeneration: number, inFlight: number} | null} */
+  let lastHelperDrop = null;
 
-  function refuse(message, code) {
-    return new CuaHostTransportError(message, { code });
+  function refuse(message, code, details) {
+    return new CuaHostTransportError(message, { code, details });
   }
 
-  /** One stable, path-free refusal on any relay surface (spec: no host paths in public errors). */
-  function respondError(context, message, code) {
-    context.respond(JSON.stringify({ ok: false, error: { message, code } }));
-  }
+  const notSent = () => notSentDetails(state.connectionGeneration);
 
-  function failPending(code) {
+  function failPending(code, extra = {}) {
     const waiting = pending;
     pending = new Map();
     for (const entry of waiting.values()) {
-      entry.fail(refuse("the helper connection is no longer available", code));
+      entry.fail(refuse("the helper connection is no longer available", code, extra));
     }
   }
 
-  function dropHelper() {
-    if (helperSocket) {
-      const socket = helperSocket;
-      helperSocket = null;
-      socket.destroy();
-    }
+  /**
+   * Drop the admitted Helper connection. `reason` is recorded (and reported through
+   * `onHelperDrop`) because the installed 92454874 failure left no host-side trace of why the
+   * connection ended: the Helper exits on host EOF, so an unexplained drop is an unexplained exit.
+   */
+  function dropHelper(reason = "socket_closed") {
+    const hadHelper = Boolean(helperSocket) || state.helperConnected;
+    helperSocket?.destroy();
+    helperSocket = null;
+    const connectionGeneration = state.connectionGeneration;
+    const inFlight = pending.size;
     state.helperConnected = false;
     state.admitted = null;
-    failPending("helper_disconnected");
+    // 已转发但未应答的请求：Helper 可能已经执行，投递状态未知（helper_exited, delivery unknown）。
+    failPending("helper_exited", { ...notSent(), delivery: "unknown" });
+    if (!hadHelper) return;
+    lastHelperDrop = { reason, at: Date.now(), connectionGeneration, inFlight };
+    // 诊断回调不能影响传输：异步投递，异常不回流。
+    const drop = lastHelperDrop;
+    void Promise.resolve()
+      .then(() => options.onHelperDrop?.(drop))
+      .catch(() => undefined);
   }
 
   /** Dead session directories are pruned by the session module before a new one is created. */
@@ -161,14 +182,15 @@ export function createCuaBrokerHost(options = {}) {
     } catch {
       // The Helper wrote something that is not one of ours: answer pending traffic honestly and
       // cut the connection rather than guessing (fail closed on malformed messages).
-      dropHelper();
+      dropHelper(line.length === 0 ? "empty_line" : "malformed_line");
       return;
     }
     const id = typeof response?.id === "string" ? response.id : null;
     const entry = id ? pending.get(id) : undefined;
     if (!entry) return; // a response with no waiter (e.g. after a timeout) is dropped
     pending.delete(id);
-    entry.respond(line);
+    // 代际戳：应答携带产生它的连接代际，运行时据此栅栏旧代际（spec "Generation fencing"）。
+    entry.respond(JSON.stringify(stampConnectionGeneration(response, state.connectionGeneration)));
   }
 
   /**
@@ -218,7 +240,13 @@ export function createCuaBrokerHost(options = {}) {
       return;
     }
     if (!helperSocket || !helperSocket.writable) {
-      respondError(context, "the helper connection is not available", "helper_disconnected");
+      // 没有转发：请求确定未送达 Helper，可在新代际安全重试。
+      respondError(
+        context,
+        "the helper connection is not available",
+        "helper_disconnected",
+        notSent(),
+      );
       return;
     }
     const internalId = `c${(helperSequence += 1)}`;
@@ -232,17 +260,17 @@ export function createCuaBrokerHost(options = {}) {
       },
       fail: (error) => {
         context.pendingIds = context.pendingIds.filter((id) => id !== internalId);
-        respondError(context, error.message, error.code ?? "unavailable");
+        respondError(context, error.message, error.code ?? "unavailable", error.details ?? {});
       },
     });
     try {
       if (!helperSocket || !helperSocket.writable) {
-        throw refuse("the helper connection is not available", "helper_disconnected");
+        throw refuse("the helper connection is not available", "helper_disconnected", notSent());
       }
       helperSocket.write(`${JSON.stringify(forwarded)}\n`);
     } catch (error) {
       pending.delete(internalId);
-      respondError(context, error.message, error.code ?? "unavailable");
+      respondError(context, error.message, error.code ?? "unavailable", error.details ?? {});
     }
   }
 
@@ -274,14 +302,6 @@ export function createCuaBrokerHost(options = {}) {
     const onLine = (line) => dispatchRequestLine(line, context);
     if (firstLine !== null) onLine(firstLine);
     attachLineFraming(socket, remainder, MAX_REQUEST_LINE_BYTES, onLine);
-  }
-
-  /** One stable, path-free hello refusal (spec: no host paths, no token data in errors). */
-  function refuseHello(socket, code, message) {
-    if (socket.writable) {
-      socket.write(`${JSON.stringify({ ok: false, error: { message, code } })}\n`);
-    }
-    socket.destroy();
   }
 
   /** Helper-role admission, then response demultiplexing on the same connection. */
@@ -338,39 +358,25 @@ export function createCuaBrokerHost(options = {}) {
       else socket.destroy();
       return;
     }
-    state.admitted = { pid: verdict.pid, identifier: verdict.identifier };
+    state.connectionGeneration += 1;
+    state.admitted = {
+      pid: verdict.pid,
+      identifier: verdict.identifier,
+      connectionGeneration: state.connectionGeneration,
+    };
     helperSocket = socket;
     state.helperConnected = true;
-    attachLineFraming(socket, remainder, MAX_RESPONSE_LINE_BYTES, handleHelperLine);
-    socket.on("error", () => dropHelper());
-    socket.on("close", () => {
-      if (helperSocket === socket) dropHelper();
-    });
-  }
-
-  /**
-   * Newline framing shared by the client and helper roles: complete lines only, oversized
-   * lines destroy the socket. `initial` carries bytes already received with the first line.
-   */
-  function attachLineFraming(socket, initial, maxBytes, onLine) {
-    let buffer = initial;
-    socket.on("data", (chunk) => {
-      buffer += chunk;
-      for (;;) {
-        const newline = buffer.indexOf("\n");
-        if (newline < 0) {
-          if (Buffer.byteLength(buffer) > maxBytes) socket.destroy();
-          return;
-        }
-        const line = buffer.slice(0, newline);
-        buffer = buffer.slice(newline + 1);
-        if (Buffer.byteLength(line) > maxBytes) {
-          socket.destroy();
-          return;
-        }
-        onLine(line);
-      }
-    });
+    // 只有当前准入的连接能结束会话；每种结束都带原因记录（onHelperDrop）。
+    const dropFor = (reason) => () => helperSocket === socket && dropHelper(reason);
+    attachLineFraming(
+      socket,
+      remainder,
+      MAX_RESPONSE_LINE_BYTES,
+      handleHelperLine,
+      dropFor("oversized_line"),
+    );
+    socket.on("error", dropFor("socket_error"));
+    socket.on("close", dropFor("helper_closed"));
   }
 
   function handleConnection(socket) {
@@ -429,6 +435,14 @@ export function createCuaBrokerHost(options = {}) {
     get admittedHelper() {
       return state.admitted;
     },
+    /** Current Helper connection generation (0 = never admitted). */
+    get connectionGeneration() {
+      return state.connectionGeneration;
+    },
+    /** Why the last admitted Helper connection ended, if one did. */
+    get lastHelperDrop() {
+      return lastHelperDrop;
+    },
 
     async start() {
       if (stopped) throw refuse("the transport has been stopped", "unavailable");
@@ -486,6 +500,7 @@ export function createCuaBrokerHost(options = {}) {
                   refuse(
                     parsed?.error?.message ?? "broker request failed",
                     parsed?.error?.code ?? "broker_error",
+                    relayFailureDetails(parsed?.error),
                   ),
                 );
               }
@@ -498,7 +513,7 @@ export function createCuaBrokerHost(options = {}) {
 
     async stop() {
       stopped = true;
-      dropHelper();
+      dropHelper("host_stopped");
       for (const socket of [...undecidedSockets]) socket.destroy();
       undecidedSockets.clear();
       for (const client of clients.splice(0)) client.destroy();

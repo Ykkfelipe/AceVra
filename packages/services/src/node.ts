@@ -601,6 +601,8 @@ const CUA_HELPER_HEALTH_TIMEOUT_MS = 30_000;
 // helper 随后 ready 时由 reconcileRecoveredHelper 只清理后续 spawn admission marker，绝不触碰
 // 已有 Agent。绝不照搬 feat 的 10s caller wait。
 const CUA_PRODUCT_HELPER_SPAWN_READY_DEADLINE_MS = 1_000;
+/** Runtime-requested Helper recovery (recover_helper sideband): one cold launch + admission. */
+const CUA_HELPER_RECOVERY_DEADLINE_MS = 8_000;
 
 /**
  * Bounded wait for the hardened session at the Agent spawn boundary.
@@ -1791,9 +1793,7 @@ export function createLocalServices(options: {
         }),
     },
     onZCodeBuiltinRefreshError: (error) => {
-      providerConfigLog.warn(undefined, "ZCode Built-in Config 远端刷新失败", {
-        error,
-      });
+      providerConfigLog.warn(undefined, "ZCode Built-in Config 远端刷新失败", { error });
     },
     onPersonalConfigRecovery: (event) => {
       providerConfigLog.warn(
@@ -1943,9 +1943,7 @@ export function createLocalServices(options: {
     listMcpServerStatuses: (params) => zcodeAgentService.listMcpServerStatuses(params),
   });
   const pluginSyncService = createPluginSyncService();
-  const subagentsService = createSubagentsService({
-    isDesktopRuntime: true,
-  });
+  const subagentsService = createSubagentsService({ isDesktopRuntime: true });
   const commandsService = createCommandsService({ isDesktopRuntime: true });
   const hooksService = createHooksService({
     grantWorkspaceHookTrust: (params) => zcodeAgentService.grantWorkspaceHookTrust(params),
@@ -2379,9 +2377,7 @@ export function createLocalServices(options: {
       } catch (error) {
         return {
           available: false,
-          reason: `Could not read Computer Use Helper permission status: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          reason: `Could not read Computer Use Helper permission status: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
     },
@@ -2472,11 +2468,7 @@ export function createLocalServices(options: {
       }
       try {
         const result = await authority.pause();
-        return {
-          ok: true,
-          status: result.status,
-          released: result.released,
-        };
+        return { ok: true, status: result.status, released: result.released };
       } catch (error) {
         return {
           ok: false,
@@ -2577,9 +2569,7 @@ export function createLocalServices(options: {
       } catch (error) {
         return {
           ok: false,
-          reason: `Failed to restart AceVra Computer Use: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          reason: `Failed to restart AceVra Computer Use: ${error instanceof Error ? error.message : String(error)}`,
         };
       }
     },
@@ -3280,17 +3270,55 @@ export function createLocalServices(options: {
   // 恢复，不能把"当前还没有 Helper"误当成"不需要生命周期所有者"。dispose 时串行 stop host。
   if (options?.serviceAuthorityMode === "desktop-local") {
     void startLeaseAuthorityServer(join(getDataBaseDir(), ".zcode"), {
-      releaseHelper: async (record) => {
-        const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
-        const host = helper?.macPermissionHost;
-        if (!host?.running || !record.helperLeaseId) {
-          throw new Error("CUA Helper is not connected; software Stop cannot confirm release");
+      // Phase 4：运行时在 helper_disconnected / helper_exited 后经 sideband 请求恢复。重启只走
+      // hardened session 的既有 relaunch（同一 socket/capability/requirements，单飞、有界），
+      // 运行时拿到新的连接代际后在仍有效的 ProtectedForegroundGrant 下获取新原生租约。
+      recoverHelper: async () => {
+        const session = peekHardenedCuaHelperSession() ?? (await ensureHardenedCuaHelperSession());
+        if (!session) return { connected: false };
+        if (!session.host.helperConnected) {
+          await waitForHardenedCuaHelperRelaunch(session, CUA_HELPER_RECOVERY_DEADLINE_MS);
         }
-        const result = await host.releaseControl({
+        return {
+          connected: session.host.helperConnected,
+          connectionGeneration: session.host.connectionGeneration,
+        };
+      },
+      releaseHelper: async (record) => {
+        if (!record.helperLeaseId) {
+          throw new Error("CUA lease has no Helper lease to release");
+        }
+        const params = {
           lease_id: record.helperLeaseId,
           owner_session: record.ownerSession,
           owner_task: record.ownerTask,
-        });
+        };
+        // 修复依据（Phase 5 审计）：darwin 产品路径上，独占租约由 CUA-1.75 hardened session 的
+        // Helper 持有；以前这里只找 legacy 托管 host（macPermissionHost），它在产品路径上不存在，
+        // 于是用户 Stop 总是抛 "Helper is not connected"，Helper 侧租约要等 15 s 到期或物理输入
+        // 才结束。先走 hardened session；租约所属的连接代际已变时不发（旧代际租约已被栅栏）。
+        const hardened = peekHardenedCuaHelperSession();
+        if (hardened?.host.helperConnected) {
+          if (
+            record.helperConnectionGeneration !== undefined &&
+            record.helperConnectionGeneration !== hardened.host.connectionGeneration
+          ) {
+            return;
+          }
+          const result = await hardened.host.callMethod<{
+            lease_state?: string;
+          }>("release_control", params, { timeoutMs: 2_000 });
+          if (result.lease_state !== "released") {
+            throw new Error("CUA Helper did not confirm terminal lease release");
+          }
+          return;
+        }
+        const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
+        const host = helper?.macPermissionHost;
+        if (!host?.running) {
+          throw new Error("CUA Helper is not connected; software Stop cannot confirm release");
+        }
+        const result = await host.releaseControl(params);
         if (result.lease_state !== "released") {
           throw new Error("CUA Helper did not confirm terminal lease release");
         }

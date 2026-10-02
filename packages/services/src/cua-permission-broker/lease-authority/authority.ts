@@ -15,11 +15,15 @@ import type {
   LeaseTermination,
 } from "./contract.js";
 import type { ComputerUseWorkspaceSnapshot, WorkspaceProjectionReader } from "./workspace.js";
-import { createTakeoverGrants } from "./takeover.js";
+import { createTakeoverGrants, isUserReclaimReason } from "./takeover.js";
+
+const coded = (message: string, code: string) => Object.assign(new Error(message), { code }); // Phase 2
 
 export interface LeaseAuthorityOptions {
   /** Releases the observed native Helper lease and resolves only after terminal cleanup. */
   releaseHelper?: (record: LeaseRecord) => Promise<void>;
+  /** Relaunch the Helper through its lifecycle owner (bounded, single-flight, same credentials). */
+  recoverHelper?: () => Promise<{ connected: boolean; connectionGeneration?: number }>;
   /** Injectable clock for deterministic tests. */
   now?: () => number;
 }
@@ -128,7 +132,7 @@ export function createLeaseAuthority(
     current = stopping;
     terminate(stopping, reason);
     if (stopping.helperLeaseId && options.releaseHelper) {
-      await options.releaseHelper(stopping);
+      await options.releaseHelper(stopping).catch(() => undefined); // 不可达也如实暂停
     }
     return true;
   };
@@ -151,7 +155,7 @@ export function createLeaseAuthority(
           throw Object.assign(new Error("Computer Use is paused"), { code: "paused" });
         }
         if (current && (current.state === "reserving" || current.state === "active")) {
-          throw new Error("CUA lease already admitted");
+          throw coded("CUA lease already admitted", "exclusive_busy");
         }
         current = {
           leaseId: randomUUID(),
@@ -162,22 +166,23 @@ export function createLeaseAuthority(
         };
         return current;
       }),
-    commitAcquire: (leaseId, helperLeaseId, helperRequirement) =>
+    commitAcquire: (leaseId, helperLeaseId, helperRequirement, helperConnectionGeneration) =>
       serial(() => {
         if (!current || current.leaseId !== leaseId || current.state !== "reserving") {
-          throw new Error("CUA lease generation is no longer admissible");
+          throw coded("CUA lease generation is no longer admissible", "lease_not_owned");
         }
         current = { ...current, state: "active", helperLeaseId, helperRequirement };
+        if (helperConnectionGeneration !== undefined)
+          current = { ...current, helperConnectionGeneration };
         return current;
       }),
     release: (leaseId, reason) =>
       serial(() => {
-        if (!current || current.leaseId !== leaseId) throw new Error("CUA lease is not active");
+        if (!current || current.leaseId !== leaseId)
+          throw coded("CUA lease is not active", "invalid_lease");
         if (current.state === "released" || current.state === "stopped") return current;
         current = { ...current, state: "released" };
-        // 用户夺回控制（物理输入/Esc 等 Helper 终止码）撤销授权；代理自己 release 保留到任务结束。
-        if (reason !== "model_release" && reason !== "released")
-          takeover.revoke(current.ownerSession);
+        if (isUserReclaimReason(reason)) takeover.revoke(current.ownerSession); // 租约到期等保留授权
         // 修复依据：此前 release 丢弃 reason，物理输入让出与正常释放无法区分，UI 无法如实提示。
         terminate(current, boundedText(reason) ?? "released");
         return current;
@@ -187,15 +192,19 @@ export function createLeaseAuthority(
         if (!current || current.state === "released" || current.state === "stopped") {
           return { status: "already_stopped" as const, record: current };
         }
+        // Phase 5：Stop 先作废授权，并发的运行时重新获取只会读到"无授权"。修复依据（9eb4f148 实测）：
+        // sideband stop 只清理运行时预留，不撤销用户的 Allow；只有 Stop/Pause/打断撤销。
+        if (stopOptions?.keepTakeover !== true) takeover.revoke();
         const stopping = { ...current, state: "stopped" as const };
         current = stopping;
-        // 修复依据（installed 9eb4f148 实测）：运行时在 Helper 拒绝 acquire（如 stale_geometry）后
-        // 用 sideband stop 清理预留，旧实现一并撤销授权，用户刚点的 Allow 立刻作废、卡片再弹。
-        // 只有用户的 Stop/Pause/打断撤销授权。
-        if (stopOptions?.keepTakeover !== true) takeover.revoke();
         terminate(stopping, "stopped");
         if (stopping.helperLeaseId && options.releaseHelper) {
-          await options.releaseHelper(stopping);
+          // Helper 不可达时 Stop 仍如实生效（安全不变量：AceVra 故障 → 用户拿回控制）。
+          const helperRelease = await options.releaseHelper(stopping).then(
+            () => "confirmed" as const,
+            () => "unreachable" as const,
+          );
+          return { status: "released" as const, record: stopping, helperRelease };
         }
         return { status: "released" as const, record: stopping };
       }),
@@ -223,6 +232,7 @@ export function createLeaseAuthority(
       status: (owner) => takeover.status(owner),
       decide: (session, decision) => takeover.decide(session, decision),
       view: (session) => takeover.view(session),
+      grant: (owner) => takeover.grant(owner),
     },
     getLastTermination: () => lastTermination,
     reportActivity: (report) => {
