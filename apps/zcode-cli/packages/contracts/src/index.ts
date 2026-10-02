@@ -64,6 +64,7 @@ export * from "./hooks/index.js";
 
 // Skills
 export * from "./skills/index.js";
+export * from "./capabilities/index.js";
 
 // Custom Commands
 export * from "./commands/index.js";
