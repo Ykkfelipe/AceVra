@@ -284,8 +284,20 @@ final class ForegroundController {
               let observationId = params["observation_id"] as? String,
               let observation = lookup(observationId) else { return foregroundRefusal("stale_geometry") }
         lock.lock()
+        let existing = lease
         let busy = lease != nil || ending
         lock.unlock()
+        // 修复依据（installed e22decca 实测，clean renderer-driven run）：第一次 acquire_control 成功
+        // 并返回了 active 租约，但模型没能从响应里取回 lease_id；此后每次重新 acquire 都撞上
+        // "exclusive_busy"，看起来像 "unknown: failed"——它既用不了手里的租约，也拿不到新的，
+        // 于是整段接管死在那里（Spotlight 那条任务就是这样报废的）。
+        // 同一 (session, task) 重新 acquire 是幂等的：把它已经持有的租约原样交还，并带上一个
+        // explicit 标记，让模型知道这个 id 就是它先前拿到的那一个。
+        if let existing, existing.ownerSession == session, existing.ownerTask == task {
+            return foregroundResult("acquire_control", effect: "confirmed", current: existing,
+                                    evidence: [["kind": "exclusive_lease", "state": "active",
+                                                "reused": true]])
+        }
         guard !busy, acquireGlobalLock() else { return foregroundRefusal("exclusive_busy") }
         guard installTap() else {
             stopTap()

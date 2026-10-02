@@ -120,6 +120,14 @@ const lease = await cu["computer.acquire_control"]({ observation_id: obs }); // 
 `get_app_state({ pid })` without `window_id` never returns `foreground_geometry` — that is the
 field to check before asking the user for anything.
 
+**Keep the `lease_id` you get back.** It is in the response JSON, as `lease_id`. Read it once and
+reuse it for every foreground call in this task; do not re-acquire to obtain a new one.
+`acquire_control` is idempotent for the same task: calling it again while you already hold the
+lease returns the same `lease_id` (with `evidence: [{ kind: "exclusive_lease", state: "active",
+reused: true }]`), so if you lose track of the id, call `acquire_control` again rather than
+assuming you are stuck. You only need to release with `computer.release_control({ lease_id })`
+when you are done.
+
 AceVra shows the user an Allow / Deny card and waits up to 25 s. Allow grants takeover for the rest
 of this task; the user's screen glows while you hold it. Then use the foreground methods
 (`computer.click`, `computer.type_text`, `computer.key_press`, …) with the returned `lease_id` and a
