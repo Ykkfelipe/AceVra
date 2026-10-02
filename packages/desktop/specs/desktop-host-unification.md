@@ -81,3 +81,38 @@ provider definitions win; official files are read-only.
 6. Desktop can set a credential, receive only `configured` status, and use the
    key host-side. `/fork` can neither read nor mutate it.
 7. Existing artifact delivery and replayable mobile behavior remain unchanged.
+
+## Local Host crash recovery (2026-10-01)
+
+Problem (measured on the installed alpha): the window-scoped Local Host process died
+(`uncaughtException`, exit code 1) and nothing restarted it. The window kept a dead transcript
+turn; every Stop/Esc reached the renderer and went nowhere.
+
+Owner: the window lifecycle in Main (`createWindow` / `desktopWindowLifecycle.ts`) — the same
+owner that already spawns the Local Host on `dom-ready` and reattaches or respawns it on renderer
+reload. No second host architecture: recovery reuses that path.
+
+Event order:
+
+```text
+Local Host exit ─► lifecycle exit observer
+   intentional? (app force-quit, host being disposed, window destroyed, superseded generation)
+      └─ yes ─► no respawn
+   crash ─► bounded policy (≤3 restarts per 2 min; backoff 0.5 s, 2 s, 8 s)
+      ├─ restart ─► after delay, if still the current generation and the window is alive:
+      │             renderer reload ─► dom-ready ─► no live host in the window map ─► spawn new
+      │             Local Host (new generation, new MessagePort, new hardened Helper session)
+      └─ exhausted ─► no further respawn; a native message tells the user the background service
+                      stopped and offers Reload (resets the budget) or Quit
+```
+
+Fencing: the renderer accepts one service port per page load, so the reload is the generation
+boundary. Commands issued against the dead host's port are never delivered to the replacement;
+the replacement host rehydrates sessions from durable storage and runs no turn on its own, so the
+dead turn is shown as ended rather than running. Agent runtimes owned by the dead host die with
+its stdio. Helper/TCC ownership is unchanged: the new host starts its own hardened Helper session
+lazily, exactly as on a cold start.
+
+Acceptance: a crash restarts once and the replacement host serves commands; repeated crashes
+back off and stop after the budget; intentional disposal or quit never respawns; a controlled
+development termination (`kill -9` of the Local Host pid) recovers the window live.

@@ -1716,6 +1716,28 @@ function createWindowInstance(startupBootstrap: StartupWindowBootstrap = {}) {
       }),
     windowHostProcessMap,
     onHostProcessReady: (windowKey) => cuaPipFocusRouter.refreshWindow(windowKey),
+    isHostProcessDisposing: (child) => listDisposingHostProcesses().includes(child),
+    onLocalHostRecoveryExhausted: (win, retry) => {
+      const isZh = currentApplicationLocale === "zh-CN";
+      void dialog
+        .showMessageBox(win, {
+          type: "error",
+          message: isZh ? "AceVra 后台服务已停止" : "AceVra's background service stopped",
+          detail: isZh
+            ? "它连续多次崩溃，已不再自动重启。可以重新加载以再次启动，或退出 AceVra。"
+            : "It crashed several times in a row and was not restarted again. Reload to start it, or quit AceVra.",
+          buttons: isZh ? ["重新加载", "退出"] : ["Reload", "Quit"],
+          defaultId: 0,
+          cancelId: 1,
+        })
+        .then(({ response }) => {
+          if (response === 0) retry();
+          else {
+            markForceQuit("local-host-recovery-exhausted");
+            app.quit();
+          }
+        });
+    },
     awaitFirstHostSpawnDecision,
     spawnHostProcess: (win, label, initMessage) =>
       spawnHostProcess(

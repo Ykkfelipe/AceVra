@@ -18,6 +18,10 @@ import {
   registerMainApplicationWindow,
   unregisterMainApplicationWindow,
 } from "./resourceManagerWindow.js";
+import {
+  createLocalHostCrashRecovery,
+  createLocalHostSupervisor,
+} from "./localHostCrashRecovery.js";
 
 const DEFAULT_RUNTIME_PROCESS_ENV_WAIT_TIMEOUT_MS = 4_500;
 
@@ -67,6 +71,12 @@ export function createWindow(options: {
   awaitFirstHostSpawnDecision?: () => Promise<void>;
   /** Local Host map insertion completed; presentation facts can now be replayed safely. */
   onHostProcessReady?: (windowKey: number) => void;
+  /** True while Main is disposing this host on purpose (reload, window close, quit). */
+  isHostProcessDisposing?: (child: ElectronUtilityProcess) => boolean;
+  /** Restart budget exhausted; Main tells the user. `retry` resets the budget and reloads. */
+  onLocalHostRecoveryExhausted?: (win: BrowserWindow, retry: () => void) => void;
+  /** Test seam for the crash-recovery policy clock/backoff. */
+  localHostCrashRecovery?: ReturnType<typeof createLocalHostCrashRecovery>;
   resolveBrowserViewOwner?: Parameters<typeof createBrowserWindow>[0]["resolveBrowserViewOwner"];
 }) {
   const win = createBrowserWindow({
@@ -121,6 +131,22 @@ export function createWindow(options: {
   registerMainApplicationWindow(wcId);
   let domReadyGeneration = 0;
   let cancelRuntimeProcessEnvWait: (() => void) | null = null;
+  // 修复依据：Local Host 崩溃（实测 uncaughtException 退出码 1）后没人重启它，窗口留下一个
+  // 死掉的回合，Stop 无处送达。恢复归本窗口生命周期所有，复用既有 reload → dom-ready → spawn
+  // 路径；host 代际用于识别"仍是当前 host"，有界预算防止重启风暴。
+  const localHostSupervisor = createLocalHostSupervisor<ElectronUtilityProcess>({
+    ...(options.localHostCrashRecovery ? { policy: options.localHostCrashRecovery } : {}),
+    isIntentional: (child) =>
+      options.forceQuitRef.current || (options.isHostProcessDisposing?.(child) ?? false),
+    isWindowAlive: () => !win.isDestroyed(),
+    recover: (reason) => {
+      if (win.isDestroyed()) return;
+      options.logger.warn(`[createWindow] recovering Local Host (${label}): ${reason}`);
+      win.webContents.reload();
+    },
+    onExhausted: (retry) => options.onLocalHostRecoveryExhausted?.(win, retry),
+    log: (message) => options.logger.warn(`[createWindow] ${message} (${label})`),
+  });
   scheduleArmsBrowserPerfLoadNudge(win.webContents);
   win.webContents.on("dom-ready", async () => {
     cancelRuntimeProcessEnvWait?.();
@@ -204,6 +230,7 @@ export function createWindow(options: {
         agentSpawnFallbackCwd: options.agentSpawnFallbackCwd,
       });
       options.windowHostProcessMap.set(wcId, child);
+      localHostSupervisor.adopt(child);
       options.onHostProcessReady?.(wcId);
       options.syncAutoUpdaterStateToWindow(win);
       options.syncReadyUpdateToWindow(win);
@@ -263,6 +290,7 @@ export function createWindow(options: {
     unregisterMainApplicationWindow(wcId);
     cancelRuntimeProcessEnvWait?.();
     cancelRuntimeProcessEnvWait = null;
+    localHostSupervisor.dispose();
     options.logger.info(`[createWindow] window closed, killing host process (${label})`);
     const child = options.windowHostProcessMap.get(wcId);
     if (child) {
