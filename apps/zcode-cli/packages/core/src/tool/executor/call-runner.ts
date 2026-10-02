@@ -18,7 +18,7 @@ import {
   prepareInitialToolExecutionInput,
 } from "../input-normalization.js";
 import { hasOfficialCuaFrameAuthority } from "../../mcp/image-normalization.js";
-import type { SkillTelemetryMetadata } from "@zcode/contracts";
+import type { CapabilityErrorPayload, SkillTelemetryMetadata } from "@zcode/contracts";
 import type { ToolExecutionContext, ToolExecutionResult } from "../types.js";
 import type { ToolEntry } from "../types.js";
 import type { BackgroundTaskTracker } from "./background-tasks.js";
@@ -136,6 +136,14 @@ async function executeToolCallImpl(
       // 空名在 admission 阶段停止会让模型永远收不到配对结果。复用
       // registry-miss 生命周期，但 provider 内容严格保留模型返回的原始空白名称。
       result.modelContent = `<tool_use_error>Error: No such tool available: ${toolCall.name}</tool_use_error>`;
+    } else {
+      // 修复依据（实测 Computer 任务把数分钟花在猜 API 拼写上）：裸 "Tool not found" 迫使模型
+      // 再试一个拼写。这里给出结构化原因与规范调用（capability-runtime.md "Structured not-found"），
+      // 一次改对；解释器异常时退回原文案，绝不让解释失败影响错误配对。
+      const explanation = explainUnknownToolSafely(deps, toolCall.name);
+      if (explanation) {
+        result.modelContent = `<tool_use_error>${JSON.stringify(explanation)}</tool_use_error>`;
+      }
     }
     // registry miss 发生在 handler/ToolCallStarted 之前；旧代码只把失败
     // 返回给 provider，没有发布 ToolCallError，V4 tool row 因而永久停在 inputStreaming。
@@ -409,6 +417,7 @@ async function executeToolCallImpl(
       automationPort: deps.automationPort,
       offPeakPort: deps.offPeakPort,
       executionTargetPort: deps.executionTargetPort,
+      capabilityQueryPort: deps.capabilityQueryPort,
       sessionStore: deps.sessionStore,
       sessionModePort: deps.sessionModePort,
       workflowPort: deps.workflowPort,
@@ -660,6 +669,17 @@ function resolveModelOutputEntry(entry: ToolEntry, output: unknown): ToolEntry {
       preview: { direction: "head" },
     },
   };
+}
+
+function explainUnknownToolSafely(
+  deps: ToolExecutorDeps,
+  toolName: string,
+): CapabilityErrorPayload | undefined {
+  try {
+    return deps.explainUnknownTool?.(toolName);
+  } catch {
+    return undefined;
+  }
 }
 
 function isEmptyToolName(toolName: string): boolean {

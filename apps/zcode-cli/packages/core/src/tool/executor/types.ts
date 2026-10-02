@@ -14,6 +14,8 @@ import type {
   AutomationPort,
   OffPeakPort,
   ExecutionTargetPort,
+  CapabilityErrorPayload,
+  CapabilityQueryPort,
   FileSystemPort,
   HttpClientPort,
   ImageProcessorPort,
@@ -108,6 +110,10 @@ export interface ToolExecutorOptions {
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
   executionTargetPort?: ExecutionTargetPort;
+  /** 能力快照只读查询（Capabilities 工具）；runtime 注入。 */
+  capabilityQueryPort?: CapabilityQueryPort;
+  /** 未注册工具名的结构化解释（core/specs/capability-runtime.md）；缺席时退回旧文案。 */
+  explainUnknownTool?: (toolName: string) => CapabilityErrorPayload | undefined;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;
@@ -213,6 +219,10 @@ export interface ToolExecutorDeps {
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
   executionTargetPort?: ExecutionTargetPort;
+  /** 能力快照只读查询（Capabilities 工具）；runtime 注入。 */
+  capabilityQueryPort?: CapabilityQueryPort;
+  /** 未注册工具名的结构化解释（core/specs/capability-runtime.md）；缺席时退回旧文案。 */
+  explainUnknownTool?: (toolName: string) => CapabilityErrorPayload | undefined;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;

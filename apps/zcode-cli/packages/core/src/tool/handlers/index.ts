@@ -4,6 +4,7 @@
 
 import {
   AMEND_WORKFLOW_TOOL_NAME,
+  CAPABILITIES_TOOL_NAME,
   CREATE_WORKFLOW_TOOL_NAME,
   EVAL_WORKFLOW_SNIPPET_TOOL_NAME,
   EXECUTION_TARGETS_TOOL_NAME,
@@ -28,6 +29,7 @@ import { editToolEntry } from "./edit.js";
 import { bashToolEntry, createBashToolEntry } from "./bash.js";
 import type { BashTimeoutPolicy } from "../bash-timeout-policy.js";
 import { createJsToolEntry, jsToolEntry } from "./node-repl.js";
+import { capabilitiesToolEntry } from "./capabilities.js";
 import { globToolEntry } from "./glob.js";
 import { grepToolEntry } from "./grep.js";
 import { webFetchToolEntry } from "./webfetch.js";
@@ -106,6 +108,8 @@ export const builtInTools: ToolEntry[] = [
   runOnTargetToolEntry,
   targetTaskToolEntry,
   remoteComputerToolEntry,
+  // 能力快照只读视图：runtime 注入 CapabilityQueryPort 时注册（includeCapabilities）。
+  capabilitiesToolEntry,
   enterPlanModeToolEntry,
   exitPlanModeToolEntry,
   askUserQuestionToolEntry,
@@ -198,6 +202,8 @@ interface RegisterBuiltInToolsOptions {
   includeOffPeak?: boolean;
   /** M2F：执行目标工具面；仅 Desktop 本地 workspace 主会话（注入了 ExecutionTargetPort）。 */
   includeExecutionTargets?: boolean;
+  /** 能力快照只读视图（Capabilities）；runtime 提供 CapabilityQueryPort 时为 true。 */
+  includeCapabilities?: boolean;
   /**
    * 动态工作流灰度门。**只有显式 false
    * 才下架** DYNAMIC_WORKFLOW_TOOL_NAMES：缺席代表调用方不参与灰度（TUI、headless、
@@ -284,6 +290,9 @@ export function registerBuiltInTools(
       options.includeDynamicWorkflow === false &&
       DYNAMIC_WORKFLOW_TOOL_NAMES.has(entry.metadata.name)
     ) {
+      continue;
+    }
+    if (entry.metadata.name === CAPABILITIES_TOOL_NAME && options.includeCapabilities !== true) {
       continue;
     }
     if (entry.metadata.name === "js" && options.includeNodeRepl !== true) {

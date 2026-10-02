@@ -21,6 +21,11 @@ import {
 } from "./tool-allowlist.js";
 import { isStaleBranchRuntimeTaskEvent } from "../methods/runtime-command-generation.js";
 import { resolveEnabledProjectMemoryRoot } from "./project-memory.js";
+import { explainUnknownTool } from "../../capability/index.js";
+import {
+  buildRuntimeCapabilitySnapshot,
+  collectRuntimeCapabilitySnapshot,
+} from "../methods/capability-context.js";
 
 const DEFAULT_SUBAGENT_BACKGROUND_BASH_MAX_MS = 3_600_000;
 const EMPTY_RUNTIME_HOOK_CONFIG = {
@@ -77,6 +82,8 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
     // browserControlPort 只是宿主能力，不应隐式暴露高权限 node_repl。
     // node_repl/browser-use 由 ZCode 官方 browser-use 插件启停推导出的 runtimeFeatures 控制。
     includeNodeRepl: nodeReplEnabled,
+    // 能力快照由 runtime 自身投影，任何会话都可只读查询；explore 等 allowlist 仍会收窄。
+    includeCapabilities: true,
     includeBrowserUse: browserUseEnabled,
     embeddedSearchEnabled: resolveRuntimeEmbeddedSearchEnabled(runtime),
     agentProfiles: runtime.config.subagents?.profiles,
@@ -193,6 +200,15 @@ function createRuntimeToolExecutor(
     automationPort: deps.automationPort,
     offPeakPort: deps.offPeakPort,
     executionTargetPort: deps.executionTargetPort,
+    capabilityQueryPort: {
+      snapshot: () =>
+        collectRuntimeCapabilitySnapshot(
+          runtime,
+          getCurrentTraceContext() ?? runtime.rootTraceContext,
+        ),
+    },
+    explainUnknownTool: (toolName) =>
+      explainUnknownTool(toolName, buildRuntimeCapabilitySnapshot(runtime)),
     sessionStore: deps.sessionStore,
     sessionModePort: createRuntimeSessionModePort(runtime),
     workflowPort: deps.workflowPort,

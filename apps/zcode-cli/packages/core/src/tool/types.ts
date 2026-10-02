@@ -7,6 +7,7 @@ import type {
   AutomationPort,
   OffPeakPort,
   ExecutionTargetPort,
+  CapabilityQueryPort,
   EmbeddedSearchBackend,
   ExecutionPort,
   BrowserControlPort,
@@ -167,6 +168,8 @@ export interface ToolExecutionContext {
   offPeakPort?: OffPeakPort;
   /** M2F：Run-on 目标进程执行端口；仅 Desktop 本地 workspace 的主会话注入。 */
   executionTargetPort?: ExecutionTargetPort;
+  /** 能力快照只读查询端口；Capabilities 工具消费。 */
+  capabilityQueryPort?: CapabilityQueryPort;
   sessionStore?: SessionStorePort;
   sessionModePort?: SessionModePort;
   workflowPort?: WorkflowPort;
