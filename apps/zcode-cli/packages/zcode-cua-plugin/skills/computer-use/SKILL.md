@@ -82,8 +82,10 @@ Background limits — plan around them up front:
 3. `get_app_state({ pid })`, then pick elements by `role`/`label` from `tree.elements`.
 4. One state-changing action per fresh observation. Observe again after acting; `unknown` is not
    success, and a missing `action_sent` field is not a failure.
-5. Use `screenshot({ pid })` only when visual evidence is required. Emit SDK images through the
-   structured SDK result; do not JSON-stringify the full result or manually emit image bytes.
+5. Use `screenshot({ pid, window_id })` when visual evidence is required or the user asks to see
+   the screen: AceVra puts that image in the chat for the user automatically. Never capture the
+   screen another way (`screencapture`, Bash, saving a file under /tmp) to "show" the user — they
+   cannot see a file path. Do not JSON-stringify the full result or manually emit image bytes.
 
 ## Background work and the live preview
 
@@ -104,7 +106,14 @@ Background limits — plan around them up front:
 ## Foreground control (screen takeover)
 
 Background first. Only when a step truly cannot be done in the background (other keys, coordinate
-input, apps without usable accessibility), ask for the user's screen:
+input, apps without usable accessibility), ask for the user's screen.
+
+**When the user explicitly asks you to take over** — "take over my screen/computer", "take
+control", "use exclusive mode", "lock the screen and do it yourself" — that IS the instruction:
+use screen takeover (`computer.acquire_control`, then `computer.activate_target` and foreground
+actions such as `computer.click` / `computer.key_press` / `computer.type_text`) even if the task
+could be done in the background. Do not silently fall back to background presses; if takeover is
+declined or refused, say so.
 
 ```js
 // The Helper issues foreground geometry only for an EXPLICIT window, so pick the window first.

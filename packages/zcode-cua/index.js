@@ -39,6 +39,26 @@ function unavailable(text, code = "unavailable", effect = "refused") {
   };
 }
 
+/** Largest screenshot inlined into the chat (a Retina window PNG is usually well below this). */
+const MAX_INLINE_SCREENSHOT_BYTES = 5 * 1024 * 1024;
+
+/**
+ * The PNG the Helper just wrote for this observation, as an inline image block; undefined when
+ * there is no frame, the capture was blank, or it is too large to show inline.
+ */
+async function readScreenshotImage(result) {
+  const image = result && typeof result === "object" ? result.image : undefined;
+  if (!image || typeof image.path !== "string" || image.blank === true) return undefined;
+  try {
+    const { readFile, stat } = await import("node:fs/promises");
+    if ((await stat(image.path)).size > MAX_INLINE_SCREENSHOT_BYTES) return undefined;
+    const data = (await readFile(image.path)).toString("base64");
+    return { type: "image", data, mimeType: "image/png", inline_screenshot: true };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Computer Use runtime using the verified Helper broker.
  *
@@ -258,6 +278,10 @@ export function createComputerUseRuntime(options = {}) {
             : (input?.arguments ?? {});
           result = await callWithRecovery(broker, method, params);
         }
+        // 用户要求的截图（screenshot 工具，不是常规 get_app_state 观察）：读取 Helper 刚写的帧，
+        // 以图片块带回，由 node_repl bridge 放进聊天。帧路径本身仍不出运行时。
+        const screenshotImage =
+          toolName === "screenshot" ? await readScreenshotImage(result) : undefined;
         // The model-facing boundary. `observe` answers with a host path to the frame it wrote;
         // that path is a host-internal detail, so it is replaced here by the opaque reference and
         // the whole result is bounded before it is serialized into model context.
@@ -325,7 +349,10 @@ export function createComputerUseRuntime(options = {}) {
             : {}),
         });
         return {
-          content: [{ type: "text", text: JSON.stringify(normalized) }],
+          content: [
+            ...(screenshotImage ? [screenshotImage] : []),
+            { type: "text", text: JSON.stringify(normalized) },
+          ],
           ...(action
             ? {
                 structuredContent: normalized,

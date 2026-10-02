@@ -32,7 +32,8 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
     name: "screenshot",
     kind: "read",
     args: "{ pid: integer, window_id?: integer }",
-    returns: "same as get_app_state, with an image",
+    returns:
+      "same as get_app_state; the window image is also shown to the user in the chat automatically (use this, never screencapture or a /tmp file, when the user asks to see the screen)",
   },
   { name: "request_access", kind: "read", args: "{}", returns: "permission and capability status" },
   {

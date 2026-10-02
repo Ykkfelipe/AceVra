@@ -335,6 +335,14 @@ export class NodeReplSession {
     this.currentSink.structuredResults.push(result as NodeReplStructuredResult);
   }
 
+  /**
+   * Computer Use 宿主一跳：用户要求的截图以图片块进入本次 run 输出（聊天里可见、模型可看）。
+   * 修复依据（Felipe 实测）：screenshot 只返回帧引用，模型只能另存 /tmp 文件，聊天里没有图。
+   */
+  emitHostImage(image: { base64: string; mimeType: string }): void {
+    this.emitImage(image);
+  }
+
   /** browser-client transport 在同一次 js run 内把 backend meta 合并进工具结果。 */
   mergeResponseMeta(meta: Record<string, unknown>): void {
     if (!this.currentSink) return;
