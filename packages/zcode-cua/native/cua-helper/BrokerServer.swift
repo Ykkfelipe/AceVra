@@ -262,6 +262,12 @@ func runBrokerSocketServer(socketPath: String, idleMs: Int) -> Never {
         let timeout: Int32 = idleMs > 0 ? Int32(max(0, idleMs - elapsedMs)) : -1
         let ready = poll(&descriptor, 1, timeout)
         if ready == 0 && idleMs > 0 {
+            // 租约存活时不退出：持有独占桌面租约的 helper 不是 idle（见 protectedLeaseActive）。
+            // 重置窗口继续服务；租约释放后恢复原有的"不逗留"语义。
+            if ForegroundController.shared.protectedLeaseActive {
+                lastActivity = Date()
+                continue
+            }
             exit(0)  // idle: an unattended helper does not linger
         }
         if ready < 0 {

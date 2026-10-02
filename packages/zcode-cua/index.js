@@ -442,18 +442,35 @@ export function createComputerUseRuntime(options = {}) {
         // like any other model-facing string — a `connect_failed` message carries the socket path,
         // and "no Helper running yet" is the ordinary first-use case, not an edge case.
         const code = error && typeof error.code === "string" ? error.code : "unknown";
+        // Phase 2（proven installed 92454874）：Helper 进程退出后，传输层抛出的错误没有 typed
+        // code，模型看到的是 "(unknown): failed"，无法行动也无法恢复。会话 socket 已消失时，
+        // 如实命名 helper_disconnected：下一次调用会经既有生命周期所有者重启 Helper，可恢复。
+        let typedCode = code;
+        let hint = "";
+        if (code === "unknown" || code === "connect_failed" || code === "connection_closed") {
+          try {
+            const { existsSync } = await import("node:fs");
+            if (!existsSync(await resolveSocketPath())) {
+              typedCode = "helper_disconnected";
+              hint =
+                " The Computer Helper process is no longer running (it exited while no request was in flight, or the host session was recycled). This failure is recoverable: the next call relaunches the Helper; a still-valid screen-takeover approval is not lost.";
+            }
+          } catch {
+            // 探测失败就保留原 code，绝不把分类错误伪装成成功路径。
+          }
+        }
         reportActivity({
           ...activityBase,
           phase: "completed",
           at: Date.now(),
           effect: "failed",
-          code,
+          code: typedCode,
         });
         const message = error instanceof Error ? error.message : String(error);
         const { redactHostPaths } = await import("./observe-result.js");
         return unavailable(
-          `Computer Use request failed (${code}): ${redactHostPaths(message)}`,
-          code,
+          `Computer Use request failed (${typedCode}): ${redactHostPaths(message)}${hint}`,
+          typedCode,
           "failed",
         );
       }

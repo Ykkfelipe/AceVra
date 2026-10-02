@@ -367,6 +367,16 @@ final class ForegroundController {
 
     func shutdown() { endLease(code: "shutdown") }
 
+    /// True while this helper owns (or is tearing down) an exclusive desktop lease.
+    /// A helper in this state is NOT idle, whatever the inbound-connection timer says:
+    /// exiting would silently kill the user's takeover (proven installed 92454874:
+    /// helper exited mid-lease and every later call became an opaque transport failure).
+    var protectedLeaseActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return lease != nil || ending
+    }
+
     func status(_ params: [String: Any]) -> [String: Any] {
         let id = params["lease_id"] as? String ?? ""
         lock.lock()

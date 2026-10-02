@@ -688,7 +688,9 @@ describe("Computer Use runtime", () => {
     const runtime = createComputerUseRuntime({ brokerSocketPath: join(dir, "absent.sock") });
     const result = await runtime.execute({ toolName: "list_apps", arguments: {}, context: {} });
     assert.equal(result.isError, true);
-    assert.match(result.content[0].text, /connect_failed/);
+    // Phase 2: a dead Helper (socket gone) is typed helper_disconnected — recoverable, and never
+    // the opaque "(unknown): failed" the model used to see for exactly this case.
+    assert.match(result.content[0].text, /helper_disconnected/);
   });
 
   it("redacts the host path that a failure message carries", async () => {
