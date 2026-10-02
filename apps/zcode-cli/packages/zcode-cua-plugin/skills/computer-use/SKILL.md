@@ -107,19 +107,29 @@ Background first. Only when a step truly cannot be done in the background (other
 input, apps without usable accessibility), ask for the user's screen:
 
 ```js
-// pid of an app with a visible window (usually the frontmost one)
-const state = JSON.parse((await cu.get_app_state({ pid })).content[0].text);
+// The Helper issues foreground geometry only for an EXPLICIT window, so pick the window first.
+const windows = JSON.parse((await cu.list_windows()).content[0].text).windows;
+const target = windows.find((w) => w.pid === pid && w.title); // the app's real window
+const state = JSON.parse(
+  (await cu.get_app_state({ pid, window_id: target.window_id })).content[0].text,
+);
 const obs = state.foreground_geometry?.observation_id; // NOT state.tree.observation_id; valid 3 s
 const lease = await cu["computer.acquire_control"]({ observation_id: obs }); // give this js call timeout_ms ≥ 40000
 ```
+
+`get_app_state({ pid })` without `window_id` never returns `foreground_geometry` — that is the
+field to check before asking the user for anything.
 
 AceVra shows the user an Allow / Deny card and waits up to 25 s. Allow grants takeover for the rest
 of this task; the user's screen glows while you hold it. Then use the foreground methods
 (`computer.click`, `computer.type_text`, `computer.key_press`, …) with the returned `lease_id` and a
 fresh `observation_id`, and `computer.release_control({ lease_id })` when done.
 
+- `foreground_geometry_unavailable`: your observation carried no foreground geometry, so the Helper
+  could never grant a lease and AceVra deliberately did not ask the user. `list_windows`, then
+  `get_app_state` with that `window_id`, then retry. Your window must be the app's current,
+  on-screen window; a pid-only observation or another app's window never qualifies.
 - `wrong_observation_id`: you passed `tree.observation_id`; use `foreground_geometry.observation_id`.
-  If `foreground_geometry` is missing, the app has no usable window: observe the frontmost app instead.
 - `takeover_allowed_reobserve`: the user just clicked Allow, but your observation is older than the
   3 s the Helper accepts. Immediately `get_app_state` again and repeat `acquire_control` with the new
   `observation_id`; it will not ask again in this task.

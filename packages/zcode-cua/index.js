@@ -4,6 +4,11 @@ import {
 } from "./capability-contract.js";
 import { describeComputerUseSurface, foregroundComputerUseAvailable } from "./computer-surface.js";
 import {
+  forgetForegroundObservations,
+  hasForegroundObservation,
+  rememberForegroundObservations,
+} from "./foreground-observations.js";
+import {
   rememberSemanticGeometry,
   semanticTargetOf,
   workspaceCursorOf,
@@ -64,6 +69,8 @@ export function createComputerUseRuntime(options = {}) {
   const identities = createSessionIdentityRegistry();
   /** sessionId → (semantic_ref → {pid, x, y}) from that session's latest observation tree. */
   const semanticGeometry = new Map();
+  /** sessionId → Set of Helper-issued foreground observation ids (see foreground-observations.js). */
+  const foregroundObservations = new Map();
   let callSequence = 0;
 
   function reportActivity(report) {
@@ -212,6 +219,23 @@ export function createComputerUseRuntime(options = {}) {
           // get_app_state 结果里的 foreground_geometry.observation_id（Helper 以小写 UUID 签发，
           // 语义树 id 为大写），于是每次都是 stale_geometry。弹卡之前就如实指出，避免无效授权往返。
           assertForegroundObservationId(input?.arguments?.observation_id);
+          // 修复依据（installed be1b1348 实测）：Helper 只在观察带 window_id 时才签发
+          // foreground_geometry，所以没有该几何的观察根本不可能拿到租约。以前这里直接弹卡，
+          // 用户批准之后请求必然失败——用真实的同意换一次注定失败的授权。先核对台账再问用户。
+          if (
+            !hasForegroundObservation(
+              foregroundObservations,
+              sessionId,
+              input?.arguments?.observation_id,
+            )
+          ) {
+            throw Object.assign(
+              new Error(
+                "this observation carries no foreground geometry, so the Helper cannot grant a lease. Call list_windows, then get_app_state with that window's window_id (foreground_geometry is only issued for an explicit window), and pass its foreground_geometry.observation_id straight to computer.acquire_control. The user was not asked for approval.",
+              ),
+              { code: "foreground_geometry_unavailable" },
+            );
+          }
           await requireTakeoverGrant(leaseAuthority, { session: sessionId, task });
         }
         const broker = await import("./broker.js");
@@ -345,7 +369,11 @@ export function createComputerUseRuntime(options = {}) {
           await releaseKnownLease(input.context.sessionId, "interrupted");
         }
         identities.remember(sessionId, method, result);
-        if (method === "observe") rememberSemanticGeometry(semanticGeometry, sessionId, result);
+        if (method === "observe") {
+          rememberSemanticGeometry(semanticGeometry, sessionId, result);
+          // 台账只登记 Helper 真的签发了前台几何的观察，acquire_control 据此决定能否弹卡。
+          rememberForegroundObservations(foregroundObservations, sessionId, result);
+        }
         const semantic = semanticTargetOf(semanticGeometry, sessionId, method, input?.arguments);
         const image =
           method === "observe" && result && typeof result === "object" ? result.image : null;
@@ -424,6 +452,7 @@ export function createComputerUseRuntime(options = {}) {
       if (context?.sessionId) {
         identities.forget(context.sessionId);
         semanticGeometry.delete(context.sessionId);
+        forgetForegroundObservations(foregroundObservations, context.sessionId);
         await releaseKnownLease(context.sessionId);
       }
     },

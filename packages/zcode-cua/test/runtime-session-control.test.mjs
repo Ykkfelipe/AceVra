@@ -77,6 +77,10 @@ describe("CUA-4 runtime session control", () => {
         route: "ax",
         effect: "confirmed",
         helper_identity: VERIFIED_IDENTITY,
+        // Helper 只为显式 window 签发前台几何，pid-only 观察没有这个字段。
+        ...(params.window_id === undefined
+          ? {}
+          : { foreground_geometry: { observation_id: OBSERVATION_ID } }),
         image: {
           ok: true,
           path: `/Users/someone/.zcode/computer-use/observations/${OBSERVATION_ID}.png`,
@@ -352,6 +356,12 @@ describe("CUA-4 runtime session control", () => {
   it("records a physical-input yield as interrupted and keeps unknown effects unknown", async () => {
     const recorder = authority();
     const cua = runtime(recorder);
+    // 真实顺序：先做一次带 window_id 的观察拿到前台几何，否则不会弹授权卡。
+    await cua.execute({
+      toolName: "get_app_state",
+      arguments: { pid: 4242, window_id: 501 },
+      context: LOCAL,
+    });
     const acquired = await cua.execute({
       toolName: "computer.acquire_control",
       arguments: { observation_id: OBSERVATION_ID },

@@ -1788,6 +1788,13 @@ only through an explicit, per-task user approval; the model can request it but n
 
 ### Product rules
 
+0. **No card unless the lease is actually possible.** The Helper issues `foreground_geometry` only
+   for an observation taken with an explicit `window_id` (`ForegroundControl.swift`
+   `rememberObservation` returns nil without one), so a pid-only observation can never produce a
+   lease. The runtime keeps a per-session ledger of the foreground ids the Helper actually issued
+   and refuses `acquire_control` with `foreground_geometry_unavailable` **before** asking the user.
+   Measured on installed `be1b1348`: the card was raised, the user pressed Allow, and the request
+   could never have succeeded — consent must not be spent on an impossible lease.
 1. The model asks by calling `computer.acquire_control`. Before any Helper lease, the runtime
    records a takeover **request** for `(session, task)` and waits up to 25 s for the user.
 2. The owning UI shows an Allow / Deny card in the Computer Use bar. Only the UI can decide

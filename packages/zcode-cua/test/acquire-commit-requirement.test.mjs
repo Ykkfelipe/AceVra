@@ -34,6 +34,20 @@ describe("acquire commit consumes the verified helper requirement", () => {
 
   function startBackend(helperIdentity) {
     return {
+      // 观察必须带 window_id 才拿得到前台几何，所以测试也走真实的 observe → acquire 顺序。
+      observe: async () => ({
+        operation: "observe",
+        effect: "confirmed",
+        route: "ax",
+        classification: "READ",
+        input_delivery: "none",
+        application_effect: "none",
+        evidence: [],
+        pid: 4242,
+        tree: { ok: true, observation_id: "A1B2C3D4-0000-4000-8000-000000000000", elements: [] },
+        foreground_geometry: { observation_id: OBSERVATION_ID, window_bounds: { x: 0, y: 0 } },
+        helper_identity: helperIdentity,
+      }),
       acquire_control: async () => ({
         operation: "acquire_control",
         effect: "confirmed",
@@ -143,6 +157,16 @@ describe("acquire commit consumes the verified helper requirement", () => {
     });
   }
 
+  /** 真实顺序：Helper 只为显式 window 签发前台几何，所以先观察再取租约。 */
+  async function observeWindow(cua) {
+    const observed = await cua.execute({
+      toolName: "get_app_state",
+      arguments: { pid: 4242, window_id: 501 },
+      context: LOCAL,
+    });
+    assert.equal(observed.isError, undefined, JSON.stringify(observed.content?.[0]));
+  }
+
   it("commits the authority lease when the confirmed acquire carries the requirement", async () => {
     await startServer(
       startBackend({
@@ -158,6 +182,7 @@ describe("acquire commit consumes the verified helper requirement", () => {
     );
     const recorder = {};
     const cua = runtime(authority(recorder));
+    await observeWindow(cua);
     const result = await cua.execute({
       toolName: "computer.acquire_control",
       arguments: { observation_id: OBSERVATION_ID },
@@ -176,7 +201,18 @@ describe("acquire commit consumes the verified helper requirement", () => {
   });
 
   it("a declined screen takeover never reaches the authority or the Helper", async () => {
-    await startServer(startBackend({ verified: true, requirement: REQUIREMENT }));
+    await startServer(
+      startBackend({
+        verified: true,
+        identifier: "dev.acevra.cua-helper",
+        cd_hash: "abcd1234",
+        ad_hoc: false,
+        pid: 4242,
+        bundle_validated: true,
+        reason: "",
+        requirement: REQUIREMENT,
+      }),
+    );
     const recorder = {};
     const declined = {
       ...authority(recorder),
@@ -189,7 +225,9 @@ describe("acquire commit consumes the verified helper requirement", () => {
         return { leaseId: "never" };
       },
     };
-    const result = await runtime(declined).execute({
+    const cua = runtime(declined);
+    await observeWindow(cua);
+    const result = await cua.execute({
       toolName: "computer.acquire_control",
       arguments: { observation_id: OBSERVATION_ID },
       context: LOCAL,
@@ -198,7 +236,7 @@ describe("acquire commit consumes the verified helper requirement", () => {
     assert.match(result.content[0].text, /takeover_declined/u);
     assert.deepEqual(recorder.requested, { session: "session-a", task: "turn-1" });
     assert.equal(recorder.begun, undefined, "no lease reservation without the user's Allow");
-    assert.deepEqual(seen, [], "the Helper is never asked");
+    assert.ok(!seen.includes("acquire_control"), "the Helper is never asked to acquire");
   });
 
   it("stays fail-closed when the confirmed acquire omits the requirement", async () => {
@@ -215,6 +253,7 @@ describe("acquire commit consumes the verified helper requirement", () => {
     );
     const recorder = {};
     const cua = runtime(authority(recorder));
+    await observeWindow(cua);
     const result = await cua.execute({
       toolName: "computer.acquire_control",
       arguments: { observation_id: OBSERVATION_ID },
@@ -224,5 +263,21 @@ describe("acquire commit consumes the verified helper requirement", () => {
     assert.match(result.content[0].text, /verified Helper requirement is unavailable/u);
     assert.equal(recorder.commit, undefined, "missing requirement must not commit");
     assert.ok(releaseCalls.includes(LEASE_ID), "confirmed lease must be safely released");
+  });
+
+  it("an observation without a foreground window never asks the user", async () => {
+    await startServer(startBackend({ verified: true, requirement: REQUIREMENT }));
+    const recorder = {};
+    const cua = runtime(authority(recorder));
+    // 不带 window_id 的观察拿不到前台几何：弹卡只会花掉一次注定失败的同意。
+    const result = await cua.execute({
+      toolName: "computer.acquire_control",
+      arguments: { observation_id: OBSERVATION_ID },
+      context: LOCAL,
+    });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /foreground_geometry_unavailable/u);
+    assert.equal(recorder.requested, undefined, "the user is never asked for an impossible lease");
+    assert.deepEqual(seen, [], "the Helper is never asked either");
   });
 });

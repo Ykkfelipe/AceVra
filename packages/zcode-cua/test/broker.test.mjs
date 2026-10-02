@@ -34,6 +34,8 @@ import { createComputerUseRuntime } from "../index.js";
  * transport tests must carry it too: `callBrokerMethod` refuses a response without a verified
  * helper identity, which is the point of the check.
  */
+/** Helper-issued foreground observation id (only present for window-scoped observations). */
+const FOREGROUND_OBSERVATION_ID = "00000000-0000-0000-0000-000000000002";
 const VERIFIED_IDENTITY = Object.freeze({
   verified: true,
   identifier: "dev.acevra.cua-helper.development",
@@ -356,6 +358,11 @@ describe("Computer Use runtime", () => {
         route: "ax",
         effect: "partial",
         helper_identity: VERIFIED_IDENTITY,
+        // Helper 只为显式 window 签发前台几何（ForegroundControl.swift 的 rememberObservation），
+        // pid-only 的观察没有这个字段，于是也不可能拿到租约。
+        ...(params.window_id === undefined
+          ? {}
+          : { foreground_geometry: { observation_id: FOREGROUND_OBSERVATION_ID } }),
         image: {
           ok: true,
           path: "/Users/someone/.zcode/computer-use/observations/abc.png",
@@ -528,6 +535,12 @@ describe("Computer Use runtime", () => {
       deliveryKind: "desktop-continuous",
     };
     const observation_id = "00000000-0000-0000-0000-000000000002";
+    // 真实顺序：先做一次带 window_id 的观察拿到前台几何，否则不会弹授权卡。
+    await runtime.execute({
+      toolName: "get_app_state",
+      arguments: { pid: 4242, window_id: 501 },
+      context,
+    });
     const acquired = await runtime.execute({
       toolName: "computer.acquire_control",
       arguments: { observation_id },
