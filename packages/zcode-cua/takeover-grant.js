@@ -13,6 +13,19 @@ function refusal(code, message) {
 }
 
 /**
+ * acquire_control needs the Helper's foreground observation (`foreground_geometry.observation_id`
+ * from get_app_state, a lowercase UUID valid for 3 s), not the semantic tree id (uppercase UUID).
+ */
+export function assertForegroundObservationId(observationId) {
+  if (typeof observationId === "string" && /[A-Z]/u.test(observationId)) {
+    throw refusal(
+      "wrong_observation_id",
+      "acquire_control needs foreground_geometry.observation_id from the latest get_app_state of an app with a visible window (not tree.observation_id); call get_app_state and pass that id immediately (it is valid for 3 seconds)",
+    );
+  }
+}
+
+/**
  * Resolves when the user allowed takeover for this (session, task); otherwise throws a coded
  * error (`takeover_declined`, `takeover_pending`, `takeover_unavailable`).
  */

@@ -182,14 +182,17 @@ export function createLeaseAuthority(
         terminate(current, boundedText(reason) ?? "released");
         return current;
       }),
-    stop: () =>
+    stop: (stopOptions) =>
       serial(async () => {
         if (!current || current.state === "released" || current.state === "stopped") {
           return { status: "already_stopped" as const, record: current };
         }
         const stopping = { ...current, state: "stopped" as const };
         current = stopping;
-        takeover.revoke();
+        // 修复依据（installed 9eb4f148 实测）：运行时在 Helper 拒绝 acquire（如 stale_geometry）后
+        // 用 sideband stop 清理预留，旧实现一并撤销授权，用户刚点的 Allow 立刻作废、卡片再弹。
+        // 只有用户的 Stop/Pause/打断撤销授权。
+        if (stopOptions?.keepTakeover !== true) takeover.revoke();
         terminate(stopping, "stopped");
         if (stopping.helperLeaseId && options.releaseHelper) {
           await options.releaseHelper(stopping);

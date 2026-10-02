@@ -74,3 +74,12 @@ test("fails closed without an authority that supports takeover", async () => {
     (error) => error.code === "takeover_unavailable",
   );
 });
+
+test("the semantic tree id is refused before any takeover card", async () => {
+  const { assertForegroundObservationId } = await import("../takeover-grant.js");
+  assert.throws(
+    () => assertForegroundObservationId("F6252F8F-E3BB-4B64-87BB-67637F9DE1BE"),
+    (error) => error.code === "wrong_observation_id",
+  );
+  assert.doesNotThrow(() => assertForegroundObservationId("f6252f8f-e3bb-4b64-87bb-67637f9de1be"));
+});

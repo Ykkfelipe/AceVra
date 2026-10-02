@@ -70,8 +70,15 @@ test("authority revokes the grant on Stop and Pause but not on the agent's own r
 
   grant();
   await authority.beginAcquire(OWNER);
+  await authority.stop({ keepTakeover: true });
+  assert.equal(
+    authority.takeover.status(OWNER),
+    "granted",
+    "runtime reservation cleanup after a Helper refusal keeps the user's Allow",
+  );
+  await authority.beginAcquire(OWNER);
   await authority.stop();
-  assert.equal(authority.takeover.status(OWNER), "none", "Stop revokes");
+  assert.equal(authority.takeover.status(OWNER), "none", "user Stop revokes");
 
   grant();
   await authority.pause();

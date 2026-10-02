@@ -108,7 +108,13 @@ export interface LeaseAuthority {
     helperRequirement: string,
   ): Promise<LeaseRecord>;
   release(leaseId: string, reason?: string): Promise<LeaseRecord>;
-  stop(): Promise<{ status: "released" | "already_stopped"; record?: LeaseRecord }>;
+  /**
+   * `keepTakeover` is only for the runtime's own reservation cleanup (sideband): a Helper refusal
+   * must not throw away the user's Allow. User Stop/Pause always revoke it.
+   */
+  stop(options?: {
+    keepTakeover?: boolean;
+  }): Promise<{ status: "released" | "already_stopped"; record?: LeaseRecord }>;
   /** Gate new Computer Use work and release an active lease through the Helper. */
   pause(): Promise<{ status: "paused" | "already_paused"; released: boolean }>;
   /** Lift the gate only; foreground work must acquire again through normal admission. */

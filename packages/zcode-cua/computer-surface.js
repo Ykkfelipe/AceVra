@@ -26,7 +26,7 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
     kind: "read",
     args: "{ pid: integer }",
     returns:
-      "result.content[0].text is JSON: { pid, tree: { observation_id, elements: [{ index, role, label, value, semantic_ref, frame, actions }] } }",
+      "result.content[0].text is JSON: { pid, tree: { observation_id, elements: [{ index, role, label, value, semantic_ref, frame, actions }] }, foreground_geometry?: { observation_id, window_bounds } } — foreground_geometry.observation_id (lowercase, valid 3 s) is the id for computer.acquire_control and other foreground methods",
   },
   {
     name: "screenshot",
@@ -81,7 +81,7 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
   {
     name: "computer.acquire_control",
     kind: "foreground",
-    args: "{ observation_id: string }",
+    args: "{ observation_id: string /* foreground_geometry.observation_id, not tree.observation_id */ }",
     note: "asks the user to Allow screen takeover (an Allow/Deny card appears in AceVra; waits up to 25 s, so give that js call timeout_ms of at least 40000) and returns lease_id. If it had to wait for the user it returns takeover_allowed_reobserve: call get_app_state again and immediately repeat acquire_control with the new observation_id (no second card). Only when a step cannot be done in the background. While you hold it the user's screen glows; any real mouse/keyboard input or Esc ends it",
   },
   { name: "computer.control_status", kind: "read", args: "{ lease_id: string }" },

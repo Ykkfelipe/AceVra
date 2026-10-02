@@ -76,7 +76,8 @@ export async function startLeaseAuthorityServer(
           );
           break;
         case "stop":
-          result = await authority.stop();
+          // sideband stop 只来自运行时清理自己的预留：保留用户授权（见 contract.stop）。
+          result = await authority.stop({ keepTakeover: true });
           break;
         case "status":
           result = authority.getStatus() ?? null;

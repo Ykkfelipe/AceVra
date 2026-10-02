@@ -107,7 +107,9 @@ Background first. Only when a step truly cannot be done in the background (other
 input, apps without usable accessibility), ask for the user's screen:
 
 ```js
-const obs = JSON.parse((await cu.get_app_state({ pid })).content[0].text).tree.observation_id;
+// pid of an app with a visible window (usually the frontmost one)
+const state = JSON.parse((await cu.get_app_state({ pid })).content[0].text);
+const obs = state.foreground_geometry?.observation_id; // NOT state.tree.observation_id; valid 3 s
 const lease = await cu["computer.acquire_control"]({ observation_id: obs }); // give this js call timeout_ms ≥ 40000
 ```
 
@@ -116,6 +118,8 @@ of this task; the user's screen glows while you hold it. Then use the foreground
 (`computer.click`, `computer.type_text`, `computer.key_press`, …) with the returned `lease_id` and a
 fresh `observation_id`, and `computer.release_control({ lease_id })` when done.
 
+- `wrong_observation_id`: you passed `tree.observation_id`; use `foreground_geometry.observation_id`.
+  If `foreground_geometry` is missing, the app has no usable window: observe the frontmost app instead.
 - `takeover_allowed_reobserve`: the user just clicked Allow, but your observation is older than the
   3 s the Helper accepts. Immediately `get_app_state` again and repeat `acquire_control` with the new
   `observation_id`; it will not ask again in this task.

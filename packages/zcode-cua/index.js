@@ -10,7 +10,7 @@ import {
 } from "./semantic-geometry.js";
 import { createSessionIdentityRegistry, identityText } from "./session-identity.js";
 import { validateComputerUseRequest } from "./request-guard.js";
-import { requireTakeoverGrant } from "./takeover-grant.js";
+import { assertForegroundObservationId, requireTakeoverGrant } from "./takeover-grant.js";
 
 /**
  * Model-facing provider-independent tool name to broker method.
@@ -208,6 +208,10 @@ export function createComputerUseRuntime(options = {}) {
         }
         // 屏幕接管只能由用户在 AceVra 里批准（specs "Screen takeover"）：Helper 租约之前先等授权。
         if (method === "acquire_control") {
+          // 修复依据（installed 9eb4f148 实测）：模型传了语义树的 tree.observation_id，Helper 只认
+          // get_app_state 结果里的 foreground_geometry.observation_id（Helper 以小写 UUID 签发，
+          // 语义树 id 为大写），于是每次都是 stale_geometry。弹卡之前就如实指出，避免无效授权往返。
+          assertForegroundObservationId(input?.arguments?.observation_id);
           await requireTakeoverGrant(leaseAuthority, { session: sessionId, task });
         }
         const broker = await import("./broker.js");

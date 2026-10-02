@@ -9,3 +9,4 @@ export declare function requireTakeoverGrant(
   owner: { session: string; task: string },
   options?: { waitMs?: number; sleep?: (ms: number) => Promise<void>; now?: () => number },
 ): Promise<void>;
+export declare function assertForegroundObservationId(observationId: unknown): void;
