@@ -85,6 +85,7 @@ import { ensureProviderFamilyDomainMigration } from "@/lib/providerFamilyDomainM
 import { useSettings } from "@/hooks/useSettingService.js";
 import { CLOSE_ACTIVE_CONTEXT_REQUEST_EVENT } from "@/lib/closeActiveContext.js";
 import { AssistantCodeCommentFeatureProvider } from "@/AssistantCodeCommentFeatureProvider.js";
+import { useScreenTakeoverOverlay } from "@/hooks/useScreenTakeoverOverlay.js";
 import {
   disposeConversationTelemetrySupervisors,
   reconcileConversationTelemetryWorkspaceScopes,
@@ -631,6 +632,8 @@ function RootInner({
     });
   }, [isStartupRenderBlocked, welcomeScreenOpenReason]);
 
+  // 屏幕接管期间的全屏发光层（纯展示，心跳驱动）。
+  useScreenTakeoverOverlay();
   useRootPlatformEffects({
     initialWorkspaceAbsPath,
     initialWorkspaceIdentity,

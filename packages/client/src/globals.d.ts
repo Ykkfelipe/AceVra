@@ -109,6 +109,7 @@ declare global {
       /** 同步当前窗口的未读 task 数到 main 进程 */
       syncWindowUnreadCount(count: number): void;
       syncActiveTaskSession(sessionId: string | null): void;
+      setScreenTakeoverOverlay?(state: { active: boolean; label?: string; hint?: string }): void;
       /** 同步需要 main 进程即时感知的应用设置 */
       syncAppSettings?(patch: Partial<AppSettings>): void;
       /** 注册 main 进程要求聚焦指定 workspace tab 的回调，返回 disposer */

@@ -4494,6 +4494,13 @@ const zhCN: Record<string, string> = {
   "chat.computerUseBar.mode.foreground": "独占前台",
   "chat.computerUseBar.effect.unverified": "无法确认结果",
   "chat.computerUseBar.yieldNotice": "你的物理输入已接管；代理不会自动夺回控制权。",
+  "chat.computerUseBar.takeover.title": "AceVra 想要使用你的屏幕",
+  "chat.computerUseBar.takeover.body":
+    "本任务期间它将控制鼠标和键盘。工作时屏幕边缘会发光——移动鼠标或按 Esc 即可收回控制。",
+  "chat.computerUseBar.takeover.allow": "允许",
+  "chat.computerUseBar.takeover.deny": "拒绝",
+  "screenTakeover.overlay.label": "AceVra 正在使用你的屏幕",
+  "screenTakeover.overlay.hint": "按 Esc 或移动鼠标即可收回控制",
   "chat.computerUseBar.pause": "暂停",
   "chat.computerUseBar.resume": "恢复",
   "chat.computerUseBar.stop": "停止",

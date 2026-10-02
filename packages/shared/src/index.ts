@@ -214,6 +214,7 @@ export type {
   EmbeddedBrowserDataClearResult,
   EmbeddedBrowserOpenUrlRequest,
   IPlatformService,
+  ScreenTakeoverOverlayState,
   OpenInEditorRemoteTarget,
   OpenInEditorOptions,
   PostUpdateReleaseNotesPayload,

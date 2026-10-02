@@ -11,6 +11,7 @@ import {
   LoaderCircleIcon,
   MonitorPauseIcon,
   MonitorPlayIcon,
+  MonitorUpIcon,
   MousePointerClickIcon,
   SquareIcon,
 } from "lucide-react";
@@ -19,6 +20,9 @@ import {
   TID_V4_COMPUTER_USE_BAR_PAUSE,
   TID_V4_COMPUTER_USE_BAR_PREVIEW,
   TID_V4_COMPUTER_USE_BAR_STOP,
+  TID_V4_COMPUTER_USE_BAR_TAKEOVER,
+  TID_V4_COMPUTER_USE_BAR_TAKEOVER_ALLOW,
+  TID_V4_COMPUTER_USE_BAR_TAKEOVER_DENY,
 } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -65,7 +69,62 @@ export interface ComputerUseBarProps {
 export function ComputerUseBar(props: ComputerUseBarProps) {
   const { session, turnRunning, onStop } = props;
   if (!session.view.visible) return null;
+  if (session.view.takeoverPending) return <ComputerUseTakeoverCard session={session} />;
   return <ComputerUseBarMounted session={session} turnRunning={turnRunning} onStop={onStop} />;
+}
+
+/**
+ * Screen takeover approval (zcode-cua specs "Screen takeover"): the agent asked for the user's
+ * screen and waits. The decision is written through the UI-owned service API only.
+ */
+export function ComputerUseTakeoverCard(props: { session: UseComputerUseSessionResult }) {
+  const { session } = props;
+  const { intl } = useZCodeIntl();
+  const [answered, setAnswered] = useState(false);
+  const decide = (decision: "allow" | "deny"): void => {
+    if (answered) return;
+    setAnswered(true);
+    session.decideTakeover(decision);
+  };
+  return (
+    <div
+      data-testid={TID_V4_COMPUTER_USE_BAR_TAKEOVER}
+      role="alertdialog"
+      aria-label={intl.formatMessage({ id: "chat.computerUseBar.takeover.title" })}
+      className="mb-2 flex w-full items-start gap-3 rounded-lg border border-[var(--color-primary)] bg-surface px-3 py-2.5 text-ui-base text-foreground"
+    >
+      <MonitorUpIcon className="mt-0.5 size-4 shrink-0 text-[var(--color-primary)]" aria-hidden />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="font-medium">
+          {intl.formatMessage({ id: "chat.computerUseBar.takeover.title" })}
+        </span>
+        <span className="opacity-80">
+          {intl.formatMessage({ id: "chat.computerUseBar.takeover.body" })}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-testid={TID_V4_COMPUTER_USE_BAR_TAKEOVER_DENY}
+          disabled={answered}
+          onClick={() => decide("deny")}
+        >
+          {intl.formatMessage({ id: "chat.computerUseBar.takeover.deny" })}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          data-testid={TID_V4_COMPUTER_USE_BAR_TAKEOVER_ALLOW}
+          disabled={answered}
+          onClick={() => decide("allow")}
+        >
+          {intl.formatMessage({ id: "chat.computerUseBar.takeover.allow" })}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** Exported for deterministic render tests; the outer component owns the data wiring. */

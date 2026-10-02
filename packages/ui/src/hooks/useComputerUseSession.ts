@@ -70,6 +70,8 @@ export interface UseComputerUseSessionResult {
   resume: () => void;
   /** Service half of Stop; the caller ALSO runs the conversation's own turn stop. */
   stopComputerControl: () => void;
+  /** Answers the agent's pending screen takeover request (UI-owned decision). */
+  decideTakeover: (decision: "allow" | "deny") => void;
 }
 
 export function useComputerUseSession(params: {
@@ -227,6 +229,14 @@ export function useComputerUseSession(params: {
       .finally(() => setPending(null));
   }, [cuaPermissionService]);
 
+  const decideTakeover = useCallback(
+    (decision: "allow" | "deny"): void => {
+      if (!cuaPermissionService || !sessionId) return;
+      void cuaPermissionService.decideScreenTakeover(sessionId, decision).catch(() => undefined);
+    },
+    [cuaPermissionService, sessionId],
+  );
+
   const view = useMemo(
     () =>
       projectComputerUseBar({
@@ -247,5 +257,6 @@ export function useComputerUseSession(params: {
     pause,
     resume,
     stopComputerControl,
+    decideTakeover,
   };
 }

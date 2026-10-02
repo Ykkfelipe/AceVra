@@ -92,6 +92,11 @@ export interface ComputerUseBarView {
   /** True → show Pause; false → show Resume (only meaningful while paused). */
   pauseAvailable: boolean;
   stopMeaningful: boolean;
+  /**
+   * The agent asked to take over the user's screen and is waiting for Allow / Deny
+   * (zcode-cua specs "Screen takeover"). The bar shows the approval card while true.
+   */
+  takeoverPending: boolean;
 }
 
 function modeOf(method: string | undefined): ComputerUseInteractionMode | null {
@@ -125,6 +130,7 @@ export function projectComputerUseBar(input: ComputerUseBarProjectionInput): Com
     terminationReason: null,
     pauseAvailable: true,
     stopMeaningful: false,
+    takeoverPending: false,
   };
   if (!session || !session.present) return base;
 
@@ -183,14 +189,20 @@ export function projectComputerUseBar(input: ComputerUseBarProjectionInput): Com
     state === "stopped";
   const outcomeBelongsToCurrentTurn =
     !currentTurnId || !activity || activity.task === currentTurnId || isTerminalTurnOutcome(state);
+  // 接管请求待答复：只属于当前任务（turn）时才弹卡；暂停中不提供 Allow。
+  const takeoverPending =
+    session.takeover?.state === "pending" &&
+    !session.paused &&
+    (!currentTurnId || session.takeover.task === currentTurnId);
   const visible =
-    safetySurface &&
-    outcomeBelongsToCurrentTurn &&
-    (turnRunning ||
-      session.paused ||
-      leaseActive ||
-      pending !== null ||
-      isTerminalTurnOutcome(state));
+    takeoverPending ||
+    (safetySurface &&
+      outcomeBelongsToCurrentTurn &&
+      (turnRunning ||
+        session.paused ||
+        leaseActive ||
+        pending !== null ||
+        isTerminalTurnOutcome(state)));
 
   const completedAfterObservation =
     activity?.phase === "completed" &&
@@ -228,6 +240,7 @@ export function projectComputerUseBar(input: ComputerUseBarProjectionInput): Com
     terminationReason,
     pauseAvailable: !session.paused,
     stopMeaningful: session.stopMeaningful || turnRunning || pending === "stop",
+    takeoverPending,
   };
 }
 

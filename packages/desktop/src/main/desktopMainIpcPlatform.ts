@@ -55,6 +55,7 @@ import { createTempTextAttachment } from "./tempTextAttachment.js";
 import { registerDesktopSaveFileIpcHandler } from "./desktopSaveFile.js";
 import { registerDesktopPrintToPdfIpcHandler } from "./desktopPrintToPdf.js";
 import { registerCuaPipActiveSessionIpc } from "./desktopCuaPipIpc.js";
+import { registerScreenTakeoverOverlayIpc } from "./screenTakeoverOverlay.js";
 
 export function registerPlatformIpcHandlers(options: {
   fetchHelpConfig?: () => Promise<unknown>;
@@ -264,6 +265,7 @@ export function registerPlatformIpcHandlers(options: {
     syncActiveTaskSession: options.syncActiveTaskSession,
     warn: (message) => options.logger.warn(message),
   });
+  registerScreenTakeoverOverlayIpc({ warn: (message) => options.logger.warn(message) });
   ipcMain.on(
     PlatformChannels.WindowControlsOverlayReady,
     (event, payload: WindowControlsOverlayReadyPayload) => {

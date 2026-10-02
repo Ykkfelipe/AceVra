@@ -541,6 +541,9 @@ export const TID_V4_COMPUTER_USE_BAR = "v4-computer-use-bar";
 export const TID_V4_COMPUTER_USE_BAR_PAUSE = "v4-computer-use-bar-pause";
 /** CUA-4 会话控制条：停止按钮 */
 export const TID_V4_COMPUTER_USE_BAR_STOP = "v4-computer-use-bar-stop";
+export const TID_V4_COMPUTER_USE_BAR_TAKEOVER = "v4-computer-use-bar-takeover";
+export const TID_V4_COMPUTER_USE_BAR_TAKEOVER_ALLOW = "v4-computer-use-bar-takeover-allow";
+export const TID_V4_COMPUTER_USE_BAR_TAKEOVER_DENY = "v4-computer-use-bar-takeover-deny";
 /** CUA-4 会话控制条：最近快照预览 */
 export const TID_V4_COMPUTER_USE_BAR_PREVIEW = "v4-computer-use-bar-preview";
 /** M3 mini Computer 浮动面板（workspace 投影的画中画呈现） */

@@ -417,6 +417,9 @@ contextBridge.exposeInMainWorld("zcode", {
     ipcRenderer.send(PlatformChannels.SyncWindowUnreadCount, count),
   syncActiveTaskSession: (sessionId: string | null) =>
     ipcRenderer.send(PlatformChannels.SyncActiveTaskSession, sessionId),
+  /** 屏幕接管发光层心跳（纯展示；main 超时自动隐藏）。 */
+  setScreenTakeoverOverlay: (state: { active: boolean; label?: string; hint?: string }) =>
+    ipcRenderer.send(PlatformChannels.SetScreenTakeoverOverlay, state),
   /** 同步需要 main 进程即时感知的应用设置 */
   syncAppSettings: (patch: Partial<AppSettings>) =>
     ipcRenderer.send(PlatformChannels.SyncAppSettings, patch),

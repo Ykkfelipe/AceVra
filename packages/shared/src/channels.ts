@@ -220,6 +220,8 @@ export const PlatformChannels = {
   SyncWindowUnreadCount: "zcode:sync-window-unread-count",
   /** Renderer → Main：当前窗口 active task，只更新 Main 的临时焦点映射。 */
   SyncActiveTaskSession: "zcode:sync-active-task-session",
+  /** 屏幕接管期间的全屏发光边框 + 提示条（心跳驱动，纯展示）。 */
+  SetScreenTakeoverOverlay: "zcode:set-screen-takeover-overlay",
   /** Renderer → Main：同步 main 进程需即时感知的应用设置 */
   SyncAppSettings: "zcode:sync-app-settings",
   /** Renderer → Main：快捷键设置页录制态开关；true = main 暂时摘除可配置菜单 accelerator */

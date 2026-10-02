@@ -521,6 +521,13 @@ export type CuaOsSupport =
  * 比如 native dialog、窗口生命周期控制等。
  * 业务服务（文件、终端、凭据等）走 IServiceAccessor 的 RPC 通道。
  */
+/** 屏幕接管发光层的展示状态；文案由 renderer 按当前语言提供。 */
+export interface ScreenTakeoverOverlayState {
+  active: boolean;
+  label?: string;
+  hint?: string;
+}
+
 export interface IPlatformService {
   /** 当前平台的文件选择框是否能返回 agent 可访问的本地绝对路径 */
   canSelectFilePath?: boolean;
@@ -724,6 +731,12 @@ export interface IPlatformService {
 
   /** 同步需要 main 进程即时感知的应用设置；Web fallback 可忽略 */
   syncAppSettings?(patch: Partial<AppSettings>): void;
+
+  /**
+   * 屏幕接管期间显示/隐藏全屏发光边框与提示条（zcode-cua specs "Screen takeover"）。
+   * 纯展示：active 时需按心跳重复调用，宿主超时未收到即自动隐藏。Web/移动端不实现。
+   */
+  setScreenTakeoverOverlay?(state: ScreenTakeoverOverlayState): void;
 
   /** 快捷键设置页录制态开关；桌面端 main 据此暂时摘除可配置菜单 accelerator，Web 可忽略 */
   setShortcutRecordingActive?(active: boolean): void;

@@ -4793,6 +4793,13 @@ const enUS: Record<string, string> = {
   "chat.computerUseBar.effect.unverified": "Could not verify the result",
   "chat.computerUseBar.yieldNotice":
     "Your physical input took over. The agent won't reclaim control automatically.",
+  "chat.computerUseBar.takeover.title": "AceVra wants to use your screen",
+  "chat.computerUseBar.takeover.body":
+    "It will control your mouse and keyboard for this task. Your screen glows while it works — move the mouse or press Esc to take back control.",
+  "chat.computerUseBar.takeover.allow": "Allow",
+  "chat.computerUseBar.takeover.deny": "Deny",
+  "screenTakeover.overlay.label": "AceVra is using your screen",
+  "screenTakeover.overlay.hint": "Press Esc or move the mouse to take back control",
   "chat.computerUseBar.pause": "Pause",
   "chat.computerUseBar.resume": "Resume",
   "chat.computerUseBar.stop": "Stop",
