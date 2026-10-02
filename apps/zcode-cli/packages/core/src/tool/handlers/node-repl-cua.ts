@@ -23,6 +23,12 @@ import {
   type NodeReplCuaBroker,
 } from "@zcode/zcode-cua/node-repl-cua-bridge";
 
+/**
+ * 本构建的本机前台接管开关（单一来源）：broker 的 allowForegroundControl 与能力快照的
+ * 前台可用性都读它，避免"快照说可用、调用被拒"的漂移。
+ */
+export const CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED = false;
+
 /** 用私有快照构造本地代理 broker；无凭据返回 undefined（绝不凭空造客户端）。 */
 export function createCoreNodeReplCuaBroker(): NodeReplCuaBroker | undefined {
   const captured = getCapturedZCodeCuaBrokerCredentials();
@@ -41,7 +47,7 @@ export function createCoreNodeReplCuaBroker(): NodeReplCuaBroker | undefined {
     // 它只是通知，不是同意门。本地 Mac 的产品规则是：代理只在自己的后台环境工作
     // （窗口预览 + 后台语义动作），绝不打断用户的鼠标与前台；前台接管必须有用户主动
     // 发起的入口，而该入口尚未存在，因此在有了用户授权来源之前 fail closed。
-    allowForegroundControl: () => false,
+    allowForegroundControl: () => CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED,
     // lease 凭据成对才给；只经内存对象传给 client，绝不读写进程 env。
     leaseAuthority:
       leaseSocket && leaseToken

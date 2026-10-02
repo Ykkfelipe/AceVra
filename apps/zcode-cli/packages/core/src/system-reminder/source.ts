@@ -48,6 +48,9 @@ export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
   "model_anomaly",
   "prompt_attachment",
   "diagnostics",
+  // 能力上下文（core/specs/capability-runtime.md）：每轮按相关性重算，不持久化；
+  // 热会话内按正文去重，冷恢复后下一次相关轮次重新注入。
+  "capability_context",
 ] as const;
 
 export type SystemReminderPrefixSource = (typeof SYSTEM_REMINDER_PREFIX_SOURCES)[number];
@@ -100,6 +103,7 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
     true,
     "sr.referenced_session_context",
   ),
+  capability_context: descriptor("current_turn", "per_current_turn", true, "sr.capability_context"),
   // Plugin 对话引用：当轮生成后按
   // model-only synthetic notice 固化，后续只追加、不改写；冷恢复按原文重建以保持缓存前缀。
   plugin_reference: descriptor("current_turn", "per_current_turn", true, "sr.plugin_reference"),

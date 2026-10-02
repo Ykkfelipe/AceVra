@@ -127,6 +127,7 @@ import { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
 import { cloneModelSelection } from "./model-selection.js";
+import type { CapabilityRuntimeCache } from "../capability/index.js";
 
 // oxlint-disable typescript-eslint/no-unsafe-declaration-merging
 export class AgentRuntime {
@@ -159,6 +160,7 @@ export class AgentRuntime {
   private messageHistory: MessageHistory;
   private readFileState: ReadFileStateMap;
   private cachedTools: ModelToolContract[] | null = null;
+  private capabilityCache?: CapabilityRuntimeCache;
   private contextBuilder: ContextBuilder | null = null;
   private contextInitialized = false;
   private contextSourceSnapshot?: ContextSourceSnapshot;

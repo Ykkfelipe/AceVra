@@ -56,6 +56,7 @@ import type { AgentRuntimeHookMethods } from "./internal-hook-methods.js";
 import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
 import type { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
+import type { CapabilityRuntimeCache } from "../capability/index.js";
 
 export interface AgentRuntimeInternal
   extends AgentRuntimeCoreMethods, AgentRuntimeTurnMethods, AgentRuntimeHookMethods {
@@ -87,6 +88,8 @@ export interface AgentRuntimeInternal
   messageHistory: MessageHistory;
   readFileState: ReadFileStateMap;
   cachedTools: ModelToolContract[] | null;
+  /** 能力快照的读缓存（目标列表 / MCP 状态）；不是第二份能力状态。 */
+  capabilityCache?: CapabilityRuntimeCache;
   contextBuilder: ContextBuilder | null;
   contextInitialized: boolean;
   contextSourceSnapshot?: ContextSourceSnapshot;

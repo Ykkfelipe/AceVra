@@ -55,6 +55,8 @@ import type { RegularTurnLoopState } from "./turn-loop-state.js";
 import { finishOutputTokenRecovery } from "./turn-output-token-continuation.js";
 import { recordTurnUsageFact } from "./usage-observability.js";
 import { persistStableForkCompletionBoundary } from "./stable-fork-boundary.js";
+import { injectCapabilityContextFromTurn } from "./capability-context.js";
+import { flushCapabilityTurnMetrics, startCapabilityTurnMetrics } from "./capability-metrics.js";
 import {
   closeGoalStateChangeReminderDeferral,
   openGoalStateChangeReminderDeferral,
@@ -119,6 +121,7 @@ export async function executeTurnCommand(
     });
   const traceId = turnTraceContext.traceId;
   const turnStartedAtMs = Date.now();
+  startCapabilityTurnMetrics(this, turnStartedAtMs);
   const targetRunInputID = options?.inputId ?? String(turnId);
   const events: SessionEvent[] = [];
   let turnMachine = TurnMachineImpl.create(this.sessionId, this.turnNumber, input, traceId, turnId);
@@ -553,6 +556,12 @@ export async function executeTurnCommand(
             turnTraceContext,
             options?.toolDisallowlist,
           );
+          // 能力上下文紧随 plugin 引用之后（同一 user → system 因果顺序），见 capability-runtime.md。
+          await injectCapabilityContextFromTurn(this, {
+            userInput: displayInput,
+            traceContext: turnTraceContext,
+            toolDisallowlist: options?.toolDisallowlist,
+          });
         }
 
         this.messageHistory.setCacheMiss();
@@ -823,6 +832,7 @@ export async function executeTurnCommand(
     );
 
   return turnTelemetry.run(execute).finally(async () => {
+    flushCapabilityTurnMetrics(this, turnTraceContext);
     if (targetRunHeartbeat) {
       clearInterval(targetRunHeartbeat);
     }

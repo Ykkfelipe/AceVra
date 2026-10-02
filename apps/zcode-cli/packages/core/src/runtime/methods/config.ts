@@ -29,6 +29,7 @@ import { applyRuntimeExecutionState } from "../execution-state.js";
 
 import { orderProviderVisibleToolContracts } from "../../tool/provider-visible-order.js";
 import { projectToolModelContract } from "../../tool/model-contract.js";
+import { recordCapabilityToolSchemaBuild } from "./capability-metrics.js";
 import { rebuildContextPrefix } from "./context-refresh.js";
 import { filterEmbeddedSearchRuntimeVisibleTools } from "./embedded-search-branch.js";
 import {
@@ -134,16 +135,20 @@ export function getActiveTurnInfo(this: AgentRuntimeInternal): ActiveTurnInfo | 
 }
 
 export function getTools(this: AgentRuntimeInternal, model?: Model): ModelToolContract[] {
+  const startedAt = Date.now();
   if (this.cachedTools === null) {
     this.cachedTools = filterRuntimeVisibleTools.call(this, this.registry.toContracts());
   }
-  return this.cachedTools
+  const tools = this.cachedTools
     .filter((tool) => tool.name !== "WebSearch" || shouldExposeWebSearch.call(this, model))
     .map((tool) =>
       projectToolModelContract(tool, this.registry.get(tool.name), {
         model,
       }),
     );
+  // 只有真实执行（带 Active Model）才是 provider 工具表投影；无 model 的枚举不计入。
+  if (model) recordCapabilityToolSchemaBuild(this, Date.now() - startedAt);
+  return tools;
 }
 
 export function invalidateToolCache(this: AgentRuntimeInternal): void {
