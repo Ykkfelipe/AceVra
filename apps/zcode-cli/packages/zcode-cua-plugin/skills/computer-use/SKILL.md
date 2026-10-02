@@ -63,7 +63,8 @@ windowless).
 Background limits — plan around them up front:
 
 - **Submitting a field in the background: use `computer.workspace_confirm`.** It presses Enter
-  inside the addressed text field via Accessibility and is verified by the window title changing.
+  inside the addressed text field (AX confirm, then a Return key event delivered straight to the
+  app process — never to the user's screen) and is verified by the window title changing.
   Proven dead ends on Chrome (do not retry them): setting the address bar to a search URL does not
   navigate, and the new-tab page exposes no AXPressable submit control.
 - Use `semantic_ref`/`pid` only from the latest `get_app_state` of that app; older refs are refused.

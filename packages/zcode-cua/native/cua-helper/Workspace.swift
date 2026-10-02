@@ -303,33 +303,45 @@ struct WorkspaceController {
             return workspaceRefusal("secure_field", "secure text input is not supported")
         }
         let titleBefore = axWSString(window, kAXTitleAttribute as String) ?? ""
-        let confirmStatus = AXUIElementPerformAction(targetField, "AXConfirm" as CFString)
-        guard confirmStatus == .success else {
-            return workspaceRefusal(
-                "confirm_unsupported",
-                "the target field does not support a background confirm (AXConfirm): \(confirmStatus.rawValue)")
-        }
-        // 有界等待读回信号；浏览器提交后窗口标题会变为结果页标题。
         var titleAfter = titleBefore
-        let deadline = Date().addingTimeInterval(1.5)
-        while Date() < deadline {
-            CFRunLoopRunInMode(.defaultMode, 0.05, false)
-            titleAfter = axWSString(window, kAXTitleAttribute as String) ?? ""
-            if titleAfter != titleBefore { break }
+        var attempts: [String] = []
+        func waitForTitleChange(_ seconds: TimeInterval) -> Bool {
+            let deadline = Date().addingTimeInterval(seconds)
+            while Date() < deadline {
+                CFRunLoopRunInMode(.defaultMode, 0.05, false)
+                titleAfter = axWSString(window, kAXTitleAttribute as String) ?? ""
+                if titleAfter != titleBefore { return true }
+            }
+            return false
         }
-        let navigated = titleAfter != titleBefore && !titleAfter.isEmpty
+        // 通道一：AXConfirm（原生 AppKit 文本框的"确认"动作）。
+        let confirmStatus = AXUIElementPerformAction(targetField, "AXConfirm" as CFString)
+        attempts.append("ax_confirm=\(confirmStatus.rawValue)")
+        var navigated = confirmStatus == .success && waitForTitleChange(0.8)
+        // 通道二（修复依据 preview-ux-386df2b：Chrome 地址栏不接受 AXConfirm）：向目标进程
+        // postToPid 投递 Return —— 与 workspace_type_text 同一机制，不激活应用、不动用户前台。
+        if !navigated, let down = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true),
+           let up = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: false) {
+            down.postToPid(pid)
+            usleep(15_000)
+            up.postToPid(pid)
+            attempts.append("pid_return=posted")
+            navigated = waitForTitleChange(1.5)
+        }
         let after = zeroStealSnapshot(pid: Int(pid))
         var result = workspaceResult(
             operation: "workspace_confirm",
             effect: navigated ? "confirmed" : "unknown",
-            route: "accessibility_action",
+            route: navigated ? "accessibility_action" : "quartz_input",
             delivery: "confirmed",
             application: navigated ? "confirmed" : "unknown")
+        if !navigated { result["code"] = "no_effect" }
         result["mode"] = "AGENT_WORKSPACE"
         result["classification"] = "BACKGROUND_SAFE"
         result["window_ordinal"] = windowOrdinal
         result["title_before"] = titleBefore
         result["title_after"] = titleAfter
+        result["attempts"] = attempts
         result["verification"] = navigated ? "window_title" : "unverified"
         if let frame = axWSFrame(targetField) {
             result["element_center"] = ["x": Double(frame.midX), "y": Double(frame.midY)]
