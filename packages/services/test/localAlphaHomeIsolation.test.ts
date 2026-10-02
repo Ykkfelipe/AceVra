@@ -102,3 +102,21 @@ test("CUA helper and probe resolve under the alpha computer-use root", () => {
   assert.equal(resolveHelperAppCandidate(env), join(devRoot, "AceVra Computer Use Dev.app"));
   assert.equal(resolvePeerIdentityProbe(env), join(devRoot, "peer-identity-probe"));
 });
+
+test("explicit Dev Helper path is used exactly; probe shares its directory", () => {
+  const root = tempDir();
+  const app = join(root, "AceVra Computer Use Dev.app");
+  mkdirSync(app);
+  writeFileSync(join(root, "peer-identity-probe"), "");
+  const env = { ZCODE_CUA_BUNDLED_HELPER_APP_PATH: app };
+  assert.equal(resolveHelperAppCandidate(env), app);
+  assert.equal(resolvePeerIdentityProbe(env), join(root, "peer-identity-probe"));
+  assert.equal(
+    resolveHelperAppCandidate({ ...env, ZCODE_CUA_PACKAGED_RESOURCES_DIR: join(root, "missing") }),
+    null,
+  );
+  assert.equal(
+    resolveHelperAppCandidate({ ZCODE_CUA_BUNDLED_HELPER_APP_PATH: join(root, "missing.app") }),
+    null,
+  );
+});

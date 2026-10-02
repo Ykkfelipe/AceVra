@@ -35,3 +35,13 @@ behavior.
 3. Official ZCode can run concurrently without reading or writing fork sentinels.
 4. The development runtime registers the compatible `zcode:` scheme, preserving OAuth callbacks.
 5. A non-local packaged build continues to use its existing identity.
+
+## Hardened CUA Host identity in development
+
+The generated macOS dev Electron bundle is owned by prepareDevElectronAppBundle. Its patched
+plist and npm-extracted nested binaries must pass strict, deep on-disk signature validation
+before launch. Preparation verifies cached bundles; invalid seals are repaired by ad-hoc
+signing this generated bundle only, preserving entitlements/flags/runtime metadata, then
+verified again. A failed seal/verification stops dev startup. Packaged signing and node_modules
+remain untouched. No extra app copies are created. Tests cover cached validity, repair order
+and failure propagation; live validation exercises native Helper admission against this Host.

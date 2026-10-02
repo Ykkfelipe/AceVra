@@ -1,3 +1,5 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { access, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -50,6 +52,26 @@ export function patchDevElectronInfoPlist(plist) {
 
 export function resolveDevElectronAppBundlePath({ runtimeRoot, electronVersion, arch }) {
   return join(runtimeRoot, `${electronVersion}-${arch}`, `${DEV_ELECTRON_APP_NAME}.app`);
+}
+
+export async function ensureDevElectronBundleSignature(appPath, run = promisify(execFile)) {
+  const verify = () => run("/usr/bin/codesign", ["--verify", "--deep", "--strict", appPath]);
+  try {
+    await verify();
+    return;
+  } catch {
+    // 修复依据：npm Electron 没有完整资源封印，且 Dev 修改 plist；Helper 的严格 Host 校验因此拒绝。
+    // 仅修复生成的启动副本，保留 Electron 所需 entitlements，绝不放宽原生 admission。
+    await run("/usr/bin/codesign", [
+      "--force",
+      "--deep",
+      "--sign",
+      "-",
+      "--preserve-metadata=entitlements,flags,runtime",
+      appPath,
+    ]);
+    await verify();
+  }
 }
 
 export async function prepareDevElectronAppBundle({
@@ -111,6 +133,8 @@ export async function prepareDevElectronAppBundle({
     // 指纹最后写：中途失败时下次仍会判定为需要重拷，不会留下半成品缓存。
     if (sourceStamp !== undefined) await writeFile(sourceStampPath, sourceStamp, "utf8");
   }
+
+  await ensureDevElectronBundleSignature(appPath);
 
   return {
     appPath,

@@ -1938,3 +1938,11 @@ In exclusive foreground mode the Helper moves the real pointer to each target al
 ease-in-out path (`PointerGlide.swift`, 6–30 tagged `mouseMoved` steps, 15 ms apart, under 0.5 s)
 before `click`, `drag`, `scroll` and `move_pointer`, so the user can watch the agent work. The
 steps carry the lease marker, so they never count as the user taking control back.
+
+### Development hardened transport path
+
+An explicit bundled Helper app path identifies that exact app (including Dev.app); the
+transport resolver must not substitute a release sibling. Explicit packaged resource roots
+remain authoritative for release and fail closed when incomplete. The peer probe is resolved
+beside the explicit Helper, using the same install generation. Missing Helper/probe stays a
+real unavailable condition, never an idle-success report.

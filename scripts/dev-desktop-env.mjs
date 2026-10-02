@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { parseEnv } from "node:util";
+import { createDesktopDevRuntimeEnvironment } from "./dev-desktop-runtime-env.mjs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -15,6 +18,14 @@ if (requestedEnv !== "test" && requestedEnv !== "production") {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
+const localEnv = await readFile(resolve(repoRoot, ".env.local"), "utf8")
+  .then(parseEnv)
+  .catch((error) => {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  });
+const devEnv = createDesktopDevRuntimeEnvironment(process.env, localEnv, requestedEnv);
+
 function run(command, args) {
   return new Promise((resolveRun, rejectRun) => {
     // Windows 下 shell:true 只按空格拼接参数；仓库路径含空格（如 E:\Z Code\...）时
@@ -24,8 +35,7 @@ function run(command, args) {
       cwd: repoRoot,
       env: withPinnedNodePath(
         {
-          ...process.env,
-          ZCODE_ENV: requestedEnv,
+          ...devEnv,
           ZCODE_DESKTOP_AGENT_BYTECODE: agentBytecode ? "1" : "0",
         },
         process.execPath,

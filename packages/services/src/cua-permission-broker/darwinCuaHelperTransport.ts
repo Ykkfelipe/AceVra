@@ -88,8 +88,12 @@ function packagedResourcePath(env: NodeJS.ProcessEnv, name: string): string | nu
 }
 
 export function resolveHelperAppCandidate(env: NodeJS.ProcessEnv = process.env): string | null {
-  const packaged = packagedResourcePath(env, "AceVra Computer Use.app");
-  if (packaged) return existsSync(packaged) ? packaged : null;
+  const resources = env.ZCODE_CUA_PACKAGED_RESOURCES_DIR?.trim();
+  const explicit = env.ZCODE_CUA_BUNDLED_HELPER_APP_PATH?.trim();
+  // 修复依据：Main 注入 Dev.app 后旧解析器换成不存在的 release 同级包，误报 helper_app_missing。
+  // packaged root 仍优先且缺失即拒绝，开发路径只验证明确指定的那一个 app。
+  const selected = resources ? join(resources, HELPER_APP_NAME) : explicit;
+  if (selected) return existsSync(selected) ? selected : null;
   return helperAppCandidates(env).find((candidate) => existsSync(candidate)) ?? null;
 }
 
