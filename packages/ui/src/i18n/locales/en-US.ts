@@ -4797,7 +4797,11 @@ const enUS: Record<string, string> = {
   "chat.computerUseBar.takeover.body":
     "It will control your mouse and keyboard for this task. Your screen glows while it works — move the mouse or press Esc to take back control.",
   "chat.computerUseBar.takeover.allow": "Allow",
+  "chat.computerUseBar.takeover.allow.description":
+    "Control your mouse and keyboard until you stop it or end the task",
   "chat.computerUseBar.takeover.deny": "Deny",
+  "chat.computerUseBar.takeover.deny.description":
+    "Keep the agent in the background, where it cannot see or control your screen",
   "screenTakeover.overlay.label": "AceVra is using your screen",
   "screenTakeover.overlay.hint": "Press Esc or move the mouse to take back control",
   "chat.computerUseBar.pause": "Pause",

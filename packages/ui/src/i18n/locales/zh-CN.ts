@@ -4498,7 +4498,9 @@ const zhCN: Record<string, string> = {
   "chat.computerUseBar.takeover.body":
     "本任务期间它将控制鼠标和键盘。工作时屏幕边缘会发光——移动鼠标或按 Esc 即可收回控制。",
   "chat.computerUseBar.takeover.allow": "允许",
+  "chat.computerUseBar.takeover.allow.description": "接管鼠标和键盘，直到你停止它或结束本任务",
   "chat.computerUseBar.takeover.deny": "拒绝",
+  "chat.computerUseBar.takeover.deny.description": "让代理留在后台，它看不到也控制不了你的屏幕",
   "screenTakeover.overlay.label": "AceVra 正在使用你的屏幕",
   "screenTakeover.overlay.hint": "按 Esc 或移动鼠标即可收回控制",
   "chat.computerUseBar.pause": "暂停",

@@ -79,7 +79,10 @@ test("card renders Allow and Deny instead of the bar", () => {
       { locale: "en-US", messages: enUS },
       React.createElement(ComputerUseBar, {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        session: { view, decideTakeover: (d: string) => decisions.push(d) } as any,
+        session: {
+          view,
+          decideTakeover: (d: string) => decisions.push(d),
+        } as any,
       }),
     ),
   );
@@ -89,4 +92,28 @@ test("card renders Allow and Deny instead of the bar", () => {
   assert.match(html, /AceVra wants to use your screen/u);
   assert.match(html, /press Esc to take back control/u);
   assert.deepEqual(decisions, [], "rendering never decides");
+});
+
+test("card reuses the permission dialog language instead of a bespoke confirm gate", () => {
+  const view = project(session({ state: "pending", task: "turn-1" }));
+  const html = renderToStaticMarkup(
+    React.createElement(
+      ZCodeIntlProvider,
+      { locale: "en-US", messages: enUS },
+      React.createElement(ComputerUseBar, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        session: { view, decideTakeover: () => {} } as any,
+      }),
+    ),
+  );
+  // 容器与选项行沿用 PermissionDialog：popover 卡片 + 编号选项 + 每个选项带后果说明。
+  assert.match(html, /rounded-2xl border border-border bg-popover/u);
+  assert.match(html, /role="listbox"/u);
+  assert.match(html, /1\./u);
+  assert.match(html, /2\./u);
+  assert.match(html, /until you stop it or end the task/u);
+  assert.match(html, /cannot see or control your screen/u);
+  // 主色实心确认按钮与键盘提示也跟权限窗一致。
+  assert.match(html, /bg-brand text-foreground-inverse/u);
+  assert.match(html, /Use Tab \/ arrow keys to choose/u);
 });
