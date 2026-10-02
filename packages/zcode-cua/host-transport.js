@@ -377,12 +377,15 @@ export function createCuaBrokerHost(options = {}) {
     // One socket, two roles, decided by the first line (spec "Transport topology"): a `hello`
     // makes this connection a Helper candidate; anything else is a client request, which the
     // capability token gates. A helper candidate that fails admission never reaches dispatch.
-    let undecided = true;
     let buffer = "";
     undecidedSockets.add(socket);
-    socket.on("data", (chunk) => {
+    // 修复依据（window host 崩溃：RangeError: Invalid string length）：首行判定后该监听器
+    // 原先仍挂在 socket 上，且在 `if (!undecided) return` 之前先 `buffer += chunk`——Helper
+    // 连接上之后的每个响应字节都被追加进这个再也不读的缓冲。observation 稀疏时察觉不到；
+    // workspace_stream 以 ~12 Hz 回传 JPEG 后数分钟就撑到 V8 字符串上限，宿主进程崩溃，
+    // 之后 Stop 等所有命令都无处送达。判定角色后立即摘掉本监听器，字节只归角色处理器所有。
+    const onFirstData = (chunk) => {
       buffer += chunk;
-      if (!undecided) return; // role handlers own the socket after the first line
       const newline = buffer.indexOf("\n");
       if (newline < 0) {
         if (Buffer.byteLength(buffer) > MAX_REQUEST_LINE_BYTES) socket.destroy();
@@ -390,7 +393,8 @@ export function createCuaBrokerHost(options = {}) {
       }
       const line = buffer.slice(0, newline);
       const remainder = buffer.slice(newline + 1);
-      undecided = false;
+      buffer = "";
+      socket.off("data", onFirstData);
       undecidedSockets.delete(socket);
       let helloShaped = false;
       try {
@@ -403,7 +407,8 @@ export function createCuaBrokerHost(options = {}) {
       } else {
         becomeClient(socket, line, remainder);
       }
-    });
+    };
+    socket.on("data", onFirstData);
     socket.on("error", () => socket.destroy());
   }
 

@@ -828,6 +828,26 @@ describe("CUA-1.75 transport session (in-process relay)", () => {
     helper.socket.destroy();
   });
 
+  it("sustained stream traffic never accumulates in the first-line router (host crash regression)", async () => {
+    // 回归：判定角色后首行监听器仍在追加每个 Helper 响应字节，持续 workspace_stream 回传数分钟
+    // 即撑到 V8 字符串上限（RangeError: Invalid string length）并使宿主进程崩溃。这里让一条
+    // Helper 连接累计回传超过该上限的字节；修复前本测试进程会以同一 RangeError 崩溃。
+    const helper = fakeHelper(host);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    const jpeg = "A".repeat(4 * 1024 * 1024);
+    const total = 140; // 140 × 4 MiB ≈ 560 MiB > V8 max string length (~512 MiB)
+    for (let index = 0; index < total; index += 1) {
+      const result = await host.callMethod(
+        "workspace_stream",
+        { operation: "read", jpeg },
+        { timeoutMs: 10_000 },
+      );
+      assert.equal(result.jpeg.length, jpeg.length);
+    }
+    assert.equal(host.helperConnected, true);
+    helper.socket.destroy();
+  });
+
   /** Declared late so the transport tests above read first; shared by all fake helpers. */
   function fakeHelper(host, overrides = {}) {
     const received = [];
