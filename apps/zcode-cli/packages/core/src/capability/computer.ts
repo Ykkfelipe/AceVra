@@ -4,6 +4,7 @@
 import type { Capability, CapabilityAction } from "@zcode/contracts";
 import {
   COMPUTER_USE_LIMITS,
+  COMPUTER_USE_COMPAT_ALIASES,
   COMPUTER_USE_SURFACE,
   type ComputerUseSurfaceEntry,
 } from "@zcode/zcode-cua/computer-surface";
@@ -36,17 +37,15 @@ export const COMPUTER_FOREGROUND_ALTERNATIVES: Readonly<Record<string, readonly 
 export interface ComputerCapabilitySource {
   /** runtimeFeatures.computerUse：官方插件已启用（只代表插件态，不代表 Helper 已连接）。 */
   featureEnabled: boolean;
-  /**
-   * 本进程是否持有已验证 Helper 的 broker 凭据（与 createCoreNodeReplCuaBroker 同一来源）。
-   * 修复依据：插件启用但无 Helper（如 headless CLI）时，facade 调用必然以
-   * "unavailable for this node_repl session" 失败；快照不能把它宣传为可用。
-   */
-  helperConnected: boolean;
+  /** 生产者可读取时提供物理连接状态；未连接不等于无法按需启动。 */
+  helperConnected?: boolean;
+  /** Host 已验证并配置可按需恢复的传输；不从插件 enabled 推断。 */
+  helperLazyStartable?: boolean;
   /** 模型可见的 node_repl 工具名（core `js` 或 MCP 宿主的 `mcp__node_repl__js`）；缺席即无执行面。 */
   nodeReplToolName?: string;
   platform: string;
   runtimeScope: "main" | "subagent";
-  /** 与 foregroundComputerUseAvailable 同一谓词的结果；本构建恒为 false。 */
+  /** 与 foregroundComputerUseAvailable 同一谓词的结果；由本地桌面主会话门控。 */
   foregroundAvailable: boolean;
   /** 已注册的官方 CUA MCP 工具名（经可信门投影成 mcp__computer-use__*）。 */
   registeredToolNames: ReadonlySet<string>;
@@ -63,7 +62,7 @@ function capabilityUnavailableReason(source: ComputerCapabilitySource): string |
   if (!source.featureEnabled) {
     return "Computer Use is not enabled in this session (the official computer-use plugin is disabled)";
   }
-  if (!source.helperConnected) {
+  if (!source.helperConnected && !source.helperLazyStartable) {
     return "the verified AceVra Computer Use Helper is not connected to this session (Computer Use runs only inside the AceVra desktop app with the Helper granted)";
   }
   if (!source.nodeReplToolName) {
@@ -109,7 +108,13 @@ export function projectComputerCapability(source: ComputerCapabilitySource): Cap
     domain: "computer",
     displayName: "Computer (this Mac, background)",
     source: "computer",
-    actions: COMPUTER_USE_SURFACE.map((entry) => projectAction(entry, source, reason)),
+    // 修复依据：computer.screenshot 已是 facade 的合法别名，模型清单必须从同一别名表投影。
+    actions: COMPUTER_USE_SURFACE.flatMap((entry) => [
+      projectAction(entry, source, reason),
+      ...Object.entries(COMPUTER_USE_COMPAT_ALIASES)
+        .filter(([, target]) => target === entry.name)
+        .map(([name]) => projectAction({ ...entry, name }, source, reason)),
+    ]),
     availability: reason ? "unavailable" : "available",
     ...(reason ? { unavailableReason: reason } : {}),
     executionTargets: [THIS_DEVICE_TARGET],

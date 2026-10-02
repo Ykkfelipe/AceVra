@@ -12,7 +12,10 @@ import {
   type CapabilitySources,
 } from "../../capability/index.js";
 import { getCapturedZCodeCuaBrokerCredentials } from "@zcode/shared";
-import { foregroundComputerUseAvailable } from "@zcode/zcode-cua/computer-surface";
+import {
+  foregroundComputerUseAvailable,
+  resolveComputerUseDeliveryContext,
+} from "@zcode/zcode-cua/computer-surface";
 import { toMcpToolName } from "../../mcp/index.js";
 import { extractPluginReferences } from "../../plugin-reference/index.js";
 import { CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED } from "../../tool/handlers/node-repl-cua.js";
@@ -88,6 +91,7 @@ function runtimeSources(
   const port = runtime.executionTargetPort;
   const selected = port?.selectedTarget();
   const runtimeFeatures = runtime.config.runtimeFeatures;
+  const cuaTransport = getCapturedZCodeCuaBrokerCredentials();
   return {
     tools: runtime.getTools().filter((tool) => !disallowed.has(tool.name)),
     mcpServers: cache.mcpServers ?? [],
@@ -96,7 +100,11 @@ function runtimeSources(
     skills: runtime.skillLoadOutcome?.skills ?? [],
     computer: {
       featureEnabled: runtimeFeatures?.computerUse === true,
-      helperConnected: Boolean(getCapturedZCodeCuaBrokerCredentials().socket?.trim()),
+      // 修复依据：私有快照是已验证传输的 admission，不能把 socket 存在当作物理连接。
+      // Helper 因 idle 退出后由同一个 Host 按需恢复；缺少传输仍 fail closed。
+      helperLazyStartable: Boolean(
+        cuaTransport.socket?.trim() && cuaTransport.pluginAuthority?.trim(),
+      ),
       platform: process.platform,
       runtimeScope: runtime.config.taskType === "subagent_child" ? "subagent" : "main",
       // 与 CUA runtime 同一谓词（本地桌面主会话、非远程/手机），只是"可请求"；
@@ -104,8 +112,8 @@ function runtimeSources(
       foregroundAvailable: foregroundComputerUseAvailable(
         {
           runtimeScope: runtime.config.taskType === "subagent_child" ? "subagent" : "main",
-          ...(runtime.config.clientMode ? { clientMode: runtime.config.clientMode } : {}),
-          ...(runtime.config.deliveryKind ? { deliveryKind: runtime.config.deliveryKind } : {}),
+          // 修复依据：bridge 对缺省 desktop metadata 已有默认值，模型快照必须复用同一规则。
+          ...resolveComputerUseDeliveryContext(runtime.config),
           ...(runtime.config.remoteSessionId
             ? { remoteSessionId: String(runtime.config.remoteSessionId) }
             : {}),

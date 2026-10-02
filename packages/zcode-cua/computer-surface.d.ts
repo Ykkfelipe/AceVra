@@ -28,3 +28,12 @@ export declare function foregroundComputerUseAvailable(
     | undefined,
   allowForegroundControl: (() => boolean) | undefined,
 ): boolean;
+
+export declare function resolveComputerUseDeliveryContext(
+  context:
+    | {
+        clientMode?: string;
+        deliveryKind?: string;
+      }
+    | undefined,
+): { clientMode: string; deliveryKind: string };

@@ -6,6 +6,10 @@
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import {
+  sanitizeZCodeRuntimeEnv,
+  resetCapturedZCodeCuaBrokerCredentialsForTest,
+} from "@zcode/shared";
 import { CoreErrorType } from "@zcode/contracts";
 import type { ExecutionTargetInfo, ModelToolContract, TraceContext } from "@zcode/contracts";
 import { createMessageHistory } from "../src/agent/message-history.js";
@@ -192,4 +196,31 @@ test("turn metrics count invalid calls, discovery calls and first valid action",
   assert.equal(metrics?.discoveryCalls, 3);
   assert.equal(metrics?.firstValidToolActionMs, 400);
   assert.ok(logs.some((log) => log.data.event === "capability.turn.metrics"));
+});
+
+test("prepared desktop context advertises a provisioned idle Helper and complete canonical names", async () => {
+  sanitizeZCodeRuntimeEnv({
+    ZCODE_CUA_PERMISSION_BROKER_SOCKET: "/test/verified-socket",
+    ZCODE_CUA_PLUGIN_AUTHORITY: "test-authority",
+  });
+  try {
+    const { runtime, history } = fakeRuntime({});
+    // 本地 desktop 的缺省 metadata 与 bridge 执行语义相同。
+    await injectCapabilityContextFromTurn(runtime, {
+      userInput: "Computer Use: take over my screen",
+      traceContext: TRACE,
+    });
+    const text = attachments(history).join("\n");
+    for (const name of [
+      "computer.acquire_control",
+      "computer.control_status",
+      "computer.release_control",
+      "computer.screenshot",
+    ]) {
+      assert.ok(text.includes(name), name);
+    }
+    assert.doesNotMatch(text, /UNAVAILABLE|Helper is not connected/u);
+  } finally {
+    resetCapturedZCodeCuaBrokerCredentialsForTest();
+  }
 });

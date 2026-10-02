@@ -1,3 +1,4 @@
+import { resolveComputerUseDeliveryContext } from "./computer-surface.js";
 // Computer Use node_repl bridge —— 两个合法 node_repl 执行面共用的唯一实现。
 //
 // 背景：CLI 里 `node_repl.js` 有两个合法执行面：
@@ -215,8 +216,10 @@ function requestContext(meta) {
   const workspaceIdentity = stringMeta("workspace_identity");
   const workspaceKey = stringMeta("workspace_key") ?? workspaceIdentity ?? workspacePath;
   if (!workspaceKey) throw new Error("node_repl CUA request is missing workspaceKey metadata");
-  const clientMode = stringMeta("client_mode") ?? "desktop-continuous";
-  const deliveryKind = stringMeta("delivery_kind") ?? clientMode;
+  const { clientMode, deliveryKind } = resolveComputerUseDeliveryContext({
+    clientMode: stringMeta("client_mode"),
+    deliveryKind: stringMeta("delivery_kind"),
+  });
   return {
     runtimeScope: meta?.runtime_scope === "subagent" ? "subagent" : "main",
     sessionId,

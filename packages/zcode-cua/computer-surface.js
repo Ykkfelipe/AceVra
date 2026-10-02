@@ -211,3 +211,9 @@ export function foregroundComputerUseAvailable(context, allowForegroundControl) 
     !context?.remoteSessionId
   );
 }
+
+/** Delivery defaults shared by the executing bridge and the capability projection. */
+export function resolveComputerUseDeliveryContext(context) {
+  const clientMode = context?.clientMode?.trim() || "desktop-continuous";
+  return { clientMode, deliveryKind: context?.deliveryKind?.trim() || clientMode };
+}

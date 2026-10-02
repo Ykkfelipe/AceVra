@@ -187,7 +187,7 @@ test("Computer in a subagent is unavailable with a truthful reason", () => {
     sources({
       computer: {
         featureEnabled: true,
-      helperConnected: true,
+        helperConnected: true,
         platform: "darwin",
         runtimeScope: "subagent",
         foregroundAvailable: false,
@@ -400,4 +400,37 @@ test("rendered context is bounded", () => {
   });
   const text = renderCapabilityContext(snapshot, selection, 1500);
   assert.ok(text === null || Buffer.byteLength(text) <= 1500);
+});
+
+test("verified lazy Helper is available while disconnected; prepared context includes takeover and screenshot aliases", () => {
+  const snapshot = buildCapabilitySnapshot(
+    sources({
+      computer: {
+        featureEnabled: true,
+        helperConnected: false,
+        helperLazyStartable: true,
+        platform: "darwin",
+        runtimeScope: "main",
+        foregroundAvailable: true,
+      },
+    }),
+  );
+  const computer = snapshot.capabilities.find((entry) => entry.id === "computer.local");
+  assert.equal(computer?.availability, "available");
+  const text =
+    renderCapabilityContext(
+      snapshot,
+      selectRelevantCapabilities(snapshot, {
+        text: "Open Chrome in the background and then take over this Mac",
+      }),
+    ) ?? "";
+  for (const name of [
+    "computer.acquire_control",
+    "computer.control_status",
+    "computer.release_control",
+    "computer.screenshot",
+  ]) {
+    assert.ok(text.includes(name), name);
+  }
+  assert.doesNotMatch(text, /UNAVAILABLE|Helper is not connected/u);
 });

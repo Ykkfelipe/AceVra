@@ -89,8 +89,8 @@ identifiers (plugin ids, `mcp__…` names, `computer-use@zcode-plugins-official`
 
 | Capability | Available when | Unavailable reason (verbatim to model) |
 | --- | --- | --- |
-| Computer (this Mac), background actions | `runtimeFeatures.computerUse` (plugin enabled) **and** captured Helper broker credentials, a node_repl tool (`js` or `mcp__node_repl__js`), darwin, main scope | plugin disabled / Helper not connected (e.g. headless CLI) / no node_repl / not macOS / subagent |
-| Computer foreground actions (`acquire_control`, `click`, `type_text`, `key_press`, …) | never in this build (`allowForegroundControl` is `() => false`) | "local foreground takeover requires explicit Protected Foreground mode, which is not available" |
+| Computer (this Mac), background actions | `runtimeFeatures.computerUse` (plugin enabled) **and** captured verified transport admission (including an idle, lazy-startable Helper), a node_repl tool (`js` or `mcp__node_repl__js`), darwin, main scope | plugin disabled / verified transport unavailable (e.g. headless CLI) / no node_repl / not macOS / subagent |
+| Computer foreground actions (`acquire_control`, `click`, `type_text`, `key_press`, …) | local main desktop-continuous session with foreground control allowed; execution still requires one user Allow grant | "screen takeover is only available in a desktop conversation on this Mac (not remote, mobile or replayed sessions); use the background actions instead" |
 | MCP server tools | server `connected` and ≥1 provider-visible tool | "MCP server X is <status>" / "no tools visible after allow/deny" |
 | Plugin-contributed capabilities | plugin enabled in this session | "plugin P is disabled in this session" (no actions advertised) |
 | Execution targets | host injected `ExecutionTargetPort` (desktop, local workspace, main scope) | "this session has no access to the user's other computers" |
@@ -169,3 +169,23 @@ Live chat acceptance (A–D) requires an installed candidate; see the milestone 
 
 Protected Foreground, new Computer UX, companions, automatic subagent orchestration, cloud VM,
 conversation sync, plugin redesign, ZCode namespace purge, marketplace rebrand.
+
+## Dev Computer readiness and complete names
+
+Physical Helper connection and session execution readiness are different facts. A verified,
+provisioned transport with a lazy restart owner is available while idle. A missing transport,
+disabled plugin, failed verification or failed recovery remains unavailable. The Host owns
+transport admission; the capability projection must not infer physical connection from a
+captured socket string. Scope, platform and node_repl gates remain unchanged.
+
+The model action list is projected from COMPUTER_USE_SURFACE plus its canonical compatibility
+alias map. This includes computer.acquire_control, computer.control_status,
+computer.release_control and computer.screenshot without a second handwritten registry.
+Aliases retain the target's arguments, risk and availability. Regression scenarios cover
+idle provisioned transport, unprovisioned transport, disabled plugin and prepared context names.
+
+The capability foreground predicate uses the bridge's canonical delivery-context defaults.
+Absent client/delivery metadata in a local main conversation already executes as
+`desktop-continuous` in node_repl; the capability reminder must describe that same context.
+Explicit web-remote-replayable, subagent scope and remoteSessionId remain denied. Defaults are
+owned by the CUA surface module and consumed by both bridge and capability projection.

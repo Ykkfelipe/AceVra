@@ -125,3 +125,26 @@ test("open_app is documented background capability and refuses a missing bundle_
   });
   assert.match(empty.content[0].text, /bundle_id: string/u);
 });
+
+test("delivery defaults match local execution while preserving explicit remote/replayed values", async () => {
+  const { resolveComputerUseDeliveryContext, foregroundComputerUseAvailable } =
+    await import("../computer-surface.js");
+  assert.deepEqual(resolveComputerUseDeliveryContext({}), {
+    clientMode: "desktop-continuous",
+    deliveryKind: "desktop-continuous",
+  });
+  for (const context of [
+    { clientMode: "web-remote-replayable" },
+    { deliveryKind: "web-remote-replayable" },
+    { remoteSessionId: "remote-1" },
+    { runtimeScope: "subagent" },
+  ]) {
+    assert.equal(
+      foregroundComputerUseAvailable(
+        { runtimeScope: "main", ...resolveComputerUseDeliveryContext(context), ...context },
+        () => true,
+      ),
+      false,
+    );
+  }
+});
