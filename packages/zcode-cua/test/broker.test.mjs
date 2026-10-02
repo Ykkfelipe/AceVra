@@ -72,6 +72,7 @@ describe("method registry", () => {
       "scroll",
       "drag",
       "open_app",
+      "workspace_confirm",
     ]) {
       assert.equal(isBrokerMethod(method), true);
       assert.equal(isReadOnlyBrokerMethod(method), false);

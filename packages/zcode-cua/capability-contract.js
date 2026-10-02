@@ -21,6 +21,7 @@ export const COMPUTER_USE_METHODS = Object.freeze({
   workspace_click: "mutation",
   workspace_type_text: "mutation",
   workspace_scroll: "mutation",
+  workspace_confirm: "mutation",
   open_app: "mutation",
 });
 
@@ -49,6 +50,7 @@ export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
   "computer.workspace_scroll": "workspace_scroll",
   // 本地版"打开应用"：远程（Dell）运行时靠进程派生天然可开应用；本地此前缺这个能力，
   // 目标应用无窗口（Chrome 红 X 后进程仍在）时模型只能空观察并退向前台接管。
+  "computer.workspace_confirm": "workspace_confirm",
   "computer.open_app": "open_app",
 });
 

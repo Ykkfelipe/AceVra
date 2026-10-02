@@ -171,6 +171,7 @@ export function createComputerUseRuntime(options = {}) {
         "workspace_click",
         "workspace_type_text",
         "workspace_scroll",
+        "workspace_confirm",
       ].includes(method);
       const mutating =
         method === "press" ||

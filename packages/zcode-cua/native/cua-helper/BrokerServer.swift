@@ -86,7 +86,7 @@ func brokerDispatch(
         return brokerFail("semantic actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
     }
-    if ["workspace_click", "workspace_type_text", "workspace_scroll", "open_app"].contains(method),
+    if ["workspace_click", "workspace_type_text", "workspace_scroll", "workspace_confirm", "open_app"].contains(method),
        !cuaHostConnectSessionActive {
         return brokerFail("workspace actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
@@ -178,6 +178,13 @@ func brokerDispatch(
                               id: request["id"])
         }
         return brokerOk(WorkspaceController.typeText(params), id: request["id"])
+    case "workspace_confirm":
+        guard Set(params.keys).isSubset(of: ["pid", "window_ordinal", "target_label",
+                                              "owner_session", "owner_task"]) else {
+            return brokerFail("workspace_confirm accepts only pid, window_ordinal, target_label",
+                              code: "bad_request", id: request["id"])
+        }
+        return brokerOk(WorkspaceController.confirm(params), id: request["id"])
     default:
         return brokerFail("unreachable", code: "internal", id: request["id"])
     }

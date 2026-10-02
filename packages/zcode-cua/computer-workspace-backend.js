@@ -94,20 +94,32 @@ export function createAgentWorkspaceBackend({ execute, snapshot, projection } = 
       const after = await readSnapshot();
       // Track the logical agent pointer from what the action actually addressed: an
       // explicit point when given, otherwise the element center the Helper resolved.
+      // 修复依据（preview-ux-0050f95b 实测）：此前只有 workspace_click 更新指针，
+      // workspace_type_text / workspace_confirm / workspace_scroll 的结果即使带
+      // element_center 也被丢弃，预览光标整段缺失。所有 workspace_* 现在走同一条
+      // 写入路径；scroll 没有元素中心时只推进时间戳，不伪造坐标。
       let pointerUpdate = null;
-      if (method === "workspace_click") {
+      const WORKSPACE_POINTER_METHODS = new Set([
+        "workspace_click",
+        "workspace_type_text",
+        "workspace_confirm",
+        "workspace_scroll",
+      ]);
+      if (WORKSPACE_POINTER_METHODS.has(method)) {
         const point =
           args && typeof args.point === "object" && args.point !== null
             ? { x: args.point.x ?? null, y: args.point.y ?? null }
             : elementCenterOf(result);
         const now = Date.now();
-        agentPointer = {
-          x: point.x,
-          y: point.y,
-          target: targetOf(args, result),
-          updatedAt: now,
-        };
-        pointerUpdate = { x: point.x, y: point.y };
+        if (point && point.x !== null && point.y !== null) {
+          agentPointer = {
+            x: point.x,
+            y: point.y,
+            target: targetOf(args, result),
+            updatedAt: now,
+          };
+          pointerUpdate = { x: point.x, y: point.y };
+        }
       }
       const body = envelopeBodyOf(result);
       if (method === "observe") {

@@ -227,6 +227,29 @@ describe("agent cursor (logical, backend-owned)", () => {
     assert.equal(backend.agentPointer.x, 50);
     assert.equal(backend.agentPointer.y, 60);
   });
+
+  it("tracks typing and confirm too, not only clicks (cursor stayed missing in preview-ux-0050f95b)", async () => {
+    const typed = {
+      ...CONFIRMED_CLICK,
+      operation: "workspace_type_text",
+      target: { pid: 4242, strategy: "focused_field" },
+    };
+    const { execute } = recordingExecute(typed);
+    const backend = createAgentWorkspaceBackend({ execute });
+    await backend.perform("workspace_type_text", { pid: 4242, text: "cats" }, LOCAL);
+    assert.equal(backend.agentPointer.x, 120, "typing must move the logical cursor to the field");
+    assert.equal(backend.agentPointer.y, 90);
+    await backend.perform("workspace_confirm", { pid: 4242 }, LOCAL);
+    assert.equal(backend.agentPointer.target.pid, 4242);
+  });
+
+  it("never fabricates coordinates when the result carries no element center", async () => {
+    const noCenter = { ...CONFIRMED_CLICK, operation: "workspace_type_text", element_center: undefined };
+    const { execute } = recordingExecute(noCenter);
+    const backend = createAgentWorkspaceBackend({ execute });
+    await backend.perform("workspace_type_text", { pid: 4242, text: "cats" }, LOCAL);
+    assert.deepEqual(backend.agentPointer, { x: null, y: null, target: null, updatedAt: null });
+  });
 });
 
 describe("frame/backend tagging", () => {

@@ -262,6 +262,84 @@ struct WorkspaceController {
         return result
     }
 
+    // MARK: - workspace_confirm
+
+    /// 修复依据（preview-ux-0050f95b 实测）：后台没有 Enter，Chrome 地址栏 set_value 填值
+    /// 不会导航，也没有可 AXPress 的提交控件，任务卡在 "search for cats"。AXConfirm 是
+    /// "在该字段内按下 Enter" 的后台标准动作：对解析出的文本框执行 kAXConfirmAction，
+    /// 以窗口标题变化作为导航读回证据，不合成任何前台按键。
+    static func confirm(_ params: [String: Any]) -> [String: Any] {
+        guard AXIsProcessTrusted() else {
+            return workspaceRefusal("permission_required", "Accessibility permission is required")
+        }
+        guard Set(params.keys).isSubset(of: ["pid", "window_ordinal", "target_label",
+                                              "owner_session", "owner_task"]),
+              let pid = (params["pid"] as? NSNumber)?.int32Value, pid > 0 else {
+            return workspaceRefusal("bad_request", "workspace_confirm requires an integer pid")
+        }
+        let before = zeroStealSnapshot(pid: Int(pid))
+        guard let (window, windowOrdinal) = resolveWindow(pid: pid, ordinal: (params["window_ordinal"] as? NSNumber)?.intValue) else {
+            return workspaceRefusal("target_lost", "target window is not addressable right now")
+        }
+        let textFields = elements(in: window).filter { candidate in
+            let role = axWSString(candidate, kAXRoleAttribute as String) ?? ""
+            return role == "AXTextField" || role == "AXTextArea"
+        }
+        guard !textFields.isEmpty else {
+            return workspaceRefusal("no_text_target", "no text element in the target window")
+        }
+        if textFields.count > 1, params["target_label"] == nil {
+            return workspaceRefusal("ambiguous_target", "multiple text elements; address one by label")
+        }
+        var targetField = textFields[0]
+        if let label = params["target_label"] as? String {
+            let matches = textFields.filter { labelMatches($0, label) }
+            guard matches.count == 1, let match = matches.first else {
+                return workspaceRefusal("target_lost", "no unique text element with the requested label")
+            }
+            targetField = match
+        }
+        guard axWSString(targetField, kAXSubroleAttribute as String) != "AXSecureTextField" else {
+            return workspaceRefusal("secure_field", "secure text input is not supported")
+        }
+        let titleBefore = axWSString(window, kAXTitleAttribute as String) ?? ""
+        let confirmStatus = AXUIElementPerformAction(targetField, "AXConfirm" as CFString)
+        guard confirmStatus == .success else {
+            return workspaceRefusal(
+                "confirm_unsupported",
+                "the target field does not support a background confirm (AXConfirm): \(confirmStatus.rawValue)")
+        }
+        // 有界等待读回信号；浏览器提交后窗口标题会变为结果页标题。
+        var titleAfter = titleBefore
+        let deadline = Date().addingTimeInterval(1.5)
+        while Date() < deadline {
+            CFRunLoopRunInMode(.defaultMode, 0.05, false)
+            titleAfter = axWSString(window, kAXTitleAttribute as String) ?? ""
+            if titleAfter != titleBefore { break }
+        }
+        let navigated = titleAfter != titleBefore && !titleAfter.isEmpty
+        let after = zeroStealSnapshot(pid: Int(pid))
+        var result = workspaceResult(
+            operation: "workspace_confirm",
+            effect: navigated ? "confirmed" : "unknown",
+            route: "accessibility_action",
+            delivery: "confirmed",
+            application: navigated ? "confirmed" : "unknown")
+        result["mode"] = "AGENT_WORKSPACE"
+        result["classification"] = "BACKGROUND_SAFE"
+        result["window_ordinal"] = windowOrdinal
+        result["title_before"] = titleBefore
+        result["title_after"] = titleAfter
+        result["verification"] = navigated ? "window_title" : "unverified"
+        if let frame = axWSFrame(targetField) {
+            result["element_center"] = ["x": Double(frame.midX), "y": Double(frame.midY)]
+        }
+        result["zero_steal"] = zeroStealEvidence(before, after)
+        result["foreground_settle"] = settleForegroundAfterBackgroundAction(
+            frontmostBefore: before.frontmost, targetPid: Int(pid))
+        return result
+    }
+
     // MARK: - primitives
 
     static func scroll(_ params: [String: Any]) -> [String: Any] {

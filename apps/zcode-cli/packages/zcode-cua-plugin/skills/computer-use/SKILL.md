@@ -54,15 +54,18 @@ gives you both spellings for every entry (`name` and `mcp_tool`):
 Background (never takes the user's foreground): `computer.press`, `computer.set_value`,
 `computer.workspace_click({ pid, target_role, target_label })`,
 `computer.workspace_type_text({ pid, text, target_label? })`,
+`computer.workspace_confirm({ pid, target_label? })` (press Enter inside the addressed field —
+the background submit),
 `computer.workspace_scroll({ pid, delta })` (delta −1…1, positive down),
 `computer.open_app({ bundle_id })` (launch an app, or recreate its window when it is running
 windowless).
 
 Background limits — plan around them up front:
 
-- **No background key presses.** There is no background Enter/Tab/shortcut. To submit a search,
-  press an observed submit/search control or a suggestion row, or set a value that needs no Enter.
-  Keys need foreground control (below), which takes the user's screen: ask first.
+- **Submitting a field in the background: use `computer.workspace_confirm`.** It presses Enter
+  inside the addressed text field via Accessibility and is verified by the window title changing.
+  Proven dead ends on Chrome (do not retry them): setting the address bar to a search URL does not
+  navigate, and the new-tab page exposes no AXPressable submit control.
 - Use `semantic_ref`/`pid` only from the latest `get_app_state` of that app; older refs are refused.
 - **Do not script apps** with `osascript`/AppleScript, `open`, or other shell automation for a
   Computer Use task. It bypasses the background guarantees and can steal the user's foreground.

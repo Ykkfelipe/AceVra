@@ -48,7 +48,11 @@ test("describe() reports the exact surface, this session's availability, and the
     surface.methods.find((entry) => entry.name === "computer.key_press").available,
     false,
   );
-  assert.ok(surface.limits.some((limit) => /no background Enter/u.test(limit)));
+  assert.ok(surface.limits.some((limit) => /workspace_confirm/u.test(limit)));
+  assert.equal(
+    surface.methods.find((entry) => entry.name === "computer.workspace_confirm").available,
+    true,
+  );
   assert.ok(surface.limits.some((limit) => /osascript/u.test(limit)));
   const foreground = createComputerUseRuntime({
     platform: "darwin",

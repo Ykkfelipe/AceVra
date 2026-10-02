@@ -212,6 +212,9 @@ const BROKER_METHOD_KINDS = Object.freeze({
   workspace_type_text: "mutating",
   workspace_stream: "mutating",
   workspace_scroll: "mutating",
+  // 后台确认字段（AXConfirm，即"在该字段内按 Enter"）：浏览器地址栏提交搜索
+  // 没有可 AXPress 的提交控件（preview-ux-0050f95b 实测），这是唯一后台提交路径。
+  workspace_confirm: "mutating",
   // 本地后台打开应用 / 为无窗口运行中的应用重建窗口（Helper open_app）。
   open_app: "mutating",
 });
