@@ -30,12 +30,17 @@ const MAX_TEXT = 160;
  * M3：宿主侧维护的 mini Computer 投影只跟踪 workspace 面向的方法（observe 建立帧，
  * workspace_* 是后台动作）。原生前台动作仍由既有 bar 投影表达，不混入 workspace 视图。
  */
+// press / set_value 是后台语义动作：运行时从最近一次 observe 的树解析出目标 pid 与元素中心，
+// 与 workspace_* 一样驱动本地预览的目标窗口与逻辑光标（不再只有 workspace_* 才有光标）。
 const WORKSPACE_PROJECTED_METHODS = new Set([
   "observe",
   "workspace_click",
   "workspace_type_text",
   "workspace_scroll",
+  "press",
+  "set_value",
 ]);
+const SEMANTIC_UPDATE_ONLY_METHODS = new Set(["press", "set_value"]);
 
 function workspaceTargetOf(
   target: ComputerUseTargetReport | undefined,
@@ -259,7 +264,9 @@ export function createLeaseAuthority(
       });
       // M3：用同一份被接受的上报喂 mini Computer 投影（顺序、上限、乱序丢弃与活动记录
       // 完全一致，不引入第二条事实来源）。投影只增改自身状态，绝不触发任何捕获。
-      if (WORKSPACE_PROJECTED_METHODS.has(method)) {
+      // 语义动作只更新已存在的 workspace（其 semantic_ref 必来自先前的 observe），绝不凭空创建视图。
+      const semanticOnly = SEMANTIC_UPDATE_ONLY_METHODS.has(method) && !workspaces.has(sessionId);
+      if (WORKSPACE_PROJECTED_METHODS.has(method) && !semanticOnly) {
         const workspace = workspaceFor(sessionId);
         const target = workspaceTargetOf(report.target);
         if (report.phase === "started") {

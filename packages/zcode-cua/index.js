@@ -58,6 +58,30 @@ function workspaceCursorOf(args, result) {
   return undefined;
 }
 
+const SEMANTIC_GEOMETRY_LIMIT = 4000;
+
+/**
+ * 语义动作（press / set_value）只带 semantic_ref，没有坐标与 pid。修复依据（f4fdd904 实测
+ * 逻辑光标从未出现）：agent 全程用语义动作，光标只由 workspace_* 产生。semantic_ref 由同一
+ * 会话最近一次 observe 的树铸造，树里带每个元素的全局 AX frame 与 pid；这里记住
+ * ref → {pid, 中心点}，供语义动作完成时上报目标与逻辑光标。每次 observe 同一 pid 时整体替换，
+ * 过期 ref 不会把光标画到别处（Helper 也会以 stale_target 拒绝过期 ref）。
+ */
+function rememberSemanticGeometry(store, sessionId, result) {
+  const pid = Number.isInteger(result?.pid) ? result.pid : undefined;
+  const elements = Array.isArray(result?.tree?.elements) ? result.tree.elements : null;
+  if (!sessionId || pid === undefined || !elements) return;
+  const geometry = new Map();
+  for (const element of elements) {
+    const frame = element?.frame;
+    if (typeof element?.semantic_ref !== "string" || !frame) continue;
+    if (![frame.x, frame.y, frame.w, frame.h].every(Number.isFinite)) continue;
+    geometry.set(element.semantic_ref, { pid, x: frame.x + frame.w / 2, y: frame.y + frame.h / 2 });
+    if (geometry.size >= SEMANTIC_GEOMETRY_LIMIT) break;
+  }
+  store.set(sessionId, geometry);
+}
+
 /**
  * Computer Use runtime using the verified Helper broker.
  *
@@ -87,6 +111,8 @@ export function createComputerUseRuntime(options = {}) {
   // CUA-4：只记录 Helper 在本运行时会话中实际列出的 pid/窗口，用于把观察目标命名；
   // 未被列出的目标只保留已知部分，绝不猜测名称。
   const identities = createSessionIdentityRegistry();
+  /** sessionId → (semantic_ref → {pid, x, y}) from that session's latest observation tree. */
+  const semanticGeometry = new Map();
   let callSequence = 0;
 
   function reportActivity(report) {
@@ -383,6 +409,12 @@ export function createComputerUseRuntime(options = {}) {
           await releaseKnownLease(input.context.sessionId, "interrupted");
         }
         identities.remember(sessionId, method, result);
+        if (method === "observe") rememberSemanticGeometry(semanticGeometry, sessionId, result);
+        const semanticTarget =
+          (method === "press" || method === "set_value") &&
+          typeof input?.arguments?.semantic_ref === "string"
+            ? semanticGeometry.get(sessionId)?.get(input.arguments.semantic_ref)
+            : undefined;
         const image =
           method === "observe" && result && typeof result === "object" ? result.image : null;
         const observationId =
@@ -391,7 +423,9 @@ export function createComputerUseRuntime(options = {}) {
         // target 只使用 Helper 已确认的身份（与 observe 同一来源），绝不猜测。
         const workspaceCursor = workspaceAction
           ? workspaceCursorOf(input?.arguments, result)
-          : undefined;
+          : semanticTarget
+            ? { x: semanticTarget.x, y: semanticTarget.y }
+            : undefined;
         reportActivity({
           ...activityBase,
           phase: "completed",
@@ -408,7 +442,9 @@ export function createComputerUseRuntime(options = {}) {
           ...(workspaceCursor ? { workspaceCursor } : {}),
           ...((method === "observe" || workspaceAction) && input?.arguments?.pid !== undefined
             ? { target: identities.target(sessionId, input?.arguments) }
-            : {}),
+            : semanticTarget
+              ? { target: identities.target(sessionId, { pid: semanticTarget.pid }) }
+              : {}),
           ...(observationId
             ? {
                 observation: {
@@ -457,6 +493,7 @@ export function createComputerUseRuntime(options = {}) {
     async closeSession(context) {
       if (context?.sessionId) {
         identities.forget(context.sessionId);
+        semanticGeometry.delete(context.sessionId);
         await releaseKnownLease(context.sessionId);
       }
     },

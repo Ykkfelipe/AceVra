@@ -88,6 +88,23 @@ task-level target choice takes precedence over defaults.
 
 ### Input and evidence rules
 
+Delayed self-activation (2026-10-01, measured on f4fdd904): some apps activate themselves shortly
+after a background AX action (Chrome raised itself ~100 ms after an AXPress on "New Tab"). The
+Helper's immediate before/after sample cannot see that, and `NSWorkspace.frontmostApplication`
+does not refresh while a broker command runs. Every background action (semantic `press` /
+`set_value`, `workspace_click` / `workspace_type_text`) therefore ends with a bounded settle check
+(~350 ms) on the live AX system-wide focused application. If the acted-on target app took the
+foreground, the Helper re-activates the app that was frontmost before the action (product
+decision: detect + restore) and reports `foreground_settle {stolen, restored}`; the action's
+delivery is then `foreground_changed`, never a silent pass. If a different app became frontmost
+(the user switching apps), it is reported but never fought.
+
+Logical cursor for semantic actions: `press` / `set_value` carry only a `semantic_ref`. The
+runtime records `semantic_ref → {pid, element centre}` from the session's latest observation tree
+(global AX points) and reports that target and cursor on completion, so the preview cursor follows
+semantic work as well as `workspace_*`. These methods update an existing workspace projection
+only; they never create one.
+
 `computer.workspace_scroll({pid, delta})` is a bounded AX scrollbar adjustment (`delta` from
 -1 to 1, positive down). It requires a unique writable scrollbar and verifies its value;
 unsupported/ambiguous targets are refused. It never synthesizes physical wheel input. Double

@@ -29,6 +29,8 @@ const ACTION_LABELS = Object.freeze({
   observe: "Observing",
   list_apps: "Listing apps",
   list_windows: "Listing windows",
+  press: "Pressing",
+  set_value: "Typing",
 });
 
 function sameTarget(left, right) {

@@ -214,6 +214,7 @@ export function MiniComputerPanelMounted(props: {
             data-testid={TID_V4_MINI_COMPUTER_FRAME}
             data-frame-seq={liveFrame?.seq}
             data-frame-source={stream.identity}
+            data-frame-captured-at={liveFrame?.capturedAt}
             src={frameUrl}
             alt={intl.formatMessage({ id: "chat.miniComputer.frame.alt" })}
             className="max-h-full max-w-full object-contain"

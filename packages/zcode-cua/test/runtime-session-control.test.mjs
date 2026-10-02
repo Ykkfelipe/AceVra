@@ -85,6 +85,16 @@ describe("CUA-4 runtime session control", () => {
           height: 50,
           blank: false,
         },
+        tree: {
+          elements: [
+            {
+              index: 0,
+              role: "AXButton",
+              semantic_ref: "ref-1",
+              frame: { x: 200, y: 100, w: 40, h: 20 },
+            },
+          ],
+        },
       }),
       press: async (params) => ({
         operation: "press",
@@ -246,6 +256,35 @@ describe("CUA-4 runtime session control", () => {
     assert.equal(pressed.structuredContent.code, "lease_authority_unavailable");
     const listed = await cua.execute({ toolName: "list_apps", arguments: {}, context: LOCAL });
     assert.equal(listed.isError, undefined);
+  });
+
+  it("semantic actions report the target pid and a logical cursor at the observed element center", async () => {
+    const recorder = authority();
+    const cua = runtime(recorder);
+    await cua.execute({ toolName: "list_apps", arguments: {}, context: LOCAL });
+    await cua.execute({ toolName: "get_app_state", arguments: { pid: 101 }, context: LOCAL });
+    await cua.execute({
+      toolName: "computer.press",
+      arguments: { semantic_ref: "ref-1" },
+      context: LOCAL,
+    });
+    await settle();
+    const press = recorder.reports.find((r) => r.method === "press" && r.phase === "completed");
+    assert.deepEqual(press.workspaceCursor, { x: 220, y: 110 });
+    assert.equal(press.target.pid, 101);
+    assert.equal(press.target.app, "Notes");
+    // 未知 ref（不是最近一次观察铸造的）不产生光标，也不猜目标。
+    await cua.execute({
+      toolName: "computer.press",
+      arguments: { semantic_ref: "ref-unknown" },
+      context: LOCAL,
+    });
+    await settle();
+    const unknown = recorder.reports
+      .filter((r) => r.method === "press" && r.phase === "completed")
+      .at(-1);
+    assert.equal(unknown.workspaceCursor, undefined);
+    assert.equal(unknown.target, undefined);
   });
 
   it("reports activity with only positively identified target names and the frame reference", async () => {

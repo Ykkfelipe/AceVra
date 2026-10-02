@@ -203,6 +203,62 @@ func frontmostPid() -> Int {
     Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0)
 }
 
+/// Live frontmost pid: AX system-wide focus is answered by the window server, unlike
+/// `NSWorkspace.frontmostApplication`, which only updates when this process's main runloop
+/// delivers workspace notifications (it does not while a broker command is executing).
+func liveFrontmostPid() -> Int {
+    var value: CFTypeRef?
+    if AXUIElementCopyAttributeValue(AXUIElementCreateSystemWide(),
+                                     kAXFocusedApplicationAttribute as CFString, &value) == .success,
+       let value, CFGetTypeID(value) == AXUIElementGetTypeID() {
+        var pid: pid_t = 0
+        if AXUIElementGetPid(value as! AXUIElement, &pid) == .success, pid > 0 { return Int(pid) }
+    }
+    return frontmostPid()
+}
+
+private let foregroundSettleWindow: TimeInterval = 0.35
+private let foregroundRestoreWindow: TimeInterval = 0.6
+
+/// 修复依据（f4fdd904 实测）：对 Chrome「New Tab」做后台 AXPress 后，Chrome 约 100 ms 后
+/// 自行激活到前台；原证据在动作返回瞬间采样（且读的是本进程不会刷新的 NSWorkspace 缓存），
+/// 报告 frontmost_unchanged=true，是假阳性。这里在有界窗口内持续观察实时前台：
+/// - 若被操作的目标 app 抢到前台，立即把前台还给动作前的 app（产品决定：detect + restore），
+///   并如实报告 stolen/restored；
+/// - 若前台变成第三方 app（多半是用户自己切换），只报告、绝不抢回，避免与用户争焦点。
+func settleForegroundAfterBackgroundAction(frontmostBefore: Int, targetPid: Int) -> [String: Any] {
+    func wait(_ seconds: TimeInterval, until done: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline {
+            if done() { return true }
+            CFRunLoopRunInMode(.defaultMode, 0.025, false)
+        }
+        return done()
+    }
+    var observed = frontmostBefore
+    let changed = wait(foregroundSettleWindow) {
+        observed = liveFrontmostPid()
+        return observed != frontmostBefore
+    }
+    guard changed, frontmostBefore > 0, frontmostBefore != targetPid else {
+        return ["kind": "foreground_settle", "settle_ms": Int(foregroundSettleWindow * 1000),
+                "stolen": false, "restored": false, "frontmost_settled_pid": observed]
+    }
+    guard observed == targetPid else {
+        return ["kind": "foreground_settle", "settle_ms": Int(foregroundSettleWindow * 1000),
+                "stolen": false, "restored": false, "frontmost_settled_pid": observed,
+                "foreign_foreground_change": true]
+    }
+    var restored = false
+    if let previous = NSRunningApplication(processIdentifier: pid_t(frontmostBefore)) {
+        _ = previous.activate(options: [])
+        restored = wait(foregroundRestoreWindow) { liveFrontmostPid() == frontmostBefore }
+    }
+    return ["kind": "foreground_settle", "settle_ms": Int(foregroundSettleWindow * 1000),
+            "stolen": true, "restored": restored, "stolen_by_pid": targetPid,
+            "frontmost_settled_pid": liveFrontmostPid()]
+}
+
 func cursorLocation() -> [String: Double]? {
     guard let point = CGEvent(source: nil)?.location else { return nil }
     return ["x": Double(point.x), "y": Double(point.y)]
@@ -260,6 +316,8 @@ func performSemanticPress(_ params: [String: Any]) -> [String: Any] {
     let afterTargetWindow = focusedWindowIdentity(Int(target.pid))
     let afterTargetState = targetWindowState(target)
     let afterCursor = cursorLocation()
+    let settle = settleForegroundAfterBackgroundAction(frontmostBefore: beforeFrontmost,
+                                                       targetPid: Int(target.pid))
     let invariants = beforeFrontmost == afterFrontmost && beforeWindow != nil
         && beforeWindow == afterWindow && beforeTargetWindow != nil
         && beforeTargetWindow == afterTargetWindow
@@ -268,6 +326,7 @@ func performSemanticPress(_ params: [String: Any]) -> [String: Any] {
         && beforeTargetState.main != nil && beforeTargetState.main == afterTargetState.main
         && beforeTargetState.focused != nil && beforeTargetState.focused == afterTargetState.focused
         && beforeCursor != nil && beforeCursor == afterCursor
+        && settle["stolen"] as? Bool != true
     // AX API status is evidence, not proof; only a target transition confirms a press.
     let targetChanged = postElement != nil && !valuesEqual(beforeValue, afterValue)
     let verified = processUnchanged && actionStatus == .success && targetChanged
@@ -285,7 +344,7 @@ func performSemanticPress(_ params: [String: Any]) -> [String: Any] {
                                 targetWindowUnchanged: targetWindowUnchanged,
                                 cursorBefore: beforeCursor, cursorAfter: afterCursor,
                                 treeChanged: false,
-                                preTreeDigest: nil, postTreeDigest: nil)
+                                preTreeDigest: nil, postTreeDigest: nil, settle: settle)
 }
 
 func performSemanticSetValue(_ params: [String: Any]) -> [String: Any] {
@@ -325,8 +384,11 @@ func performSemanticSetValue(_ params: [String: Any]) -> [String: Any] {
     let afterTargetWindow = focusedWindowIdentity(Int(target.pid))
     let afterTargetState = targetWindowState(target)
     let afterCursor = cursorLocation()
+    let settle = settleForegroundAfterBackgroundAction(frontmostBefore: beforeFrontmost,
+                                                       targetPid: Int(target.pid))
     // Readback is authoritative even when the setter's status is inconclusive.
-    let invariants = beforeFrontmost == afterFrontmost && beforeWindow != nil
+    let invariants = settle["stolen"] as? Bool != true
+        && beforeFrontmost == afterFrontmost && beforeWindow != nil
         && beforeWindow == afterWindow && beforeTargetWindow != nil
         && beforeTargetWindow == afterTargetWindow
         && beforeTargetState.identity != nil
@@ -348,7 +410,8 @@ func performSemanticSetValue(_ params: [String: Any]) -> [String: Any] {
                                 windowUnchanged: beforeWindow != nil && beforeWindow == afterWindow,
                                 targetWindowUnchanged: targetWindowUnchanged,
                                 cursorBefore: beforeCursor, cursorAfter: afterCursor,
-                                treeChanged: false, preTreeDigest: nil, postTreeDigest: nil)
+                                treeChanged: false, preTreeDigest: nil, postTreeDigest: nil,
+                                settle: settle)
 }
 
 private func nonSensitiveValueEvidence(_ value: Any) -> Any {
@@ -374,7 +437,8 @@ private func semanticActionResult(operation: String, target: SemanticTarget, bef
                                   windowUnchanged: Bool, targetWindowUnchanged: Bool,
                                   cursorBefore: [String: Double]?,
                                   cursorAfter: [String: Double]?, treeChanged: Bool,
-                                  preTreeDigest: String?, postTreeDigest: String?) -> [String: Any] {
+                                  preTreeDigest: String?, postTreeDigest: String?,
+                                  settle: [String: Any]) -> [String: Any] {
     let effect = semanticActionEffect(
         apiSucceeded: apiStatus == 0,
         stateVerified: verified,
@@ -398,6 +462,6 @@ private func semanticActionResult(operation: String, target: SemanticTarget, bef
                           "cursor_before": cursorBefore as Any? ?? NSNull(),
                           "cursor_after": cursorAfter as Any? ?? NSNull(),
                           "cursor_unchanged": cursorBefore == cursorAfter,
-                          "target_non_frontmost": frontmostAfter != Int(target.pid)]]
+                          "target_non_frontmost": frontmostAfter != Int(target.pid)], settle]
     ]
 }

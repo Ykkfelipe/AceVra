@@ -141,6 +141,9 @@ struct WorkspaceController {
         result["target"] = ["pid": Int(pid), "role": role].merging(resolution) { current, _ in current }
         result.merge(frameInfo) { current, _ in current }
         result["zero_steal"] = zeroStealEvidence(before, after)
+        // 与语义动作同一套延迟前台核查：目标 app 事后自激活时还给用户原前台并如实报告。
+        result["foreground_settle"] = settleForegroundAfterBackgroundAction(
+            frontmostBefore: before.frontmost, targetPid: Int(pid))
         return result
     }
 
@@ -253,6 +256,9 @@ struct WorkspaceController {
             result["element_center"] = ["x": Double(frame.midX), "y": Double(frame.midY)]
         }
         result["zero_steal"] = zeroStealEvidence(before, after)
+        // 与语义动作同一套延迟前台核查：目标 app 事后自激活时还给用户原前台并如实报告。
+        result["foreground_settle"] = settleForegroundAfterBackgroundAction(
+            frontmostBefore: before.frontmost, targetPid: Int(pid))
         return result
     }
 

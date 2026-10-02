@@ -218,3 +218,45 @@ test("the session view carries the owning session's workspace projection", async
   );
   assert.equal(other.present, false);
 });
+
+test("semantic press/set_value drive the target and logical cursor; a new target fences the old cursor", () => {
+  const authority = newAuthority();
+  authority.reportActivity(
+    report({
+      method: "observe",
+      phase: "completed",
+      callId: "c1",
+      observation: { id: "OBS-1" },
+      target: { pid: 95733, app: "Google Chrome" },
+    }),
+  );
+  authority.reportActivity(report({ method: "press", phase: "started", callId: "c2" }));
+  authority.reportActivity(
+    report({
+      method: "press",
+      phase: "completed",
+      callId: "c2",
+      effect: "unknown",
+      target: { pid: 95733, app: "Google Chrome" },
+      workspaceCursor: { x: 616, y: 53 },
+    }),
+  );
+  let view = authority.getWorkspace("session-a");
+  assert.equal(view?.action?.method, "press");
+  assert.deepEqual([view?.cursor?.x, view?.cursor?.y], [616, 53]);
+  // Chrome → Notes：set_value 在新 pid 上，旧目标的光标被清掉后再写新光标。
+  authority.reportActivity(
+    report({
+      method: "set_value",
+      phase: "completed",
+      callId: "c3",
+      effect: "confirmed",
+      target: { pid: 25548, app: "Notes" },
+      workspaceCursor: { x: 900, y: 400 },
+    }),
+  );
+  view = authority.getWorkspace("session-a");
+  assert.equal(view?.target?.pid, 25548);
+  assert.equal(view?.target?.appName, "Notes");
+  assert.deepEqual([view?.cursor?.x, view?.cursor?.y], [900, 400]);
+});
