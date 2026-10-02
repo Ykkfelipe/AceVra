@@ -18,6 +18,86 @@ AceVra-multitask/       feature/multitask
 AceVra-bot/             feature/personal-bot
 ```
 
+## 2. Exact worktree setup recipe
+
+Run this from the existing AceVra checkout. It creates implementation worktrees from the **latest remote main** without switching or modifying the current checkout:
+
+```bash
+ROOT="$(git rev-parse --show-toplevel)"
+PARENT="$(dirname "$ROOT")"
+
+git fetch origin --prune
+
+git worktree add -b feature/multitask \
+  "$PARENT/AceVra-multitask" origin/main
+
+git worktree add -b feature/personal-bot \
+  "$PARENT/AceVra-bot" origin/main
+
+git worktree add -b feature/cross-mode \
+  "$PARENT/AceVra-cross-mode" origin/main
+
+git worktree add -b feature/auth-first-run \
+  "$PARENT/AceVra-auth" origin/main
+
+git worktree list
+```
+
+If a feature branch or worktree already exists, **do not blindly recreate it**. Inspect first:
+
+```bash
+git worktree list
+git branch --list 'feature/*'
+git branch -r --list 'origin/feature/*'
+```
+
+A setup agent should be idempotent: reuse a valid existing feature worktree, or stop and report a conflict instead of deleting/replacing work.
+
+### Roadmap references for implementation workers
+
+Implementation branches should start from latest `origin/main`, not from roadmap branches. Read the roadmap without merging it:
+
+```bash
+git show origin/roadmap/multitask-future:docs/roadmap/multitask.md
+git show origin/roadmap/personal-bot-future:docs/roadmap/personal-bot.md
+git show origin/roadmap/cross-mode-future:docs/roadmap/cross-mode-continuity.md
+git show origin/roadmap/auth-first-run-future:docs/roadmap/auth-first-run.md
+```
+
+The shared policy can likewise be read from the relevant roadmap branch.
+
+### Dependency install
+
+Inside each worktree, when dependencies are needed:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+pnpm's shared content-addressed store reduces duplicate package storage, though each worktree still has its own links and generated outputs.
+
+### Environment/secrets
+
+Gitignored files such as `.env.local` do not automatically appear in a new worktree.
+
+- Do not copy or expose secrets unnecessarily.
+- If local development requires the same trusted development env, explicitly copy or symlink only the required local env file after inspecting it.
+- Never commit the env file.
+- Do not invent production credentials.
+
+### Optional remote branch publication
+
+After creating a feature branch, publish it when useful:
+
+```bash
+git -C "$PARENT/AceVra-multitask" push -u origin feature/multitask
+git -C "$PARENT/AceVra-bot" push -u origin feature/personal-bot
+git -C "$PARENT/AceVra-cross-mode" push -u origin feature/cross-mode
+git -C "$PARENT/AceVra-auth" push -u origin feature/auth-first-run
+```
+
+Do not push merely to satisfy setup if the user wants local-only work first.
+
 ## 2. Dependency/storage rule
 
 - AceVra uses pnpm. Each worktree can run `pnpm install` when required; pnpm's content-addressed store avoids redownloading independent full copies of package contents.
