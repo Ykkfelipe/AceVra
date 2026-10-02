@@ -1931,3 +1931,10 @@ stopped and releases the native lease through the hardened session that actually
 (`releaseHelper` previously looked only at the legacy managed host and always failed on the product
 path). An unreachable Helper does not fail Stop (`helperRelease: "unreachable"`); the runtime's next
 call sees the revoked grant, releases what it can, and reports `user_takeover`.
+
+### Visible agent pointer
+
+In exclusive foreground mode the Helper moves the real pointer to each target along an
+ease-in-out path (`PointerGlide.swift`, 6–30 tagged `mouseMoved` steps, 15 ms apart, under 0.5 s)
+before `click`, `drag`, `scroll` and `move_pointer`, so the user can watch the agent work. The
+steps carry the lease marker, so they never count as the user taking control back.

@@ -464,6 +464,19 @@ final class ForegroundController {
         return true
     }
 
+    /// 可见的代理指针：在动作前把真实指针沿缓动路径移到目标（带本租约标记，不会被当作用户打断）。
+    /// 修复依据（Felipe 验收要求）：以前点击直接把指针瞬移到目标，用户看不到代理在操作。
+    fileprivate func glide(to point: CGPoint, current: ForegroundLease) -> Bool {
+        let start = CGEvent(source: nil)?.location ?? point
+        for step in pointerGlidePath(from: start, to: point) {
+            guard let moved = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+                                      mouseCursorPosition: step, mouseButton: .left),
+                  post(moved, current: current) else { return false }
+            Thread.sleep(forTimeInterval: pointerGlideStepSeconds)
+        }
+        return true
+    }
+
     fileprivate func confirmedDelivery(_ current: ForegroundLease, since count: Int,
                                        expected: Int) -> Bool {
         let deadline = Date().addingTimeInterval(0.15)
@@ -745,7 +758,8 @@ extension ForegroundController {
             shutdown(); return foregroundRefusal("focus_mismatch")
         }
         let before = CGEvent(source: nil)?.location ?? CGPoint.zero
-        guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+        guard glide(to: point, current: current),
+              let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
                                   mouseCursorPosition: point, mouseButton: .left),
               post(event, current: current) else { return foregroundRefusal("interrupted") }
         let deadline = Date().addingTimeInterval(0.15)
@@ -773,6 +787,7 @@ extension ForegroundController {
         guard foregroundTargetReady(current), pointBelongsToTarget(point, current) else {
             shutdown(); return foregroundRefusal("focus_mismatch")
         }
+        guard glide(to: point, current: current) else { return foregroundRefusal("interrupted") }
         let beforeElement = axElementAtPoint(point)
         let before = axElementProbe(beforeElement)
         let count = postedCount(current)
@@ -1030,6 +1045,7 @@ extension ForegroundController {
               let dy = (params["delta_y"] as? NSNumber)?.doubleValue,
               dx.isFinite, dy.isFinite, abs(dx) <= 600, abs(dy) <= 600,
               dx != 0 || dy != 0 else { return foregroundRefusal("invalid_scroll_delta") }
+        guard glide(to: point, current: current) else { return foregroundRefusal("interrupted") }
         let beforeElement = axScrollIndicatorAtPoint(point)
         let before = axElementProbe(beforeElement)
         let count = postedCount(current)
@@ -1069,6 +1085,7 @@ extension ForegroundController {
             endLease(code: "focus_mismatch")
             return foregroundRefusal("focus_mismatch")
         }
+        guard glide(to: start, current: current) else { return foregroundRefusal("interrupted") }
         let beforeElement = axElementAtPoint(start)
         let before = axElementProbe(beforeElement)
         let count = postedCount(current)
