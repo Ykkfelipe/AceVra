@@ -140,6 +140,9 @@ export const COMPUTER_USE_LIMITS = Object.freeze([
 export const COMPUTER_USE_COMPAT_ALIASES = Object.freeze({
   press: "computer.press",
   set_value: "computer.set_value",
+  // 修复依据（Felipe 实测 sess_f6877b31）：模型调用 cu["computer.screenshot"] 得到 "not a function"，
+  // 那一步在刚拿到屏幕接管后报错，接管随之闲置。
+  "computer.screenshot": "screenshot",
 });
 
 /** Maps a compatibility alias to its canonical model-visible name (identity otherwise). */
