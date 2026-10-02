@@ -1,4 +1,5 @@
 import type { TaskChatToolCall as ChatToolCall } from "@/lib/taskChatMessageTypes.js";
+import { computerActionMethodFromOperation } from "@/lib/computerActionLabel.js";
 
 export type NodeReplOperation = "run" | "reset" | "add-module-dir";
 
@@ -26,6 +27,13 @@ export interface NodeReplCuaApp {
 export interface NodeReplDisplayModel {
   operation: NodeReplOperation;
   userTitle?: string;
+  /**
+   * 已识别的 Computer Use 操作（归一化方法名）。
+   *
+   * Computer Use 动作以 js cell 执行，这类 cell 不走 CUA 卡片而走 node_repl renderer；
+   * 命中已知操作时产品标签必须胜出，模型自述的 `userTitle` 会被抑制。
+   */
+  computerOperation?: string;
   code?: string;
   moduleDirectory?: string;
   resultText?: string;
@@ -350,6 +358,51 @@ function findCuaApp(value: unknown, visited = new Set<object>()): NodeReplCuaApp
   return undefined;
 }
 
+/** 结果投影有时把结构化结果压成 JSON 文本；只对短的对象文本做一次解析尝试。 */
+const MAX_OPERATION_JSON_LENGTH = 20_000;
+
+/**
+ * 从 cell 的结构化结果里找出 Computer Use 操作名。
+ *
+ * 与 `findCuaApp` 同款递归：实时 tool.updated 把结果放在 raw.result 内，终态 snapshot
+ * 则把 completed part 的 metadata 直接当作 raw，只扫一个固定位置会在对话结束后丢标签。
+ * 只有落在 `computerActionLabel` 已知表里的名字才算命中——自定义 js cell 仍按普通 cell
+ * 展示它的模型标题。
+ */
+function findComputerOperation(value: unknown, visited = new Set<object>()): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith("{") || trimmed.length > MAX_OPERATION_JSON_LENGTH) {
+      return undefined;
+    }
+    try {
+      return findComputerOperation(JSON.parse(trimmed) as unknown, visited);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!value || typeof value !== "object" || visited.has(value)) return undefined;
+  visited.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findComputerOperation(item, visited);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (!isRecord(value)) return undefined;
+  const operation = readNonEmptyString(value.operation);
+  if (operation) {
+    const method = computerActionMethodFromOperation(operation);
+    if (method) return method;
+  }
+  for (const item of Object.values(value)) {
+    const found = findComputerOperation(item, visited);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 function hasBrowserTurnEndDisplay(value: unknown, visited = new Set<object>()): boolean {
   if (!value || typeof value !== "object" || visited.has(value)) return false;
   visited.add(value);
@@ -400,6 +453,12 @@ export function buildNodeReplDisplayModel(toolCall: ChatToolCall): NodeReplDispl
   // completed part 的 metadata 直接作为 raw。只扫描 raw.result 会让对话结束后的图片消失。
   const images = extractImages([...outputCandidates, toolCall.raw]);
   const app = findCuaApp(toolCall.raw);
+  // 只有 run 形态的 cell 会带 Computer Use 结果；reset/configure 的 raw 里出现同名
+  // 字段也只是历史噪声，不应把「重置内核」显示成一次电脑操作。
+  const computerOperation =
+    resolveOperation(toolCall) === "run"
+      ? findComputerOperation([toolCall.output, readRawOutput(toolCall.raw), toolCall.raw])
+      : undefined;
   const persisted = parsePersistedResult(
     removeProjectedImagePlaceholders(
       removeProjectedCompletionMarkers(projectedText),
@@ -409,7 +468,11 @@ export function buildNodeReplDisplayModel(toolCall: ChatToolCall): NodeReplDispl
 
   return {
     operation: resolveOperation(toolCall),
-    userTitle: readUserTitle(toolCall, inputs),
+    // Computer Use 的 cell 由产品标签展示（node-repl.tsx 用 computerOperation 渲染动作词）。
+    // cell input 里的 `title` 是模型自己写的推理语言标题——中文短语或英文思考文本，
+    // 在英文界面里就是错标；已知 Computer 操作时必须抑制它，未知的 js cell 保持原样。
+    userTitle: computerOperation ? undefined : readUserTitle(toolCall, inputs),
+    ...(computerOperation ? { computerOperation } : {}),
     code: removeLeadingBlankLines(readInputString(inputs, ["code"])),
     moduleDirectory: readInputString(inputs, ["dir", "path"])?.trim(),
     ...persisted,

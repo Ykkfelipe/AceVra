@@ -44,6 +44,7 @@ export const COMPUTER_ACTION_LABEL_IDS: Readonly<Record<string, string>> = Objec
   select_text: "chat.computerAction.setValue",
   activate_target: "chat.computerAction.openApp",
   open_application: "chat.computerAction.openApp",
+  open: "chat.computerAction.openApp",
   acquire_control: "chat.computerAction.acquireControl",
   release_control: "chat.computerAction.releaseControl",
   control_status: "chat.computerAction.checkStatus",
@@ -52,6 +53,7 @@ export const COMPUTER_ACTION_LABEL_IDS: Readonly<Record<string, string>> = Objec
   hold_key: "chat.computerAction.holdKey",
   move_pointer: "chat.computerAction.movePointer",
   mouse_move: "chat.computerAction.movePointer",
+  move: "chat.computerAction.movePointer",
   drag: "chat.computerAction.drag",
   left_click_drag: "chat.computerAction.drag",
   read_clipboard: "chat.computerAction.readClipboard",
@@ -69,4 +71,35 @@ export function computerActionMessageId(method: string): string {
 /** Renders the product-owned label for a Computer method (a clean, localized verb phrase). */
 export function formatComputerActionLabel(intl: ComputerActionIntl, method: string): string {
   return intl.formatMessage({ id: computerActionMessageId(method) });
+}
+
+const COMPUTER_OPERATION_ACTION_PATTERN = /^[a-z0-9_]+$/u;
+
+/**
+ * 把一次执行结果里报出的 Computer operation 名字归一化成 `COMPUTER_ACTION_LABEL_IDS`
+ * 的 key；不是已知 Computer 操作时返回 undefined。
+ *
+ * 这是「js cell 是不是一次 Computer Use 动作」的唯一判据。Computer Use 以
+ * `mcp__node_repl__js` cell 执行，结果里带回操作名，而 cell 的 input 还带着模型自述的
+ * `title`（可能是中文或英文思考文本）。已知操作必须让产品标签胜出；未知的 js cell
+ * （用户脚本、自定义 MCP）不在这张表里，继续按普通 cell 展示它的模型标题。
+ *
+ * 接受三种写法，权威名字表在 `packages/zcode-cua/capability-contract.js`
+ * (`COMPUTER_USE_MODEL_TO_METHOD` 的 `computer.<method>` 键与 `computer_use__<action>` 前缀)：
+ * 裸方法名、`computer.<method>` facade 名、带 MCP/命名空间前缀的 `…computer_use__<action>`。
+ */
+export function computerActionMethodFromOperation(operation: string): string | undefined {
+  const normalized = operation.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  // 尾部段即动作名：`click` / `computer.click` / `mcp__computer_use__left_click` /
+  // `mcp__computer-use__type` / `mcp__plugin_zcode_cua_computer_use__type` 都归到这里。
+  const segments = normalized.split("__");
+  const last = segments[segments.length - 1] ?? "";
+  const action = last.startsWith("computer.") ? last.slice("computer.".length) : last;
+  if (!COMPUTER_OPERATION_ACTION_PATTERN.test(action)) {
+    return undefined;
+  }
+  return Object.hasOwn(COMPUTER_ACTION_LABEL_IDS, action) ? action : undefined;
 }

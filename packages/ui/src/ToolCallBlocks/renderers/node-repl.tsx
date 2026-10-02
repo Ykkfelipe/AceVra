@@ -15,6 +15,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { formatComputerActionLabel } from "@/lib/computerActionLabel.js";
 import { cuaAppKeyToIconRequest } from "@/lib/cuaAppIconRequest.js";
 import { buildNodeReplDisplayModel, type NodeReplDisplayModel } from "@/lib/nodeReplToolDisplay.js";
 import { CuaAppSummaryIcon } from "@/ToolCallBlocks/renderers/cuaAppSummaryIcon.js";
@@ -64,6 +65,7 @@ function getSummary(
   status: string,
   isRunning: boolean,
   formatMessage: (id: string) => string,
+  computerActionLabel: string | undefined,
 ): { title: string; status?: string; detail?: string } {
   const isFailed = status === "failed";
   const isDenied = status === "denied";
@@ -110,16 +112,18 @@ function getSummary(
         : "chat.toolCall.nodeRepl.finished",
   );
   return {
-    title: model.userTitle ?? fallbackTitle,
-    status: model.userTitle
-      ? formatMessage(
-          isFailed
-            ? "chat.toolCall.nodeRepl.failed"
-            : isRunning
-              ? "chat.toolCall.nodeRepl.processing"
-              : "chat.toolCall.nodeRepl.completed",
-        )
-      : undefined,
+    // Computer Use 动作优先用产品标签；不是 Computer 动作时才回落到模型写的标题。
+    title: computerActionLabel ?? model.userTitle ?? fallbackTitle,
+    status:
+      computerActionLabel || model.userTitle
+        ? formatMessage(
+            isFailed
+              ? "chat.toolCall.nodeRepl.failed"
+              : isRunning
+                ? "chat.toolCall.nodeRepl.processing"
+                : "chat.toolCall.nodeRepl.completed",
+          )
+        : undefined,
   };
 }
 
@@ -168,9 +172,21 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
   const { toolCall } = context.toolCallNode;
   const model = useMemo(() => buildNodeReplDisplayModel(toolCall), [toolCall]);
   const formatMessage = useCallback((id: string) => intl.formatMessage({ id }), [intl]);
+  // Computer Use 动作以 js cell 执行，走的是 node_repl renderer 而不是 CUA 卡片，因此这里
+  // 必须重新拿到产品自有的动作词：cell input 的 `title` 是模型写的推理语言标题（中文短语
+  // 或英文思考文本），在英文界面里就是错标。App 身份沿用 findCuaApp 已经取到的路径，
+  // 没有可信 displayName 时不显示应用名（appKey 是 `darwin:<bundleId>` 形态，不适合当文案）。
+  const computerAction = useMemo(() => {
+    if (!model.computerOperation) return null;
+    return {
+      appName: model.app?.displayName?.trim() || undefined,
+      label: formatComputerActionLabel(intl, model.computerOperation),
+    };
+  }, [intl, model.app, model.computerOperation]);
   const summary = useMemo(
-    () => getSummary(model, toolCall.status, context.isRunning, formatMessage),
-    [context.isRunning, formatMessage, model, toolCall.status],
+    () =>
+      getSummary(model, toolCall.status, context.isRunning, formatMessage, computerAction?.label),
+    [computerAction?.label, context.isRunning, formatMessage, model, toolCall.status],
   );
   // Computer Use 的 cell 携带目标应用身份时，leading icon 换成该应用的真实图标 —— 连续
   // CUA 步骤据此一眼看出各步操作的是哪个 app。图标由平台服务按
@@ -382,14 +398,18 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
         showIcon={context.showIcon !== false}
         canToggle={canToggle}
         forceOpen={context.forceOpen ?? false}
-        kindLabel={null}
+        kindLabel={computerAction?.appName ?? null}
         sourceLabel={context.sourceLabel}
         primaryText={summaryText}
         statusLabel={formatMessage("chat.toolCall.nodeRepl.failed")}
         statusTooltip={visibleError}
-        showFailureStatus={toolCall.status === "failed" && Boolean(model.userTitle)}
+        // 与「这一行有自己的产品/模型标题」同一个条件：Computer 动作被抑制模型标题后
+        // 仍要显示失败状态词，否则失败会静默消失。
+        showFailureStatus={toolCall.status === "failed" && summary.status !== undefined}
         isRunning={context.isRunning}
-        title={summary.title}
+        title={
+          computerAction?.appName ? `${computerAction.appName} ${summary.title}` : summary.title
+        }
         renderContent={hasDetails ? renderContent : undefined}
       />
       <ToolSnapshotFieldNotice

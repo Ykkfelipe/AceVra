@@ -250,6 +250,8 @@ export function CuaGroupToolCallBlock(context: CuaGroupRenderProps) {
     [context, events],
   );
 
+  const completedLabel = intl.formatMessage({ id: "chat.toolCall.cua.group.completedLabel" });
+
   return (
     <ToolLayout
       toolId={toolCall.toolId}
@@ -257,9 +259,7 @@ export function CuaGroupToolCallBlock(context: CuaGroupRenderProps) {
       showIcon={!isRunning}
       canToggle={context.canToggle ?? true}
       forceOpen={!isRunning && (context.forceOpen ?? false)}
-      kindLabel={
-        isRunning ? null : intl.formatMessage({ id: "chat.toolCall.cua.group.completedLabel" })
-      }
+      kindLabel={isRunning ? null : completedLabel}
       primaryText={isRunning ? primaryText : null}
       prioritizePrimaryText
       diffCount={diffCount}
@@ -271,11 +271,11 @@ export function CuaGroupToolCallBlock(context: CuaGroupRenderProps) {
           : `cua:${toolCall.toolId}:empty`
       }
       isRunning={isRunning}
-      title={
-        isRunning
-          ? (latestToolSummary?.title ?? toolCall.title)
-          : intl.formatMessage({ id: "chat.toolCall.cua.group.completedLabel" })
-      }
+      // 分组标题只认产品标签（latestToolSummary.title 本身就是
+      // buildCuaSummaryPresentation 产出的「应用名 + 动作词」）。原来的
+      // `?? toolCall.title` 会把模型自述的标题带进无障碍标题：那可能是中文短语或
+      // 「查找全局电脑对象」这类英文思考文本，不属于界面文案。
+      title={isRunning ? (latestToolSummary?.title ?? completedLabel) : completedLabel}
       renderContent={renderContent}
     />
   );
