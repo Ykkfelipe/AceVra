@@ -3,32 +3,43 @@
 Status: proposed. Owner: CUA (packages/zcode-cua + packages/services + packages/ui).
 Date: 2026-10-01. Supersedes nothing; extends `specs/computer-use.md`.
 
-## Finish-and-polish milestone (2026-10-01)
+## Finish-and-polish milestone (2026-10-01, product-corrected)
 
-The visually accepted Dell Computer pane remains the canonical Computer surface. This milestone
-adds the local Mac AgentWorkspace as another producer for that surface; it does not create a
-second computer UI or capture the user's arbitrary frontmost desktop.
+There are two distinct Computer experiences, and their presentation must not be shared:
+
+- **RemoteComputerPane** — the existing right-side Computer pane / Computer tab. It is a
+  remote-computer viewer/controller for Dell, and future remote machines (Mac mini, mini PC,
+  cloud). Local Mac is never an entry, source, or target in this surface.
+- **LocalComputerPreview** — the floating mini Computer panel over the active conversation
+  (the M3 "little screen"). It is the only surface for local Mac AgentWorkspace work.
+
+Low-level streaming primitives are shared (frame lifecycle, latest-frame admission, cursor
+events, the signed Helper capture path); product surfaces are separate.
 
 ### Stream contract and source identity
 
 The renderer consumes source-independent latest-frame state. Every source identifies itself as
 `local-mac` or `remote-node` and supplies a device/workspace identity, connection/freshness,
 monotonic frame sequence, capture timestamp, current frame, logical agent cursor, ownership, and
-activity. The source owns capture and reconnect; the shared Computer surface owns presentation
-and user input gestures. Dell-specific worker details stay in its adapter.
+activity. The source owns capture and reconnect; each product surface owns only presentation.
+Dell-specific worker details stay in its adapter; local-Mac details stay in the local preview
+adapter. `local-mac`/`remote-node` branching belongs in adapters, never in the RemoteComputerPane.
 
 For `local-mac`, the producer captures the actual AgentWorkspace target window using the signed
 Helper's existing ScreenCaptureKit permission and window-scoped capture path. It must not request
-or publish a whole-display capture of the user's foreground. Capture lifecycle is bound to the
-target window identity: disappearance clears the current frame and reports unavailable; a newly
-resolved target starts a fresh sequence/generation so pixels from a prior target cannot flash.
-Input routing continues through the existing AgentWorkspace/Helper seam. Background actions must
-not acquire the native exclusive foreground lease. Explicit Take control pauses admission and
-activates the positively identified target for the user; it does not grant the agent an exclusive
-lease or forward pane gestures into the Mac. Give back lifts admission only; it does not move the
-user's cursor or automatically reactivate AceVra. Background work resumes through normal routing.
-Local Stop first closes Computer admission/control, then stops the owning chat turn through
-the existing task stop command; hiding the pane never stops that turn.
+or publish a whole-display capture of the user's foreground, the AceVra window itself, or any app
+the agent is not operating. The preview shows only the window the agent is operating; when the
+target changes (e.g. Chrome → Notes) the preview transitions to the new target. Capture lifecycle
+is bound to the target window identity: disappearance clears the current frame and reports
+unavailable; a newly resolved target starts a fresh sequence/generation so pixels from a prior
+target cannot flash. Input routing continues through the existing AgentWorkspace/Helper seam.
+Background actions must not acquire the native exclusive foreground lease. The local preview
+exposes no remote-computer concepts: no device selector, no SSH/connection chrome, no
+Take control/Give back semantics. Its controls are Pause and Stop (plus Expand; hide/reopen is
+presentation-only), backed by the existing admission-level commands; Stop also stops the owning
+chat turn through the existing task stop command. Closing/hiding the preview never stops that
+turn. A future explicit "open the actual window" action may be added later; it is not part of
+this milestone and Take control/Give back must not be reintroduced for local.
 
 The Helper owns a ScreenCaptureKit `SCStream` per active visual target, nominally 12 fps, with
 `showsCursor=false` and a bounded capture queue. A host-only `workspace_stream` broker command
@@ -37,13 +48,21 @@ clients cannot call this command. Latest JPEG bytes and metadata are held in mem
 to the observation store. The services adapter validates the session's current pid/window before
 each read and supplies a source generation; stale generation responses are discarded. One request
 at a time and one retained frame at every stage bound memory and prevent playback backlog.
-Closing/hiding the pane stops its capture demand; a Helper-side viewer timeout also stops orphaned
-capture. Target selection never falls back to the physical desktop or a different app.
+Closing/hiding the preview stops its capture demand; a Helper-side viewer timeout also stops
+orphaned capture. Target selection never falls back to the physical desktop or a different app.
+Known limitation (2026-10-01): the window-host services graph cannot yet reach the hardened
+Helper transport for this RPC, so the continuous `workspace_stream` path is infrastructure and
+tests only; the local preview consumes the accepted observation projection
+(`getComputerUseSession` + `getComputerUseObservationFrame`) until the transport ownership is
+resolved.
 
-The right pane reports device/workspace and target app, connection and freshness, Idle/Working/
-You're in control, real activity, ownership controls supported by that source, and truthful
-unavailable states. Product-owned localized labels are used. Local and remote routes never
-silently substitute for one another. A task-level target choice takes precedence over defaults.
+The local preview reports the target app, live/working state, freshness, real activity, and
+truthful unavailable states, with product-owned localized labels. It appears automatically when
+a local Computer task becomes active, remains visible while that task runs (even as the
+conversation produces text), and its visibility/expanded state is session-keyed presentation
+state (not owned by any transcript message), so a later detach/always-on-top surface can reuse
+the same ownership. Local and remote routes never silently substitute for one another; a
+task-level target choice takes precedence over defaults.
 
 ### Input and evidence rules
 
@@ -57,31 +76,55 @@ when the source can deliver and verify them. A delivered action is not success u
 post-action observation verifies its effect; stale observations, vanished targets, secure fields,
 and unsaved/destructive dialogs preserve truthful refusal or uncertainty. Foreground escalation
 is an explicit request/decision surfaced to the user, never an automatic retry after a background
-failure. Activity labels derive from real action/task events and AceVra-owned i18n.
+failure. The LLM never consumes every preview frame: the human preview is continuous/sampled for
+display, agent observations remain the sampled/verified channel, and post-action verification
+waits for a frame/observation fresher than the action. Activity labels derive from real
+action/task events through one central normalization boundary (ActivityEventNormalizer): known
+system operations render AceVra-owned locale labels and never model-authored titles; assistant
+prose is untouched; no hidden chain-of-thought is rendered.
+
+### Transcript labeling for js-executed Computer actions
+
+Computer Use actions execute as `mcp__node_repl__js` cells, so their normal-chat row is rendered
+by the node-repl tool card rather than the CUA card, and that card owns the label path itself.
+When a cell's structured result reports an `operation` that normalizes to a known Computer method
+(the `computer.<method>` facade names and `computer_use__<action>` legacy names, per
+`COMPUTER_USE_MODEL_TO_METHOD`), the row renders `formatComputerActionLabel` — with the cell's
+target app beside it when the cell carries an app identity — and the model-authored `input.title`
+is suppressed. A js cell whose operation is not a known Computer method is not a Computer action:
+it keeps its sanitized model title and is never labelled as a terminal or other system action. The
+CUA group card's accessible title uses the same product label and never falls back to
+`toolCall.title`.
 
 ### State and event order
 
 ```text
-AgentWorkspace target ── Helper window capture ──┐
-                                                  ├─ latest-frame source adapter ─ Computer pane
-Dell worker ── remote stream adapter ────────────┘
-Agent action → existing owner/admission/router → source adapter → fresh evidence → activity projection
+AgentWorkspace target ── Helper window capture ──┬─ observation projection ── LocalComputerPreview (floating, conversation-scoped)
+                                                 └─ workspace_stream adapter ── (future continuous preview feed)
+Dell worker ── remote stream adapter ── RemoteComputerPane (right side; remote devices only)
+Agent action → existing owner/admission/router → fresh evidence → activity projection → ActivityEventNormalizer → UI
 ```
 
 Helper remains the local capture/input authority; the remote worker remains the Dell authority;
 services retain session ownership/admission and task target routing; each source adapter owns its
-connection, frame sequence, target generation, and freshness; the pane is a projection and sends
-commands through that adapter's existing service path. Desktop remains continuous; no mobile
-replay semantics are changed.
+connection, frame sequence, target generation, and freshness; the preview and the pane are
+projections and send commands through their adapters' existing service paths. Desktop remains
+continuous; no mobile replay semantics are changed.
 
 ### Acceptance added
 
-- The same right-side Computer pane can select/display local Mac workspace or Dell without
-  exposing source-specific engineering controls.
+- A normal-chat local Computer task (e.g. background Chrome, then Notes) shows the floating
+  LocalComputerPreview — never a right-pane entry — with the target window live, the logical
+  cursor visible, typing/navigation visibly updating, and the preview transitioning when the
+  target changes.
+- The RemoteComputerPane offers only remote devices; local sessions never auto-open it and no
+  "This Mac"/local entry exists in it.
 - Local frames always identify and show the AgentWorkspace target window, with visible logical
   cursor/activity and no physical cursor/frontmost-app change during background work.
 - Target disappearance/reopen and Dell disconnect/reconnect clear stale frames and restore only
   the current source generation; no cross-device or cross-task frame leakage.
+- Known system tool/activity titles are AceVra-owned locale labels in both locales; model-authored
+  titles never surface for known operations.
 - Local/Dell normalized input and safety matrix reports only measured capabilities. Fixture and
   deterministic checks precede packaging; normal-chat acceptance is required on the installed
   candidate on both sources before alpha-complete status.

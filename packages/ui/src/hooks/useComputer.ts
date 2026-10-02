@@ -17,8 +17,6 @@ import {
   type StreamCursor,
 } from "@/computers/computerFrameStream.js";
 import { usePlatform } from "./usePlatform.js";
-import { useOptionalServices } from "./useServices.js";
-import { LOCAL_COMPUTER_ID, useLocalComputer } from "./useLocalComputer.js";
 
 export function useComputersPlatform(): IComputersPlatform | null {
   return usePlatform().computers ?? null;
@@ -70,37 +68,6 @@ export function useComputerSessionAutoOpen(
 ) {
   const computers = useComputersPlatform();
   const latest = useRef({ activeSessionId, openComputer });
-  const service = useOptionalServices()?.cuaPermissionService;
-  useEffect(() => {
-    if (!service || !activeSessionId) return;
-    let active = true;
-    let opened = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const read = async () => {
-      try {
-        const view = await service.getComputerUseSession(activeSessionId);
-        if (
-          active &&
-          !opened &&
-          view.present &&
-          view.workspace?.backendId === "agent-workspace" &&
-          view.workspace.target
-        ) {
-          opened = true;
-          latest.current.openComputer(LOCAL_COMPUTER_ID);
-        }
-      } catch {
-        // 服务正在重连时不自动打开来源；下一次读取仍由当前会话决定。
-      } finally {
-        if (active && !opened) timer = setTimeout(() => void read(), 1_000);
-      }
-    };
-    void read();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [activeSessionId, service]);
   latest.current = { activeSessionId, openComputer };
   useEffect(() => {
     if (!computers) return;
@@ -128,20 +95,6 @@ export interface LiveFrame {
  * in Main: no subscription (and no socket) unless the tab is the visible active tab.
  */
 export function useComputer(
-  computerId: string | null,
-  options: { streaming: boolean; interactive: boolean; sessionId?: string | null },
-) {
-  const local = useLocalComputer(
-    options.sessionId ?? null,
-    computerId === LOCAL_COMPUTER_ID && options.streaming,
-  );
-  const remote = useRemoteComputer(computerId === LOCAL_COMPUTER_ID ? null : computerId, options);
-  return computerId === LOCAL_COMPUTER_ID
-    ? local
-    : { ...remote, available: remote.available || local.available, inputSupported: true };
-}
-
-function useRemoteComputer(
   computerId: string | null,
   options: { streaming: boolean; interactive: boolean },
 ) {
