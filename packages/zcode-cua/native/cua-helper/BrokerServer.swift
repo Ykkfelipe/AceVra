@@ -40,8 +40,23 @@ func brokerFail(_ message: String, code: String, id: Any?) -> [String: Any] {
 }
 
 func brokerSerialize(_ object: [String: Any]) -> Data {
-    let data = (try? JSONSerialization.data(withJSONObject: object, options: [])) ?? Data()
-    return data
+    // 修复依据（installed 92454874 调查）：序列化失败（如结果里出现 NaN/Infinity）时，旧代码写出
+    // 空 Data，接着补一个换行——宿主读到空行，JSON.parse 失败后按"畸形消息"切断连接，Helper
+    // 读到 EOF 后 exit(0)，表现就是"Helper 无故退出 + 所有后续调用 (unknown): failed"。
+    // 先用 isValidJSONObject 预检（它对 NaN/Infinity 返回 false，也避免抛 ObjC 异常），失败时
+    // 回一个带原 id 的结构化错误，连接保持可用。
+    if JSONSerialization.isValidJSONObject(object),
+       let data = try? JSONSerialization.data(withJSONObject: object, options: []) {
+        return data
+    }
+    var fallback: [String: Any] = [
+        "ok": false,
+        "error": ["message": "the helper produced a result that is not valid JSON",
+                  "code": "invalid_result"],
+    ]
+    if let id = object["id"] as? String { fallback["id"] = id }
+    return (try? JSONSerialization.data(withJSONObject: fallback, options: []))
+        ?? Data(#"{"ok":false,"error":{"message":"invalid result","code":"invalid_result"}}"#.utf8)
 }
 
 // MARK: - Dispatch
@@ -262,9 +277,12 @@ func runBrokerSocketServer(socketPath: String, idleMs: Int) -> Never {
         let timeout: Int32 = idleMs > 0 ? Int32(max(0, idleMs - elapsedMs)) : -1
         let ready = poll(&descriptor, 1, timeout)
         if ready == 0 && idleMs > 0 {
-            // 租约存活时不退出：持有独占桌面租约的 helper 不是 idle（见 protectedLeaseActive）。
-            // 重置窗口继续服务；租约释放后恢复原有的"不逗留"语义。
-            if ForegroundController.shared.protectedLeaseActive {
+            // 只有 IDLE 才能被通用空闲计时器结束（HelperLifecycle.swift）：PROTECTED_ACTIVE /
+            // PROTECTED_ENDING 不是 idle。重置窗口继续服务；租约结束后恢复原有的"不逗留"语义。
+            let elapsed = Int(Date().timeIntervalSince(lastActivity) * 1000)
+            let state = ForegroundController.shared.lifecycleState(msSinceActivity: elapsed,
+                                                                    idleMs: idleMs)
+            if !helperMayExitOnIdle(state) {
                 lastActivity = Date()
                 continue
             }
@@ -301,9 +319,12 @@ func runBrokerSocketServer(socketPath: String, idleMs: Int) -> Never {
 /// nothing — the helper exits without serving, so substitution destroys the capability instead
 /// of redirecting it.
 ///
-/// Connection lifecycle: EOF from the host ends the helper (exit 0). The host relays client
-/// traffic over this connection; a helper restart is a fresh launch + fresh handshake, and the
-/// host re-admits a new connection only after this one closes.
+/// Connection lifecycle: EOF from the host ends the helper (exit 0) unless it holds an exclusive
+/// lease (PROTECTED_ACTIVE). Then it releases held input, keeps the lease for a bounded reconnect
+/// grace (`protectedReconnectGraceMs`), and either re-attaches to the same host as a new
+/// connection generation (the old lease is fenced) or ends the lease and exits when the grace
+/// runs out. The host relays client traffic over this connection; a helper restart is a fresh
+/// launch + fresh handshake, and the host re-admits a new connection only after this one closes.
 func runBrokerHostClient(socketPath: String, launchToken: String, connectTimeoutMs: Int,
                          idleMs: Int) -> Never {
     signal(SIGPIPE, SIG_IGN)
@@ -316,24 +337,84 @@ func runBrokerHostClient(socketPath: String, launchToken: String, connectTimeout
         exit(78)
     }
 
-    let fd = connectBrokerSocket(path: socketPath, timeoutMs: connectTimeoutMs)
-    guard fd >= 0 else {
-        FileHandle.standardError.write(
-            "broker: could not connect to the host session socket (errno \(errno))\n"
-                .data(using: .utf8)!)
-        exit(71)
+    var fd: Int32
+    switch connectAndAnnounce(socketPath: socketPath, launchToken: launchToken,
+                              timeoutMs: connectTimeoutMs) {
+    case .connected(let connected): fd = connected
+    case .failed(let status, let message):
+        FileHandle.standardError.write("broker: \(message)\n".data(using: .utf8)!)
+        exit(status)
     }
 
+    while true {
+        // The verified host is the only caller on this connection; its identity was checked
+        // against the pinned requirement, so serve without the per-connection peer gate.
+        cuaHostConnectSessionActive = true
+        serveBrokerRequests(fd, peer: nil)
+        // No actuation while no authenticated host is attached.
+        cuaHostConnectSessionActive = false
+        close(fd)
+
+        // Phase 3（proven installed 92454874：Helper 只在宿主 EOF 时 exit(0)）。断开时按生命周期
+        // 状态决定：无保护状态立即退出（原行为）；PROTECTED_ACTIVE 进入有界重连宽限；
+        // PROTECTED_ENDING 先完成清理再退出。安全不变量：AceVra 故障 → 用户拿回控制。
+        let state = ForegroundController.shared.lifecycleState(msSinceActivity: 0, idleMs: 0)
+        guard case .reconnectWithinGrace(let graceMs) = hostDisconnectAction(state) else { break }
+        // 宽限开始前立刻释放所有合成按键/按钮，用户输入在 AceVra 不可达期间绝不被半截组合键卡住。
+        ForegroundController.shared.releaseHeldInputNow()
+        FileHandle.standardError.write(
+            "broker: host transport lost while protected; reconnect grace \(graceMs) ms\n"
+                .data(using: .utf8)!)
+        guard let reconnected = reconnectWithinGrace(socketPath: socketPath,
+                                                     launchToken: launchToken,
+                                                     graceMs: graceMs) else {
+            // 宽限到期，宿主没有回来：结束租约（释放输入/tap/锁），把控制交还用户，然后退出。
+            ForegroundController.shared.endLease(reason: graceExpiredLeaseCode)
+            break
+        }
+        // 新连接是新代际：原生租约绝不跨代际存活。运行时经仍有效的 ProtectedForegroundGrant
+        // 重新获取一个新租约；旧代际租约在此栅栏。
+        ForegroundController.shared.endLease(reason: reconnectFencedLeaseCode)
+        fd = reconnected
+    }
+    finishProtectedStateAndExit()
+}
+
+/// Bounded PROTECTED_ENDING: cleanup runs off the main thread and the process exits when it
+/// finishes or when protectedEndingSafetyMs elapses, whichever comes first. Exit drops the tap
+/// and the desktop lock in any case, so the user regains control either way.
+private func finishProtectedStateAndExit() -> Never {
+    let done = DispatchSemaphore(value: 0)
+    Thread.detachNewThread {
+        ForegroundController.shared.shutdown()
+        done.signal()
+    }
+    _ = done.wait(timeout: .now() + .milliseconds(protectedEndingSafetyMs))
+    exit(0)  // the host session ended; an unattended helper does not linger
+}
+
+private enum HostConnectOutcome {
+    case connected(Int32)
+    case failed(Int32, String)
+}
+
+/// Connect, verify the listener's code identity against the pinned requirement, and send the
+/// hello. Used for the first connection and for each reconnect attempt inside the grace: a
+/// reconnect is authenticated exactly like a first connection (fresh peer verification, the same
+/// launch token), and the host admits it as a new connection generation.
+private func connectAndAnnounce(socketPath: String, launchToken: String,
+                                timeoutMs: Int) -> HostConnectOutcome {
+    let fd = connectBrokerSocket(path: socketPath, timeoutMs: timeoutMs)
+    guard fd >= 0 else {
+        return .failed(71, "could not connect to the host session socket (errno \(errno))")
+    }
     // Verify the listener BEFORE any payload-bearing traffic. `hello` carries the launch token
     // and the verified identity only after the host's code satisfied the requirement.
     let host = hostPeerIdentity(fd)
     guard host.verified else {
-        FileHandle.standardError.write(
-            "broker: host identity verification failed: \(host.reason)\n".data(using: .utf8)!)
         close(fd)
-        exit(77)
+        return .failed(77, "host identity verification failed: \(host.reason)")
     }
-
     let hello: [String: Any] = [
         "ok": true,
         "result": [
@@ -347,17 +428,27 @@ func runBrokerHostClient(socketPath: String, launchToken: String, connectTimeout
     var helloData = brokerSerialize(hello)
     helloData.append(0x0A)
     if !writeAll(fd, helloData) {
-        FileHandle.standardError.write("broker: host closed during hello\n".data(using: .utf8)!)
-        exit(72)
+        close(fd)
+        return .failed(72, "host closed during hello")
     }
+    return .connected(fd)
+}
 
-    // The verified host is the only caller on this connection; its identity was checked against
-    // the pinned requirement above, so serve without the per-connection peer gate bind mode uses.
-    cuaHostConnectSessionActive = true
-    serveBrokerRequests(fd, peer: nil)
-    ForegroundController.shared.shutdown()
-    close(fd)
-    exit(0)  // the host session ended; an unattended helper does not linger
+/// Try to re-attach to the same authoritative host for at most `graceMs`. A host that stopped
+/// removed its socket, so attempts fail fast and the grace simply runs out.
+private func reconnectWithinGrace(socketPath: String, launchToken: String,
+                                  graceMs: Int) -> Int32? {
+    let deadline = Date().addingTimeInterval(Double(graceMs) / 1000.0)
+    while Date() < deadline {
+        let remaining = Int(deadline.timeIntervalSinceNow * 1000)
+        if case .connected(let fd) = connectAndAnnounce(socketPath: socketPath,
+                                                        launchToken: launchToken,
+                                                        timeoutMs: max(50, min(500, remaining))) {
+            return fd
+        }
+        Thread.sleep(forTimeInterval: 0.25)
+    }
+    return nil
 }
 
 /// Connect to a Unix socket with bounded retries. The host binds before launching, so the first
@@ -439,6 +530,8 @@ private func serveBrokerRequests(_ client: Int32, peer: CodeIdentityReport?) {
     var chunk = [UInt8](repeating: 0, count: 64 * 1024)
     while true {
         let readCount = read(client, &chunk, chunk.count)
+        // EINTR 不是断开：以前 read 返回 -1 就当作 EOF，被信号打断也会结束会话并退出。
+        if readCount < 0 && errno == EINTR { continue }
         if readCount <= 0 { break }
         buffer.append(contentsOf: chunk[0..<readCount])
         if buffer.count > maxRequestLineBytes, buffer.firstIndex(of: 0x0A) == nil {

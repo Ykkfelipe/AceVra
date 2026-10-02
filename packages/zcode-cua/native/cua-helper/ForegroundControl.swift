@@ -40,6 +40,8 @@ private final class ForegroundLease {
     let marker: Int64
     var heldMouse = false
     var heldKey: CGKeyCode?
+    /// Modifier keys this lease pressed and has not released yet, in press order.
+    var heldModifiers: [CGKeyCode] = []
     var interrupted = false
     var observedOwnEvents = 0
 
@@ -219,8 +221,10 @@ final class ForegroundController {
         lock.lock()
         let mouseHeld = current.heldMouse
         let keyHeld = current.heldKey
+        let modifiersHeld = current.heldModifiers
         current.heldMouse = false
         current.heldKey = nil
+        current.heldModifiers = []
         lock.unlock()
         if mouseHeld,
            let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
@@ -231,6 +235,20 @@ final class ForegroundController {
            let up = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: false) {
             tagged(up, marker: current.marker).post(tap: .cghidEventTap)
         }
+        // 修饰键逆序抬起，最终 flags 为空：Helper 失败/断开/退出时绝不留下按住的 Command/Shift。
+        for modifier in modifiersHeld.reversed() {
+            if let up = CGEvent(keyboardEventSource: nil, virtualKey: modifier, keyDown: false) {
+                up.type = .flagsChanged
+                up.flags = []
+                tagged(up, marker: current.marker).post(tap: .cghidEventTap)
+            }
+        }
+    }
+
+    fileprivate func setModifiersHeld(_ current: ForegroundLease, _ modifiers: [CGKeyCode]) {
+        lock.lock()
+        current.heldModifiers = modifiers
+        lock.unlock()
     }
 
     private func endLease(code: String) {
@@ -367,6 +385,20 @@ final class ForegroundController {
 
     func shutdown() { endLease(code: "shutdown") }
 
+    /// End the lease with an explicit code (generation fence, grace expiry). Same cleanup as any
+    /// other ending: held input released, tap stopped, desktop lock released.
+    func endLease(reason: String) { endLease(code: reason) }
+
+    /// Host transport lost while protected: release every synthetic key/button this lease holds
+    /// right now, before the reconnect grace starts, so the user's input is never blocked by a
+    /// half-delivered chord while AceVra is unreachable. The lease itself is kept for the grace.
+    func releaseHeldInputNow() {
+        lock.lock()
+        let current = lease
+        lock.unlock()
+        if let current { cleanupHeldInput(current) }
+    }
+
     /// True while this helper owns (or is tearing down) an exclusive desktop lease.
     /// A helper in this state is NOT idle, whatever the inbound-connection timer says:
     /// exiting would silently kill the user's takeover (proven installed 92454874:
@@ -375,6 +407,16 @@ final class ForegroundController {
         lock.lock()
         defer { lock.unlock() }
         return lease != nil || ending
+    }
+
+    /// Lifetime state for HelperLifecycle.swift decisions.
+    func lifecycleState(msSinceActivity: Int, idleMs: Int) -> HelperLifecycleState {
+        lock.lock()
+        let active = lease != nil
+        let tearingDown = ending
+        lock.unlock()
+        return helperLifecycleState(leaseActive: active, leaseEnding: tearingDown,
+                                    msSinceActivity: msSinceActivity, idleMs: idleMs)
     }
 
     func status(_ params: [String: Any]) -> [String: Any] {
@@ -433,6 +475,23 @@ final class ForegroundController {
         return false
     }
 }
+
+/// Modifier press order for key_press chords (released in reverse).
+let foregroundModifierOrder: [(name: String, code: CGKeyCode, flag: CGEventFlags)] = [
+    ("command", 55, .maskCommand), ("shift", 56, .maskShift),
+    ("option", 58, .maskAlternate), ("control", 59, .maskControl),
+]
+
+/// Keys key_press may post: named keys plus ANSI letters/digits for shortcuts such as Command+L.
+/// Mirrors COMPUTER_USE_KEY_NAMES in capability-contract.js; anything else is invalid_key.
+let foregroundKeyCodes: [String: CGKeyCode] = [
+    "return": 36, "tab": 48, "space": 49, "delete": 51, "escape": 53,
+    "left": 123, "right": 124, "down": 125, "up": 126,
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
+    "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32,
+    "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46,
+    "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29,
+]
 
 func foregroundRefusal(_ code: String) -> [String: Any] {
     ["effect": "refused", "code": code, "route": "none", "evidence": [],
@@ -877,10 +936,7 @@ extension ForegroundController {
                 return foregroundRefusal("secure_field")
             }
         }
-        let keys: [String: CGKeyCode] = ["return": 36, "tab": 48, "space": 49,
-                                           "delete": 51, "escape": 53, "left": 123,
-                                           "right": 124, "down": 125, "up": 126]
-        guard let name = params["key"] as? String, let key = keys[name] else {
+        guard let name = params["key"] as? String, let key = foregroundKeyCodes[name] else {
             return foregroundRefusal("invalid_key")
         }
         let modifiers = params["modifiers"] as? [String] ?? []
@@ -902,12 +958,42 @@ extension ForegroundController {
         }
         down.flags = flags
         up.flags = flags
-        setKeyHeld(current, key: key)
+        // 原生修饰键时序：修饰键依次按下（flagsChanged，flags 逐步累加）→ 主键按下/抬起 →
+        // 修饰键逆序抬起。只在主键事件上挂 flags 的旧做法对系统级热键（如 Command+Space 的
+        // Spotlight）不可靠；按下的修饰键都登记在租约上，任何中途失败由 cleanupHeldInput 抬起。
+        let ordered = foregroundModifierOrder.filter { modifiers.contains($0.name) }
+        var pressed: [CGKeyCode] = []
+        var running: CGEventFlags = []
         defer { cleanupHeldInput(current) }
+        for modifier in ordered {
+            guard let event = CGEvent(keyboardEventSource: nil, virtualKey: modifier.code,
+                                      keyDown: true) else {
+                return foregroundRefusal("input_unavailable")
+            }
+            running.insert(modifier.flag)
+            event.type = .flagsChanged
+            event.flags = running
+            pressed.append(modifier.code)
+            setModifiersHeld(current, pressed)
+            guard post(event, current: current) else { return foregroundRefusal("interrupted") }
+        }
+        setKeyHeld(current, key: key)
         guard post(down, current: current) else { return foregroundRefusal("interrupted") }
         guard post(up, current: current) else { return foregroundRefusal("interrupted") }
         setKeyHeld(current, key: nil)
-        let delivered = confirmedDelivery(current, since: count, expected: 2)
+        for modifier in ordered.reversed() {
+            guard let event = CGEvent(keyboardEventSource: nil, virtualKey: modifier.code,
+                                      keyDown: false) else {
+                return foregroundRefusal("input_unavailable")
+            }
+            running.remove(modifier.flag)
+            event.type = .flagsChanged
+            event.flags = running
+            guard post(event, current: current) else { return foregroundRefusal("interrupted") }
+            pressed.removeLast()
+            setModifiersHeld(current, pressed)
+        }
+        let delivered = confirmedDelivery(current, since: count, expected: 2 + ordered.count * 2)
         guard stillActive(current) else { return foregroundRefusal("interrupted") }
         let readbackDeadline = Date().addingTimeInterval(0.25)
         var after: AXElementProbe?
@@ -921,7 +1007,13 @@ extension ForegroundController {
             Thread.sleep(forTimeInterval: 0.01)
         }
         return inputResult("key_press", current, delivered: delivered, before: before, after: after,
-                           extra: [["kind": "key", "name": name, "modifiers": modifiers]])
+                           extra: [["kind": "key", "name": name, "modifiers": modifiers],
+                                   ["kind": "key_sequence",
+                                    "events": ordered.map { "\($0.name)_down" }
+                                        + ["\(name)_down", "\(name)_up"]
+                                        + ordered.reversed().map { "\($0.name)_up" },
+                                    "posted_events": 2 + ordered.count * 2,
+                                    "observed_by_tap": delivered]])
     }
 
     func scroll(_ params: [String: Any]) -> [String: Any] {
