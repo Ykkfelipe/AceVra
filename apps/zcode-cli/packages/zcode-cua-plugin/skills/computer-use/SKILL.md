@@ -114,25 +114,31 @@ const state = JSON.parse(
   (await cu.get_app_state({ pid, window_id: target.window_id })).content[0].text,
 );
 const obs = state.foreground_geometry?.observation_id; // NOT state.tree.observation_id; valid 3 s
-const lease = await cu["computer.acquire_control"]({ observation_id: obs }); // give this js call timeout_ms ≥ 40000
+const control = await cu["computer.acquire_control"]({ observation_id: obs }); // give this js call timeout_ms ≥ 40000
 ```
 
 `get_app_state({ pid })` without `window_id` never returns `foreground_geometry` — that is the
 field to check before asking the user for anything.
 
-**Keep the `lease_id` you get back.** It is in the response JSON, as `lease_id`. Read it once and
-reuse it for every foreground call in this task; do not re-acquire to obtain a new one.
-`acquire_control` is idempotent for the same task: calling it again while you already hold the
-lease returns the same `lease_id` (with `evidence: [{ kind: "exclusive_lease", state: "active",
-reused: true }]`), so if you lose track of the id, call `acquire_control` again rather than
-assuming you are stuck. You only need to release with `computer.release_control({ lease_id })`
-when you are done.
+**There is no lease id to keep.** A successful `acquire_control` returns
+`protectedForeground: "active"`. AceVra holds the user's approval for this task and the native
+control behind it; if its Helper restarts or the native lease times out, AceVra re-establishes it
+under the same approval (no second card). Calling `acquire_control` again in the same task just
+reports the current state.
 
-AceVra shows the user an Allow / Deny card and waits up to 25 s. Allow grants takeover for the rest
-of this task; the user's screen glows while you hold it. Then use the foreground methods
-(`computer.click`, `computer.type_text`, `computer.key_press`, …) with the returned `lease_id` and a
-fresh `observation_id`, and `computer.release_control({ lease_id })` when done.
+AceVra shows the user an Allow / Deny card and waits up to 25 s. Allow grants takeover for this
+task (up to 15 minutes); the user's screen glows while you hold it. Then use the foreground methods
+(`computer.click`, `computer.type_text`, `computer.key_press`, …) with only a fresh
+`observation_id` and the action, and `computer.release_control({})` when done.
+`computer.control_status({})` reports `protectedForeground: active | reacquiring | inactive`.
 
+- `effect_unverified`: the Helper restarted while your action was in flight. It was NOT repeated.
+  Call `get_app_state` and decide from what you see whether to do it again.
+- `connection_generation_changed` with `recovered: true`: control was re-established, but the
+  window changed, so your action was not sent. Re-observe and repeat it.
+- `user_takeover` / `protected_grant_expired`: the user took the screen back (input, Esc, Stop) or
+  the approval ended. Do not fight the user; continue in the background or say which step needs
+  their hands.
 - `foreground_geometry_unavailable`: your observation carried no foreground geometry, so the Helper
   could never grant a lease and AceVra deliberately did not ask the user. `list_windows`, then
   `get_app_state` with that `window_id`, then retry. Your window must be the app's current,
@@ -145,6 +151,6 @@ fresh `observation_id`, and `computer.release_control({ lease_id })` when done.
   or say which step needs their hands, then stop.
 - `takeover_pending`: no answer yet — tell the user the card is waiting; call `acquire_control`
   again only after they allow it. Never loop.
-- Any real mouse/keyboard input or Esc ends the lease (`interrupted`) and revokes the grant: the
+- Any real mouse/keyboard input or Esc ends the lease (`user_takeover`) and revokes the grant: the
   user took control back. Do not fight them; ask again only if they want you to continue.
 - Remote/mobile sessions and subagents cannot take over the screen.
