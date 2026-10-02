@@ -21,6 +21,7 @@ export const COMPUTER_USE_METHODS = Object.freeze({
   workspace_click: "mutation",
   workspace_type_text: "mutation",
   workspace_scroll: "mutation",
+  open_app: "mutation",
 });
 
 export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
@@ -46,6 +47,9 @@ export const COMPUTER_USE_MODEL_TO_METHOD = Object.freeze({
   "computer.workspace_click": "workspace_click",
   "computer.workspace_type_text": "workspace_type_text",
   "computer.workspace_scroll": "workspace_scroll",
+  // 本地版"打开应用"：远程（Dell）运行时靠进程派生天然可开应用；本地此前缺这个能力，
+  // 目标应用无窗口（Chrome 红 X 后进程仍在）时模型只能空观察并退向前台接管。
+  "computer.open_app": "open_app",
 });
 
 export const COMPUTER_USE_BACKEND_SUPPORT = Object.freeze({
@@ -83,6 +87,9 @@ export const COMPUTER_USE_ROUTES = Object.freeze(["accessibility_action", "quart
 export const COMPUTER_USE_ACTION_CLASSIFICATIONS = Object.freeze({
   press: "BEST_EFFORT_BACKGROUND",
   set_value: "BEST_EFFORT_BACKGROUND",
+  // open_app 会在应用自激活时短暂抢焦点再由 settle/restore 还回，不是纯后台安全，
+  // 如实归类为 best-effort background（与 press/set_value 同级）。
+  open_app: "BEST_EFFORT_BACKGROUND",
   acquire_control: "REQUIRES_FOREGROUND",
   release_control: "REQUIRES_FOREGROUND",
   activate_target: "REQUIRES_FOREGROUND",
@@ -117,6 +124,7 @@ export function resolveComputerUseCapabilities({ platform, helperVerified, acces
     press: false,
     set_value: false,
     control_status: false,
+    open_app: false,
     ...Object.fromEntries(COMPUTER_USE_FOREGROUND_METHODS.map((method) => [method, false])),
   };
   if (platform !== "darwin" || helperVerified !== true) return unavailable;
@@ -130,6 +138,7 @@ export function resolveComputerUseCapabilities({ platform, helperVerified, acces
     press: axGranted,
     set_value: axGranted,
     control_status: axGranted,
+    open_app: true,
     ...Object.fromEntries(
       COMPUTER_USE_FOREGROUND_METHODS.map((method) => [
         method,
@@ -302,6 +311,15 @@ export function validSemanticActionInput(method, input) {
     );
   }
   return false;
+}
+
+/** open_app 只需要 bundle_id（list_apps 返回的 bundle identifier），如 "com.google.Chrome"。 */
+export function validOpenAppInput(input) {
+  return (
+    typeof input?.bundle_id === "string" &&
+    input.bundle_id.trim().length > 0 &&
+    input.bundle_id.length <= 256
+  );
 }
 
 export function resolveComputerUseMethod(modelToolName) {

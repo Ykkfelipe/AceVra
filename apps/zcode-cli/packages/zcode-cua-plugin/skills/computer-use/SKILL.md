@@ -46,7 +46,9 @@ lists the real methods.
 Background (never takes the user's foreground): `computer.press`, `computer.set_value`,
 `computer.workspace_click({ pid, target_role, target_label })`,
 `computer.workspace_type_text({ pid, text, target_label? })`,
-`computer.workspace_scroll({ pid, delta })` (delta −1…1, positive down).
+`computer.workspace_scroll({ pid, delta })` (delta −1…1, positive down),
+`computer.open_app({ bundle_id })` (launch an app, or recreate its window when it is running
+windowless).
 
 Background limits — plan around them up front:
 
@@ -61,10 +63,14 @@ Background limits — plan around them up front:
 ## Observation-first workflow
 
 1. `list_apps()` (and `list_windows()` when the window matters) to find the target `pid`.
-2. `get_app_state({ pid })`, then pick elements by `role`/`label` from `tree.elements`.
-3. One state-changing action per fresh observation. Observe again after acting; `unknown` is not
+2. If the app is not running, or is running but `list_windows()` shows no usable window for it
+   (browsers keep the process alive after the last window closes), call
+   `cu["computer.open_app"]({ bundle_id })` first — it starts the app or recreates a window in the
+   background. Do not fall back to desktop takeover just because a target app has no window.
+3. `get_app_state({ pid })`, then pick elements by `role`/`label` from `tree.elements`.
+4. One state-changing action per fresh observation. Observe again after acting; `unknown` is not
    success, and a missing `action_sent` field is not a failure.
-4. Use `screenshot({ pid })` only when visual evidence is required. Emit SDK images through the
+5. Use `screenshot({ pid })` only when visual evidence is required. Emit SDK images through the
    structured SDK result; do not JSON-stringify the full result or manually emit image bytes.
 
 ## Background work and the live preview

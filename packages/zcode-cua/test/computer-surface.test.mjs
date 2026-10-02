@@ -85,3 +85,31 @@ test("refusals name the expected arguments instead of 'arguments are invalid'", 
   assert.match(unknown.content[0].text, /computer\.workspace_click/u);
   assert.match(unknown.content[0].text, /describe\(\)/u);
 });
+
+test("open_app is documented background capability and refuses a missing bundle_id", async () => {
+  const runtime = createComputerUseRuntime({
+    platform: "darwin",
+    allowForegroundControl: () => false,
+  });
+  const described = await runtime.execute({ toolName: "describe", context: LOCAL });
+  const openApp = described.structuredContent.methods.find(
+    (entry) => entry.name === "computer.open_app",
+  );
+  assert.ok(openApp, "open_app must be in the documented surface");
+  assert.equal(openApp.kind, "background");
+  assert.equal(openApp.available, true);
+  assert.match(openApp.note, /running windowless/u);
+
+  const missing = await runtime.execute({
+    toolName: "computer.open_app",
+    arguments: {},
+    context: LOCAL,
+  });
+  assert.match(missing.content[0].text, /bundle_id: string/u);
+  const empty = await runtime.execute({
+    toolName: "computer.open_app",
+    arguments: { bundle_id: "   " },
+    context: LOCAL,
+  });
+  assert.match(empty.content[0].text, /bundle_id: string/u);
+});

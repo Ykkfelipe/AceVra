@@ -138,6 +138,16 @@ only; they never create one.
 unsupported/ambiguous targets are refused. It never synthesizes physical wheel input. Double
 click, right click, drag and key chords remain outside this background substrate's capability.
 
+`computer.open_app({bundle_id})` (2026-10-02) is the local counterpart of the remote runtime's
+process spawn: launch an app in the background, or hand a running-but-windowless app (browsers
+keep the process alive after the last window closes) its window back. It delivers the
+LaunchServices open/reopen event with `activates=false`, polls for a usable window (layer 0,
+short edge ≥40pt — the same filter as `list_windows`), and applies the foreground settle/restore
+guard because some apps self-activate after reopen. Effect is confirmed only when a usable window
+appeared; a no-window result is `failed`/`unknown`, never success. The model-visible guidance:
+before observing a target that is not running or has no window, call `open_app` instead of
+falling back to desktop takeover.
+
 The existing normalized input vocabulary is audited per producer. Capabilities are exposed only
 when the source can deliver and verify them. A delivered action is not success until a fresh
 post-action observation verifies its effect; stale observations, vanished targets, secure fields,

@@ -86,7 +86,7 @@ func brokerDispatch(
         return brokerFail("semantic actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
     }
-    if ["workspace_click", "workspace_type_text", "workspace_scroll"].contains(method),
+    if ["workspace_click", "workspace_type_text", "workspace_scroll", "open_app"].contains(method),
        !cuaHostConnectSessionActive {
         return brokerFail("workspace actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])
@@ -113,6 +113,12 @@ func brokerDispatch(
         return brokerOk(listAppsResult(), id: request["id"])
     case "list_windows":
         return brokerOk(listWindowsResult(params: params), id: request["id"])
+    case "open_app":
+        guard Set(params.keys).isSubset(of: ["bundle_id"]) else {
+            return brokerFail("open_app accepts only bundle_id", code: "bad_request",
+                              id: request["id"])
+        }
+        return brokerOk(performOpenApp(params), id: request["id"])
     case "observe":
         guard params["pid"] is NSNumber else {
             return brokerFail("observe requires an integer pid", code: "bad_request",

@@ -66,6 +66,13 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
     note: "scrollbar fraction from -1 to 1, positive down; needs a unique writable scrollbar",
   },
   {
+    name: "computer.open_app",
+    kind: "background",
+    args: "{ bundle_id: string }",
+    returns: "pid, usable_windows count, foreground settle evidence",
+    note: "launch an app in the background, or recreate a window for an app that is running windowless (e.g. Chrome after the red X keeps the process alive). Call this BEFORE observing when list_apps shows the app but list_windows shows no usable window for it, or when the app is not running at all",
+  },
+  {
     name: "computer.acquire_control",
     kind: "foreground",
     args: "{ observation_id: string }",

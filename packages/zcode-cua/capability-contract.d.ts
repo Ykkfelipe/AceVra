@@ -17,7 +17,8 @@ export type ComputerUseMethod =
   | "drag"
   | "workspace_click"
   | "workspace_type_text"
-  | "workspace_scroll";
+  | "workspace_scroll"
+  | "open_app";
 export type ComputerUseEffect = "confirmed" | "partial" | "unknown" | "refused" | "failed";
 export type ComputerUseClassification =
   | "BACKGROUND_SAFE"
@@ -64,6 +65,7 @@ export declare function normalizeComputerUseResult(
   evidence: unknown[];
 };
 export declare function validSemanticActionInput(method: string, input: unknown): boolean;
+export declare function validOpenAppInput(input: unknown): boolean;
 export declare function validForegroundInput(method: string, input: unknown): boolean;
 export declare function resolveComputerUseMethod(
   modelToolName: string,

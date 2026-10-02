@@ -48,6 +48,9 @@ export const COMPUTER_METHOD_CLASSES = Object.freeze({
   workspace_click: "physical",
   workspace_type_text: "physical",
   workspace_scroll: "physical",
+  // open_app 后台投递 open/reopen 事件；部分应用会自激活，由 Helper 的 settle/restore
+  // 守卫还回前台，因此与 press/set_value 同属 best-effort background，而不是纯 background。
+  open_app: "physical",
   // Lease lifecycle: foreground-control management is inherently takeover machinery.
   acquire_control: "lease",
   release_control: "lease",

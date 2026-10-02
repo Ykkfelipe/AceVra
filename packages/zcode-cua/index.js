@@ -1,16 +1,10 @@
 import {
-  resolveComputerUseMethod,
   normalizeComputerUseResult,
   resolveComputerUseCapabilities,
-  validSemanticActionInput,
-  validForegroundInput,
-  COMPUTER_USE_FOREGROUND_METHODS,
 } from "./capability-contract.js";
 import {
-  argsRefusal,
   describeComputerUseSurface,
   foregroundComputerUseAvailable,
-  MODEL_TOOL_HINT,
 } from "./computer-surface.js";
 import {
   rememberSemanticGeometry,
@@ -18,6 +12,7 @@ import {
   workspaceCursorOf,
 } from "./semantic-geometry.js";
 import { createSessionIdentityRegistry, identityText } from "./session-identity.js";
+import { validateComputerUseRequest } from "./request-guard.js";
 
 /**
  * Model-facing provider-independent tool name to broker method.
@@ -155,47 +150,16 @@ export function createComputerUseRuntime(options = {}) {
           foregroundAvailable: foregroundAvailableFor(input?.context),
         });
       }
-      const method = resolveComputerUseMethod(toolName);
-      if (platform !== "darwin") {
-        return unavailable(
-          "Computer Use native methods are unavailable on this platform",
-          "unsupported_platform",
-        );
+      const guard = validateComputerUseRequest({
+        toolName,
+        input,
+        platform,
+        allowForegroundControl: options.allowForegroundControl,
+      });
+      if (guard.refusal) {
+        return unavailable(guard.refusal.text, guard.refusal.code);
       }
-      if (!method) {
-        return unavailable(
-          `Computer Use tool '${toolName || "(unnamed)"}' is not available: ${MODEL_TOOL_HINT}`,
-          "unsupported",
-        );
-      }
-      if (
-        (method === "press" || method === "set_value") &&
-        !validSemanticActionInput(method, input?.arguments)
-      ) {
-        return unavailable(argsRefusal(toolName, method), "bad_request");
-      }
-      const foreground = COMPUTER_USE_FOREGROUND_METHODS.includes(method);
-      if (
-        method === "control_status" &&
-        (!input?.arguments ||
-          Object.keys(input.arguments).length !== 1 ||
-          // Helper 签发的 lease id 是大写 UUID；大小写不敏感校验，原样透传（Helper 侧
-          // 租约登记按原样字符串精确匹配，归一化反而会破坏后续 release/中断匹配）。
-          !/^[0-9a-f-]{36}$/iu.test(input.arguments.lease_id ?? ""))
-      ) {
-        return unavailable("control_status requires a lease_id", "bad_request");
-      }
-      if (foreground) {
-        if (!foregroundAvailableFor(input?.context)) {
-          return unavailable(
-            "Foreground Computer Use requires a local desktop task; background tools still work (see `await agent.computerUse.describe()`)",
-            "local_only",
-          );
-        }
-        if (!validForegroundInput(method, input?.arguments)) {
-          return unavailable(argsRefusal(toolName, method), "bad_request");
-        }
-      }
+      const { method, foreground } = guard;
 
       const sessionId =
         typeof input?.context?.sessionId === "string" ? input.context.sessionId : "";
@@ -209,7 +173,11 @@ export function createComputerUseRuntime(options = {}) {
         "workspace_scroll",
       ].includes(method);
       const mutating =
-        method === "press" || method === "set_value" || foreground || workspaceAction;
+        method === "press" ||
+        method === "set_value" ||
+        method === "open_app" ||
+        foreground ||
+        workspaceAction;
       if (
         leaseAuthority &&
         typeof leaseAuthority.admission === "function" &&
