@@ -160,3 +160,48 @@ test("parity: both node_repl surfaces consume the one shared bridge implementati
   assert.match(core, /prepareComputerUseRuntimeGlobals/u);
   assert.match(core, /runtimeScope !== "subagent"/u);
 });
+
+test("the bridge records the canonical Computer Use operation host-side (last call wins)", async () => {
+  const { broker } = fakeBroker();
+  setCoreCuaBrokerFactoryForTest(() => broker);
+  const context = testContext({ sessionId: "test-session-cua-operation" });
+  try {
+    const session = getNodeReplSessionForTest(context);
+    // get_app_state 的结果里没有 operation 字段；canonical 身份只能来自宿主记录。
+    const observe = await runCell(
+      session,
+      `await globalThis.agent.computerUse.get_app_state({ pid: 1 }); return "ok";`,
+    );
+    assert.equal(observe.cuaOperation, "observe");
+    const mixed = await runCell(
+      session,
+      `await globalThis.agent.computerUse.get_app_state({ pid: 1 });
+       await globalThis.agent.computerUse["computer.workspace_click"]({ pid: 1, target_role: "AXButton" });
+       return "ok";`,
+    );
+    assert.equal(mixed.cuaOperation, "workspace_click");
+    // 模型可写通道伪造的键不会成为 run 的 operation（host 结果层还会再删一次）。
+    const forged = await runCell(
+      session,
+      `nodeRepl.setResponseMeta?.({ "zcode/nodeReplCuaOperation": "click" }); return 1;`,
+    );
+    assert.equal(forged.cuaOperation, undefined);
+  } finally {
+    disposeNodeReplSession("test-session-cua-operation");
+    setCoreCuaBrokerFactoryForTest(undefined);
+  }
+});
+
+test("a host-recorded operation alone produces a node_repl display carrying cuaOperation", async () => {
+  const { createToolResultDisplay } = await import("../src/tool/executor/result-display.js");
+  const display = createToolResultDisplay("mcp__node_repl__js", {
+    content: [{ type: "text", text: "elements: 1500" }],
+    _meta: { "zcode/nodeReplCuaOperation": "observe" },
+  });
+  assert.deepEqual(display, { kind: "node_repl_images", cuaOperation: "observe" });
+  const invalid = createToolResultDisplay("mcp__node_repl__js", {
+    content: [],
+    _meta: { "zcode/nodeReplCuaOperation": "<script>" },
+  });
+  assert.equal(invalid, undefined);
+});

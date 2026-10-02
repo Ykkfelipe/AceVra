@@ -86,15 +86,25 @@ prose is untouched; no hidden chain-of-thought is rendered.
 ### Transcript labeling for js-executed Computer actions
 
 Computer Use actions execute as `mcp__node_repl__js` cells, so their normal-chat row is rendered
-by the node-repl tool card rather than the CUA card, and that card owns the label path itself.
-When a cell's structured result reports an `operation` that normalizes to a known Computer method
-(the `computer.<method>` facade names and `computer_use__<action>` legacy names, per
-`COMPUTER_USE_MODEL_TO_METHOD`), the row renders `formatComputerActionLabel` — with the cell's
-target app beside it when the cell carries an app identity — and the model-authored `input.title`
-is suppressed. A js cell whose operation is not a known Computer method is not a Computer action:
-it keeps its sanitized model title and is never labelled as a terminal or other system action. The
-CUA group card's accessible title uses the same product label and never falls back to
-`toolCall.title`.
+by the node-repl tool card rather than the CUA card. The canonical operation identity is recorded
+by the host, not inferred from result shapes: the node_repl CUA bridge records the method of every
+Computer Use call it executes (`recordCuaOperation`, canonicalized through
+`COMPUTER_USE_MODEL_TO_METHOD`, e.g. `get_app_state` ⇒ `observe`; last call in a cell wins, same as
+the app identity), the node_repl host publishes it under the host-only `_meta` key
+`zcode/nodeReplCuaOperation` (REPL code cannot forge it — the key is deleted and re-set from the
+run, exactly like `zcode/nodeReplCuaApp`), and core projects it as `cuaOperation` on the
+`node_repl_images` display. One label boundary (`computerActionLabel`) maps that operation to an
+AceVra-owned localized label, interpolating the target app when the display carries a trusted app
+name ("Looking at Notes", "Typing in Notes"). A structured result `operation` field remains a
+fallback for rows persisted before this field existed. A Computer Use cell whose operation is not
+in the label table renders the generic "Using the computer" label.
+
+Model-authored `input.title` is never product chrome in a js cell row. A running cell (operation
+not yet known) shows the generic "Working" label only. A completed non-Computer cell shows the
+generic completion label with the model's title as a visually distinct muted note (not a label).
+Assistant prose and reasoning rendering are untouched. The CUA group card's accessible title uses
+the same product label and never falls back to `toolCall.title`; the mini panel caption uses the
+same `computerActionLabel` boundary.
 
 ### State and event order
 

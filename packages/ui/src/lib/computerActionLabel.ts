@@ -6,9 +6,10 @@
 // maps a normalized Computer method to an i18n id; `formatComputerActionLabel` renders it.
 // Unknown methods fall back to a stable generic label rather than leaking model text.
 //
-// Labels are clean verb phrases (placeholder-free on purpose): the CUA card and the mini panel
-// render the target/app NEXT to the verb as their existing chip, so we never interpolate into
-// the string and never risk a dangling "{app}" when a value is missing.
+// Base labels are placeholder-free verb phrases. When the caller has a TRUSTED app name (the
+// host-recorded app identity or the workspace projection target — never model text), the
+// `chat.computerAction.app.*` variant interpolates it ("Looking at Notes"); without one the base
+// label is used, so a dangling "{app}" can never render.
 
 export interface ComputerActionIntl {
   formatMessage(input: { id: string }, values?: Record<string, string>): string;
@@ -68,9 +69,42 @@ export function computerActionMessageId(method: string): string {
   return id ?? "chat.computerAction.default";
 }
 
-/** Renders the product-owned label for a Computer method (a clean, localized verb phrase). */
-export function formatComputerActionLabel(intl: ComputerActionIntl, method: string): string {
-  return intl.formatMessage({ id: computerActionMessageId(method) });
+/** Base label id → app-interpolated variant ("Looking at {app}"). */
+const COMPUTER_ACTION_APP_LABEL_IDS: Readonly<Record<string, string>> = Object.freeze({
+  "chat.computerAction.observe": "chat.computerAction.app.observe",
+  "chat.computerAction.screenshot": "chat.computerAction.app.screenshot",
+  "chat.computerAction.listWindows": "chat.computerAction.app.listWindows",
+  "chat.computerAction.click": "chat.computerAction.app.click",
+  "chat.computerAction.typeText": "chat.computerAction.app.typeText",
+  "chat.computerAction.setValue": "chat.computerAction.app.setValue",
+  "chat.computerAction.scroll": "chat.computerAction.app.scroll",
+  "chat.computerAction.press": "chat.computerAction.app.press",
+  "chat.computerAction.keyPress": "chat.computerAction.app.keyPress",
+  "chat.computerAction.openApp": "chat.computerAction.app.openApp",
+  "chat.computerAction.default": "chat.computerAction.app.default",
+});
+
+/** Whether the label for `method` already names the app (so callers drop a separate app chip). */
+export function computerActionLabelIncludesApp(method: string, app?: string | null): boolean {
+  return (
+    Boolean(app?.trim()) &&
+    Object.hasOwn(COMPUTER_ACTION_APP_LABEL_IDS, computerActionMessageId(method))
+  );
+}
+
+/**
+ * Renders the product-owned label for a Computer method (a localized verb phrase). `app` must
+ * be a trusted display name; it is interpolated only for methods with an app variant.
+ */
+export function formatComputerActionLabel(
+  intl: ComputerActionIntl,
+  method: string,
+  options: { app?: string | null } = {},
+): string {
+  const id = computerActionMessageId(method);
+  const app = options.app?.trim();
+  const appId = app ? COMPUTER_ACTION_APP_LABEL_IDS[id] : undefined;
+  return appId && app ? intl.formatMessage({ id: appId }, { app }) : intl.formatMessage({ id });
 }
 
 const COMPUTER_OPERATION_ACTION_PATTERN = /^[a-z0-9_]+$/u;

@@ -148,6 +148,14 @@ export const ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY =
  */
 export const ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY = "zcode/nodeReplCuaApp";
 /**
+ * 本次 cell 最后一次 Computer Use 调用的 canonical 操作名（如 `observe`、`workspace_click`）。
+ *
+ * 与 `ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY` 同一信任边界：**只能由 node-repl-host 写入**，取自
+ * CUA bridge 实际执行的方法；模型经 `setResponseMeta` / `emitStructuredResult` 写入的同名键会在
+ * 宿主侧被丢弃。UI 用它渲染产品自有的动作标签，取代模型自拟的 cell title。
+ */
+export const ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY = "zcode/nodeReplCuaOperation";
+/**
  * 官方 Server MCP 响应头里的 `x-request-id`，附在失败的 tool result 上（值为 string）。
  *
  * 用短前缀 `zcode/` 而不是 `com.zcode/`：这不是跨语言协议——服务端在 header 里给，客户端

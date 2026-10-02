@@ -45,6 +45,7 @@ export interface NodeReplWriteSink {
   structuredResults: NodeReplStructuredResult[];
   responseMeta: Record<string, unknown>;
   cuaApps: NodeReplCuaAppIdentity[];
+  cuaOperations: string[];
 }
 
 export interface NodeReplRunResult {
@@ -64,6 +65,8 @@ export interface NodeReplRunResult {
   responseMeta?: Record<string, unknown>;
   /** 本次 cell 最后一个确立身份的 CUA 调用所操作的应用；由宿主 bridge 记录，模型不可写。 */
   cuaApp?: NodeReplCuaAppIdentity;
+  /** 本次 cell 最后一次 CUA 调用的 canonical 操作名；由宿主 bridge 记录，模型不可写。 */
+  cuaOperation?: string;
 }
 
 export type NodeReplRequestMeta = Record<string, unknown>;
@@ -108,6 +111,14 @@ function latestCuaAppResult(
 ): Pick<NodeReplRunResult, "cuaApp"> {
   const cuaApp = cuaApps.at(-1);
   return cuaApp ? { cuaApp } : {};
+}
+
+/** 与 app 身份同款 last-write-wins：一个 cell 里多次 CUA 调用时取最后一次的操作。 */
+function latestCuaOperationResult(
+  cuaOperations: readonly string[],
+): Pick<NodeReplRunResult, "cuaOperation"> {
+  const cuaOperation = cuaOperations.at(-1);
+  return cuaOperation ? { cuaOperation } : {};
 }
 
 /**
@@ -369,6 +380,12 @@ export class NodeReplSession {
     this.currentSink.cuaApps.push(app);
   }
 
+  /** CUA bridge 记录本次执行的 canonical 操作名；同样不在 sandbox globals 上。 */
+  recordCuaOperation(operation: string): void {
+    if (!this.currentSink) return;
+    this.currentSink.cuaOperations.push(operation);
+  }
+
   /** 执行一段代码；signal 支持取消（超时/停止）。 */
   async run(
     code: string,
@@ -390,6 +407,7 @@ export class NodeReplSession {
     const structuredResults: NodeReplStructuredResult[] = [];
     const responseMeta: Record<string, unknown> = {};
     const cuaApps: NodeReplCuaAppIdentity[] = [];
+    const cuaOperations: string[] = [];
     if (this.nodeReplApi) {
       this.nodeReplApi.requestMeta = { ...options.requestMeta };
     }
@@ -402,6 +420,7 @@ export class NodeReplSession {
       structuredResults,
       responseMeta,
       cuaApps,
+      cuaOperations,
     };
     try {
       // vm.Script 不接受静态 ESM 声明；在执行前给出可恢复的错误，避免浏览器动作根本未开始却被误判为插件故障。
@@ -432,6 +451,7 @@ export class NodeReplSession {
         ...(structuredResults.length > 0 ? { structuredResults } : {}),
         ...(Object.keys(responseMeta).length > 0 ? { responseMeta } : {}),
         ...latestCuaAppResult(cuaApps),
+        ...latestCuaOperationResult(cuaOperations),
       };
     } catch (error) {
       // 注意：vm context 内抛出的 Error 属于不同 realm，host 侧 `instanceof Error` 为 false。
@@ -460,6 +480,7 @@ export class NodeReplSession {
         ...(structuredResults.length > 0 ? { structuredResults } : {}),
         ...(Object.keys(responseMeta).length > 0 ? { responseMeta } : {}),
         ...latestCuaAppResult(cuaApps),
+        ...latestCuaOperationResult(cuaOperations),
       };
     } finally {
       this.currentSink = null;

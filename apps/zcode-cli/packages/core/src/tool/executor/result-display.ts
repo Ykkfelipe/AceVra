@@ -7,6 +7,7 @@ import {
   cuaTargetAppDisplaySchema,
   nodeReplCuaAppDisplaySchema,
   ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY,
+  ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY,
   SEND_MESSAGE_TOOL_NAME,
   SendMessageOutputSchema,
   TASK_OUTPUT_DISPLAY_MAX_OUTPUT_CHARS,
@@ -354,6 +355,17 @@ function readNodeReplCuaApp(output: Record<string, unknown>): NodeReplCuaAppDisp
   return parsed.success ? parsed.data : undefined;
 }
 
+const NODE_REPL_CUA_OPERATION_PATTERN = /^[a-z0-9_.]{1,64}$/iu;
+
+/** 宿主写入的 canonical Computer Use 操作；只认 host-only 键（见 readNodeReplCuaApp 的同款理由）。 */
+function readNodeReplCuaOperation(output: Record<string, unknown>): string | undefined {
+  const meta = isRecord(output._meta) ? output._meta : undefined;
+  const value = meta?.[ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY];
+  return typeof value === "string" && NODE_REPL_CUA_OPERATION_PATTERN.test(value)
+    ? value
+    : undefined;
+}
+
 function createNodeReplDisplay(
   toolName: string,
   output: unknown,
@@ -399,11 +411,15 @@ function createNodeReplDisplay(
   // 纯动作 cell（点击、输入）没有截图，但仍要把 App 身份投影给工具卡的 leading icon；
   // 因此不能再以「有图」作为产出 display 的唯一条件。
   const app = readNodeReplCuaApp(output);
-  if (images.length === 0 && !app) return undefined;
+  // 观察类 cell（get_app_state）既无截图也未必有 app 关联，但仍是一次 Computer Use 操作；
+  // 有 canonical 操作名就产出 display，UI 才能用产品标签取代模型自拟的标题。
+  const cuaOperation = readNodeReplCuaOperation(output);
+  if (images.length === 0 && !app && !cuaOperation) return undefined;
   return {
     kind: "node_repl_images",
     ...(images.length > 0 ? { images } : {}),
     ...(app ? { app } : {}),
+    ...(cuaOperation ? { cuaOperation } : {}),
     ...(truncated ? { truncated: true } : {}),
   };
 }

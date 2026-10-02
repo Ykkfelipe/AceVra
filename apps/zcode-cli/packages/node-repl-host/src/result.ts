@@ -1,6 +1,7 @@
 import {
   ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY,
   ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY,
+  ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY,
 } from "@zcode/contracts/mcp";
 import { isOfficialCuaImageRefText } from "@zcode/zcode-cua/frame-contract";
 import { CUA_APP_ASSOCIATIONS_META_KEY } from "@zcode/zcode-cua/host-display-contract";
@@ -99,6 +100,9 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
   delete responseMeta[CUA_APP_ASSOCIATIONS_META_KEY];
   delete responseMeta[ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY];
   if (run.cuaApp) responseMeta[ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY] = run.cuaApp;
+  // 同款信任边界：canonical 操作名只接受 bridge 记录的 run.cuaOperation。
+  delete responseMeta[ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY];
+  if (run.cuaOperation) responseMeta[ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY] = run.cuaOperation;
   // Anthropic 兼容网关（如 bigmodel MaaS）只解析 tool_result.content 开头的连续
   // image block，一旦先遇到 text 就丢弃后面的图，模型只能看到 image_ref 元数据而看不到画面
   // （实测 [image]/[image,text] 可见，[text,image]/[text,image,text] 不可见）。

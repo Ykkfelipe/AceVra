@@ -58,6 +58,8 @@ export declare function createComputerUseBridgeGlobals(input: {
   session: () => {
     mergeResponseMeta(meta: Record<string, unknown>): void;
     recordCuaAppIdentity(app: { appKey: string; displayName?: string }): void;
+    /** Canonical Computer Use operation the bridge executed (host-recorded, model cannot write). */
+    recordCuaOperation?(operation: string): void;
   };
   documentationRoot: string;
 }): Record<PropertyKey, unknown>;

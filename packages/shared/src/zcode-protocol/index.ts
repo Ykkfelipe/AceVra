@@ -108,6 +108,12 @@ export const zcodeNodeReplImageToolResultDisplaySchema = z
       )
       .min(1)
       .max(2),
+    // 宿主 CUA bridge 记录的 canonical Computer Use 操作（如 observe / workspace_click）；
+    // 模型代码不可写。UI 据此渲染 AceVra 自有的本地化动作标签，而不是模型自拟的 title。
+    cuaOperation: z
+      .string()
+      .regex(/^[a-z0-9_.]{1,64}$/iu)
+      .optional(),
     truncated: z.boolean().optional(),
     source: z.literal("browser_turn_end").optional(),
   })

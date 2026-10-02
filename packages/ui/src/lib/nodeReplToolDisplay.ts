@@ -1,5 +1,5 @@
 import type { TaskChatToolCall as ChatToolCall } from "@/lib/taskChatMessageTypes.js";
-import { computerActionMethodFromOperation } from "@/lib/computerActionLabel.js";
+import { findNodeReplComputerOperation } from "@/lib/nodeReplCuaOperation.js";
 
 export type NodeReplOperation = "run" | "reset" | "add-module-dir";
 
@@ -358,51 +358,6 @@ function findCuaApp(value: unknown, visited = new Set<object>()): NodeReplCuaApp
   return undefined;
 }
 
-/** 结果投影有时把结构化结果压成 JSON 文本；只对短的对象文本做一次解析尝试。 */
-const MAX_OPERATION_JSON_LENGTH = 20_000;
-
-/**
- * 从 cell 的结构化结果里找出 Computer Use 操作名。
- *
- * 与 `findCuaApp` 同款递归：实时 tool.updated 把结果放在 raw.result 内，终态 snapshot
- * 则把 completed part 的 metadata 直接当作 raw，只扫一个固定位置会在对话结束后丢标签。
- * 只有落在 `computerActionLabel` 已知表里的名字才算命中——自定义 js cell 仍按普通 cell
- * 展示它的模型标题。
- */
-function findComputerOperation(value: unknown, visited = new Set<object>()): string | undefined {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed.startsWith("{") || trimmed.length > MAX_OPERATION_JSON_LENGTH) {
-      return undefined;
-    }
-    try {
-      return findComputerOperation(JSON.parse(trimmed) as unknown, visited);
-    } catch {
-      return undefined;
-    }
-  }
-  if (!value || typeof value !== "object" || visited.has(value)) return undefined;
-  visited.add(value);
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findComputerOperation(item, visited);
-      if (found) return found;
-    }
-    return undefined;
-  }
-  if (!isRecord(value)) return undefined;
-  const operation = readNonEmptyString(value.operation);
-  if (operation) {
-    const method = computerActionMethodFromOperation(operation);
-    if (method) return method;
-  }
-  for (const item of Object.values(value)) {
-    const found = findComputerOperation(item, visited);
-    if (found) return found;
-  }
-  return undefined;
-}
-
 function hasBrowserTurnEndDisplay(value: unknown, visited = new Set<object>()): boolean {
   if (!value || typeof value !== "object" || visited.has(value)) return false;
   visited.add(value);
@@ -455,9 +410,14 @@ export function buildNodeReplDisplayModel(toolCall: ChatToolCall): NodeReplDispl
   const app = findCuaApp(toolCall.raw);
   // 只有 run 形态的 cell 会带 Computer Use 结果；reset/configure 的 raw 里出现同名
   // 字段也只是历史噪声，不应把「重置内核」显示成一次电脑操作。
+  // 宿主记录的 operation 优先（覆盖 get_app_state 这类结果里没有 operation 字段的观察）；
+  // 结果里的 operation 字段只作为该字段出现之前持久化的历史行的回退。
   const computerOperation =
     resolveOperation(toolCall) === "run"
-      ? findComputerOperation([toolCall.output, readRawOutput(toolCall.raw), toolCall.raw])
+      ? findNodeReplComputerOperation({
+          display: [toolCall.raw, toolCall.output],
+          results: [toolCall.output, readRawOutput(toolCall.raw), toolCall.raw],
+        })
       : undefined;
   const persisted = parsePersistedResult(
     removeProjectedImagePlaceholders(

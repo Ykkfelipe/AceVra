@@ -98,3 +98,19 @@ test("subagent Node REPL remains usable without a browser facade", async () => {
     else process.env.ZCODE_PLUGIN_ROOT = previousPluginRoot;
   }
 });
+
+test("the CUA operation meta key is host-only: forged REPL meta is replaced by the bridge record", () => {
+  const forged = toMcpRunResult({
+    logs: "",
+    result: "1",
+    responseMeta: { "zcode/nodeReplCuaOperation": "click" },
+  });
+  assert.equal(forged._meta?.["zcode/nodeReplCuaOperation"], undefined);
+  const recorded = toMcpRunResult({
+    logs: "",
+    result: "1",
+    responseMeta: { "zcode/nodeReplCuaOperation": "click" },
+    cuaOperation: "observe",
+  });
+  assert.equal(recorded._meta?.["zcode/nodeReplCuaOperation"], "observe");
+});

@@ -14,13 +14,15 @@
 //     只把 { socketPath, token } 形式的本地连接传进来；
 //   - cell globals 里只出现 symbol-keyed bridge，绝不出现 socket/token 值。
 //
-// 依赖约束：只能用 node: 内置模块。core 依赖本包，本包不能反向依赖 @zcode/core / 宿主包。
+// 依赖约束：只能用 node: 内置模块与本包的纯模块（capability-contract.js）。core 依赖本包，
+// 本包不能反向依赖 @zcode/core / 宿主包。
 
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { createConnection, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveComputerUseMethod } from "./capability-contract.js";
 
 export const NODE_REPL_CUA_BRIDGE_SYMBOL = Symbol.for("zcode.node-repl.computer-use-bridge");
 export const CUA_UNAVAILABLE_IN_SUBAGENT_MESSAGE = "Computer Use is not available in subagent";
@@ -102,6 +104,10 @@ export function createComputerUseBridgeGlobals(input) {
     },
     call: async (method, methodInput) => {
       const active = assertAvailable();
+      // canonical 操作身份在宿主这一跳记录（调用前记录：失败的调用同样是一次已知操作，
+      // 工具行应显示「Looking at Notes · Operation failed」而不是模型标题）。
+      const operation = canonicalCuaOperation(method);
+      if (operation) input.session().recordCuaOperation?.(operation);
       const result = await sendCuaBrokerRequest(
         input.broker,
         {
@@ -121,6 +127,16 @@ export function createComputerUseBridgeGlobals(input) {
   };
 
   return { [NODE_REPL_CUA_BRIDGE_SYMBOL]: bridge };
+}
+
+const CUA_OPERATION_PATTERN = /^[a-z0-9_.]{1,64}$/iu;
+
+/** facade 属性名 → canonical 方法名（`get_app_state` ⇒ `observe`，`computer.click` ⇒ `click`）。 */
+function canonicalCuaOperation(method) {
+  if (typeof method !== "string" || !CUA_OPERATION_PATTERN.test(method)) return undefined;
+  const mapped = resolveComputerUseMethod(method);
+  if (mapped) return mapped;
+  return method.startsWith("computer.") ? method.slice("computer.".length) : method;
 }
 
 function readPrimaryAppIdentity(result) {

@@ -33,8 +33,8 @@ const intl = {
 const known = Object.freeze({
   list_apps: "Viewing running apps",
   list_windows: "Viewing windows",
-  get_app_state: "Observing",
-  observe: "Observing",
+  get_app_state: "Looking at the screen",
+  observe: "Looking at the screen",
   screenshot: "Capturing screenshot",
   workspace_click: "Clicking",
   click: "Clicking",
@@ -42,7 +42,7 @@ const known = Object.freeze({
   type_text: "Typing",
   scroll: "Scrolling",
   press: "Pressing",
-  activate_target: "Opening",
+  activate_target: "Opening an app",
   acquire_control: "Taking exclusive desktop control",
   release_control: "Returning desktop control",
 });
@@ -80,7 +80,7 @@ test("acquire_control uses explicit foreground-control wording", () => {
 });
 
 test("unknown methods fall back to a stable generic label, never model text", () => {
-  assert.equal(formatComputerActionLabel(intl, "totally_unknown_tool_xyz"), "Computer action");
+  assert.equal(formatComputerActionLabel(intl, "totally_unknown_tool_xyz"), "Using the computer");
 });
 
 /**
@@ -137,7 +137,7 @@ test("the operation is read from the live raw.result AND the terminal snapshot s
 
 test("every known Computer operation name maps to a product label, in all three spellings", () => {
   const expectations: ReadonlyArray<[string, string]> = [
-    ["observe", "Observing"],
+    ["observe", "Looking at the screen"],
     ["screenshot", "Capturing screenshot"],
     ["click", "Clicking"],
     ["left_click", "Clicking"],
@@ -152,17 +152,17 @@ test("every known Computer operation name maps to a product label, in all three 
     ["move", "Moving pointer"],
     ["move_pointer", "Moving pointer"],
     ["drag", "Dragging"],
-    ["open", "Opening"],
-    ["open_application", "Opening"],
-    ["activate_target", "Opening"],
-    ["wait", "Waiting"],
+    ["open", "Opening an app"],
+    ["open_application", "Opening an app"],
+    ["activate_target", "Opening an app"],
+    ["wait", "Waiting for the screen"],
     ["acquire_control", "Taking exclusive desktop control"],
     ["release_control", "Returning desktop control"],
     ["permission_status", "Requesting permissions"],
     ["control_status", "Checking control status"],
     ["list_apps", "Viewing running apps"],
     ["list_windows", "Viewing windows"],
-    ["get_app_state", "Observing"],
+    ["get_app_state", "Looking at the screen"],
     ["read_clipboard", "Reading clipboard"],
     ["write_clipboard", "Writing to clipboard"],
     ["zoom", "Zooming"],
@@ -226,4 +226,72 @@ test("reset/configure cells never pick up a Computer operation", () => {
   } as unknown as Parameters<typeof buildNodeReplDisplayModel>[0]);
   assert.equal(reset.operation, "reset");
   assert.equal(reset.computerOperation, undefined);
+});
+
+test('a trusted app name is interpolated into the product label ("Looking at Notes")', () => {
+  assert.equal(formatComputerActionLabel(intl, "observe", { app: "Notes" }), "Looking at Notes");
+  assert.equal(
+    formatComputerActionLabel(intl, "get_app_state", { app: "Notes" }),
+    "Looking at Notes",
+  );
+  assert.equal(
+    formatComputerActionLabel(intl, "workspace_click", { app: "Chrome" }),
+    "Clicking in Chrome",
+  );
+  assert.equal(
+    formatComputerActionLabel(intl, "workspace_type_text", { app: "Notes" }),
+    "Typing in Notes",
+  );
+  assert.equal(formatComputerActionLabel(intl, "set_value", { app: "Notes" }), "Typing in Notes");
+  assert.equal(
+    formatComputerActionLabel(intl, "activate_target", { app: "Chrome" }),
+    "Opening Chrome",
+  );
+  assert.equal(
+    formatComputerActionLabel(intl, "workspace_scroll", { app: "Chrome" }),
+    "Scrolling in Chrome",
+  );
+  // 没有可信 app 时回落到无占位符的基础标签，绝不渲染出 "{app}"。
+  assert.equal(formatComputerActionLabel(intl, "observe", { app: "  " }), "Looking at the screen");
+  assert.equal(
+    formatComputerActionLabel(intl, "acquire_control", { app: "Notes" }),
+    "Taking exclusive desktop control",
+  );
+});
+
+test("a host-recorded operation normalizes a get_app_state cell WITHOUT any result operation field", () => {
+  const model = buildNodeReplDisplayModel({
+    toolId: "tool-obs",
+    toolName: "mcp__node_repl__js",
+    kind: "js",
+    input: { code: "await agent.computerUse.get_app_state({ pid: 1 })", title: "观察 Notes 状态" },
+    output: "elements: 1500",
+    status: "completed",
+    raw: {
+      result: { content: [{ type: "text", text: "elements: 1500" }] },
+      display: {
+        kind: "node_repl_images",
+        cuaOperation: "observe",
+        app: { appKey: "darwin:com.apple.Notes", displayName: "Notes" },
+      },
+    },
+  } as unknown as Parameters<typeof buildNodeReplDisplayModel>[0]);
+  assert.equal(model.computerOperation, "observe");
+  assert.equal(model.userTitle, undefined);
+});
+
+test("an unknown host-recorded Computer operation is still a Computer cell (generic label)", () => {
+  const model = buildNodeReplDisplayModel({
+    toolId: "tool-new",
+    toolName: "mcp__node_repl__js",
+    kind: "js",
+    input: { code: "x", title: "做一件新事" },
+    status: "completed",
+    raw: { display: { kind: "node_repl_images", cuaOperation: "computer.brand_new_thing" } },
+  } as unknown as Parameters<typeof buildNodeReplDisplayModel>[0]);
+  assert.equal(model.userTitle, undefined);
+  assert.equal(
+    formatComputerActionLabel(intl, model.computerOperation ?? ""),
+    "Using the computer",
+  );
 });

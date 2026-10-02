@@ -72,7 +72,7 @@ test("a known Computer operation renders the product label, not the model's titl
 test("the English UI never shows model-authored English reasoning text either", () => {
   const markup = render(computerCell("observe", { title: "Look for global computer object" }));
   const text = visibleText(markup);
-  assert.match(text, /Observing/);
+  assert.match(text, /Looking at the screen/);
   assert.doesNotMatch(text, /Look for global computer object/);
 });
 
@@ -81,8 +81,7 @@ test("the target app is shown next to the action when the cell carries an app id
     computerCell("observe", { app: { appKey: "darwin:com.google.Chrome", displayName: "Chrome" } }),
   );
   const text = visibleText(markup);
-  assert.match(text, /Chrome/);
-  assert.match(text, /Observing/);
+  assert.match(text, /Looking at Chrome/);
 });
 
 test("an appKey without a display name is not rendered as raw text", () => {
@@ -92,7 +91,7 @@ test("an appKey without a display name is not rendered as raw text", () => {
   assert.doesNotMatch(text, /darwin:com\.google\.Chrome/);
 });
 
-test("a non-Computer js cell keeps its sanitized model title", () => {
+test("a non-Computer js cell shows a generic product title; the model title is only a muted note", () => {
   const cell = {
     toolId: "tool-custom",
     toolName: "mcp__node_repl__js",
@@ -102,9 +101,71 @@ test("a non-Computer js cell keeps its sanitized model title", () => {
     status: "completed",
     raw: { result: { operation: "custom_thing" } },
   } as unknown as ChatToolCall;
-  const text = visibleText(render(cell));
-  assert.match(text, /Summarise the release notes/);
-  assert.doesNotMatch(text, /Computer action/);
+  const markup = render(cell);
+  const text = visibleText(markup);
+  assert.match(text, /Operation completed/);
+  assert.match(markup, /data-testid="node-repl-model-note"[^>]*>Summarise the release notes</);
+  assert.doesNotMatch(text, /Using the computer/);
+});
+
+/** A real leaked row shape: get_app_state cell, Chinese model title, NO result `operation`. */
+function hostOperationCell(
+  cuaOperation: string,
+  title: string,
+  status: "completed" | "running" = "completed",
+): ChatToolCall {
+  return {
+    toolId: `tool-host-${cuaOperation}`,
+    toolName: "mcp__node_repl__js",
+    kind: "js",
+    input: { code: "const st = await agent.computerUse.get_app_state({ pid: 25548 })", title },
+    output: status === "completed" ? "elements: 1500" : undefined,
+    status,
+    raw:
+      status === "completed"
+        ? {
+            result: { content: [{ type: "text", text: "elements: 1500" }] },
+            display: {
+              kind: "node_repl_images",
+              cuaOperation,
+              app: { appKey: "darwin:com.apple.Notes", displayName: "Notes" },
+            },
+          }
+        : {},
+  } as unknown as ChatToolCall;
+}
+
+for (const [operation, english] of [
+  ["observe", "Looking at Notes"],
+  ["workspace_click", "Clicking in Notes"],
+  ["workspace_type_text", "Typing in Notes"],
+  ["set_value", "Typing in Notes"],
+  ["press", "Pressing a button in Notes"],
+] as const) {
+  test(`Chinese model title + host-recorded ${operation} renders "${english}"`, () => {
+    const text = visibleText(render(hostOperationCell(operation, "观察 Notes 状态")));
+    assert.match(text, new RegExp(english));
+    assert.doesNotMatch(text, /观察|状态/);
+    // The app is inside the label; it is not repeated as a separate chip.
+    assert.equal(text.match(/Notes/g)?.length, 1);
+  });
+}
+
+test("a running js cell never flashes the model title (operation not known yet)", () => {
+  const cell = hostOperationCell("observe", "观察 Notes 状态", "running");
+  const context = {
+    toolCallNode: { toolCall: cell, childToolCalls: [] },
+    isRunning: true,
+    childToolList: null,
+  } as unknown as Parameters<typeof NodeReplToolCallBlock>[0];
+  const markup = renderToStaticMarkup(
+    <ZCodeIntlProvider initialLocale="en-US" messages={enUS}>
+      <NodeReplToolCallBlock {...context} />
+    </ZCodeIntlProvider>,
+  );
+  const text = visibleText(markup);
+  assert.match(text, /Working/);
+  assert.doesNotMatch(text, /观察/);
 });
 
 test("the product label is localized — a Chinese session does not show English verbs", () => {

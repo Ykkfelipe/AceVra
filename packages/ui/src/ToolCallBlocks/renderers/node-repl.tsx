@@ -15,9 +15,13 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { formatComputerActionLabel } from "@/lib/computerActionLabel.js";
+import {
+  computerActionLabelIncludesApp,
+  formatComputerActionLabel,
+} from "@/lib/computerActionLabel.js";
 import { cuaAppKeyToIconRequest } from "@/lib/cuaAppIconRequest.js";
-import { buildNodeReplDisplayModel, type NodeReplDisplayModel } from "@/lib/nodeReplToolDisplay.js";
+import { buildNodeReplDisplayModel } from "@/lib/nodeReplToolDisplay.js";
+import { getNodeReplSummary } from "@/ToolCallBlocks/renderers/node-repl-summary.js";
 import { CuaAppSummaryIcon } from "@/ToolCallBlocks/renderers/cuaAppSummaryIcon.js";
 import { ToolSnapshotFieldNotice } from "@/ToolCallBlocks/ToolSnapshotFieldNotice.js";
 import { ToolLayout } from "@/ToolCallBlocks/ToolLayout.js";
@@ -58,73 +62,6 @@ function isCompactResult(value: string): boolean {
     !trimmed.includes("\n") &&
     !looksLikeJson(trimmed)
   );
-}
-
-function getSummary(
-  model: NodeReplDisplayModel,
-  status: string,
-  isRunning: boolean,
-  formatMessage: (id: string) => string,
-  computerActionLabel: string | undefined,
-): { title: string; status?: string; detail?: string } {
-  const isFailed = status === "failed";
-  const isDenied = status === "denied";
-  const isStopped = status === "stopped";
-
-  if (isDenied || isStopped) {
-    return {
-      title: formatMessage(
-        isDenied ? "chat.toolCall.nodeRepl.denied" : "chat.toolCall.nodeRepl.stopped",
-      ),
-    };
-  }
-
-  if (model.operation === "reset") {
-    return {
-      title: formatMessage(
-        isFailed
-          ? "chat.toolCall.nodeRepl.resetFailed"
-          : isRunning
-            ? "chat.toolCall.nodeRepl.resetting"
-            : "chat.toolCall.nodeRepl.reset",
-      ),
-    };
-  }
-
-  if (model.operation === "add-module-dir") {
-    return {
-      title: formatMessage(
-        isFailed
-          ? "chat.toolCall.nodeRepl.configureFailed"
-          : isRunning
-            ? "chat.toolCall.nodeRepl.configuring"
-            : "chat.toolCall.nodeRepl.configured",
-      ),
-      detail: model.moduleDirectory,
-    };
-  }
-
-  const fallbackTitle = formatMessage(
-    isFailed
-      ? "chat.toolCall.nodeRepl.failed"
-      : isRunning
-        ? "chat.toolCall.nodeRepl.processing"
-        : "chat.toolCall.nodeRepl.finished",
-  );
-  return {
-    // Computer Use 动作优先用产品标签；不是 Computer 动作时才回落到模型写的标题。
-    title: computerActionLabel ?? model.userTitle ?? fallbackTitle,
-    status:
-      computerActionLabel || model.userTitle
-        ? formatMessage(
-            isFailed
-              ? "chat.toolCall.nodeRepl.failed"
-              : isRunning
-                ? "chat.toolCall.nodeRepl.processing"
-                : "chat.toolCall.nodeRepl.completed",
-          )
-        : undefined,
-  };
 }
 
 function FriendlyCodeBlock({
@@ -178,14 +115,24 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
   // 没有可信 displayName 时不显示应用名（appKey 是 `darwin:<bundleId>` 形态，不适合当文案）。
   const computerAction = useMemo(() => {
     if (!model.computerOperation) return null;
+    const appName = model.app?.displayName?.trim() || undefined;
     return {
-      appName: model.app?.displayName?.trim() || undefined,
-      label: formatComputerActionLabel(intl, model.computerOperation),
+      // 标签已含应用名（"Looking at Notes"）时不再重复 app chip。
+      chipAppName: computerActionLabelIncludesApp(model.computerOperation, appName)
+        ? undefined
+        : appName,
+      label: formatComputerActionLabel(intl, model.computerOperation, { app: appName }),
     };
   }, [intl, model.app, model.computerOperation]);
   const summary = useMemo(
     () =>
-      getSummary(model, toolCall.status, context.isRunning, formatMessage, computerAction?.label),
+      getNodeReplSummary(
+        model,
+        toolCall.status,
+        context.isRunning,
+        formatMessage,
+        computerAction?.label,
+      ),
     [computerAction?.label, context.isRunning, formatMessage, model, toolCall.status],
   );
   // Computer Use 的 cell 携带目标应用身份时，leading icon 换成该应用的真实图标 —— 连续
@@ -241,9 +188,17 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
             {summary.detail}
           </code>
         ) : null}
+        {summary.note ? (
+          <span
+            className="min-w-0 truncate italic text-foreground-subtlest"
+            data-testid="node-repl-model-note"
+          >
+            {summary.note}
+          </span>
+        ) : null}
       </span>
     ),
-    [summary.detail, summary.status, summary.title],
+    [summary.detail, summary.note, summary.status, summary.title],
   );
   const renderContent = useCallback(
     () => (
@@ -398,7 +353,7 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
         showIcon={context.showIcon !== false}
         canToggle={canToggle}
         forceOpen={context.forceOpen ?? false}
-        kindLabel={computerAction?.appName ?? null}
+        kindLabel={computerAction?.chipAppName ?? null}
         sourceLabel={context.sourceLabel}
         primaryText={summaryText}
         statusLabel={formatMessage("chat.toolCall.nodeRepl.failed")}
@@ -408,7 +363,9 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
         showFailureStatus={toolCall.status === "failed" && summary.status !== undefined}
         isRunning={context.isRunning}
         title={
-          computerAction?.appName ? `${computerAction.appName} ${summary.title}` : summary.title
+          computerAction?.chipAppName
+            ? `${computerAction.chipAppName} ${summary.title}`
+            : summary.title
         }
         renderContent={hasDetails ? renderContent : undefined}
       />
