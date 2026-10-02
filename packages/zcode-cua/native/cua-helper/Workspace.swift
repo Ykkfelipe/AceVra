@@ -285,21 +285,35 @@ struct WorkspaceController {
             let role = axWSString(candidate, kAXRoleAttribute as String) ?? ""
             return role == "AXTextField" || role == "AXTextArea"
         }
-        guard !textFields.isEmpty else {
-            return workspaceRefusal("no_text_target", "no text element in the target window")
-        }
-        if textFields.count > 1, params["target_label"] == nil {
-            return workspaceRefusal("ambiguous_target", "multiple text elements; address one by label")
-        }
-        var targetField = textFields[0]
-        if let label = params["target_label"] as? String {
-            let matches = textFields.filter { labelMatches($0, label) }
-            guard matches.count == 1, let match = matches.first else {
-                return workspaceRefusal("target_lost", "no unique text element with the requested label")
+        // 修复依据（confirm-probe-386df2b 实测）：type_text 刚确认过输入，Chrome 的惰性
+        // AX 树在下一次调用时就可能不再枚举该字段（no_text_target）。先回退到应用级
+        // focused element；再回退为直接向进程投递 Return（Chrome 内部 DOM 焦点仍在，
+        // AX 树稀疏不影响）。只有"字段不存在"以外的歧义/安全拒绝保持原样。
+        var targetField: AXUIElement? = nil
+        if !textFields.isEmpty {
+            if textFields.count > 1, params["target_label"] == nil {
+                return workspaceRefusal("ambiguous_target", "multiple text elements; address one by label")
             }
-            targetField = match
+            targetField = textFields[0]
+            if let label = params["target_label"] as? String {
+                let matches = textFields.filter { labelMatches($0, label) }
+                guard matches.count == 1, let match = matches.first else {
+                    return workspaceRefusal("target_lost", "no unique text element with the requested label")
+                }
+                targetField = match
+            }
+        } else if params["target_label"] == nil {
+            var focusedRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(AXUIElementCreateApplication(pid),
+                                             kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+               let focused = focusedRef, CFGetTypeID(focused) == AXUIElementGetTypeID() {
+                let element = focused as! AXUIElement
+                let role = axWSString(element, kAXRoleAttribute as String) ?? ""
+                if role == "AXTextField" || role == "AXTextArea" { targetField = element }
+            }
         }
-        guard axWSString(targetField, kAXSubroleAttribute as String) != "AXSecureTextField" else {
+        if let field = targetField,
+           axWSString(field, kAXSubroleAttribute as String) == "AXSecureTextField" {
             return workspaceRefusal("secure_field", "secure text input is not supported")
         }
         let titleBefore = axWSString(window, kAXTitleAttribute as String) ?? ""
@@ -314,10 +328,15 @@ struct WorkspaceController {
             }
             return false
         }
-        // 通道一：AXConfirm（原生 AppKit 文本框的"确认"动作）。
-        let confirmStatus = AXUIElementPerformAction(targetField, "AXConfirm" as CFString)
-        attempts.append("ax_confirm=\(confirmStatus.rawValue)")
-        var navigated = confirmStatus == .success && waitForTitleChange(0.8)
+        // 通道一：AXConfirm（原生 AppKit 文本框的"确认"动作）。字段不可见时跳过。
+        var navigated = false
+        if let field = targetField {
+            let confirmStatus = AXUIElementPerformAction(field, "AXConfirm" as CFString)
+            attempts.append("ax_confirm=\(confirmStatus.rawValue)")
+            navigated = confirmStatus == .success && waitForTitleChange(0.8)
+        } else {
+            attempts.append("ax_confirm=no_field")
+        }
         // 通道二（修复依据 preview-ux-386df2b：Chrome 地址栏不接受 AXConfirm）：向目标进程
         // postToPid 投递 Return —— 与 workspace_type_text 同一机制，不激活应用、不动用户前台。
         if !navigated, let down = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true),
@@ -332,7 +351,7 @@ struct WorkspaceController {
         var result = workspaceResult(
             operation: "workspace_confirm",
             effect: navigated ? "confirmed" : "unknown",
-            route: navigated ? "accessibility_action" : "quartz_input",
+            route: "quartz_input",
             delivery: "confirmed",
             application: navigated ? "confirmed" : "unknown")
         if !navigated { result["code"] = "no_effect" }
@@ -343,7 +362,7 @@ struct WorkspaceController {
         result["title_after"] = titleAfter
         result["attempts"] = attempts
         result["verification"] = navigated ? "window_title" : "unverified"
-        if let frame = axWSFrame(targetField) {
+        if let field = targetField, let frame = axWSFrame(field) {
             result["element_center"] = ["x": Double(frame.midX), "y": Double(frame.midY)]
         }
         result["zero_steal"] = zeroStealEvidence(before, after)
