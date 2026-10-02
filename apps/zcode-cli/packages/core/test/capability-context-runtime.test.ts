@@ -157,12 +157,27 @@ test("turn metrics count invalid calls, discovery calls and first valid action",
         completedAt: at(200),
       }),
       result({ toolCallId: "c", completedAt: at(300) }),
+      result({ toolCallId: "e", toolName: "Bash", completedAt: at(350) }),
+      result({ toolCallId: "f", completedAt: at(360) }),
       result({ toolCallId: "d", completedAt: at(400) }),
     ],
     [
       { id: "a", name: "type_text", input: {} },
       { id: "b", name: "js", input: { code: "await agent.computerUse.press({})" } },
       { id: "c", name: "js", input: { code: "await agent.computerUse.describe()" } },
+      {
+        id: "e",
+        name: "Bash",
+        input: {
+          command:
+            "find ~/.zcode/cli/plugins/cache/zcode-plugins-official/computer-use -name client.mjs",
+        },
+      },
+      {
+        id: "f",
+        name: "js",
+        input: { code: "nodeRepl.write(Object.keys(agent.computerUse).join())" },
+      },
       {
         id: "d",
         name: "js",
@@ -174,7 +189,7 @@ test("turn metrics count invalid calls, discovery calls and first valid action",
   );
   const metrics = flushCapabilityTurnMetrics(runtime, TRACE);
   assert.equal(metrics?.invalidToolCalls, 2);
-  assert.equal(metrics?.discoveryCalls, 1);
+  assert.equal(metrics?.discoveryCalls, 3);
   assert.equal(metrics?.firstValidToolActionMs, 400);
   assert.ok(logs.some((log) => log.data.event === "capability.turn.metrics"));
 });

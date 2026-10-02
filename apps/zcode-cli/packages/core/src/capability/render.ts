@@ -72,6 +72,8 @@ function unavailableLines(actions: readonly CapabilityAction[]): string[] {
   );
 }
 
+// 修复依据（installed 64a7a1a9 实测 A2）：模型仍先 import 技能文档里的 client.mjs、在插件缓存里
+// find/ls、Object.keys(agent.computerUse)，约 6 次调用后才动手。明确"已预装、清单完整"。
 function invocationLine(capability: Capability): string | undefined {
   const first = capability.actions.find((action) => action.invocation.kind === "node_repl");
   if (!first || first.invocation.kind !== "node_repl") return undefined;
@@ -79,7 +81,7 @@ function invocationLine(capability: Capability): string | undefined {
     const mcp = first.invocation.mcpToolName
       ? " The same actions are also provider tools named mcp__computer-use__<name with non-alphanumerics replaced by _>."
       : "";
-    return `How to call: inside the \`${first.invocation.toolName}\` tool, \`await agent.computerUse["<name>"](args)\` with the exact names below (results are MCP-shaped: content[0].text holds JSON).${mcp}`;
+    return `How to call: inside the \`${first.invocation.toolName}\` tool, \`await agent.computerUse["<name>"](args)\` with the exact names below (results are MCP-shaped: content[0].text holds JSON). \`agent.computerUse\` is already installed in every cell and this list is complete: do not import client scripts, search plugin files, call describe() or enumerate keys first.${mcp}`;
   }
   return `How to call: inside the \`${first.invocation.toolName}\` tool, ${first.invocation.expression}.`;
 }

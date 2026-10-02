@@ -12,8 +12,14 @@ const INVALID_TOOL_ERROR_TYPES: ReadonlySet<string> = new Set([
   CoreErrorType.ToolNotFound,
   CoreErrorType.InvalidInput,
 ]);
-const COMPUTER_DESCRIBE_PATTERN =
-  /computerUse\s*(?:\.\s*describe|\[\s*["']describe["']\s*\])\s*\(/u;
+// 修复依据（installed 64a7a1a9 实测 A2）：旧判定只认 describe()，把 import client.mjs、
+// Object.keys(agent.computerUse) 与对插件缓存的 find/ls 记成"有效动作"，首个有效动作时间被低估。
+const COMPUTER_DISCOVERY_CODE_PATTERN =
+  /computerUse\s*(?:\.\s*describe|\[\s*["']describe["']\s*\])\s*\(|Object\.(?:keys|getOwnPropertyNames)\(\s*agent\b|client\.mjs|computer-use-client/u;
+// 读/搜 Computer 运行时或插件文件来找调用方式，同属能力发现。
+const COMPUTER_SOURCE_PROBE_PATTERN =
+  /plugins\/cache\/[^"'\s]*computer-use|zcode-cua|computer-surface|computer-use-client|skills\/computer-use/u;
+const SOURCE_PROBE_TOOLS: ReadonlySet<string> = new Set(["Bash", "Read", "Grep", "Glob"]);
 const NODE_REPL_TOOL_PATTERN = /^(?:js|mcp__.*node_repl.*__js)$/u;
 // Computer 拒绝（未知方法 / 参数形状错误）与 facade 上不存在的属性同样是"猜错 API"，按无效调用计。
 // js 单元的异常不会让工具失败，而是落在 output.error，所以两处都要看。
@@ -53,9 +59,12 @@ export function recordCapabilityToolSchemaBuild(
 
 function isDiscoveryCall(result: ToolExecutionResult, toolCall: ToolCall | undefined): boolean {
   if (result.toolName === CAPABILITIES_TOOL) return true;
+  if (SOURCE_PROBE_TOOLS.has(result.toolName)) {
+    return COMPUTER_SOURCE_PROBE_PATTERN.test(JSON.stringify(toolCall?.input ?? {}));
+  }
   if (!NODE_REPL_TOOL_PATTERN.test(result.toolName)) return false;
   const code = (toolCall?.input as { code?: unknown } | undefined)?.code;
-  return typeof code === "string" && COMPUTER_DESCRIBE_PATTERN.test(code);
+  return typeof code === "string" && COMPUTER_DISCOVERY_CODE_PATTERN.test(code);
 }
 
 function cellErrorText(result: ToolExecutionResult): string {
