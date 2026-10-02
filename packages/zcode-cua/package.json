@@ -14,6 +14,10 @@
       "types": "./capability-contract.d.ts",
       "import": "./capability-contract.js"
     },
+    "./computer-surface": {
+      "types": "./computer-surface.d.ts",
+      "import": "./computer-surface.js"
+    },
     "./computer-backend": {
       "types": "./computer-backend.d.ts",
       "import": "./computer-backend.js"

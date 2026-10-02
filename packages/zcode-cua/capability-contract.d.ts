@@ -18,6 +18,7 @@ export type ComputerUseMethod =
   | "workspace_click"
   | "workspace_type_text"
   | "workspace_scroll"
+  | "workspace_confirm"
   | "open_app";
 export type ComputerUseEffect = "confirmed" | "partial" | "unknown" | "refused" | "failed";
 export type ComputerUseClassification =
