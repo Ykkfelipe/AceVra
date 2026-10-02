@@ -425,3 +425,19 @@ test("a rotated worker token is refetched once on 401", async (t) => {
   assert.equal(result.ok, true);
   assert.equal(tokenReads(), 2);
 });
+
+test("Stop of an agent-owned job reports the owning session so its chat turn ends too", async (t) => {
+  const { service, worker } = setup();
+  t.after(() => service.dispose());
+  await service.computerAction({
+    sessionId: "s1",
+    targetId: "ssh:dell",
+    action: { kind: "click", x: 10, y: 20 },
+  });
+  const stopped = await service.stop("dell");
+  assert.deepEqual(stopped, { ok: true, stoppedSessionId: "s1" });
+  assert.ok(worker.requests.some((r) => r.path === "/agent/stop"));
+  // 没有 agent 会话拥有的 job（例如用户自己的面板接管）时，不报告任何会话，不会停错回合。
+  const again = await service.stop("dell");
+  assert.deepEqual(again, { ok: true });
+});

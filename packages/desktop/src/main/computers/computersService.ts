@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- SSH computer runtime: tunnel, worker lease, view relay and commands share one entry lifecycle; splitting is a separate refactor. */
 import {
   type ComputerAction,
   type ComputerCommandResult,
@@ -418,10 +419,16 @@ export function createComputersService(deps: {
         toCommand(await call(entry, (client) => client.post("/agent/resume"))),
       ),
     stop: (computerId: string) =>
-      command(computerId, async (entry) => {
+      command(computerId, async (entry): Promise<ComputerCommandResult> => {
+        // 修复依据（594eca2 Dell 回归）：Stop 只停了 worker job，聊天回合继续；agent 下一次动作
+        // 经 ensureSessionJob 重新挂上新 job，Stop 形同虚设。这里把被停 job 所属的 agent 会话交回
+        // renderer，由它走既有的回合停止路径（Main 只转发，不持有回合状态）。
+        const ownerSessionId = entry.session?.sessionId;
         const result = toCommand(await call(entry, (client) => client.post("/agent/stop")));
         stopSessionLease(entry);
-        return result;
+        return result.ok && ownerSessionId
+          ? { ok: true, stoppedSessionId: ownerSessionId }
+          : result;
       }),
     async forget(computerId: string) {
       const entry = entries.get(computerId);

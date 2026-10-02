@@ -44,6 +44,8 @@ interface ComputerPaneProps {
   expanded: boolean;
   onToggleExpand: () => void;
   onSelectComputer: (computerId: string) => void;
+  /** Stop ended a remote job owned by this agent session: end that chat turn as well. */
+  onStopAgentTurn?: (sessionId: string) => void;
 }
 
 const STATUS_TONE: Record<ComputerStatusKind, string> = {
@@ -79,7 +81,8 @@ const KNOWN_ACTIVITY = new Set([
  * Take control / Give back, Resume, Stop and Expand. Presentation only — the worker owns control.
  */
 export function ComputerPane(props: ComputerPaneProps) {
-  const { computerId, visible, expanded, onToggleExpand, onSelectComputer } = props;
+  const { computerId, visible, expanded, onToggleExpand, onSelectComputer, onStopAgentTurn } =
+    props;
   const { intl } = useZCodeIntl();
   const t = useCallback(
     (id: string, values?: Record<string, string>) =>
@@ -119,10 +122,13 @@ export function ComputerPane(props: ComputerPaneProps) {
       if (!result.ok) {
         logger.warn(`[computers] ${command} failed: ${result.reason}`);
         setNote(t("commandFailed", { reason: result.reason }));
+      } else if (command === "stop" && result.stoppedSessionId) {
+        // 停 worker job 之外还要结束拥有该 job 的聊天回合，否则 agent 会立即重新挂上新 job。
+        onStopAgentTurn?.(result.stoppedSessionId);
       }
       return result;
     },
-    [run, t],
+    [onStopAgentTurn, run, t],
   );
 
   const surfaceRef = useRef<HTMLDivElement>(null);

@@ -471,3 +471,14 @@ pure functions (letterbox mapping, modifier/key mapping, throttling, no subscrip
 
 Composer Run-on control removed; user turns declare `automatic`; Settings → Computers; plain work
 card wording; agent tool descriptions reworded; "Tool callRunning" separator fixed.
+
+
+## Stop ends the owning chat turn (2026-10-01)
+
+Measured on 594eca2: the Computer pane's Stop posted `/agent/stop` to the worker but the agent's
+chat turn kept running, and its next action re-attached a fresh job through `ensureSessionJob`, so
+Stop had no lasting effect. Stop now also ends the turn: Main's `stop` returns
+`stoppedSessionId` (the agent session that owned the stopped job; absent for a panel-owned job),
+and the side pane ends that conversation's turn through the existing `stopGeneration` path — the
+same path the local preview's Stop uses. Main only forwards; it holds no turn state. A
+`stoppedSessionId` that is not the visible conversation is logged and not stopped (never guessed).

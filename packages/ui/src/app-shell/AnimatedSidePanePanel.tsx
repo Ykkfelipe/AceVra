@@ -422,6 +422,31 @@ export function AnimatedSidePanePanel({
   const isDragCollapsible = !isVisible;
   const isResizeDisabled = !isVisible;
   const workspaceKey = workspaceIdentity?.trim() || workspaceAbsPath;
+  // 远程 Computer 的 Stop 停掉 worker job 后，还要结束拥有该 job 的聊天回合（与本地预览的
+  // Stop 同一条 stopGeneration 路径）。只停当前会话：不猜测、不跨会话停止。
+  const stopAgentTurn = useCallback(
+    (sessionId: string) => {
+      if (sessionId !== activeTaskId) {
+        logger.warn(
+          "[computers] stop: job owner is not the active conversation; turn not stopped",
+          {
+            sessionId,
+          },
+        );
+        return;
+      }
+      void services.zcodeTaskService
+        .stopGeneration({
+          taskId: sessionId,
+          workspacePath: workspaceAbsPath,
+          ...(workspaceIdentity ? { workspaceIdentity } : {}),
+        })
+        .catch((error: unknown) => {
+          logger.warn("[computers] stop: ending the agent turn failed", { error: String(error) });
+        });
+    },
+    [activeTaskId, services, workspaceAbsPath, workspaceIdentity],
+  );
   const tabs = sidePaneState?.tabs ?? EMPTY_SIDE_PANE_TABS;
   const screenshotSurfaceRequest = screenshotSurfaceRequestProp;
   const isScreenshotSurfaceActive = Boolean(screenshotSurfaceRequest);
@@ -1308,6 +1333,7 @@ export function AnimatedSidePanePanel({
                             expanded={computerExpandRestoreSize !== null}
                             onToggleExpand={toggleComputerExpand}
                             onSelectComputer={onOpenComputer}
+                            onStopAgentTurn={stopAgentTurn}
                           />
                         ) : tab.type === "terminal" ? (
                           <SidePaneTerminalPane

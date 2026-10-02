@@ -98,7 +98,13 @@ export type ComputerTestResult =
   | { ok: true; screen: { width: number; height: number }; version: string | null }
   | { ok: false; reason: string };
 
-export type ComputerCommandResult = { ok: true } | { ok: false; reason: string };
+export type ComputerCommandResult =
+  | {
+      ok: true;
+      /** `stop` only: the agent session whose remote job was stopped; its chat turn must end too. */
+      stoppedSessionId?: string;
+    }
+  | { ok: false; reason: string };
 
 /** One raw keyboard event forwarded by Main while remote keyboard capture is active (spec §3.3). */
 export interface CapturedKeyEvent {
