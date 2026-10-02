@@ -94,7 +94,7 @@ export function createProtectedForegroundController(deps) {
    * any thinking gap into a reacquiring loop). Delivery failures are ignored here on purpose: the
    * typed failure surfaces on the next real action, where recovery belongs. Never logs ids.
    */
-  const renewIntervalMs = deps.leaseRenewIntervalMs ?? 10_000;
+  const renewIntervalMs = deps.leaseRenewIntervalMs ?? 5_000;
   let renewTimer;
   function ensureRenewTimer() {
     if (renewTimer || !(renewIntervalMs > 0)) return;
@@ -145,6 +145,22 @@ export function createProtectedForegroundController(deps) {
       if (typeof leaseAuthority?.release === "function") {
         await leaseAuthority
           .release(native.authorityLeaseId, "model_release")
+          .catch(() => undefined);
+      }
+      // 可观测性（proven installed 78256d1f）：租约先于显式 release 消失时（到期/用户接管/
+      // helper 断开），模型只看到 refused，不知道为什么。Helper 的 control_status 在 30 s 内
+      // 报告 lastTerminationCode——把它附在结果里，让终止原因 typed 且可观察。
+      if (result && result.lease_state !== "released" && result.lease_state !== "active") {
+        await helperCall("control_status", {
+          lease_id: native.helperLeaseId,
+          ...ownerParams(sessionId, binding.taskId),
+        })
+          .then((status) => {
+            const reason = status?.lease_state;
+            if (typeof reason === "string" && reason !== "unknown") {
+              result.termination_reason = reason;
+            }
+          })
           .catch(() => undefined);
       }
     }

@@ -987,9 +987,21 @@ extension ForegroundController {
                 return foregroundRefusal("secure_field")
             }
         }
-        guard let name = params["key"] as? String, let key = foregroundKeyCodes[name] else {
+        guard let name = params["key"] as? String else {
             return foregroundRefusal("invalid_key")
         }
+        // 普通键盘符号（+ - = 标点等）没有稳定的 macOS 虚拟键码：单字符按 unicode 事件投递，
+        // 走 type_text 同一条 CGEvent 路径；命名结构键（return/tab/修饰键组合等）保持原表，
+        // 行为不变。修复依据（installed 78256d1f 实测）："+" 被 invalid_key 拒绝，模型被迫
+        // 绕道 type_text 再撞 unsafe_focus。
+        let structuredKey = foregroundKeyCodes[name]
+        let characterUnits: [UniChar]? = (structuredKey == nil && name.count == 1)
+            ? Array(name.utf16)
+            : nil
+        guard structuredKey != nil || characterUnits?.count == 1 else {
+            return foregroundRefusal("invalid_key")
+        }
+        let key = structuredKey ?? 0
         let modifiers = params["modifiers"] as? [String] ?? []
         guard modifiers.count <= 4, Set(modifiers).count == modifiers.count,
               modifiers.allSatisfy({ ["shift", "control", "option", "command"].contains($0) }) else {
@@ -1006,6 +1018,10 @@ extension ForegroundController {
         guard let down = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: true),
               let up = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: false) else {
             return foregroundRefusal("input_unavailable")
+        }
+        if let characterUnits {
+            down.keyboardSetUnicodeString(stringLength: characterUnits.count, unicodeString: characterUnits)
+            up.keyboardSetUnicodeString(stringLength: characterUnits.count, unicodeString: characterUnits)
         }
         down.flags = flags
         up.flags = flags
