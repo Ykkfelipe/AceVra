@@ -188,17 +188,9 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
             {summary.detail}
           </code>
         ) : null}
-        {summary.note ? (
-          <span
-            className="min-w-0 truncate italic text-foreground-subtlest"
-            data-testid="node-repl-model-note"
-          >
-            {summary.note}
-          </span>
-        ) : null}
       </span>
     ),
-    [summary.detail, summary.note, summary.status, summary.title],
+    [summary.detail, summary.status, summary.title],
   );
   const renderContent = useCallback(
     () => (

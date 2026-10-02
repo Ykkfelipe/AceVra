@@ -7,7 +7,7 @@ export function getNodeReplSummary(
   isRunning: boolean,
   formatMessage: (id: string) => string,
   computerActionLabel: string | undefined,
-): { title: string; status?: string; detail?: string; note?: string } {
+): { title: string; status?: string; detail?: string } {
   const isFailed = status === "failed";
   const isDenied = status === "denied";
   const isStopped = status === "stopped";
@@ -52,10 +52,8 @@ export function getNodeReplSummary(
         ? "chat.toolCall.nodeRepl.processing"
         : "chat.toolCall.nodeRepl.finished",
   );
-  // 模型自写的 `input.title` 不是产品标题：已知 Computer 操作用产品标签；其余 js cell 用通用
-  // 产品标签，模型标题只在完成后作为视觉上区分的弱化备注出现（运行中尚不知 operation，
-  // 一律只显示「Working」，避免英文界面里先闪出中文模型标题）。
-  const note = !computerActionLabel && !isRunning ? model.userTitle : undefined;
+  // 模型自写的 `input.title` 不是产品 chrome，任何状态下都不出现在行上（英文界面里它常是中文）：
+  // 已知 Computer 操作用产品标签，其余 js cell 用通用产品标签；完整代码仍在展开详情里。
   return {
     title: computerActionLabel ?? fallbackTitle,
     status: computerActionLabel
@@ -67,6 +65,5 @@ export function getNodeReplSummary(
               : "chat.toolCall.nodeRepl.completed",
         )
       : undefined,
-    ...(note ? { note } : {}),
   };
 }

@@ -58,7 +58,10 @@ called in-process through that hardened session's trusted `host.callMethod` (the
 in `host-transport.js` admits it only on the trusted path); the managed host's
 `queryWorkspaceStream` is only a secondary holder. The renderer reaches the adapter through the
 existing `cuaPermissionService.getComputerWorkspaceStream` RPC and never touches Helper transport.
-No second Helper, TCC identity or capture process exists. The adapter exposes only `read` and
+No second Helper, TCC identity or capture process exists. Sustained stream traffic is a new load
+on the hardened relay: the host-transport first-line router must detach once a connection's role
+is decided (a still-attached router accumulated every Helper response byte and crashed the window
+host with `RangeError: Invalid string length` after a few minutes of streaming). The adapter exposes only `read` and
 `stop`: local has no Take control/Give back, and the Helper's `take_control` operation is not
 reachable from the product.
 
@@ -118,9 +121,10 @@ name ("Looking at Notes", "Typing in Notes"). A structured result `operation` fi
 fallback for rows persisted before this field existed. A Computer Use cell whose operation is not
 in the label table renders the generic "Using the computer" label.
 
-Model-authored `input.title` is never product chrome in a js cell row. A running cell (operation
-not yet known) shows the generic "Working" label only. A completed non-Computer cell shows the
-generic completion label with the model's title as a visually distinct muted note (not a label).
+Model-authored `input.title` never appears on a js cell row, in any state or locale (the model
+often titles cells in Chinese even in an English session). A running cell (operation not yet
+known) shows the generic "Working" label; a completed non-Computer cell shows the generic
+completion label; the cell code remains available in the expanded details.
 Assistant prose and reasoning rendering are untouched. The CUA group card's accessible title uses
 the same product label and never falls back to `toolCall.title`; the mini panel caption uses the
 same `computerActionLabel` boundary.

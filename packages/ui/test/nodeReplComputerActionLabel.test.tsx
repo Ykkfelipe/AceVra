@@ -91,7 +91,7 @@ test("an appKey without a display name is not rendered as raw text", () => {
   assert.doesNotMatch(text, /darwin:com\.google\.Chrome/);
 });
 
-test("a non-Computer js cell shows a generic product title; the model title is only a muted note", () => {
+test("a non-Computer js cell shows a generic product title and never the model title", () => {
   const cell = {
     toolId: "tool-custom",
     toolName: "mcp__node_repl__js",
@@ -104,7 +104,7 @@ test("a non-Computer js cell shows a generic product title; the model title is o
   const markup = render(cell);
   const text = visibleText(markup);
   assert.match(text, /Operation completed/);
-  assert.match(markup, /data-testid="node-repl-model-note"[^>]*>Summarise the release notes</);
+  assert.doesNotMatch(text, /Summarise the release notes/);
   assert.doesNotMatch(text, /Using the computer/);
 });
 
@@ -173,4 +173,19 @@ test("the product label is localized — a Chinese session does not show English
   assert.match(text, /正在输入/);
   assert.doesNotMatch(text, /Typing/);
   assert.doesNotMatch(text, /查找全局电脑对象/);
+});
+
+test("a Chinese-titled probe cell with no Computer Use call shows no Chinese in the row", () => {
+  const cell = {
+    toolId: "tool-probe",
+    toolName: "mcp__node_repl__js",
+    kind: "js",
+    input: { code: "nodeRepl.write(typeof agent.computerUse.press)", title: "查看代理使用文档" },
+    output: "function",
+    status: "completed",
+    raw: {},
+  } as unknown as ChatToolCall;
+  const text = visibleText(render(cell));
+  assert.match(text, /Operation completed/);
+  assert.doesNotMatch(text, /[\u3400-\u9fff]/);
 });
