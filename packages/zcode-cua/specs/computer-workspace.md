@@ -86,6 +86,34 @@ state (not owned by any transcript message), so a later detach/always-on-top sur
 the same ownership. Local and remote routes never silently substitute for one another; a
 task-level target choice takes precedence over defaults.
 
+### LocalComputerPreview presentation: floating window (2026-10-01)
+
+The preview is a projection of the session's local Computer state, not a transcript message and
+not the owner of the session. One owner per fact:
+
+- session facts (target, frame stream, logical cursor, activity, pause/stop) — host projection +
+  the window stream hook, mounted once per conversation (`MiniComputerPanel`, wired component);
+- presentation (compact/expanded, position, width, hidden, stopped-dismissal) —
+  `miniComputerStore`, keyed by session id. A future detached native window subscribes to the
+  same session facts and its own presentation entry; nothing here is tied to a message row.
+
+Floating: the panel renders through a portal into the document body with fixed coordinates, so
+dragging never reflows the chat and transcript updates never recreate it. Drag starts only on the
+title bar's drag area (buttons and the live frame never start a drag); the position updates via a
+transform during the drag and is committed to the store on release, clamped to the app window
+with an 8 px margin, and re-clamped when the window shrinks. Resize is a corner handle that
+changes width only; the frame height follows the stream's aspect ratio (fallback 16:10), so the
+image is never letterboxed or distorted and cursor percentages map 1:1 onto window pixels. Width
+is bounded (260 px … min(640 px, window − 16 px)). Expanded is the same element tree in a larger
+centred rect (≤ window − 96 px wide, frame ≤ window height − 160 px) with an explicit Restore; it
+never remounts the frame, never opens a second stream and never enters the RemoteComputerPane.
+None of these interactions touch the stream hook, so stream sequence and cursor state persist.
+
+Lifecycle: Pause keeps the preview; Stop ends the turn and the Computer control, shows a brief
+"Stopped" state (~1.5 s) and dismisses; a completed task shows "Done" for a short relevance window
+(8 s) and dismisses. × hides the preview (the task keeps running) and leaves a reopen chip — it is
+semantically distinct from Stop.
+
 ### Input and evidence rules
 
 Delayed self-activation (2026-10-01, measured on f4fdd904): some apps activate themselves shortly

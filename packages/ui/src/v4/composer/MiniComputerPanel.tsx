@@ -1,339 +1,39 @@
-// M3: persistent floating mini Computer panel (picture-in-picture) over the conversation.
+// LocalComputerPreview (wired): floating, movable, resizable view of the session's local Computer.
 //
 // 纯投影呈现：动作/目标/光标事实来自宿主维护的 workspace 投影，像素来自 signed Helper 对
 // agent 目标窗口的窗口级 SCStream（useLocalComputerStream → workspace_stream）。屏幕级的
-// observation 帧只属于 agent 观察通道，绝不作为这里的实时预览。这里没有第二个状态机，也
-// 没有计时器合成的动作。
+// observation 帧只属于 agent 观察通道，绝不作为这里的实时预览。这里没有第二个状态机。
 //
-// 零偷取：渲染本面板不激活任何应用、不移动物理光标、不获取任何租约。后台语义通过
-// "Working in background" 呈现；只有原生租约真正 active 时才出现 "Exclusive control"。
-// × 只隐藏面板（呈现偏好，miniComputerStore），绝不停止任务/暂停执行；展开是同一
-// workspace 的另一种呈现，不是第二个会话。
-import {
-  LoaderCircleIcon,
-  Maximize2Icon,
-  Minimize2Icon,
-  MonitorPauseIcon,
-  MonitorPlayIcon,
-  MousePointer2Icon,
-  SquareIcon,
-  XIcon,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import {
-  TID_V4_MINI_COMPUTER,
-  TID_V4_MINI_COMPUTER_CAPTION,
-  TID_V4_MINI_COMPUTER_CLOSE,
-  TID_V4_MINI_COMPUTER_CURSOR,
-  TID_V4_MINI_COMPUTER_EXPAND,
-  TID_V4_MINI_COMPUTER_FRAME,
-  TID_V4_MINI_COMPUTER_PAUSE,
-  TID_V4_MINI_COMPUTER_REOPEN,
-  TID_V4_MINI_COMPUTER_STOP,
-} from "@zcode/shared";
-import type { CuaComputerUseSessionView, CuaWorkspaceView } from "@zcode/services";
-import { Button } from "@/components/ui/button.js";
-import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { formatComputerActionLabel } from "@/lib/computerActionLabel.js";
+// 呈现（紧凑/展开、位置、宽度、隐藏、Stop 后收起）归 miniComputerStore，按会话键控；拖动、
+// 缩放、展开都不触碰会话事实与窗口流，因此不会重启画面流、不会丢失帧序号与光标。浮窗经
+// portal 挂到 body 并使用固定坐标：拖动不引起聊天重排，transcript 更新也不会重建它。
+// 零偷取：渲染本面板不激活任何应用、不移动物理光标、不获取任何租约。
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { CuaComputerUseSessionView } from "@zcode/services";
 import type { UseComputerUseSessionResult } from "@/hooks/useComputerUseSession.js";
 import { useLocalComputerStream } from "@/hooks/useLocalComputerStream.js";
-import type { LocalStreamState } from "@/computers/localComputerStream.js";
+import {
+  compactPreviewRect,
+  expandedPreviewRect,
+  type Viewport,
+} from "@/computers/localPreviewGeometry.js";
 import { useMiniComputerStore } from "@/store/miniComputerStore.js";
+import {
+  MINI_COMPUTER_STOPPED_DISMISS_MS,
+  MiniComputerPanelMounted,
+} from "./LocalComputerPreviewWindow.js";
 
-const WORKSPACE_STATE_MESSAGE_ID: Record<CuaWorkspaceView["state"], string> = {
-  idle: "chat.miniComputer.state.idle",
-  observing: "chat.miniComputer.state.observing",
-  acting: "chat.miniComputer.state.acting",
-  paused: "chat.miniComputer.state.paused",
-  failed: "chat.miniComputer.state.failed",
-  stale: "chat.miniComputer.state.stale",
-};
-
-/**
- * Places the logical cursor over an `object-contain` frame: the displayed frame is
- * min(100cqw, ar·100cqh) wide and min(100cqh, 100cqw/ar) tall, centred in the frame area.
- */
-export function localCursorStyle(
-  position: { left: number; top: number },
-  aspectRatio: number,
-): { left: string; top: string } {
-  const fx = (position.left / 100 - 0.5).toFixed(4);
-  const fy = (position.top / 100 - 0.5).toFixed(4);
-  const ar = aspectRatio.toFixed(4);
-  return {
-    left: `calc(50cqw + ${fx} * min(100cqw, ${ar} * 100cqh))`,
-    top: `calc(50cqh + ${fy} * min(100cqh, 100cqw / ${ar}))`,
-  };
-}
-
-export interface MiniComputerPanelData {
-  workspace: CuaWorkspaceView;
-  /** Window-scoped live stream of the agent's target window (never a screen observation). */
-  stream: LocalStreamState;
-  /** Real admission pause from the lease authority (never a UI-only state). */
-  paused: boolean;
-  /** True only while the native exclusive lease is actually active (escalation). */
-  leaseActive: boolean;
-  turnRunning: boolean;
-  /** Presentational preferences from miniComputerStore, keyed by session. */
-  hidden: boolean;
-  expanded: boolean;
-  /** Whether the workspace is still worth a reopen affordance. */
-  relevant: boolean;
-  /** Optimistic command in flight from the real service path. */
-  pending: "pause" | "resume" | "stop" | null;
-}
-
-export interface MiniComputerPanelActions {
-  onHide: () => void;
-  onReopen: () => void;
-  onSetExpanded: (expanded: boolean) => void;
-  onPause: () => void;
-  onResume: () => void;
-  onStop: () => void;
-}
-
-/**
- * Exported for deterministic render tests; the wired component owns store/service wiring.
- */
-export function MiniComputerPanelMounted(props: {
-  data: MiniComputerPanelData;
-  actions: MiniComputerPanelActions;
-}) {
-  const { data, actions } = props;
-  const { intl } = useZCodeIntl();
-  const {
-    workspace: polledWorkspace,
-    stream,
-    paused,
-    leaseActive,
-    turnRunning,
-    hidden,
-    expanded,
-    relevant,
-    pending,
-  } = data;
-
-  if (hidden) {
-    if (!relevant) return null;
-    return (
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        data-testid={TID_V4_MINI_COMPUTER_REOPEN}
-        onClick={actions.onReopen}
-        className="pointer-events-auto shadow-lg"
-        aria-label={intl.formatMessage({ id: "chat.miniComputer.reopen" })}
-      >
-        <MousePointer2Icon className="size-3.5" aria-hidden />
-        {intl.formatMessage({ id: "chat.miniComputer.reopen" })}
-      </Button>
-    );
-  }
-
-  // 流读取（~12 Hz）随帧带回同一时刻的投影，比 1 s 会话轮询更新；没有时回落到轮询投影。
-  const workspace = stream.workspace ?? polledWorkspace;
-  const targetLabel = workspace.target?.app ?? null;
-  const title = targetLabel ?? intl.formatMessage({ id: "chat.miniComputer.title" });
-  const stateLabel = intl.formatMessage({ id: WORKSPACE_STATE_MESSAGE_ID[workspace.state] });
-
-  // Truthful caption: 与 transcript 共用同一套 product-owned Computer 动作标签
-  // （computerActionLabel），不采用模型自述文本。目标名作为旁边 chip 一样由投影给出。
-  const captionParts = workspace.action
-    ? [
-        formatComputerActionLabel(intl, workspace.action.method, {
-          app: workspace.action.targetLabel ?? targetLabel,
-        }),
-      ]
-    : [];
-  const done = !turnRunning && workspace.state === "idle" && !paused;
-  const caption =
-    captionParts.length > 0
-      ? captionParts.join(" · ")
-      : done
-        ? intl.formatMessage({ id: "chat.miniComputer.done" })
-        : stateLabel;
-
-  // Mode: background is the workspace default; "Exclusive control" only for a real lease.
-  const modeLabel = leaseActive
-    ? intl.formatMessage({ id: "chat.miniComputer.mode.exclusive" })
-    : workspace.backendId === "agent-workspace"
-      ? intl.formatMessage({ id: "chat.miniComputer.mode.background" })
-      : null;
-
-  const liveFrame = stream.stream.frame;
-  const frameUrl = liveFrame?.url ?? null;
-  const cursorPosition = stream.cursor;
-  const placeholderId =
-    stream.status === "unavailable"
-      ? "chat.miniComputer.frame.unavailable"
-      : workspace.target
-        ? "chat.miniComputer.frame.waiting"
-        : "chat.miniComputer.frame.none";
-
-  const body = (
-    <>
-      <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-3 py-1.5">
-        <span className="min-w-0 flex-1 truncate text-ui-sm font-medium" title={title}>
-          {title}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid={TID_V4_MINI_COMPUTER_EXPAND}
-          onClick={() => actions.onSetExpanded(!expanded)}
-          aria-label={
-            expanded
-              ? intl.formatMessage({ id: "chat.miniComputer.exitExpand" })
-              : intl.formatMessage({ id: "chat.miniComputer.expand" })
-          }
-        >
-          {expanded ? (
-            <Minimize2Icon className="size-3.5" aria-hidden />
-          ) : (
-            <Maximize2Icon className="size-3.5" aria-hidden />
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          data-testid={TID_V4_MINI_COMPUTER_CLOSE}
-          onClick={actions.onHide}
-          aria-label={intl.formatMessage({ id: "chat.miniComputer.hide" })}
-        >
-          <XIcon className="size-3.5" aria-hidden />
-        </Button>
-      </div>
-      {/* Live, window-scoped: only the AgentWorkspace target window, latest frame only. */}
-      <div className="relative flex min-h-0 w-full flex-1 items-center justify-center bg-black/40 [container-type:size]">
-        {frameUrl ? (
-          <img
-            data-testid={TID_V4_MINI_COMPUTER_FRAME}
-            data-frame-seq={liveFrame?.seq}
-            data-frame-source={stream.identity}
-            data-frame-captured-at={liveFrame?.capturedAt}
-            src={frameUrl}
-            alt={intl.formatMessage({ id: "chat.miniComputer.frame.alt" })}
-            className="max-h-full max-w-full object-contain"
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-1 p-4 text-ui-sm text-foreground-subtle">
-            {stream.status === "waiting" && workspace.target ? (
-              <LoaderCircleIcon className="size-4 animate-spin" aria-hidden />
-            ) : null}
-            <span>{intl.formatMessage({ id: placeholderId })}</span>
-          </div>
-        )}
-        {frameUrl && cursorPosition && stream.aspectRatio ? (
-          // Logical agent cursor: display-only, positioned inside the captured window. The frame
-          // is letterboxed (object-contain), so the offset is computed against the displayed
-          // frame box via container query units, keeping it aligned across resizes.
-          <span
-            data-testid={TID_V4_MINI_COMPUTER_CURSOR}
-            data-cursor-left={cursorPosition.left.toFixed(1)}
-            data-cursor-top={cursorPosition.top.toFixed(1)}
-            className="pointer-events-none absolute text-foreground drop-shadow"
-            style={localCursorStyle(cursorPosition, stream.aspectRatio)}
-          >
-            <MousePointer2Icon className="size-4 -translate-x-0.5 -translate-y-0.5 fill-current" />
-          </span>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-2 border-t border-[var(--color-border)] px-3 py-1.5">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span
-            data-testid={TID_V4_MINI_COMPUTER_CAPTION}
-            className="truncate text-ui-sm"
-            title={caption}
-          >
-            {caption}
-          </span>
-          <span className="flex min-w-0 items-center gap-2 text-ui-xs text-foreground-subtle">
-            <span data-testid={`${TID_V4_MINI_COMPUTER}-state`}>{stateLabel}</span>
-            {modeLabel ? (
-              <>
-                <span aria-hidden>·</span>
-                <span data-testid={`${TID_V4_MINI_COMPUTER}-mode`}>{modeLabel}</span>
-              </>
-            ) : null}
-          </span>
-        </div>
-        {paused ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid={TID_V4_MINI_COMPUTER_PAUSE}
-            onClick={actions.onResume}
-            disabled={pending !== null}
-            aria-label={intl.formatMessage({ id: "chat.computerUseBar.resume" })}
-          >
-            <MonitorPlayIcon className="size-3.5" aria-hidden />
-            {intl.formatMessage({ id: "chat.computerUseBar.resume" })}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid={TID_V4_MINI_COMPUTER_PAUSE}
-            onClick={actions.onPause}
-            disabled={pending !== null}
-            aria-label={intl.formatMessage({ id: "chat.computerUseBar.pause" })}
-          >
-            <MonitorPauseIcon className="size-3.5" aria-hidden />
-            {intl.formatMessage({ id: "chat.computerUseBar.pause" })}
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-testid={TID_V4_MINI_COMPUTER_STOP}
-          onClick={actions.onStop}
-          disabled={pending === "stop"}
-          aria-label={intl.formatMessage({ id: "chat.computerUseBar.stop" })}
-        >
-          <SquareIcon className="size-3.5" aria-hidden />
-          {intl.formatMessage({ id: "chat.computerUseBar.stop" })}
-        </Button>
-      </div>
-    </>
-  );
-
-  if (expanded) {
-    // 另一种呈现，同一 workspace：同一投影、同一帧、同一投影光标，不是第二个会话。
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6">
-        <div
-          data-testid={TID_V4_MINI_COMPUTER}
-          data-mini-computer-expanded="true"
-          data-mini-computer-state={workspace.state}
-          className="flex h-[80vh] w-[80vw] max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-surface shadow-lg"
-        >
-          {body}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      data-testid={TID_V4_MINI_COMPUTER}
-      data-mini-computer-expanded="false"
-      data-mini-computer-state={workspace.state}
-      className="pointer-events-auto flex h-64 w-[22rem] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-surface text-foreground shadow-lg"
-    >
-      {body}
-    </div>
-  );
-}
+export {
+  localCursorStyle,
+  MINI_COMPUTER_STOPPED_DISMISS_MS,
+  MiniComputerPanelMounted,
+  type MiniComputerPanelActions,
+  type MiniComputerPanelData,
+} from "./LocalComputerPreviewWindow.js";
 
 /** Relevance window: how long a finished workspace stays worth showing/reopening. */
-const MINI_COMPUTER_RELEVANCE_MS = 15_000;
+const MINI_COMPUTER_RELEVANCE_MS = 8_000;
 
 /**
  * True while the session's agent-workspace projection is the relevant Computer UI.
@@ -363,11 +63,16 @@ export function isAgentWorkspaceActive(
   );
 }
 
+function readViewport(): Viewport | null {
+  return typeof window === "undefined"
+    ? null
+    : { width: window.innerWidth, height: window.innerHeight };
+}
+
 /**
  * Wired component: one shared `useComputerUseSession` poll (hoisted by the composer) feeds
- * both the Computer Use bar and this panel — a second poller would double the host RPC and
- * the Helper reconciliation for no benefit. Presentation preferences (hidden/expanded) come
- * from the session-keyed store; workspace facts come only from the service projection.
+ * both the Computer Use bar and this panel. Presentation (hidden/expanded/position/width/
+ * stopped) comes from the session-keyed store; workspace facts come only from the services.
  */
 export function MiniComputerPanel(props: {
   session: UseComputerUseSessionResult;
@@ -376,15 +81,13 @@ export function MiniComputerPanel(props: {
   onStop: () => void;
 }) {
   const { session, sessionId, turnRunning, onStop } = props;
-  const hiddenFlag = useMiniComputerStore((state) =>
-    sessionId ? state.hiddenBySession[sessionId] === true : false,
-  );
-  const expandedFlag = useMiniComputerStore((state) =>
-    sessionId ? state.expandedBySession[sessionId] === true : false,
-  );
-  const hide = useMiniComputerStore((state) => state.hide);
-  const reopen = useMiniComputerStore((state) => state.reopen);
-  const setExpanded = useMiniComputerStore((state) => state.setExpanded);
+  const key = sessionId ?? "";
+  const hiddenFlag = useMiniComputerStore((state) => state.hiddenBySession[key] === true);
+  const expandedFlag = useMiniComputerStore((state) => state.expandedBySession[key] === true);
+  const position = useMiniComputerStore((state) => state.positionBySession[key] ?? null);
+  const width = useMiniComputerStore((state) => state.widthBySession[key] ?? null);
+  const stoppedAt = useMiniComputerStore((state) => state.stoppedAtBySession[key] ?? null);
+  const store = useMiniComputerStore.getState;
 
   // 1 s clock only for the presentation relevance window; it never drives workspace facts.
   const [clock, setClock] = useState(() => Date.now());
@@ -393,18 +96,49 @@ export function MiniComputerPanel(props: {
     return () => clearInterval(timer);
   }, []);
 
+  // 浮窗只在客户端挂载后经 portal 渲染；视口变化时重新夹紧位置。
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [viewport, setViewport] = useState<Viewport | null>(null);
+  const [anchor, setAnchor] = useState<{ right: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      setViewport(readViewport());
+      const box = anchorRef.current?.parentElement?.getBoundingClientRect();
+      if (box) setAnchor({ right: box.right, top: box.bottom });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
   const view = session.session;
   const workspace = view?.present ? (view.workspace ?? null) : null;
   const paused = view?.present ? view.paused : false;
   const leaseActive = view?.present ? view.lease.state === "active" : false;
 
-  const relevant = isAgentWorkspaceActive(view, turnRunning, clock);
+  // Stop 之后若出现新的 workspace 活动（同一会话开始了新的本地任务），不再沿用旧的「已停止」。
+  const stopped =
+    stoppedAt !== null &&
+    (!workspace || workspace.updatedAt <= stoppedAt + MINI_COMPUTER_STOPPED_DISMISS_MS);
+  const dismissedAfterStop =
+    stopped && stoppedAt !== null && clock - stoppedAt > MINI_COMPUTER_STOPPED_DISMISS_MS;
+  const relevant = isAgentWorkspaceActive(view, turnRunning, clock) && !dismissedAfterStop;
   // 可视需求只在面板可见时存在：隐藏/不相关即停止窗口流（stop），不影响执行。
   const stream = useLocalComputerStream(sessionId, Boolean(workspace) && relevant && !hiddenFlag);
 
-  if (!sessionId || !workspace || !relevant) return null;
+  useEffect(() => {
+    if (sessionId && stoppedAt !== null && !stopped) store().clearStopped(sessionId);
+  }, [sessionId, stopped, stoppedAt, store]);
 
-  return (
+  if (!sessionId || !workspace || !relevant) return <span ref={anchorRef} hidden />;
+
+  const rect = viewport
+    ? expandedFlag
+      ? expandedPreviewRect(stream.aspectRatio, viewport)
+      : compactPreviewRect({ position, width, aspectRatio: stream.aspectRatio, viewport, anchor })
+    : undefined;
+
+  const panel = (
     <MiniComputerPanelMounted
       data={{
         workspace,
@@ -416,20 +150,38 @@ export function MiniComputerPanel(props: {
         expanded: expandedFlag,
         relevant,
         pending: session.pending,
+        stopped,
+        ...(rect && !hiddenFlag ? { rect } : {}),
       }}
       actions={{
         // × 只改呈现偏好：不停止任务、不暂停执行、不丢弃 workspace 投影。
-        onHide: () => hide(sessionId),
-        onReopen: () => reopen(sessionId),
-        onSetExpanded: (value) => setExpanded(sessionId, value),
+        onHide: () => store().hide(sessionId),
+        onReopen: () => store().reopen(sessionId),
+        onSetExpanded: (value) => store().setExpanded(sessionId, value),
         onPause: () => session.pause(),
         onResume: () => session.resume(),
-        // 与 Computer Use bar 同一组真实路径：会话回合停止 + 服务端控制停止。
+        // 与 Computer Use bar 同一组真实路径：会话回合停止 + 服务端控制停止；随后短暂显示
+        // 「已停止」再收起。
         onStop: () => {
           onStop();
           session.stopComputerControl();
+          store().markStopped(sessionId, Date.now());
+        },
+        onMove: (next) => store().setPosition(sessionId, next),
+        onResize: (nextWidth, next) => {
+          store().setWidth(sessionId, nextWidth);
+          store().setPosition(sessionId, next);
         },
       }}
     />
+  );
+
+  return (
+    <>
+      <span ref={anchorRef} hidden />
+      {rect && !hiddenFlag && typeof document !== "undefined"
+        ? createPortal(panel, document.body)
+        : panel}
+    </>
   );
 }

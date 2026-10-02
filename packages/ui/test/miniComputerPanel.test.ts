@@ -166,7 +166,13 @@ function renderWired(input: {
 }
 
 function resetStore(): void {
-  useMiniComputerStore.setState({ hiddenBySession: {}, expandedBySession: {} });
+  useMiniComputerStore.setState({
+    hiddenBySession: {},
+    expandedBySession: {},
+    positionBySession: {},
+    widthBySession: {},
+    stoppedAtBySession: {},
+  });
 }
 
 test("panel appears on active workspace state", () => {
@@ -249,7 +255,7 @@ test("cursor overlay is placed over the letterboxed window frame; no cursor with
 });
 
 test("caption shows the projection's real action with the app; a finished task shows Done", () => {
-  const acting = renderMounted(mountedData());
+  const acting = renderMounted(mountedData({ turnRunning: true }));
   assert.ok(acting.includes(TID_V4_MINI_COMPUTER_CAPTION));
   assert.ok(acting.includes("Clicking in WorkspaceFixture"));
   const observing = renderMounted(
@@ -257,6 +263,7 @@ test("caption shows the projection's real action with the app; a finished task s
       workspace: workspace({
         action: { method: "observe", label: "观察 Notes 状态", targetLabel: "Notes" },
       }),
+      turnRunning: true,
     }),
   );
   assert.ok(observing.includes("Looking at Notes"));
@@ -273,6 +280,7 @@ test("the stream's fresher projection wins over the 1 s session poll", () => {
       stream: stream({
         workspace: workspace({ action: { method: "workspace_type_text", targetLabel: "Notes" } }),
       }),
+      turnRunning: true,
     }),
   );
   assert.ok(html.includes("Typing in Notes"));
@@ -331,7 +339,20 @@ test("hide/reopen is presentation-only state, keyed per session", () => {
   // 隐藏只改呈现偏好，绝不触碰任何 workspace 事实（store 里只有 hidden/expanded 两个键）。
   assert.deepEqual(
     Object.keys(useMiniComputerStore.getState()).sort(),
-    ["expandedBySession", "hiddenBySession", "reopen", "hide", "setExpanded"].sort(),
+    [
+      "expandedBySession",
+      "hiddenBySession",
+      "positionBySession",
+      "widthBySession",
+      "stoppedAtBySession",
+      "reopen",
+      "hide",
+      "setExpanded",
+      "setPosition",
+      "setWidth",
+      "markStopped",
+      "clearStopped",
+    ].sort(),
   );
   useMiniComputerStore.getState().reopen("session-a");
   assert.equal(useMiniComputerStore.getState().hiddenBySession["session-a"], false);
@@ -474,4 +495,56 @@ test("switching tasks: suppression is per session view, no state leakage", () =>
   useMiniComputerStore.getState().hide("session-a");
   assert.equal(useMiniComputerStore.getState().hiddenBySession["session-a"], true);
   assert.equal(useMiniComputerStore.getState().hiddenBySession["session-b"] ?? false, false);
+});
+
+// ---------------------------------------------------------------------------
+// Floating window (LocalComputerPreview presentation).
+// ---------------------------------------------------------------------------
+
+const RECT = { x: 900, y: 420, width: 352, frameHeight: 220 };
+
+test("floating: fixed window at the stored rect, with a title-bar drag area and a resize corner", () => {
+  const html = renderMounted({ ...mountedData({ turnRunning: true }), rect: RECT });
+  assert.ok(html.includes("translate3d(900px, 420px, 0)"));
+  assert.ok(html.includes("width:352px"));
+  assert.ok(html.includes("height:220px"), "frame height follows the aspect, no letterbox");
+  assert.ok(html.includes(`${TID_V4_MINI_COMPUTER}-titlebar`));
+  assert.ok(html.includes(`${TID_V4_MINI_COMPUTER}-resize`));
+  assert.ok(html.includes('draggable="false"'), "the live frame never starts a native drag");
+});
+
+test("expand is the same element tree in a larger rect, with Restore and no resize corner", () => {
+  const compact = renderMounted({ ...mountedData({ turnRunning: true }), rect: RECT });
+  const expanded = renderMounted({
+    ...mountedData({ turnRunning: true, expanded: true }),
+    rect: { x: 120, y: 80, width: 1_200, frameHeight: 675 },
+  });
+  assert.ok(expanded.includes(`data-mini-computer-expanded="true"`));
+  assert.ok(expanded.includes("Restore"));
+  assert.equal(expanded.includes(`${TID_V4_MINI_COMPUTER}-resize`), false);
+  // 同一帧、同一来源：展开不新开流，帧序号不变。
+  for (const html of [compact, expanded]) {
+    assert.ok(html.includes(`data-frame-seq="3"`));
+    assert.ok(html.includes(`data-frame-source="gen-1:42:7"`));
+  }
+});
+
+test("Stop shows a truthful Stopped state and disables further commands", () => {
+  const html = renderMounted({ ...mountedData({ turnRunning: true }), stopped: true });
+  assert.ok(html.includes("Stopped"));
+  assert.ok(html.includes(`data-mini-computer-state="stopped"`));
+});
+
+test("presentation is per session: moving/resizing one preview never affects another", () => {
+  resetStore();
+  const store = useMiniComputerStore.getState();
+  store.setPosition("session-a", { x: 10, y: 20 });
+  store.setWidth("session-a", 480);
+  const next = useMiniComputerStore.getState();
+  assert.deepEqual(next.positionBySession["session-a"], { x: 10, y: 20 });
+  assert.equal(next.positionBySession["session-b"], undefined);
+  assert.equal(next.widthBySession["session-b"], undefined);
+  next.setExpanded("session-a", true);
+  useMiniComputerStore.getState().markStopped("session-a", 1);
+  assert.equal(useMiniComputerStore.getState().expandedBySession["session-a"], false);
 });
