@@ -275,7 +275,10 @@ test("caption shows the projection's real action with the app; a finished task s
   // 完成态是绿色对勾（Codex 式收尾信号），不是灰点；运行中不得出现。
   assert.ok(done.includes('data-mini-computer-done="true"'));
   assert.ok(done.includes('data-testid="v4-mini-computer-done"'));
+  // 大对勾盖在画面中央（Codex 式）：完成时必须有，运行中必须没有。
+  assert.ok(done.includes('data-testid="v4-mini-computer-done-overlay"'));
   assert.equal(observing.includes("v4-mini-computer-done"), false);
+  assert.equal(observing.includes("v4-mini-computer-done-overlay"), false);
 });
 
 test("the stream's fresher projection wins over the 1 s session poll", () => {

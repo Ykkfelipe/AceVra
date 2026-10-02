@@ -3,6 +3,7 @@
 // 只渲染传入的会话事实与呈现矩形；拖动/缩放手势在本地跟手、松手才提交，不触碰会话事实与窗口
 // 流。展开与紧凑是同一棵元素树（同一个面板元素只换位置与尺寸），不会重新挂载画面。
 import {
+  CheckIcon,
   CircleCheckIcon,
   GripVerticalIcon,
   LoaderCircleIcon,
@@ -366,6 +367,19 @@ export function MiniComputerPanelMounted(props: {
               style={localCursorStyle(cursorPosition, stream.aspectRatio)}
             >
               <MousePointer2Icon className="size-4 -translate-x-0.5 -translate-y-0.5 fill-current" />
+            </span>
+          ) : null}
+          {done ? (
+            // 完成态大对勾（Codex 式）：盖住预览画面中央，用户一眼知道任务做完，而不是
+            // 只在标题栏留一个小标记。纯呈现，点击穿透（pointer-events-none）。
+            <span
+              data-testid={`${TID_V4_MINI_COMPUTER}-done-overlay`}
+              aria-hidden
+              className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/45"
+            >
+              <span className="flex size-24 items-center justify-center rounded-full bg-success shadow-xl ring-4 ring-background/60">
+                <CheckIcon className="size-14 text-white" strokeWidth={3} />
+              </span>
             </span>
           ) : null}
           {floating && !expanded ? (
