@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWorkspaceStreamAdapter } from "../src/cua-permission-broker/cuaWorkspaceStream.js";
+import { readFile } from "node:fs/promises";
+import {
+  createWorkspaceStreamAdapter,
+  createWorkspaceStreamHelperCall,
+} from "../src/cua-permission-broker/cuaWorkspaceStream.js";
 import type { CuaWorkspaceView } from "@zcode/zcode-cua/broker";
 function setup() {
   let workspace: CuaWorkspaceView | undefined = {
@@ -12,8 +16,7 @@ function setup() {
     updatedAt: 1,
   };
   const calls: Record<string, unknown>[] = [];
-  let paused = false;
-  const stopEvents: string[] = [];
+  const paused = false;
   let respond: (p: Record<string, unknown>) => Promise<Record<string, unknown>> = async () => ({
     status: "available",
     seq: 1,
@@ -26,16 +29,6 @@ function setup() {
   const read = createWorkspaceStreamAdapter({
     workspace: () => workspace,
     paused: () => paused,
-    pause: async () => {
-      paused = true;
-      stopEvents.push("pause");
-    },
-    resume: async () => {
-      paused = false;
-    },
-    stop: async (sessionId) => {
-      stopEvents.push(`stop:${sessionId}`);
-    },
     call: async (p) => {
       calls.push(p);
       return respond(p);
@@ -44,7 +37,6 @@ function setup() {
   return {
     read,
     calls,
-    stopEvents,
     setTarget: (v: CuaWorkspaceView | undefined) => {
       workspace = v;
     },
@@ -124,17 +116,6 @@ test("hidden viewer stops its generation, another session cannot stop it", async
   await s.read("session", { operation: "stop" });
   assert.equal(s.calls.at(-1)?.generation, initial.generation);
 });
-test("Take control pauses first and Give back resumes without an agent foreground lease", async () => {
-  const s = setup();
-  const r = await s.read("session", { operation: "take_control" });
-  assert.equal(r.paused, true);
-  assert.equal(r.userControl, true);
-  assert.equal(s.calls[0].operation, "take_control");
-  const back = await s.read("session", { operation: "give_back" });
-  assert.equal(back.paused, false);
-  assert.equal(back.userControl, false);
-  assert.equal(s.calls.length, 1);
-});
 test("capture failure truthfully reports unavailable without cached pixels", async () => {
   const s = setup();
   s.setRespond(async () => {
@@ -151,18 +132,101 @@ test("wrong target pixels are refused even when the transport reports success", 
   assert.equal(r.reason, "wrong_target");
   assert.equal(r.jpeg, undefined);
 });
-test("hide and reopen renews the visual generation while retaining explicit human control", async () => {
+test("hide and reopen renews the visual generation", async () => {
   const s = setup();
-  const first = await s.read("session", { operation: "take_control" });
+  const first = await s.read("session", { operation: "read" });
   await s.read("session", { operation: "stop" });
+  assert.equal(s.calls.at(-1)?.operation, "stop");
   const reopened = await s.read("session", { operation: "read" });
   assert.notEqual(first.generation, reopened.generation);
-  assert.equal(reopened.userControl, true);
-  assert.equal(reopened.paused, true);
 });
-test("Stop blocks admission before stopping the owning chat turn", async () => {
+test("local has no Take control: unknown operations never reach the Helper", async () => {
   const s = setup();
-  const r = await s.read("session", { operation: "stop_agent" });
-  assert.equal(r.paused, true);
-  assert.deepEqual(s.stopEvents, ["pause", "stop:session"]);
+  for (const operation of ["take_control", "give_back", "stop_agent"]) {
+    const r = await s.read("session", { operation } as never);
+    assert.equal(r.reason, "bad_request");
+  }
+  assert.equal(s.calls.length, 0);
+});
+test("target switch Chrome→Notes fences the old generation and starts a fresh one", async () => {
+  const s = setup();
+  const chrome = await s.read("session", { operation: "read" });
+  s.setTarget({ ...s.workspace!, target: { pid: 11, windowId: 21, app: "Notes" } });
+  s.setRespond(async () => ({ status: "available", seq: 1, pid: 11, windowId: 21, jpeg: "bg==" }));
+  const notes = await s.read("session", { operation: "read" });
+  assert.notEqual(notes.generation, chrome.generation);
+  assert.equal(notes.pid, 11);
+  assert.equal(s.calls.at(-1)?.pid, 11);
+  assert.equal(s.calls.at(-1)?.generation, notes.generation);
+});
+test("cursor and pixels come from the same read: projection is re-read after capture", async () => {
+  const s = setup();
+  s.setRespond(async () => {
+    s.setTarget({ ...s.workspace!, cursor: { x: 120, y: 80, updatedAt: 9 } });
+    return { status: "available", seq: 2, pid: 10, windowId: 20, originX: 100, originY: 50 };
+  });
+  const r = await s.read("session", { operation: "read" });
+  assert.deepEqual(r.workspace?.cursor, { x: 120, y: 80, updatedAt: 9 });
+  assert.equal(r.originX, 100);
+});
+
+const nodeSource = await readFile(new URL("../src/node.ts", import.meta.url), "utf8");
+
+function hardenedHolder(connected: boolean, calls: unknown[][]) {
+  return {
+    host: {
+      helperConnected: connected,
+      callMethod: async (
+        method: string,
+        params: Record<string, unknown>,
+        options?: { timeoutMs?: number },
+      ) => {
+        calls.push([method, params, options]);
+        return { status: "available", seq: 1 };
+      },
+    },
+  };
+}
+test("stream reads use the hardened session that owns the Helper in this Local Host", async () => {
+  const calls: unknown[][] = [];
+  let managedCalled = false;
+  const call = createWorkspaceStreamHelperCall({
+    hardened: () => hardenedHolder(true, calls),
+    managed: () => ({
+      queryWorkspaceStream: async () => {
+        managedCalled = true;
+        return {};
+      },
+    }),
+  });
+  const result = await call({ operation: "read", generation: "g" });
+  assert.equal(result.status, "available");
+  assert.equal(calls[0]?.[0], "workspace_stream");
+  assert.deepEqual(calls[0]?.[2], { timeoutMs: 3_000 });
+  assert.equal(managedCalled, false);
+});
+test("an empty managed lifecycle (darwin product) no longer makes the stream fail", async () => {
+  const calls: unknown[][] = [];
+  const call = createWorkspaceStreamHelperCall({
+    hardened: () => hardenedHolder(true, calls),
+    managed: () => undefined,
+  });
+  assert.equal((await call({ operation: "read" })).status, "available");
+});
+test("a disconnected Helper fails closed instead of starting a second Helper", async () => {
+  const calls: unknown[][] = [];
+  const call = createWorkspaceStreamHelperCall({
+    hardened: () => hardenedHolder(false, calls),
+    managed: () => undefined,
+  });
+  await assert.rejects(call({ operation: "read" }), /unavailable/);
+  assert.equal(calls.length, 0);
+});
+test("node.ts wires the stream through the hardened session, not only the managed peek", () => {
+  const start = nodeSource.indexOf("const workspaceStream = createWorkspaceStreamAdapter(");
+  const end = nodeSource.indexOf("const cuaPermissionService", start);
+  const wiring = nodeSource.slice(start, end);
+  assert.match(wiring, /createWorkspaceStreamHelperCall\(/);
+  assert.match(wiring, /hardened: \(\) => peekHardenedCuaHelperSession\(\)/);
+  assert.doesNotMatch(wiring, /take_control|stopGeneration/);
 });

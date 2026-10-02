@@ -320,7 +320,7 @@ export interface CuaWorkspaceFrameView {
 }
 
 export interface CuaWorkspaceCursorView {
-  /** Logical agent cursor in the target window's coordinate space; display-only. */
+  /** Logical agent cursor in global AX screen points (top-left origin); display-only. */
   x: number | null;
   y: number | null;
   updatedAt: number;
@@ -378,13 +378,13 @@ export interface CuaObservationFrameResult {
 }
 
 export interface ICuaPermissionService {
-  /** Human visual stream; never creates model observations. Commands retain service admission. */
+  /**
+   * Human visual stream of the AgentWorkspace target window; never creates model observations.
+   * Local has no Take control/Give back: only `read` (latest frame after `afterSeq`) and `stop`.
+   */
   getComputerWorkspaceStream(
     sessionId: string,
-    request: {
-      operation: "read" | "stop" | "take_control" | "give_back" | "stop_agent";
-      afterSeq?: number;
-    },
+    request: { operation: "read" | "stop"; afterSeq?: number },
   ): Promise<CuaWorkspaceStreamResult>;
   getStatus(
     workspacePath: string,
@@ -419,7 +419,6 @@ export interface CuaWorkspaceStreamResult {
   generation: string;
   workspace?: CuaWorkspaceView;
   paused: boolean;
-  userControl: boolean;
   seq?: number;
   capturedAt?: number;
   width?: number;

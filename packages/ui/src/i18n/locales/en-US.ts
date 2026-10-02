@@ -4810,7 +4810,6 @@ const enUS: Record<string, string> = {
   "chat.miniComputer.mode.background": "Working in background",
   "chat.miniComputer.mode.exclusive": "Exclusive control",
   "chat.miniComputer.done": "✓ Done",
-  "chat.miniComputer.freshness.superseded": "Preview from before the last action",
   "chat.miniComputer.frame.alt": "Live view of the window the agent is using",
   "chat.miniComputer.frame.none": "No window to show yet",
   "chat.miniComputer.expand": "Expand",

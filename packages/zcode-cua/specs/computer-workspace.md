@@ -50,11 +50,30 @@ each read and supplies a source generation; stale generation responses are disca
 at a time and one retained frame at every stage bound memory and prevent playback backlog.
 Closing/hiding the preview stops its capture demand; a Helper-side viewer timeout also stops
 orphaned capture. Target selection never falls back to the physical desktop or a different app.
-Known limitation (2026-10-01): the window-host services graph cannot yet reach the hardened
-Helper transport for this RPC, so the continuous `workspace_stream` path is infrastructure and
-tests only; the local preview consumes the accepted observation projection
-(`getComputerUseSession` + `getComputerUseObservationFrame`) until the transport ownership is
-resolved.
+Transport ownership (2026-10-01, resolved): on macOS the window-scoped Local Host's services graph
+owns the hardened CUA-1.75 Helper session (`hardenedCuaHelperSession`, the same session whose
+tuple is injected into the agent spawn env). The managed MCP-host Helper lifecycle is never
+acquired on darwin by design, so the stream adapter must not depend on it. `workspace_stream` is
+called in-process through that hardened session's trusted `host.callMethod` (the host-only gate
+in `host-transport.js` admits it only on the trusted path); the managed host's
+`queryWorkspaceStream` is only a secondary holder. The renderer reaches the adapter through the
+existing `cuaPermissionService.getComputerWorkspaceStream` RPC and never touches Helper transport.
+No second Helper, TCC identity or capture process exists. The adapter exposes only `read` and
+`stop`: local has no Take control/Give back, and the Helper's `take_control` operation is not
+reachable from the product.
+
+The LocalComputerPreview consumes the stream, not the screen-scoped observation projection: the
+observation frame is never shown as the live preview. The preview polls `read` (one request in
+flight, ~80 ms cadence ⇒ up to the Helper's 12 fps) with `afterSeq` so unchanged frames carry no
+bytes; it admits frames by strictly increasing `seq` within one `generation:pid:windowId` source
+identity and drops the current frame on any identity change or unavailable status. Hiding the
+preview stops the demand (`stop`), and the Helper viewer timeout covers a vanished renderer.
+The logical agent cursor is the workspace projection's cursor (global AX points from the last
+workspace action, reset by the projection on target switch). The preview positions it relative to
+the stream's own window geometry (`originX/originY/pointWidth/pointHeight` returned with each
+read), accepts cursor updates only with non-decreasing `updatedAt` within one source identity,
+and hides it when it falls outside the captured window. It never reads or moves the physical
+cursor.
 
 The local preview reports the target app, live/working state, freshness, real activity, and
 truthful unavailable states, with product-owned localized labels. It appears automatically when
@@ -109,8 +128,9 @@ same `computerActionLabel` boundary.
 ### State and event order
 
 ```text
-AgentWorkspace target ── Helper window capture ──┬─ observation projection ── LocalComputerPreview (floating, conversation-scoped)
-                                                 └─ workspace_stream adapter ── (future continuous preview feed)
+AgentWorkspace target (projection pid/window, cursor) ─┐
+Helper SCStream (window-scoped) ── workspace_stream ── hardened session callMethod (Local Host) ── stream adapter ── cuaPermissionService RPC ── LocalComputerPreview (floating, conversation-scoped)
+Helper observation (screen/window observe) ── agent observation channel only (never the live preview)
 Dell worker ── remote stream adapter ── RemoteComputerPane (right side; remote devices only)
 Agent action → existing owner/admission/router → fresh evidence → activity projection → ActivityEventNormalizer → UI
 ```

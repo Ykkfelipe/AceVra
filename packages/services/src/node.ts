@@ -511,7 +511,10 @@ import {
   type CuaResumeComputerUseResult,
 } from "#src/cua-permission-broker/index.js";
 import type { WorkspaceProjectionReader } from "#src/cua-permission-broker/lease-authority/workspace.js";
-import { createWorkspaceStreamAdapter } from "./cua-permission-broker/cuaWorkspaceStream.js";
+import {
+  createWorkspaceStreamAdapter,
+  createWorkspaceStreamHelperCall,
+} from "./cua-permission-broker/cuaWorkspaceStream.js";
 import {
   resolveWindowsCuaRuntime,
   WindowsCuaDevRuntimeResolutionError,
@@ -2215,23 +2218,17 @@ export function createLocalServices(options: {
       };
     },
     paused: () => leaseAuthorityServers.get(services)?.authority.getAdmission().paused ?? true,
-    pause: async () => leaseAuthorityServers.get(services)?.authority.pause(),
-    resume: async () => leaseAuthorityServers.get(services)?.authority.resume(),
-    stop: async (sessionId) => {
-      await leaseAuthorityServers.get(services)?.authority.stop();
-      // 原 mini 面板同时停止 Computer 和当前回合；统一右栏不能丢失回合停止路径。
-      await services.get(IZCodeTaskService).stopGeneration({ taskId: sessionId });
-    },
-    call: async (params) => {
-      const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
-      if (
-        !helper ||
-        !isDefaultCuaProductHelperCurrent(helper) ||
-        !helper.macPermissionHost?.queryWorkspaceStream
-      )
-        throw new Error("Local computer capture unavailable");
-      return helper.macPermissionHost.queryWorkspaceStream(params);
-    },
+    // 可信传输按真实所有者解析（见 createWorkspaceStreamHelperCall）：darwin 产品路径是本图持有的
+    // hardened session，托管 MCP-host Helper 只是次要持有者。
+    call: createWorkspaceStreamHelperCall({
+      hardened: () => peekHardenedCuaHelperSession(),
+      managed: () => {
+        const helper = defaultCuaProductHelperLifecycle.peek()?.helper;
+        return helper && isDefaultCuaProductHelperCurrent(helper)
+          ? helper.macPermissionHost
+          : undefined;
+      },
+    }),
   });
   const cuaPermissionService: ICuaPermissionService = {
     getComputerWorkspaceStream: workspaceStream,

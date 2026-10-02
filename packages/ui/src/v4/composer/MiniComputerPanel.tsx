@@ -1,8 +1,9 @@
 // M3: persistent floating mini Computer panel (picture-in-picture) over the conversation.
 //
-// 纯投影呈现：一切事实来自宿主维护的 workspace 投影（session view 的 `workspace` 段），
-// 这里没有第二个状态机、没有计时器合成的动作、也没有任何捕获路径——轮询只读快照，
-// 帧像素只按 frameId 取一次（复用 useComputerUseSession 的受控帧读取）。
+// 纯投影呈现：动作/目标/光标事实来自宿主维护的 workspace 投影，像素来自 signed Helper 对
+// agent 目标窗口的窗口级 SCStream（useLocalComputerStream → workspace_stream）。屏幕级的
+// observation 帧只属于 agent 观察通道，绝不作为这里的实时预览。这里没有第二个状态机，也
+// 没有计时器合成的动作。
 //
 // 零偷取：渲染本面板不激活任何应用、不移动物理光标、不获取任何租约。后台语义通过
 // "Working in background" 呈现；只有原生租约真正 active 时才出现 "Exclusive control"。
@@ -34,10 +35,9 @@ import type { CuaComputerUseSessionView, CuaWorkspaceView } from "@zcode/service
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { formatComputerActionLabel } from "@/lib/computerActionLabel.js";
-import type {
-  ComputerUsePreviewState,
-  UseComputerUseSessionResult,
-} from "@/hooks/useComputerUseSession.js";
+import type { UseComputerUseSessionResult } from "@/hooks/useComputerUseSession.js";
+import { useLocalComputerStream } from "@/hooks/useLocalComputerStream.js";
+import type { LocalStreamState } from "@/computers/localComputerStream.js";
 import { useMiniComputerStore } from "@/store/miniComputerStore.js";
 
 const WORKSPACE_STATE_MESSAGE_ID: Record<CuaWorkspaceView["state"], string> = {
@@ -49,30 +49,27 @@ const WORKSPACE_STATE_MESSAGE_ID: Record<CuaWorkspaceView["state"], string> = {
   stale: "chat.miniComputer.state.stale",
 };
 
-function clampPercent(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(100, Math.max(0, value));
-}
-
-/** Logical cursor position inside the frame, in percent of the captured frame size. */
-export function workspaceCursorPercent(
-  cursor: { x: number | null; y: number | null },
-  dimensions: { width: number; height: number } | null | undefined,
-): { left: number; top: number } | null {
-  if (!dimensions || !Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height)) {
-    // 没有可靠的帧尺寸就无法诚实地投影坐标：宁可少显示，也不猜。
-    return null;
-  }
-  if (cursor.x === null || cursor.y === null) return null;
+/**
+ * Places the logical cursor over an `object-contain` frame: the displayed frame is
+ * min(100cqw, ar·100cqh) wide and min(100cqh, 100cqw/ar) tall, centred in the frame area.
+ */
+export function localCursorStyle(
+  position: { left: number; top: number },
+  aspectRatio: number,
+): { left: string; top: string } {
+  const fx = (position.left / 100 - 0.5).toFixed(4);
+  const fy = (position.top / 100 - 0.5).toFixed(4);
+  const ar = aspectRatio.toFixed(4);
   return {
-    left: clampPercent((cursor.x / dimensions.width) * 100),
-    top: clampPercent((cursor.y / dimensions.height) * 100),
+    left: `calc(50cqw + ${fx} * min(100cqw, ${ar} * 100cqh))`,
+    top: `calc(50cqh + ${fy} * min(100cqh, 100cqw / ${ar}))`,
   };
 }
 
 export interface MiniComputerPanelData {
   workspace: CuaWorkspaceView;
-  preview: ComputerUsePreviewState;
+  /** Window-scoped live stream of the agent's target window (never a screen observation). */
+  stream: LocalStreamState;
   /** Real admission pause from the lease authority (never a UI-only state). */
   paused: boolean;
   /** True only while the native exclusive lease is actually active (escalation). */
@@ -106,8 +103,8 @@ export function MiniComputerPanelMounted(props: {
   const { data, actions } = props;
   const { intl } = useZCodeIntl();
   const {
-    workspace,
-    preview,
+    workspace: polledWorkspace,
+    stream,
     paused,
     leaseActive,
     turnRunning,
@@ -135,20 +132,21 @@ export function MiniComputerPanelMounted(props: {
     );
   }
 
+  // 流读取（~12 Hz）随帧带回同一时刻的投影，比 1 s 会话轮询更新；没有时回落到轮询投影。
+  const workspace = stream.workspace ?? polledWorkspace;
   const targetLabel = workspace.target?.app ?? null;
   const title = targetLabel ?? intl.formatMessage({ id: "chat.miniComputer.title" });
   const stateLabel = intl.formatMessage({ id: WORKSPACE_STATE_MESSAGE_ID[workspace.state] });
 
   // Truthful caption: 与 transcript 共用同一套 product-owned Computer 动作标签
   // （computerActionLabel），不采用模型自述文本。目标名作为旁边 chip 一样由投影给出。
-  const captionVerb = workspace.action
-    ? formatComputerActionLabel(intl, workspace.action.method)
-    : null;
-  const captionTarget =
-    workspace.action?.targetLabel && workspace.action.targetLabel !== targetLabel
-      ? workspace.action.targetLabel
-      : null;
-  const captionParts = [captionVerb, captionTarget].filter((part) => part) as string[];
+  const captionParts = workspace.action
+    ? [
+        formatComputerActionLabel(intl, workspace.action.method, {
+          app: workspace.action.targetLabel ?? targetLabel,
+        }),
+      ]
+    : [];
   const done = !turnRunning && workspace.state === "idle" && !paused;
   const caption =
     captionParts.length > 0
@@ -164,11 +162,15 @@ export function MiniComputerPanelMounted(props: {
       ? intl.formatMessage({ id: "chat.miniComputer.mode.background" })
       : null;
 
-  const frame = workspace.frame;
-  const frameUrl = preview.status === "available" ? (preview.dataUrl ?? null) : null;
-  const cursorPosition = workspace.cursor
-    ? workspaceCursorPercent(workspace.cursor, frame?.dimensions)
-    : null;
+  const liveFrame = stream.stream.frame;
+  const frameUrl = liveFrame?.url ?? null;
+  const cursorPosition = stream.cursor;
+  const placeholderId =
+    stream.status === "unavailable"
+      ? "chat.miniComputer.frame.unavailable"
+      : workspace.target
+        ? "chat.miniComputer.frame.waiting"
+        : "chat.miniComputer.frame.none";
 
   const body = (
     <>
@@ -205,35 +207,35 @@ export function MiniComputerPanelMounted(props: {
           <XIcon className="size-3.5" aria-hidden />
         </Button>
       </div>
-      {/* Snapshot, not a stream: the projection's latest frame, one fetch per frameId. */}
-      <div className="relative flex min-h-0 w-full flex-1 items-center justify-center bg-black/40">
+      {/* Live, window-scoped: only the AgentWorkspace target window, latest frame only. */}
+      <div className="relative flex min-h-0 w-full flex-1 items-center justify-center bg-black/40 [container-type:size]">
         {frameUrl ? (
           <img
             data-testid={TID_V4_MINI_COMPUTER_FRAME}
-            data-frame-id={frame?.frameId}
+            data-frame-seq={liveFrame?.seq}
+            data-frame-source={stream.identity}
             src={frameUrl}
             alt={intl.formatMessage({ id: "chat.miniComputer.frame.alt" })}
-            className={
-              "max-h-full max-w-full object-contain" +
-              (frame?.freshness === "stale" ? " opacity-50" : "")
-            }
+            className="max-h-full max-w-full object-contain"
           />
         ) : (
           <div className="flex flex-col items-center gap-1 p-4 text-ui-sm text-foreground-subtle">
-            {preview.status === "loading" ? (
+            {stream.status === "waiting" && workspace.target ? (
               <LoaderCircleIcon className="size-4 animate-spin" aria-hidden />
             ) : null}
-            <span>{intl.formatMessage({ id: "chat.miniComputer.frame.none" })}</span>
+            <span>{intl.formatMessage({ id: placeholderId })}</span>
           </div>
         )}
-        {frameUrl && cursorPosition && workspace.cursor ? (
-          // Logical agent cursor: display-only projection inside the workspace frame.
+        {frameUrl && cursorPosition && stream.aspectRatio ? (
+          // Logical agent cursor: display-only, positioned inside the captured window. The frame
+          // is letterboxed (object-contain), so the offset is computed against the displayed
+          // frame box via container query units, keeping it aligned across resizes.
           <span
             data-testid={TID_V4_MINI_COMPUTER_CURSOR}
-            data-cursor-x={workspace.cursor.x ?? undefined}
-            data-cursor-y={workspace.cursor.y ?? undefined}
+            data-cursor-left={cursorPosition.left.toFixed(1)}
+            data-cursor-top={cursorPosition.top.toFixed(1)}
             className="pointer-events-none absolute text-foreground drop-shadow"
-            style={{ left: `${cursorPosition.left}%`, top: `${cursorPosition.top}%` }}
+            style={localCursorStyle(cursorPosition, stream.aspectRatio)}
           >
             <MousePointer2Icon className="size-4 -translate-x-0.5 -translate-y-0.5 fill-current" />
           </span>
@@ -255,11 +257,6 @@ export function MiniComputerPanelMounted(props: {
                 <span aria-hidden>·</span>
                 <span data-testid={`${TID_V4_MINI_COMPUTER}-mode`}>{modeLabel}</span>
               </>
-            ) : null}
-            {frame?.freshness === "superseded" ? (
-              <span data-testid={`${TID_V4_MINI_COMPUTER}-freshness`} className="truncate">
-                {intl.formatMessage({ id: "chat.miniComputer.freshness.superseded" })}
-              </span>
             ) : null}
           </span>
         </div>
@@ -401,6 +398,8 @@ export function MiniComputerPanel(props: {
   const leaseActive = view?.present ? view.lease.state === "active" : false;
 
   const relevant = isAgentWorkspaceActive(view, turnRunning, clock);
+  // 可视需求只在面板可见时存在：隐藏/不相关即停止窗口流（stop），不影响执行。
+  const stream = useLocalComputerStream(sessionId, Boolean(workspace) && relevant && !hiddenFlag);
 
   if (!sessionId || !workspace || !relevant) return null;
 
@@ -408,7 +407,7 @@ export function MiniComputerPanel(props: {
     <MiniComputerPanelMounted
       data={{
         workspace,
-        preview: session.preview,
+        stream,
         paused,
         leaseActive,
         turnRunning,

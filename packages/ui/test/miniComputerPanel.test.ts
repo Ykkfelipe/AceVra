@@ -1,7 +1,8 @@
 /**
- * M3 UI: the floating mini Computer panel. Deterministic fakes only — no Helper, no service,
- * no capture. Covers: appears on active workspace state, frame rendering, logical cursor at
- * projected coordinates, frame refresh in the SAME panel, × hide/reopen without stopping,
+ * M3 UI: the floating mini Computer panel (LocalComputerPreview). Deterministic fakes only — no
+ * Helper, no service, no capture. Covers: appears on active workspace state, live window-stream
+ * frame rendering (never the screen observation), logical cursor over the letterboxed window
+ * frame, frame refresh in the SAME panel, × hide/reopen without stopping,
  * expanded = same workspace, task fencing, truthful background mode, staleness, pause/stop
  * wiring, and zero-capture/zero-side-effect rendering.
  *
@@ -28,15 +29,12 @@ register("./uiAssetStubLoader.mjs", import.meta.url);
 
 const { ZCodeIntlProvider } = await import("../src/i18n/IntlProvider.js");
 const enUS = (await import("../src/i18n/locales/en-US.js")).default;
-const {
-  isAgentWorkspaceActive,
-  MiniComputerPanel,
-  MiniComputerPanelMounted,
-  workspaceCursorPercent,
-} = await import("../src/v4/composer/MiniComputerPanel.js");
+const { isAgentWorkspaceActive, MiniComputerPanel, MiniComputerPanelMounted, localCursorStyle } =
+  await import("../src/v4/composer/MiniComputerPanel.js");
 const { useMiniComputerStore } = await import("../src/store/miniComputerStore.js");
 
-const FRAME_URL = "data:image/png;base64,QUJD";
+const FRAME_URL = "data:image/jpeg;base64,QUJD";
+const OBSERVATION_URL = "data:image/png;base64,T0JTRVJWQVRJT04=";
 
 function workspace(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -54,7 +52,7 @@ function workspace(overrides: Record<string, unknown> = {}): Record<string, unkn
     action: {
       method: "workspace_click",
       label: "Clicking",
-      targetLabel: "Increment",
+      targetLabel: "WorkspaceFixture",
       effect: "confirmed",
     },
     framesCaptured: 1,
@@ -64,16 +62,32 @@ function workspace(overrides: Record<string, unknown> = {}): Record<string, unkn
   };
 }
 
-function preview(status = "available"): Record<string, unknown> {
-  return status === "available"
-    ? { status, dataUrl: FRAME_URL, observationId: "OBS-1" }
-    : { status };
+/** Session-poll observation preview: must never be rendered as the live local preview. */
+function preview(): Record<string, unknown> {
+  return { status: "available", dataUrl: OBSERVATION_URL, observationId: "OBS-1" };
+}
+
+function stream(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    identity: "gen-1:42:7",
+    stream: {
+      frame: { seq: 3, capturedAt: 1_000, url: FRAME_URL },
+      cursor: null,
+      counters: { presented: 3, dropped: 0, cursorUpdates: 0, lastLatencyMs: 20 },
+    },
+    cursor: { left: 25, top: 25, updatedAt: 1_000 },
+    status: "live",
+    reason: null,
+    workspace: null,
+    aspectRatio: 4 / 3,
+    ...overrides,
+  };
 }
 
 function mountedData(
   overrides: {
     workspace?: Record<string, unknown>;
-    preview?: Record<string, unknown>;
+    stream?: Record<string, unknown>;
     paused?: boolean;
     leaseActive?: boolean;
     turnRunning?: boolean;
@@ -85,7 +99,7 @@ function mountedData(
 ): Record<string, unknown> {
   return {
     workspace: overrides.workspace ?? workspace(),
-    preview: overrides.preview ?? preview(),
+    stream: overrides.stream ?? stream(),
     paused: overrides.paused === true,
     leaseActive: overrides.leaseActive === true,
     turnRunning: overrides.turnRunning === true,
@@ -163,86 +177,109 @@ test("panel appears on active workspace state", () => {
   assert.ok(html.includes("WorkspaceFixture"));
 });
 
-test("frame renders with its identity; a new frame updates the SAME panel", () => {
+test("frame renders the live window stream with its source identity; a new frame updates the SAME panel", () => {
   const first = renderMounted(mountedData());
-  assert.ok(first.includes(`data-frame-id="OBS-1"`));
+  assert.ok(first.includes(`data-frame-seq="3"`));
+  assert.ok(first.includes(`data-frame-source="gen-1:42:7"`));
   assert.ok(first.includes(FRAME_URL));
   const second = renderMounted(
     mountedData({
-      workspace: workspace({
-        frame: {
-          frameId: "OBS-2",
-          capturedAt: 2_000,
-          dimensions: { width: 800, height: 600 },
-          freshness: "fresh",
+      stream: stream({
+        stream: {
+          frame: { seq: 4, capturedAt: 2_000, url: "data:image/jpeg;base64,REVG" },
+          cursor: null,
+          counters: { presented: 4, dropped: 0, cursorUpdates: 0, lastLatencyMs: 20 },
         },
       }),
-      preview: {
-        status: "available",
-        dataUrl: "data:image/png;base64,REVG",
-        observationId: "OBS-2",
-      },
     }),
   );
-  // Same test id — one persistent panel; new frame id and new pixels.
+  // Same test id — one persistent panel; new frame seq and new pixels.
   assert.ok(second.includes(TID_V4_MINI_COMPUTER_FRAME));
-  assert.ok(second.includes(`data-frame-id="OBS-2"`));
+  assert.ok(second.includes(`data-frame-seq="4"`));
   assert.ok(second.includes("REVG"));
 });
 
-test("cursor overlay renders at projected coordinates; impossible projections are hidden", () => {
-  const html = renderMounted(mountedData());
-  assert.ok(html.includes(TID_V4_MINI_COMPUTER_CURSOR));
-  assert.ok(html.includes("left:25%"), "200/800 = 25%");
-  assert.ok(html.includes("top:25%"), "150/600 = 25%");
-  const noDimensions = renderMounted(
+test("the screen-scoped observation frame is never shown as the local live preview", () => {
+  const html = renderMounted(
     mountedData({
-      workspace: workspace({ frame: { frameId: "OBS-1", capturedAt: 1, freshness: "fresh" } }),
+      stream: stream({
+        stream: {
+          frame: null,
+          cursor: null,
+          counters: { presented: 0, dropped: 0, cursorUpdates: 0, lastLatencyMs: null },
+        },
+        status: "waiting",
+        cursor: null,
+      }),
     }),
   );
-  assert.equal(noDimensions.includes(TID_V4_MINI_COMPUTER_CURSOR), false);
-  const noCursor = renderMounted(mountedData({ workspace: workspace({ cursor: null }) }));
-  assert.equal(noCursor.includes(TID_V4_MINI_COMPUTER_CURSOR), false);
-  assert.deepEqual(workspaceCursorPercent({ x: null, y: null }, { width: 100, height: 100 }), null);
+  assert.equal(html.includes(OBSERVATION_URL), false);
+  assert.equal(html.includes(TID_V4_MINI_COMPUTER_FRAME), false);
+  assert.ok(html.includes("Waiting for the window"));
+  const lost = renderMounted(
+    mountedData({
+      stream: stream({
+        stream: {
+          frame: null,
+          cursor: null,
+          counters: { presented: 0, dropped: 0, cursorUpdates: 0, lastLatencyMs: null },
+        },
+        status: "unavailable",
+        reason: "target_lost",
+        cursor: null,
+      }),
+    }),
+  );
+  assert.ok(lost.includes("isn&#x27;t available"));
 });
 
-test("caption shows the projection's real action; a finished task shows Done", () => {
+test("cursor overlay is placed over the letterboxed window frame; no cursor without geometry", () => {
+  const html = renderMounted(mountedData());
+  assert.ok(html.includes(TID_V4_MINI_COMPUTER_CURSOR));
+  assert.ok(html.includes(`data-cursor-left="25.0"`));
+  assert.ok(html.includes("calc(50cqw + -0.2500 * min(100cqw, 1.3333 * 100cqh))"));
+  assert.deepEqual(localCursorStyle({ left: 50, top: 50 }, 2), {
+    left: "calc(50cqw + 0.0000 * min(100cqw, 2.0000 * 100cqh))",
+    top: "calc(50cqh + 0.0000 * min(100cqh, 100cqw / 2.0000))",
+  });
+  const noGeometry = renderMounted(mountedData({ stream: stream({ aspectRatio: null }) }));
+  assert.equal(noGeometry.includes(TID_V4_MINI_COMPUTER_CURSOR), false);
+  const noCursor = renderMounted(mountedData({ stream: stream({ cursor: null }) }));
+  assert.equal(noCursor.includes(TID_V4_MINI_COMPUTER_CURSOR), false);
+});
+
+test("caption shows the projection's real action with the app; a finished task shows Done", () => {
   const acting = renderMounted(mountedData());
   assert.ok(acting.includes(TID_V4_MINI_COMPUTER_CAPTION));
-  assert.ok(acting.includes("Clicking"));
+  assert.ok(acting.includes("Clicking in WorkspaceFixture"));
+  const observing = renderMounted(
+    mountedData({
+      workspace: workspace({
+        action: { method: "observe", label: "观察 Notes 状态", targetLabel: "Notes" },
+      }),
+    }),
+  );
+  assert.ok(observing.includes("Looking at Notes"));
+  assert.equal(observing.includes("观察"), false);
   const done = renderMounted(
     mountedData({ workspace: workspace({ action: null, state: "idle" }), turnRunning: false }),
   );
   assert.ok(done.includes("Done"));
 });
 
-test("superseded and stale frames are indicated, never silently fresh", () => {
-  const superseded = renderMounted(
+test("the stream's fresher projection wins over the 1 s session poll", () => {
+  const html = renderMounted(
     mountedData({
-      workspace: workspace({
-        frame: workspace({}).frame && {
-          frameId: "OBS-1",
-          capturedAt: 1,
-          dimensions: { width: 800, height: 600 },
-          freshness: "superseded",
-        },
+      stream: stream({
+        workspace: workspace({ action: { method: "workspace_type_text", targetLabel: "Notes" } }),
       }),
     }),
   );
-  assert.ok(superseded.includes("before the last action"));
-  const stale = renderMounted(
-    mountedData({
-      workspace: workspace({
-        state: "stale",
-        frame: {
-          frameId: "OBS-1",
-          capturedAt: 1,
-          dimensions: { width: 800, height: 600 },
-          freshness: "stale",
-        },
-      }),
-    }),
-  );
+  assert.ok(html.includes("Typing in Notes"));
+});
+
+test("stale workspace state is indicated", () => {
+  const stale = renderMounted(mountedData({ workspace: workspace({ state: "stale" }) }));
   assert.ok(stale.includes("Stale"));
 });
 
@@ -300,10 +337,10 @@ test("hide/reopen is presentation-only state, keyed per session", () => {
   assert.equal(useMiniComputerStore.getState().hiddenBySession["session-a"], false);
 });
 
-test("expand is the same workspace: same frame id, larger presentation", () => {
+test("expand is the same workspace: same frame, larger presentation", () => {
   const html = renderMounted(mountedData({ expanded: true }));
   assert.ok(html.includes(`data-mini-computer-expanded="true"`));
-  assert.ok(html.includes(`data-frame-id="OBS-1"`));
+  assert.ok(html.includes(`data-frame-seq="3"`));
   assert.ok(html.includes(TID_V4_MINI_COMPUTER));
 });
 
