@@ -388,3 +388,20 @@ Design around:
 **Multitask is how AceVra coordinates multiple workers.**
 
 **Bot is the AceVra that knows and helps the user.**
+
+## Parallel development / build policy
+
+When implementation begins:
+
+- create a fresh `feature/...` branch from the latest good `main`
+- give the implementing worker its own Git worktree
+- do not point multiple code-writing workers at the same checkout
+- prefer targeted tests/checks during development
+- do not create persistent packaged desktop builds from feature worktrees
+- let the integration/main workspace own the single canonical packaged AceVra build
+- clean temporary feature build outputs after validation
+- remove the worktree after the feature is merged
+
+Full details: `docs/roadmap/parallel-development-policy.md`.
+
+The roadmap branch itself is documentation/reference only; do not use it as a long-lived implementation base.
