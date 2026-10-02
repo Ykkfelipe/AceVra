@@ -272,6 +272,10 @@ test("caption shows the projection's real action with the app; a finished task s
     mountedData({ workspace: workspace({ action: null, state: "idle" }), turnRunning: false }),
   );
   assert.ok(done.includes("Done"));
+  // 完成态是绿色对勾（Codex 式收尾信号），不是灰点；运行中不得出现。
+  assert.ok(done.includes('data-mini-computer-done="true"'));
+  assert.ok(done.includes('data-testid="v4-mini-computer-done"'));
+  assert.equal(observing.includes("v4-mini-computer-done"), false);
 });
 
 test("the stream's fresher projection wins over the 1 s session poll", () => {

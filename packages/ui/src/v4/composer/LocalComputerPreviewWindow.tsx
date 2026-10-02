@@ -3,6 +3,7 @@
 // 只渲染传入的会话事实与呈现矩形；拖动/缩放手势在本地跟手、松手才提交，不触碰会话事实与窗口
 // 流。展开与紧凑是同一棵元素树（同一个面板元素只换位置与尺寸），不会重新挂载画面。
 import {
+  CircleCheckIcon,
   GripVerticalIcon,
   LoaderCircleIcon,
   Maximize2Icon,
@@ -231,6 +232,7 @@ export function MiniComputerPanelMounted(props: {
         data-testid={TID_V4_MINI_COMPUTER}
         data-mini-computer-expanded={expanded ? "true" : "false"}
         data-mini-computer-state={stopped ? "stopped" : workspace.state}
+        data-mini-computer-done={done ? "true" : undefined}
         data-mini-computer-dragging={gestures.active ? "true" : undefined}
         role="dialog"
         aria-label={title}
@@ -254,13 +256,22 @@ export function MiniComputerPanelMounted(props: {
           {floating && !expanded ? (
             <GripVerticalIcon className="size-3.5 shrink-0 text-foreground-subtlest" aria-hidden />
           ) : null}
-          <span
-            aria-hidden
-            className={cn(
-              "size-2 shrink-0 rounded-full",
-              live ? "bg-success animate-pulse" : paused ? "bg-warning" : "bg-foreground-subtlest",
-            )}
-          />
+          {done ? (
+            // 完成态用绿色对勾替代状态点（Codex/Claude 式收尾信号）：任务做完时一眼可见。
+            <CircleCheckIcon
+              data-testid={`${TID_V4_MINI_COMPUTER}-done`}
+              aria-hidden
+              className="size-3.5 shrink-0 text-success"
+            />
+          ) : (
+            <span
+              aria-hidden
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                live ? "bg-success animate-pulse" : paused ? "bg-warning" : "bg-foreground-subtlest",
+              )}
+            />
+          )}
           <div className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="truncate text-ui-sm font-medium" title={title}>
               {title}

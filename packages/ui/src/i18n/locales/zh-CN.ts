@@ -4510,7 +4510,7 @@ const zhCN: Record<string, string> = {
   "chat.miniComputer.state.stale": "已过期",
   "chat.miniComputer.mode.background": "后台工作中",
   "chat.miniComputer.mode.exclusive": "独占控制",
-  "chat.miniComputer.done": "✓ 已完成",
+  "chat.miniComputer.done": "已完成",
   "chat.miniComputer.frame.alt": "智能体正在使用的窗口实时画面",
   "chat.miniComputer.frame.none": "暂无可显示的窗口",
   "chat.miniComputer.expand": "展开",

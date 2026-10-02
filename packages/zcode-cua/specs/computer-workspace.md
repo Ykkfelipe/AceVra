@@ -138,6 +138,12 @@ only; they never create one.
 unsupported/ambiguous targets are refused. It never synthesizes physical wheel input. Double
 click, right click, drag and key chords remain outside this background substrate's capability.
 
+LocalComputerPreview completion state (2026-10-02): when the turn ends and the workspace
+projection is idle (no pause, no stop), the panel shows a green check icon in the status slot
+(Codex-style completion signal, `data-mini-computer-done="true"`) with the localized "Done"
+caption, instead of the grey status dot; the stopped state keeps its own caption. The checkmark
+is presentation only — it never mutates session facts.
+
 `computer.open_app({bundle_id})` (2026-10-02) is the local counterpart of the remote runtime's
 process spawn: launch an app in the background, or hand a running-but-windowless app (browsers
 keep the process alive after the last window closes) its window back. It delivers the
