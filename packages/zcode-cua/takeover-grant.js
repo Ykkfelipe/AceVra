@@ -33,12 +33,23 @@ export async function requireTakeoverGrant(leaseAuthority, owner, options = {}) 
     );
   }
   let state = (await leaseAuthority.requestTakeover(owner))?.state;
+  // 已批准（同一任务早先 Allow）：观察仍是调用方刚取的，直接放行。
+  if (state === "granted") return;
   const deadline = now() + waitMs;
   while (state === "pending" && now() < deadline) {
     await sleep(TAKEOVER_POLL_MS);
     state = (await leaseAuthority.takeoverStatus(owner))?.state;
   }
-  if (state === "granted") return;
+  if (state === "granted") {
+    // 修复依据（installed d825c492 实测）：Helper 只接受 3 s 内的观察
+    // （ForegroundControl.swift foregroundObservationAge）。等待用户点 Allow 必然超过它，
+    // 带着旧 observation_id 进 Helper 只会得到 stale_geometry。授权已记录到本任务，
+    // 让模型重新观察后立即再调一次 acquire_control（此时直接放行）。
+    throw refusal(
+      "takeover_allowed_reobserve",
+      "the user allowed screen takeover for this task. Your observation is now too old: call get_app_state again and immediately call computer.acquire_control with the new observation_id (it will not ask again)",
+    );
+  }
   if (state === "denied") {
     throw refusal(
       "takeover_declined",

@@ -26,9 +26,12 @@ const fastClock = () => {
   return { now: () => t, sleep: async (ms) => void (t += ms) };
 };
 
-test("resolves once the user allows the pending request", async () => {
+test("an Allow after waiting asks for a fresh observation (Helper accepts only 3 s old ones)", async () => {
   const fake = authority(["pending", "pending", "granted"]);
-  await requireTakeoverGrant(fake, OWNER, fastClock());
+  await assert.rejects(
+    requireTakeoverGrant(fake, OWNER, fastClock()),
+    (error) => error.code === "takeover_allowed_reobserve",
+  );
   assert.deepEqual(fake.calls[0], ["request", OWNER]);
   assert.equal(fake.calls.length, 3);
 });

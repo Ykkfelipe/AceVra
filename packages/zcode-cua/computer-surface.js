@@ -82,7 +82,7 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
     name: "computer.acquire_control",
     kind: "foreground",
     args: "{ observation_id: string }",
-    note: "asks the user to Allow screen takeover (an Allow/Deny card appears in AceVra; waits up to 25 s, so give that js call timeout_ms of at least 40000) and returns lease_id. Only when a step cannot be done in the background. While you hold it the user's screen glows; any real mouse/keyboard input or Esc ends it",
+    note: "asks the user to Allow screen takeover (an Allow/Deny card appears in AceVra; waits up to 25 s, so give that js call timeout_ms of at least 40000) and returns lease_id. If it had to wait for the user it returns takeover_allowed_reobserve: call get_app_state again and immediately repeat acquire_control with the new observation_id (no second card). Only when a step cannot be done in the background. While you hold it the user's screen glows; any real mouse/keyboard input or Esc ends it",
   },
   { name: "computer.control_status", kind: "read", args: "{ lease_id: string }" },
   { name: "computer.release_control", kind: "foreground", args: "{ lease_id: string }" },

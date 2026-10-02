@@ -1794,7 +1794,10 @@ only through an explicit, per-task user approval; the model can request it but n
    (UI-owned RPC `decideScreenTakeover`, same class as pause/resume/stop); the runtime sideband can
    request and read, never decide.
 3. Allow grants takeover for the rest of that task (turn). Later `acquire_control` calls in the
-   same task do not ask again.
+   same task do not ask again. Because the Helper accepts only observations up to 3 s old, an
+   `acquire_control` that had to wait for the Allow returns `takeover_allowed_reobserve` instead of
+   forwarding a stale observation; the model re-observes and repeats it, and the existing grant
+   lets it straight through (measured on installed `d825c492`: waiting 16 s → `stale_geometry`).
 4. Any real mouse/keyboard input (including Esc), Stop, or Pause ends the lease (existing Helper
    event tap / authority paths) **and revokes the grant**; the next takeover asks again. A
    normal `release_control` by the agent keeps the grant for the task.

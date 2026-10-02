@@ -116,6 +116,9 @@ of this task; the user's screen glows while you hold it. Then use the foreground
 (`computer.click`, `computer.type_text`, `computer.key_press`, …) with the returned `lease_id` and a
 fresh `observation_id`, and `computer.release_control({ lease_id })` when done.
 
+- `takeover_allowed_reobserve`: the user just clicked Allow, but your observation is older than the
+  3 s the Helper accepts. Immediately `get_app_state` again and repeat `acquire_control` with the new
+  `observation_id`; it will not ask again in this task.
 - `takeover_declined`: the user said no — do not ask again in this task; continue in the background
   or say which step needs their hands, then stop.
 - `takeover_pending`: no answer yet — tell the user the card is waiting; call `acquire_control`
