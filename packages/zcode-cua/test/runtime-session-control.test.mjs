@@ -122,7 +122,21 @@ describe("CUA-4 runtime session control", () => {
         helper_identity: VERIFIED_IDENTITY,
       }),
       click: async () =>
-        clickResult.value === "interrupted"
+        clickResult.value === "lease_ended"
+          ? {
+              operation: "click",
+              effect: "refused",
+              route: "none",
+              classification: "REQUIRES_FOREGROUND",
+              mode: "EXCLUSIVE_FOREGROUND",
+              code: "security_state_unreadable",
+              lease_state: "inactive",
+              input_delivery: "none",
+              application_effect: "unknown",
+              evidence: [],
+              helper_identity: VERIFIED_IDENTITY,
+            }
+          : clickResult.value === "interrupted"
           ? {
               operation: "click",
               effect: "refused",
@@ -392,6 +406,35 @@ describe("CUA-4 runtime session control", () => {
     await settle();
     assert.equal(interrupted.structuredContent.code, "interrupted");
     assert.deepEqual(recorder.releases, [{ leaseId: "authority-lease-1", reason: "interrupted" }]);
+    clickResult.value = "unknown";
+  });
+
+  it("releases the authority lease when the Helper ends its own lease", async () => {
+    const recorder = authority();
+    const cua = runtime(recorder);
+    await cua.execute({
+      toolName: "get_app_state",
+      arguments: { pid: 4242, window_id: 501 },
+      context: LOCAL,
+    });
+    await cua.execute({
+      toolName: "computer.acquire_control",
+      arguments: { observation_id: OBSERVATION_ID },
+      context: LOCAL,
+    });
+    // Helper 读不到聚焦元素状态时自己结束了租约：authority 必须同步，否则 UI 的控制状态
+    // 一直 active，发光层不会消失，下一次 acquire 还会撞上"仍然有效"的租约。
+    clickResult.value = "lease_ended";
+    const refused = await cua.execute({
+      toolName: "computer.click",
+      arguments: { observation_id: OBSERVATION_ID, lease_id: LEASE_ID, point: { x: 1, y: 2 } },
+      context: LOCAL,
+    });
+    await settle();
+    assert.equal(refused.structuredContent.code, "security_state_unreadable");
+    assert.deepEqual(recorder.releases, [
+      { leaseId: "authority-lease-1", reason: "security_state_unreadable" },
+    ]);
     clickResult.value = "unknown";
   });
 

@@ -365,8 +365,18 @@ export function createComputerUseRuntime(options = {}) {
         if (foreground && method === "release_control") {
           await releaseAuthorityLease(input.context.sessionId, "model_release");
         }
-        if (foreground && normalized.code === "interrupted") {
-          await releaseKnownLease(input.context.sessionId, "interrupted");
+        if (
+          foreground &&
+          (normalized.code === "interrupted" ||
+            normalized.lease_state === "inactive" ||
+            normalized.lease_state === "interrupted")
+        ) {
+          // 修复依据（installed 70e348e1 实测）：Helper 自己结束租约时（例如 key_press 的
+          // security_state_unreadable、focus_mismatch）只回了 lease_state: inactive，而这里
+          // 只认 code === "interrupted"。authority 侧的租约因此一直 active：UI 的控制状态不灭，
+          // 发光层不会自己消失，下一次 acquire 还会撞上"仍然有效"的租约。
+          // Helper 用 lease_state 表达"租约已结束"，就按它同步，不再维护另一份 code 清单。
+          await releaseKnownLease(input.context.sessionId, normalized.code ?? "helper_ended_lease");
         }
         identities.remember(sessionId, method, result);
         if (method === "observe") {

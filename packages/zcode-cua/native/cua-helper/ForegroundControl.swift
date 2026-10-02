@@ -816,8 +816,19 @@ extension ForegroundController {
         let (current, code) = checkedLease(params)
         guard let current else { return foregroundRefusal(code ?? "invalid_lease") }
         guard foregroundTargetReady(current) else { shutdown(); return foregroundRefusal("focus_mismatch") }
+        // 系统级组合键（command/control，剪贴板键除外）交给应用/菜单层，不写入聚焦字段，
+        // 因此安全字段检查在这里不适用：pid 没有可读聚焦元素时它只会误伤。
+        // 修复依据（installed 70e348e1 实测）：发 Command+Space 时 subrole 读取失败，
+        // 旧逻辑 endLease("security_state_unreadable") 直接结束了用户的租约——一次按键
+        // 把整段接管拆掉，后续重新获取又留下 authority 侧仍 active 的租约与不灭的发光层。
+        let chordKey = params["key"] as? String ?? ""
+        let chordModifiers = params["modifiers"] as? [String] ?? []
+        let clipboardKeys: Set<String> = ["v", "c", "x", "a"]
+        let systemChord =
+            (chordModifiers.contains("command") || chordModifiers.contains("control"))
+            && !clipboardKeys.contains(chordKey)
         // A key action can address a window-level shortcut. A secure field still refuses it.
-        if let focused = focusedAXElement(current.observation.pid) {
+        if !systemChord, let focused = focusedAXElement(current.observation.pid) {
             var subroleValue: CFTypeRef?
             let subroleStatus = AXUIElementCopyAttributeValue(focused, kAXSubroleAttribute as CFString,
                                                                &subroleValue)
@@ -825,15 +836,15 @@ extension ForegroundController {
             let subrole = subroleStatus == .success
                 ? axText(focused, kAXSubroleAttribute as String) ?? "" : ""
             let unsupported: [Int32] = [-25205, -25213]
+            // 读不到状态只拒绝这一次按键：不能投递，但用户的租约必须活着（租约只应由
+            // 真实打断、焦点丢失或用户停止结束）。
             guard subroleStatus == .success || unsupported.contains(subroleStatus.rawValue) else {
-                endLease(code: "security_state_unreadable")
                 return foregroundRefusal("security_state_unreadable")
             }
             var protection: CFTypeRef?
             let protectionStatus = AXUIElementCopyAttributeValue(focused, "AXProtectedContent" as CFString,
                                                                  &protection)
             guard protectionStatus == .success || unsupported.contains(protectionStatus.rawValue) else {
-                endLease(code: "security_state_unreadable")
                 return foregroundRefusal("security_state_unreadable")
             }
             if role.localizedCaseInsensitiveContains("secure")
