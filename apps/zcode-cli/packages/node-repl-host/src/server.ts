@@ -44,7 +44,6 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-
 const MAX_SYNC_TIMEOUT_MS = 120_000;
 const UNTRUSTED_SESSION_KEY = "__unscoped__";
 const WORKER_KIND = "zcode-node-repl-call";
@@ -383,7 +382,6 @@ if (!isMainThread && isWorkerCallData(workerData)) {
     });
 }
 
-
 export function captureComputerUseRuntimeFromEnvironment(
   env: NodeJS.ProcessEnv = process.env,
 ): ComputerUseRuntime | undefined {
@@ -399,9 +397,10 @@ export function captureComputerUseRuntimeFromEnvironment(
       ? { brokerToken: env.ZCODE_CUA_PERMISSION_BROKER_TOKEN.trim() }
       : {}),
     refreshMarkerPath: env.ZCODE_CUA_PERMISSION_BROKER_REFRESH_MARKER?.trim(),
-    // 与 core 内置 handler 同一产品规则（见 node-repl-cua.ts）：本地 Mac 不提供模型
-    // 自行发起的前台接管，安全条绝不由模型动作升起；用户主动入口出现前 fail closed。
-    allowForegroundControl: () => false,
+    // 与 core 内置 handler 同一产品规则（见 node-repl-cua.ts）：前台接管只能由用户在 AceVra
+    // 里批准（acquire_control 先经 lease authority 的 takeover 授权门，见 takeover-grant.js）。
+    // 这里的 true 只表示"可以请求"；没有用户的 Allow，Helper 租约永远不会开始。
+    allowForegroundControl: () => true,
     leaseAuthority: createLeaseAuthorityClient(env),
   });
 }

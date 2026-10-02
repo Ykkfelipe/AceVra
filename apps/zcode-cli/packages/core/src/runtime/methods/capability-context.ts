@@ -12,6 +12,7 @@ import {
   type CapabilitySources,
 } from "../../capability/index.js";
 import { getCapturedZCodeCuaBrokerCredentials } from "@zcode/shared";
+import { foregroundComputerUseAvailable } from "@zcode/zcode-cua/computer-surface";
 import { toMcpToolName } from "../../mcp/index.js";
 import { extractPluginReferences } from "../../plugin-reference/index.js";
 import { CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED } from "../../tool/handlers/node-repl-cua.js";
@@ -98,7 +99,19 @@ function runtimeSources(
       helperConnected: Boolean(getCapturedZCodeCuaBrokerCredentials().socket?.trim()),
       platform: process.platform,
       runtimeScope: runtime.config.taskType === "subagent_child" ? "subagent" : "main",
-      foregroundAvailable: CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED,
+      // 与 CUA runtime 同一谓词（本地桌面主会话、非远程/手机），只是"可请求"；
+      // 真正的接管仍需用户在 AceVra 里 Allow。
+      foregroundAvailable: foregroundComputerUseAvailable(
+        {
+          runtimeScope: runtime.config.taskType === "subagent_child" ? "subagent" : "main",
+          ...(runtime.config.clientMode ? { clientMode: runtime.config.clientMode } : {}),
+          ...(runtime.config.deliveryKind ? { deliveryKind: runtime.config.deliveryKind } : {}),
+          ...(runtime.config.remoteSessionId
+            ? { remoteSessionId: String(runtime.config.remoteSessionId) }
+            : {}),
+        },
+        () => CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED,
+      ),
     },
     browser: {
       enabled: runtimeFeatures?.browserUse === true && runtime.browserControlPort !== undefined,

@@ -2,10 +2,7 @@ import {
   normalizeComputerUseResult,
   resolveComputerUseCapabilities,
 } from "./capability-contract.js";
-import {
-  describeComputerUseSurface,
-  foregroundComputerUseAvailable,
-} from "./computer-surface.js";
+import { describeComputerUseSurface, foregroundComputerUseAvailable } from "./computer-surface.js";
 import {
   rememberSemanticGeometry,
   semanticTargetOf,
@@ -13,6 +10,7 @@ import {
 } from "./semantic-geometry.js";
 import { createSessionIdentityRegistry, identityText } from "./session-identity.js";
 import { validateComputerUseRequest } from "./request-guard.js";
+import { requireTakeoverGrant } from "./takeover-grant.js";
 
 /**
  * Model-facing provider-independent tool name to broker method.
@@ -207,6 +205,10 @@ export function createComputerUseRuntime(options = {}) {
       try {
         if (typeof options.ensureBrokerAvailable === "function") {
           await options.ensureBrokerAvailable();
+        }
+        // 屏幕接管只能由用户在 AceVra 里批准（specs "Screen takeover"）：Helper 租约之前先等授权。
+        if (method === "acquire_control") {
+          await requireTakeoverGrant(leaseAuthority, { session: sessionId, task });
         }
         const broker = await import("./broker.js");
         const { sanitizeObservationResult } = await import("./observe-result.js");

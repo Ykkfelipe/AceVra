@@ -41,6 +41,8 @@ import type {
   CuaWorkspaceActionView,
   CuaPauseComputerUseResult,
   CuaResumeComputerUseResult,
+  CuaDecideScreenTakeoverResult,
+  CuaSessionTakeoverView,
   CuaObservationFrameResult,
   CuaWorkspaceStreamResult,
   ICuaPermissionService as BrokerICuaPermissionService,
@@ -70,6 +72,8 @@ export type {
   CuaWorkspaceActionView,
   CuaPauseComputerUseResult,
   CuaResumeComputerUseResult,
+  CuaDecideScreenTakeoverResult,
+  CuaSessionTakeoverView,
   CuaObservationFrameResult,
   CuaWorkspaceStreamResult,
 };

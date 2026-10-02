@@ -272,6 +272,8 @@ export {
   type CuaWorkspaceActionView,
   type CuaPauseComputerUseResult,
   type CuaResumeComputerUseResult,
+  type CuaDecideScreenTakeoverResult,
+  type CuaSessionTakeoverView,
   type CuaObservationFrameResult,
   isCuaPermissionStatusAvailable,
 } from "./cua-permission-broker/cuaPermissionService.js";

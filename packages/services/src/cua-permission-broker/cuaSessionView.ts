@@ -132,6 +132,16 @@ export async function describeComputerUseSession(
   view.paused = admission.paused;
   if (admission.pausedAt !== undefined) view.pausedAt = admission.pausedAt;
   if (activity) view.activity = { ...activity };
+  // 屏幕接管请求/授权：只投影本会话自己的记录，供 Allow/Deny 卡片使用（UI 只能读，决定走专用服务 API）。
+  const takeover = authority.takeover.view(sessionId);
+  if (takeover) {
+    view.takeover = {
+      state: takeover.state,
+      task: takeover.task,
+      requestedAt: takeover.requestedAt,
+      ...(takeover.decidedAt !== undefined ? { decidedAt: takeover.decidedAt } : {}),
+    };
+  }
   // M3：mini Computer 视图只暴露会话自己的 workspace 投影（纯读快照）；显式映射，
   // 宿主内部的零偷取证据等字段绝不跨界。
   const workspace = deps.workspace?.getWorkspace(sessionId);

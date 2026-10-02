@@ -12,9 +12,9 @@ import { THIS_DEVICE_TARGET } from "./domains.js";
 export const COMPUTER_CAPABILITY_ID = "computer.local";
 export const COMPUTER_MCP_PREFIX = "mcp__computer-use__";
 
-/** 前台方法在本构建恒不可用（allowForegroundControl 恒为 false）；原因逐字给模型。 */
+/** 前台接管只在本机桌面主会话可请求（远程/手机不可）；原因逐字给模型。 */
 export const PROTECTED_FOREGROUND_REASON =
-  "local foreground takeover requires explicit Protected Foreground mode, which is not available in this session; use the background actions instead";
+  "screen takeover is only available in a desktop conversation on this Mac (not remote, mobile or replayed sessions); use the background actions instead";
 
 /**
  * 被猜的前台/历史拼写 → 本会话真正可用的后台替代动作。

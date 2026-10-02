@@ -488,6 +488,13 @@ describe("Computer Use runtime", () => {
     let commitAcquireCalls = 0;
     let releaseCalls = 0;
     const leaseAuthority = {
+      // 屏幕接管已由用户批准（本测试关注租约本身，批准门见 takeover-grant.test.mjs）。
+      async requestTakeover() {
+        return { state: "granted" };
+      },
+      async takeoverStatus() {
+        return { state: "granted" };
+      },
       async beginAcquire() {
         beginAcquireCalls += 1;
         return { leaseId: "authority-lease-1", state: "reserving" };

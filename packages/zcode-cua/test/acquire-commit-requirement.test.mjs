@@ -103,6 +103,13 @@ describe("acquire commit consumes the verified helper requirement", () => {
 
   function authority(recorder = {}) {
     return {
+      // 屏幕接管已由用户批准（本测试关注租约本身，批准门见 takeover-grant.test.mjs）。
+      async requestTakeover() {
+        return { state: "granted" };
+      },
+      async takeoverStatus() {
+        return { state: "granted" };
+      },
       async beginAcquire() {
         return { leaseId: "authority-lease-1" };
       },
@@ -166,6 +173,32 @@ describe("acquire commit consumes the verified helper requirement", () => {
       JSON.stringify(result.structuredContent).includes("lease_authority_generation"),
       "committed generation is surfaced",
     );
+  });
+
+  it("a declined screen takeover never reaches the authority or the Helper", async () => {
+    await startServer(startBackend({ verified: true, requirement: REQUIREMENT }));
+    const recorder = {};
+    const declined = {
+      ...authority(recorder),
+      async requestTakeover(owner) {
+        recorder.requested = owner;
+        return { state: "denied" };
+      },
+      async beginAcquire() {
+        recorder.begun = true;
+        return { leaseId: "never" };
+      },
+    };
+    const result = await runtime(declined).execute({
+      toolName: "computer.acquire_control",
+      arguments: { observation_id: OBSERVATION_ID },
+      context: LOCAL,
+    });
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /takeover_declined/u);
+    assert.deepEqual(recorder.requested, { session: "session-a", task: "turn-1" });
+    assert.equal(recorder.begun, undefined, "no lease reservation without the user's Allow");
+    assert.deepEqual(seen, [], "the Helper is never asked");
   });
 
   it("stays fail-closed when the confirmed acquire omits the requirement", async () => {

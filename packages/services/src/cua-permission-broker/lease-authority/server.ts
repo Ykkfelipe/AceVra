@@ -13,6 +13,14 @@ export interface LeaseAuthorityServer {
   close(): Promise<void>;
 }
 
+function takeoverOwner(params: Record<string, unknown>): { session: string; task: string } {
+  const session = typeof params.session === "string" ? params.session.trim().slice(0, 256) : "";
+  const task = typeof params.task === "string" ? params.task.trim().slice(0, 256) : "";
+  if (!session || !task)
+    throw Object.assign(new Error("bad takeover owner"), { code: "bad_request" });
+  return { session, task };
+}
+
 export async function startLeaseAuthorityServer(
   dataRoot: string,
   options: LeaseAuthorityOptions = {},
@@ -77,6 +85,13 @@ export async function startLeaseAuthorityServer(
         // 不经 sideband 暴露，模型无法自行暂停、恢复或停止。
         case "admission":
           result = authority.getAdmission();
+          break;
+        // 屏幕接管：运行时只能发起请求与读取结论；批准（decide）只走 UI 的服务 API。
+        case "request_takeover":
+          result = { state: authority.takeover.request(takeoverOwner(params)) };
+          break;
+        case "takeover_status":
+          result = { state: authority.takeover.status(takeoverOwner(params)) };
           break;
         case "report_activity":
           authority.reportActivity(params as unknown as ComputerUseActivityReport);

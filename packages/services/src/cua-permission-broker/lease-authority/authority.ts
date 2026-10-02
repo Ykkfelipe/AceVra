@@ -15,6 +15,7 @@ import type {
   LeaseTermination,
 } from "./contract.js";
 import type { ComputerUseWorkspaceSnapshot, WorkspaceProjectionReader } from "./workspace.js";
+import { createTakeoverGrants } from "./takeover.js";
 
 export interface LeaseAuthorityOptions {
   /** Releases the observed native Helper lease and resolves only after terminal cleanup. */
@@ -92,6 +93,8 @@ export function createLeaseAuthority(
   const sessions = new Map<string, ComputerUseSessionRecord>();
   // M3：mini Computer 视图的宿主持有投影，与会话记录同生命周期、同上限。
   const workspaces = new Map<string, WorkspaceProjection>();
+  // 屏幕接管授权：只有拥有会话的 UI 能批准；接管被用户打断/停止/暂停时撤销。
+  const takeover = createTakeoverGrants(now);
 
   const workspaceFor = (sessionId: string): WorkspaceProjection => {
     let workspace = workspaces.get(sessionId);
@@ -119,6 +122,7 @@ export function createLeaseAuthority(
   };
 
   const endActiveLease = async (reason: string): Promise<boolean> => {
+    takeover.revoke();
     if (!current || (current.state !== "reserving" && current.state !== "active")) return false;
     const stopping = { ...current, state: "stopped" as const };
     current = stopping;
@@ -171,6 +175,9 @@ export function createLeaseAuthority(
         if (!current || current.leaseId !== leaseId) throw new Error("CUA lease is not active");
         if (current.state === "released" || current.state === "stopped") return current;
         current = { ...current, state: "released" };
+        // 用户夺回控制（物理输入/Esc 等 Helper 终止码）撤销授权；代理自己 release 保留到任务结束。
+        if (reason !== "model_release" && reason !== "released")
+          takeover.revoke(current.ownerSession);
         // 修复依据：此前 release 丢弃 reason，物理输入让出与正常释放无法区分，UI 无法如实提示。
         terminate(current, boundedText(reason) ?? "released");
         return current;
@@ -182,6 +189,7 @@ export function createLeaseAuthority(
         }
         const stopping = { ...current, state: "stopped" as const };
         current = stopping;
+        takeover.revoke();
         terminate(stopping, "stopped");
         if (stopping.helperLeaseId && options.releaseHelper) {
           await options.releaseHelper(stopping);
@@ -206,6 +214,13 @@ export function createLeaseAuthority(
         return { status: "resumed" as const };
       }),
     getAdmission: () => admission,
+    // revoke 只属于 authority 自身（打断/停止/暂停）：对外端口不暴露它。
+    takeover: {
+      request: (owner) => takeover.request(owner),
+      status: (owner) => takeover.status(owner),
+      decide: (session, decision) => takeover.decide(session, decision),
+      view: (session) => takeover.view(session),
+    },
     getLastTermination: () => lastTermination,
     reportActivity: (report) => {
       const sessionId = boundedText(report?.session);

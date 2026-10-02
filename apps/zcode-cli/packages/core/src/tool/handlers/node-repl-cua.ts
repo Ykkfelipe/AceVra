@@ -26,8 +26,11 @@ import {
 /**
  * 本构建的本机前台接管开关（单一来源）：broker 的 allowForegroundControl 与能力快照的
  * 前台可用性都读它，避免"快照说可用、调用被拒"的漂移。
+ *
+ * true 只表示"可以请求接管"：acquire_control 必须先拿到用户在 AceVra 里点的 Allow
+ * （lease authority 的 takeover 授权门，zcode-cua/takeover-grant.js），模型无法自行批准。
  */
-export const CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED = false;
+export const CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED = true;
 
 /** 用私有快照构造本地代理 broker；无凭据返回 undefined（绝不凭空造客户端）。 */
 export function createCoreNodeReplCuaBroker(): NodeReplCuaBroker | undefined {
@@ -42,11 +45,9 @@ export function createCoreNodeReplCuaBroker(): NodeReplCuaBroker | undefined {
     brokerSocketPath: socketPath,
     ...(capabilityToken ? { brokerToken: capabilityToken } : {}),
     ...(refreshMarker ? { refreshMarkerPath: refreshMarker } : {}),
-    // 修复依据（Felipe 实测 preview-ux-0050f95c）：此前这里恒为 true，模型可自行
-    // computer.acquire_control 抢走用户前台，安全条（v4-computer-use-bar）随之出现——
-    // 它只是通知，不是同意门。本地 Mac 的产品规则是：代理只在自己的后台环境工作
-    // （窗口预览 + 后台语义动作），绝不打断用户的鼠标与前台；前台接管必须有用户主动
-    // 发起的入口，而该入口尚未存在，因此在有了用户授权来源之前 fail closed。
+    // 修复依据（Felipe 实测 preview-ux-0050f95c）：曾经恒为 true 时模型可自行抢走前台，
+    // 安全条只是通知、不是同意门，于是改为 fail closed。现在同意门已存在：acquire_control
+    // 必须等用户在 AceVra 的 Allow/Deny 卡片里批准（takeover-grant.js），这里才重新放开。
     allowForegroundControl: () => CORE_COMPUTER_FOREGROUND_CONTROL_ALLOWED,
     // lease 凭据成对才给；只经内存对象传给 client，绝不读写进程 env。
     leaseAuthority:

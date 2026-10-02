@@ -297,7 +297,22 @@ export type CuaComputerUseSessionView =
       workspace?: CuaWorkspaceView;
       /** True while a Stop is expected to change something (lease held or action in flight). */
       stopMeaningful: boolean;
+      /** Screen takeover request/decision for this session (see specs "Screen takeover"). */
+      takeover?: CuaSessionTakeoverView;
     };
+
+export interface CuaSessionTakeoverView {
+  state: "pending" | "granted" | "denied";
+  task: string;
+  requestedAt: number;
+  decidedAt?: number;
+}
+
+export interface CuaDecideScreenTakeoverResult {
+  ok: boolean;
+  /** `decided` when a pending request was answered; `nothing_pending` otherwise. */
+  status: "decided" | "nothing_pending" | "unavailable";
+}
 
 // ---------------------------------------------------------------------------
 // M3: mini Computer workspace view. Projected host-side from real workspace
@@ -404,6 +419,14 @@ export interface ICuaPermissionService {
   pauseComputerUse(): Promise<CuaPauseComputerUseResult>;
   /** Lifts the pause gate only; foreground work re-enters through normal admission. */
   resumeComputerUse(): Promise<CuaResumeComputerUseResult>;
+  /**
+   * Owning UI only: answer the session's pending screen takeover request. Not a sideband
+   * method — the model can request takeover but can never grant it.
+   */
+  decideScreenTakeover(
+    sessionId: string,
+    decision: "allow" | "deny",
+  ): Promise<CuaDecideScreenTakeoverResult>;
   /** Fetches the session's own latest observation frame as confined PNG bytes. */
   getComputerUseObservationFrame(
     sessionId: string,

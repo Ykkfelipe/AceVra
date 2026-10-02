@@ -509,6 +509,8 @@ import {
   type CuaObservationFrameResult,
   type CuaPauseComputerUseResult,
   type CuaResumeComputerUseResult,
+  type CuaDecideScreenTakeoverResult,
+  type CuaSessionTakeoverView,
 } from "#src/cua-permission-broker/index.js";
 import type { WorkspaceProjectionReader } from "#src/cua-permission-broker/lease-authority/workspace.js";
 import {
@@ -2483,6 +2485,18 @@ export function createLocalServices(options: {
           error: error instanceof Error ? error.message : String(error),
         };
       }
+    },
+    async decideScreenTakeover(
+      sessionId: string,
+      decision: "allow" | "deny",
+    ): Promise<CuaDecideScreenTakeoverResult> {
+      const authority = leaseAuthorityServers.get(services)?.authority;
+      if (!authority || typeof sessionId !== "string" || !sessionId.trim()) {
+        return { ok: false, status: "unavailable" };
+      }
+      if (decision !== "allow" && decision !== "deny") return { ok: false, status: "unavailable" };
+      const decided = authority.takeover.decide(sessionId.trim(), decision);
+      return { ok: decided, status: decided ? "decided" : "nothing_pending" };
     },
     async resumeComputerUse(): Promise<CuaResumeComputerUseResult> {
       const authority = leaseAuthorityServers.get(services)?.authority;

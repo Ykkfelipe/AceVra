@@ -61,6 +61,8 @@ export type {
   CuaWorkspaceActionView,
   CuaPauseComputerUseResult,
   CuaResumeComputerUseResult,
+  CuaDecideScreenTakeoverResult,
+  CuaSessionTakeoverView,
   CuaObservationFrameResult,
 } from "./cuaPermissionService.js";
 

@@ -1780,3 +1780,46 @@ the Helper is down → one sweep recycle after recovery → the next natural dem
 provisioned spawn env → later sweeps never recycle again (no loop); spawn env keys expose key
 names only; the send/getClient path contains no recycle; and the integrated assembly source keeps
 the verdict peek-only, gated, and triggered only from Helper-recovery boundaries.
+
+## Screen takeover (user-approved foreground)
+
+Background work stays the default. Foreground control (`EXCLUSIVE_FOREGROUND`) becomes reachable
+only through an explicit, per-task user approval; the model can request it but never grant it.
+
+### Product rules
+
+1. The model asks by calling `computer.acquire_control`. Before any Helper lease, the runtime
+   records a takeover **request** for `(session, task)` and waits up to 25 s for the user.
+2. The owning UI shows an Allow / Deny card in the Computer Use bar. Only the UI can decide
+   (UI-owned RPC `decideScreenTakeover`, same class as pause/resume/stop); the runtime sideband can
+   request and read, never decide.
+3. Allow grants takeover for the rest of that task (turn). Later `acquire_control` calls in the
+   same task do not ask again.
+4. Any real mouse/keyboard input (including Esc), Stop, or Pause ends the lease (existing Helper
+   event tap / authority paths) **and revokes the grant**; the next takeover asks again. A
+   normal `release_control` by the agent keeps the grant for the task.
+5. Deny, or no answer within the wait, refuses `acquire_control` with `takeover_declined` /
+   `takeover_pending`. A pending request stays answerable for 5 minutes; a later Allow is used by
+   the next `acquire_control` of that task.
+6. While a lease is active, AceVra draws a click-through, non-focusable animated glow around every
+   display plus a top-center pill ("AceVra is using your screen — press Esc or move the mouse to
+   take back control"). Overlay windows sit above layer 0 so the Helper's `topmostWindow`
+   hit-test ignores them. The overlay is presentation only: the renderer drives it from the
+   global control status, and Electron main hides it if no heartbeat arrives for 4 s.
+7. Remote/mobile and subagent contexts keep refusing foreground control (unchanged).
+
+### Ownership and event order
+
+```text
+model js cell ── computer.acquire_control ──▶ runtime (zcode-cua)
+  runtime ── sideband request_takeover(session, task) ──▶ lease authority  [state: pending]
+  UI poll getComputerUseSession ◀── takeover {state: pending, requestedAt}
+  user clicks Allow ── decideScreenTakeover(session, allow) ──▶ authority      [state: granted]
+  runtime ── sideband takeover_status poll ──▶ granted
+  runtime ── begin_acquire → Helper acquire_control → commit_acquire           [lease: active]
+  renderer ── getControlStatus active ──▶ platform.setScreenTakeoverOverlay(heartbeat) ──▶ main glow
+  physical input / Esc / Stop / Pause ── lease ends ──▶ authority revokes grant ──▶ glow hides
+```
+
+Single owners: the lease authority owns the grant record (keyed by session, scoped to one task);
+the Helper owns the lease; Electron main owns only overlay windows.

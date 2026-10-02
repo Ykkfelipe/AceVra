@@ -82,7 +82,7 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
     name: "computer.acquire_control",
     kind: "foreground",
     args: "{ observation_id: string }",
-    note: "returns lease_id; takes the user's foreground",
+    note: "asks the user to Allow screen takeover (an Allow/Deny card appears in AceVra; waits up to 25 s, so give that js call timeout_ms of at least 40000) and returns lease_id. Only when a step cannot be done in the background. While you hold it the user's screen glows; any real mouse/keyboard input or Esc ends it",
   },
   { name: "computer.control_status", kind: "read", args: "{ lease_id: string }" },
   { name: "computer.release_control", kind: "foreground", args: "{ lease_id: string }" },
@@ -125,9 +125,9 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
 
 /** Known limits the model must know before planning (stated once, not discovered by failure). */
 export const COMPUTER_USE_LIMITS = Object.freeze([
-  "Background actions cannot press arbitrary keys, but a FIELD CAN BE SUBMITTED: after workspace_type_text, call computer.workspace_confirm({ pid, target_label? }) to press Enter inside that field (AX confirm, then a Return key event posted to the app process; verified by the window title changing). Proven dead ends on Chrome — do not retry: the address bar does not navigate on value-set, and the new-tab page has no AXPressable submit control. Foreground key control is NOT available to you here — when a step needs other keys, say so to the user and stop; never take over their screen.",
+  "Background actions cannot press arbitrary keys, but a FIELD CAN BE SUBMITTED: after workspace_type_text, call computer.workspace_confirm({ pid, target_label? }) to press Enter inside that field (AX confirm, then a Return key event posted to the app process; verified by the window title changing). Proven dead ends on Chrome — do not retry: the address bar does not navigate on value-set, and the new-tab page has no AXPressable submit control. Other keys or coordinate input need the user's screen: only when a step truly cannot be done in the background, call computer.acquire_control({ observation_id }) — the user must Allow screen takeover in AceVra. If they decline or do not answer, stop and tell them which step needs their hands; never retry in a loop.",
   "Every state-changing call uses a semantic_ref or pid from the LATEST get_app_state of that app; refs from older observations are refused as stale_target.",
-  "Do not drive apps with osascript/AppleScript, shell `open`, or other scripting from Bash for a Computer Use task: it bypasses the background guarantees and can steal the user's foreground. If a step is unsupported in the background, say so and stop — foreground takeover is not available to you.",
+  "Do not drive apps with osascript/AppleScript, shell `open`, or other scripting from Bash for a Computer Use task: it bypasses the background guarantees and can steal the user's foreground. If a step is unsupported in the background, ask for screen takeover with computer.acquire_control (the user approves it in AceVra) or say so and stop.",
 ]);
 
 /** Unambiguous historical spellings accepted for the two semantic actions. */

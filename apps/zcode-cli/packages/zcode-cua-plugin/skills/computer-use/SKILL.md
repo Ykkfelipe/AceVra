@@ -101,13 +101,25 @@ Background limits — plan around them up front:
   pre-existing user content. A delivered input with unknown application effect requires a fresh
   target observation; a newer visual frame alone is not confirmation.
 
-## Foreground control
+## Foreground control (screen takeover)
 
-Foreground control is **not available to you** on this Mac: `computer.acquire_control` and every
-method that needs a lease are refused. AceVra's local product rule is that the agent works only
-in its own background environment — it never takes the user's screen, cursor, or keyboard. When
-a step truly needs keys or the user's hands (e.g. submitting a search that has no background
-submit control), say so plainly and stop; the user decides what happens next. Never claim you
-have control, and never retry a refused foreground call with different arguments — the refusal is
-a product boundary, not an argument error. Release/lease language in older notes is kept only for
-remote (Dell) sessions, which have their own control flow.
+Background first. Only when a step truly cannot be done in the background (other keys, coordinate
+input, apps without usable accessibility), ask for the user's screen:
+
+```js
+const obs = JSON.parse((await cu.get_app_state({ pid })).content[0].text).tree.observation_id;
+const lease = await cu["computer.acquire_control"]({ observation_id: obs }); // give this js call timeout_ms ≥ 40000
+```
+
+AceVra shows the user an Allow / Deny card and waits up to 25 s. Allow grants takeover for the rest
+of this task; the user's screen glows while you hold it. Then use the foreground methods
+(`computer.click`, `computer.type_text`, `computer.key_press`, …) with the returned `lease_id` and a
+fresh `observation_id`, and `computer.release_control({ lease_id })` when done.
+
+- `takeover_declined`: the user said no — do not ask again in this task; continue in the background
+  or say which step needs their hands, then stop.
+- `takeover_pending`: no answer yet — tell the user the card is waiting; call `acquire_control`
+  again only after they allow it. Never loop.
+- Any real mouse/keyboard input or Esc ends the lease (`interrupted`) and revokes the grant: the
+  user took control back. Do not fight them; ask again only if they want you to continue.
+- Remote/mobile sessions and subagents cannot take over the screen.

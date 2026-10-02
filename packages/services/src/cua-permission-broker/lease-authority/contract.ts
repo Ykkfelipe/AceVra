@@ -97,6 +97,9 @@ export interface ComputerUseSessionRecord {
   readonly observation?: ComputerUseObservationRecord;
 }
 
+export type { TakeoverPort, TakeoverRecord, TakeoverState } from "./takeover.js";
+import type { TakeoverPort } from "./takeover.js";
+
 export interface LeaseAuthority {
   beginAcquire(owner: { session: string; task: string }): Promise<LeaseRecord>;
   commitAcquire(
@@ -111,6 +114,8 @@ export interface LeaseAuthority {
   /** Lift the gate only; foreground work must acquire again through normal admission. */
   resume(): Promise<{ status: "resumed" | "not_paused" }>;
   getAdmission(): LeaseAdmission;
+  /** Screen takeover approvals; revoked by the authority on interruption, Stop and Pause. */
+  readonly takeover: TakeoverPort;
   getLastTermination(): LeaseTermination | undefined;
   reportActivity(report: ComputerUseActivityReport): void;
   getSession(sessionId: string): ComputerUseSessionRecord | undefined;

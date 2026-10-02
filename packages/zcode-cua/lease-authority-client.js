@@ -66,6 +66,13 @@ export function createLeaseAuthorityClient(env = process.env) {
     admission() {
       return this.request("admission", {}, { timeoutMs: 1500 });
     },
+    // 屏幕接管：运行时只能请求与读取结论，批准只属于拥有会话的 UI。
+    requestTakeover(owner) {
+      return this.request("request_takeover", owner, { timeoutMs: 1500 });
+    },
+    takeoverStatus(owner) {
+      return this.request("takeover_status", owner, { timeoutMs: 1500 });
+    },
     reportActivity(report) {
       return this.request("report_activity", report, { timeoutMs: 1500 });
     },

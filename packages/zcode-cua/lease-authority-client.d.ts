@@ -41,6 +41,10 @@ export interface LeaseAuthorityClient {
   stop(): Promise<{ status: "released" | "already_stopped"; record?: LeaseRecord }>;
   /** CUA-4: read-only desktop admission (pause gate). Bounded. */
   admission(): Promise<LeaseAuthorityAdmission>;
+  /** Screen takeover: ask for this task (never grants). Bounded. */
+  requestTakeover(owner: { session: string; task: string }): Promise<{ state: string }>;
+  /** Screen takeover: the user's decision for exactly this task. Bounded. */
+  takeoverStatus(owner: { session: string; task: string }): Promise<{ state: string }>;
   /** CUA-4: best-effort activity projection. Bounded; never authorizes anything. */
   reportActivity(report: ComputerUseActivityReport): Promise<{ accepted: true }>;
 }
