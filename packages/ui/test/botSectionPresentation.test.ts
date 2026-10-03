@@ -43,6 +43,25 @@ test("the sidebar entry and the empty/loading states are localized", () => {
     "bot.capability.available",
     "bot.capability.notConfigured",
     "bot.capability.planned",
+    // §15：右侧上下文面板的三个标签页与 Computers 标签页的只读文案。
+    "bot.tab.memory",
+    "bot.tab.computers",
+    "bot.tab.capabilities",
+    "bot.computers.count",
+    "bot.computers.empty",
+    "bot.computers.unavailable",
+    "bot.computers.role.thisDevice",
+    "bot.computers.role.desktop",
+    "bot.computers.role.node",
+    "bot.computers.presence.online",
+    "bot.computers.presence.offline",
+    "bot.computers.presence.revoked",
+    "bot.computers.capability.computerUse",
+    "bot.computers.capability.shell",
+    "bot.computers.capability.files",
+    "bot.computers.capability.git",
+    "bot.computers.capability.longTasks",
+    "bot.computers.capability.minecraft",
   ]) {
     assert.ok(key in enUS, `missing ${key}`);
     assert.ok(key in zhCN, `missing ${key}`);

@@ -1,18 +1,22 @@
 /**
  * Personal Bot 主视图：一个持续的 Ace 对话，而不是一次 coding session。
  *
- * 对话占据主区域（BotConversation 复用既有单 pane 会话栈）；身份、能力面与记忆收在侧栏，
- * 它们是 Bot 的上下文，不是主界面。
+ * 结构对齐参考产品的共同骨架（AceVra 自己的视觉语言）：对话是绝对主区域
+ * （BotConversation 复用既有单 pane 会话栈），顶部只留一条窄的身份条，
+ * 右侧是 Memory / Computers / Capabilities 三个标签页的上下文面板。
  *
  * 数据只经 Bot 服务面读取；不读 Bot 数据文件，也不把 Bot 混进 Coding Sessions 列表。
+ * Computers 标签页只读展示账户设备注册表，管理动作仍归账户区。
  */
 import { RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.js";
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
 import { Spinner } from "@/components/ui/spinner.js";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { useBotHome } from "@/hooks/useBotHome.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { BotComputersPanel } from "@/bot/BotComputersPanel.js";
 import { BotConversation } from "@/bot/BotConversation.js";
 import type {
   BotCapabilityAvailability,
@@ -134,50 +138,83 @@ export function BotSection({ isDesktop = false }: BotSectionProps) {
           <BotConversation isDesktop={isDesktop} />
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-t border-border p-4 [scrollbar-gutter:stable] md:w-80 md:border-t-0 md:border-l">
-          {loading ? (
-            <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
-              <Spinner className="size-4" />
-              {intl.formatMessage({ id: "bot.loading" })}
+        <aside className="flex w-full shrink-0 flex-col border-t border-border md:w-80 md:border-t-0 md:border-l">
+          <Tabs defaultValue="memory" className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 border-b border-border px-3 pt-3">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="memory">
+                  {intl.formatMessage({ id: "bot.tab.memory" })}
+                </TabsTrigger>
+                <TabsTrigger value="computers">
+                  {intl.formatMessage({ id: "bot.tab.computers" })}
+                </TabsTrigger>
+                <TabsTrigger value="capabilities">
+                  {intl.formatMessage({ id: "bot.tab.capabilities" })}
+                </TabsTrigger>
+              </TabsList>
             </div>
-          ) : null}
 
-          {error ? (
-            <p className="text-ui-sm text-destructive">
-              {intl.formatMessage({ id: "bot.loadFailed" })}
-            </p>
-          ) : null}
+            <TabsContent
+              value="memory"
+              className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
+                  <Spinner className="size-4" />
+                  {intl.formatMessage({ id: "bot.loading" })}
+                </div>
+              ) : null}
 
-          <section className="flex flex-col gap-1">
-            <h2 className="text-ui-sm font-medium text-foreground">
-              {intl.formatMessage({ id: "bot.section.memory" })}
-            </h2>
-            <span className="text-ui-xs text-muted-foreground">
-              {intl.formatMessage({ id: "bot.memory.count" }, { count: String(memory.length) })}
-            </span>
-            {visibleMemory.length === 0 ? (
-              <p className="text-ui-xs text-muted-foreground">
-                {intl.formatMessage({ id: "bot.memory.empty" })}
-              </p>
-            ) : (
-              <ul className="flex flex-col">
-                {visibleMemory.map((record) => (
-                  <MemoryRow key={record.id} record={record} />
-                ))}
-              </ul>
-            )}
-          </section>
+              {error ? (
+                <p className="text-ui-sm text-destructive">
+                  {intl.formatMessage({ id: "bot.loadFailed" })}
+                </p>
+              ) : null}
 
-          <section className="flex flex-col gap-1">
-            <h2 className="text-ui-sm font-medium text-foreground">
-              {intl.formatMessage({ id: "bot.section.capabilities" })}
-            </h2>
-            <ul className="flex flex-col">
-              {(capabilities?.entries ?? []).map((entry) => (
-                <CapabilityRow key={entry.domain} entry={entry} />
-              ))}
-            </ul>
-          </section>
+              <section className="flex flex-col gap-1">
+                <h2 className="text-ui-sm font-medium text-foreground">
+                  {intl.formatMessage({ id: "bot.section.memory" })}
+                </h2>
+                <span className="text-ui-xs text-muted-foreground">
+                  {intl.formatMessage({ id: "bot.memory.count" }, { count: String(memory.length) })}
+                </span>
+                {visibleMemory.length === 0 && !loading ? (
+                  <p className="text-ui-xs text-muted-foreground">
+                    {intl.formatMessage({ id: "bot.memory.empty" })}
+                  </p>
+                ) : (
+                  <ul className="flex flex-col">
+                    {visibleMemory.map((record) => (
+                      <MemoryRow key={record.id} record={record} />
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </TabsContent>
+
+            <TabsContent
+              value="computers"
+              className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
+            >
+              <BotComputersPanel />
+            </TabsContent>
+
+            <TabsContent
+              value="capabilities"
+              className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
+            >
+              <section className="flex flex-col gap-1">
+                <h2 className="text-ui-sm font-medium text-foreground">
+                  {intl.formatMessage({ id: "bot.section.capabilities" })}
+                </h2>
+                <ul className="flex flex-col">
+                  {(capabilities?.entries ?? []).map((entry) => (
+                    <CapabilityRow key={entry.domain} entry={entry} />
+                  ))}
+                </ul>
+              </section>
+            </TabsContent>
+          </Tabs>
         </aside>
       </div>
     </div>

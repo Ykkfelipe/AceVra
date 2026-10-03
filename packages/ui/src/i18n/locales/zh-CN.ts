@@ -6562,6 +6562,26 @@ const zhCN: Record<string, string> = {
   "bot.style.accent.blue": "蓝色强调色",
   "bot.style.accent.teal": "青色强调色",
   "bot.style.accent.amber": "琥珀强调色",
+  // Bot 右侧上下文面板的标签页（§15）。
+  "bot.tab.memory": "记忆",
+  "bot.tab.computers": "电脑",
+  "bot.tab.capabilities": "能力",
+  "bot.computers.count": "已连接 {count} 台",
+  "bot.computers.refresh": "刷新电脑状态",
+  "bot.computers.unavailable": "暂时无法获取电脑状态。",
+  "bot.computers.empty": "还没有电脑。以后连接的机器（比如 SSH 服务器）会显示在这里。",
+  "bot.computers.role.thisDevice": "这台电脑",
+  "bot.computers.role.desktop": "AceVra 桌面端",
+  "bot.computers.role.node": "服务器",
+  "bot.computers.presence.online": "在线",
+  "bot.computers.presence.offline": "离线",
+  "bot.computers.presence.revoked": "已移除",
+  "bot.computers.capability.computerUse": "电脑操作",
+  "bot.computers.capability.shell": "终端",
+  "bot.computers.capability.files": "文件",
+  "bot.computers.capability.git": "Git",
+  "bot.computers.capability.longTasks": "长任务",
+  "bot.computers.capability.minecraft": "Minecraft",
 };
 
 export default zhCN;

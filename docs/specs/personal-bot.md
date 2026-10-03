@@ -484,3 +484,45 @@ workspaces and its `isMainMemoryTaskType` gate excludes `personal_bot` exactly a
 6. Repeated turns with unchanged memory do not accumulate duplicate blocks.
 7. No raw personal-memory record crosses the protocol boundary.
 8. Coding sessions and Project Memory behave exactly as before.
+
+## 15. M2+ (approved direction): Bot surface redesign
+
+The first-pass Bot surface (stacked header + chat + report-card sidebar) did not match the product's
+intended feel. Three reference products were reviewed; their shared structure is: a **dominant chat
+column**, a **slim identity header**, and a **tabbed context panel** on the right (profile / memory /
+computers). The Bot surface is redesigned onto that structure in AceVra's own visual language
+(`DESIGN.md` tokens only, no hardcoded reference palettes, light and dark both correct).
+
+### 15.1 Layout
+
+- Chat is the dominant region and always renders first (`BotConversation`, the `V4ChatPane` host,
+  unchanged from §13). Context data never gates the conversation.
+- A slim header carries the Ace identity (avatar, name, descriptor, style badges, refresh). It is
+  chrome, not content; no actions beyond refresh.
+- The right panel (`w-80`, borders via `border-border`, stacks below chat under `md`) is a Tabs
+  surface with exactly three tabs: **Memory**, **Computers**, **Capabilities**. Tab labels, presence
+  labels, roles, platforms and capability chips are localized (`bot.*` keys, en-US/zh-CN parity is
+  enforced by the presentation test).
+
+### 15.2 Computers tab (read-only)
+
+- Lists the machines Ace can work with, from the existing account device registry via
+  `IPlatformService.account.listDevices()` (`AccountDevicesView`). No new registry, no second data
+  path, no state owner.
+- **Read-only + status only** (user-approved scope): presence dot (online uses the success token),
+  display name, role (this computer / AceVra desktop / server node), platform label, and capability
+  chips. Pairing, renaming, revoking stay in the account Computers section — the Bot surface links
+  nothing and mutates nothing.
+- Failure semantics match the rest of the Bot surface: `listDevices()` unavailable or throwing
+  renders an unavailable note, never blocks the chat or other tabs, and never shows credentials
+  (the view type is descriptive facts only).
+- Future servers (e.g. an SSH Dell) are `type: "node"` rows in the same registry; they need no
+  special-casing here. The empty state says future machines will appear here.
+
+### 15.3 Unchanged invariants
+
+One persistent Ace (no multi-bot list, despite the references); identity separate from conversation
+state; `BotConversationShell.sessionId` remains the sole durable conversation authority; personal
+memory retrieval stays behind `IBotService.buildMemoryContext()` with §14's wire limits; no Bot
+entries in Coding Sessions; Computer Use execution is untouched (this surface only _displays_ the
+device registry).

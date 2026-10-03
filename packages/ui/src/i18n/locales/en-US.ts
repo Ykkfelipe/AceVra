@@ -6887,6 +6887,27 @@ const enUS: Record<string, string> = {
   "bot.style.accent.blue": "Blue accent",
   "bot.style.accent.teal": "Teal accent",
   "bot.style.accent.amber": "Amber accent",
+  // Bot 右侧上下文面板的标签页（§15）。
+  "bot.tab.memory": "Memory",
+  "bot.tab.computers": "Computers",
+  "bot.tab.capabilities": "Capabilities",
+  "bot.computers.count": "{count} connected",
+  "bot.computers.refresh": "Refresh computer status",
+  "bot.computers.unavailable": "Computer status is not available right now.",
+  "bot.computers.empty":
+    "No computers yet. Machines you connect — like an SSH server — will appear here.",
+  "bot.computers.role.thisDevice": "This computer",
+  "bot.computers.role.desktop": "AceVra desktop",
+  "bot.computers.role.node": "Server",
+  "bot.computers.presence.online": "Online",
+  "bot.computers.presence.offline": "Offline",
+  "bot.computers.presence.revoked": "Removed",
+  "bot.computers.capability.computerUse": "Computer use",
+  "bot.computers.capability.shell": "Shell",
+  "bot.computers.capability.files": "Files",
+  "bot.computers.capability.git": "Git",
+  "bot.computers.capability.longTasks": "Long tasks",
+  "bot.computers.capability.minecraft": "Minecraft",
 };
 
 export default enUS;
