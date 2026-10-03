@@ -298,9 +298,9 @@ uses. The lifecycle is:
 open Bot
   → read shell pointer
       ├─ null           → draft (first send creates the session)
-      └─ non-null       → validate (read-only, no runtime spawn)
-                            ├─ exists → bind
-                            └─ missing → clear pointer → draft
+      └─ non-null       → bind it; the subscription resolves it
+                            ├─ resolves → conversation continues
+                            └─ sessionNotFound → clear pointer → draft
   → onSessionCreated  → setConversationSession(newId)
   → onSessionDeleted  → setConversationSession(null)
   → session disappears while open (reactive race) → clear pointer → draft
@@ -308,8 +308,16 @@ open Bot
 
 Invariants:
 
-- Validation must not spawn a runtime: it uses a read-only, existing-only session read. This keeps
-  "open the Bot" from paying for a cold runtime just to discover a stale pointer.
+- **There is deliberately no preflight validation.** An `existing-only` session read reports whether
+  a runtime is _alive_, not whether a session exists — verified from source during implementation.
+  Because the Bot runtime is lazily spawned, a preflight on a cold start would misreport a valid
+  pointer as stale and erase it. Validation is therefore part of the normal open: showing the
+  conversation requires subscribing anyway, so the subscription's own `sessionNotFound` is the
+  authoritative signal, and no throwaway runtime is created just to validate.
+- Only `sessionNotFound` clears the pointer. Transport hiccups, turn failures and other error states
+  must not, otherwise a recoverable error would escalate into a lost conversation.
+- The unavailable signal is reported at most once per session id, so a host that has not yet finished
+  clearing does not receive a storm of repeats.
 - Clearing a stale pointer touches **only** `conversation.json`. Identity, profile and personal
   memory are never affected by pointer recovery (M1 §4 separation is preserved).
 - Recovery is silent and forward-moving: the user gets a fresh draft, not an error loop.

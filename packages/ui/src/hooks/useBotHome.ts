@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   BotCapabilitySurface,
-  BotConversationShell,
   BotIdentityView,
   IBotService,
   PersonalMemoryRecord,
@@ -23,7 +22,6 @@ interface BotHomeState {
   identity: BotIdentityView | null;
   memory: PersonalMemoryRecord[];
   capabilities: BotCapabilitySurface | null;
-  shell: BotConversationShell | null;
   loading: boolean;
   error: unknown | null;
 }
@@ -32,7 +30,6 @@ const EMPTY_STATE: BotHomeState = {
   identity: null,
   memory: [],
   capabilities: null,
-  shell: null,
   loading: false,
   error: null,
 };
@@ -60,15 +57,14 @@ export function useBotHome(): BotHomeResult {
     setState((previous) => ({ ...previous, loading: true, error: null }));
 
     try {
-      const [identity, memory, capabilities, shell] = await Promise.all([
+      const [identity, memory, capabilities] = await Promise.all([
         botService.getIdentity(),
         botService.listMemory(),
         botService.listCapabilitySurface(),
-        botService.getConversationShell(),
       ]);
       // 服务换代/重复刷新时丢弃过期结果，避免旧响应覆盖新事实。
       if (generation !== generationRef.current) return;
-      setState({ identity, memory, capabilities, shell, loading: false, error: null });
+      setState({ identity, memory, capabilities, loading: false, error: null });
     } catch (error) {
       if (generation !== generationRef.current) return;
       setState({ ...EMPTY_STATE, loading: false, error });

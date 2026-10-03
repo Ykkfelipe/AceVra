@@ -1,16 +1,19 @@
 /**
- * Personal Bot 主视图：一个持续的 Bot 身份，而不是一次 coding session。
+ * Personal Bot 主视图：一个持续的 Ace 对话，而不是一次 coding session。
  *
- * 只读 Bot 服务面（身份/档案、对话外壳、个人记忆、能力面）；不写会话消息，
- * 也不把 Bot 混进 Coding Sessions 列表。
+ * 对话占据主区域（BotConversation 复用既有单 pane 会话栈）；身份、能力面与记忆收在侧栏，
+ * 它们是 Bot 的上下文，不是主界面。
+ *
+ * 数据只经 Bot 服务面读取；不读 Bot 数据文件，也不把 Bot 混进 Coding Sessions 列表。
  */
-import { Bot as BotIcon, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.js";
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
 import { Spinner } from "@/components/ui/spinner.js";
 import { useBotHome } from "@/hooks/useBotHome.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
+import { BotConversation } from "@/bot/BotConversation.js";
 import type {
   BotCapabilityAvailability,
   BotCapabilityEntry,
@@ -68,10 +71,13 @@ function CapabilityRow({ entry }: { entry: BotCapabilityEntry }) {
   );
 }
 
-export function BotSection() {
+interface BotSectionProps {
+  isDesktop?: boolean;
+}
+
+export function BotSection({ isDesktop = false }: BotSectionProps) {
   const { intl } = useZCodeIntl();
-  const { identity, memory, capabilities, shell, loading, error, available, refresh } =
-    useBotHome();
+  const { identity, memory, capabilities, loading, error, available, refresh } = useBotHome();
 
   if (!available) {
     return (
@@ -87,48 +93,21 @@ export function BotSection() {
   const visibleMemory = memory.slice(0, MAX_VISIBLE_MEMORY);
 
   return (
-    <div
-      className="min-h-0 flex-1 overflow-y-auto bg-background [scrollbar-gutter:stable]"
-      data-testid="bot-section"
-    >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 md:px-6">
-        <header className="flex items-center gap-3">
-          <Avatar size="lg">
-            <AvatarFallback>{initialOf(displayName)}</AvatarFallback>
-          </Avatar>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <h1 className="truncate text-ui-xl font-medium text-foreground">
-              {displayName || intl.formatMessage({ id: "bot.fallbackName" })}
-            </h1>
-            <p className="truncate text-ui-sm text-muted-foreground">
-              {identity?.profile.descriptor ?? ""}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => void refresh()}
-            aria-label={intl.formatMessage({ id: "bot.refresh" })}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
-        </header>
-
-        {loading ? (
-          <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
-            <Spinner className="size-4" />
-            {intl.formatMessage({ id: "bot.loading" })}
-          </div>
-        ) : null}
-
-        {error ? (
-          <p className="text-ui-sm text-destructive">
-            {intl.formatMessage({ id: "bot.loadFailed" })}
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background" data-testid="bot-section">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 md:px-5">
+        <Avatar size="lg">
+          <AvatarFallback>{initialOf(displayName)}</AvatarFallback>
+        </Avatar>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h1 className="truncate text-ui-base font-medium text-foreground">
+            {displayName || intl.formatMessage({ id: "bot.fallbackName" })}
+          </h1>
+          <p className="truncate text-ui-xs text-muted-foreground">
+            {identity?.profile.descriptor ?? ""}
           </p>
-        ) : null}
-
+        </div>
         {identity ? (
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="hidden shrink-0 items-center gap-1 lg:flex">
             <Badge variant="outline">
               {intl.formatMessage({ id: `bot.style.tone.${identity.profile.style.tone}` })}
             </Badge>
@@ -137,71 +116,69 @@ export function BotSection() {
                 id: `bot.style.verbosity.${identity.profile.style.verbosity}`,
               })}
             </Badge>
-            <Badge variant="outline">
-              {intl.formatMessage({ id: `bot.style.accent.${identity.profile.style.accent}` })}
-            </Badge>
           </div>
         ) : null}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void refresh()}
+          aria-label={intl.formatMessage({ id: "bot.refresh" })}
+        >
+          <RefreshCw className="size-4" />
+        </Button>
+      </header>
 
-        <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2">
-            <BotIcon className="size-4 text-muted-foreground" />
-            <h2 className="text-ui-base font-medium text-foreground">
-              {intl.formatMessage({ id: "bot.section.conversation" })}
-            </h2>
-          </div>
-          <dl className="flex flex-col gap-1 text-ui-xs">
-            <div className="flex gap-2">
-              <dt className="shrink-0 text-muted-foreground">
-                {intl.formatMessage({ id: "bot.conversation.workspace" })}
-              </dt>
-              <dd className="min-w-0 truncate text-foreground">{shell?.workspacePath ?? ""}</dd>
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        {/* 对话是主区域：始终渲染，不因侧栏数据加载状态而延迟。 */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <BotConversation isDesktop={isDesktop} />
+        </div>
+
+        <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-t border-border p-4 [scrollbar-gutter:stable] md:w-80 md:border-t-0 md:border-l">
+          {loading ? (
+            <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
+              <Spinner className="size-4" />
+              {intl.formatMessage({ id: "bot.loading" })}
             </div>
-            <div className="flex gap-2">
-              <dt className="shrink-0 text-muted-foreground">
-                {intl.formatMessage({ id: "bot.conversation.status" })}
-              </dt>
-              <dd className="min-w-0 truncate text-foreground">
-                {shell?.sessionId
-                  ? intl.formatMessage({ id: "bot.conversation.linked" })
-                  : intl.formatMessage({ id: "bot.conversation.notStarted" })}
-              </dd>
-            </div>
-          </dl>
-        </section>
+          ) : null}
 
-        <section className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
-          <h2 className="text-ui-base font-medium text-foreground">
-            {intl.formatMessage({ id: "bot.section.capabilities" })}
-          </h2>
-          <ul className="flex flex-col">
-            {(capabilities?.entries ?? []).map((entry) => (
-              <CapabilityRow key={entry.domain} entry={entry} />
-            ))}
-          </ul>
-        </section>
+          {error ? (
+            <p className="text-ui-sm text-destructive">
+              {intl.formatMessage({ id: "bot.loadFailed" })}
+            </p>
+          ) : null}
 
-        <section className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-ui-base font-medium text-foreground">
+          <section className="flex flex-col gap-1">
+            <h2 className="text-ui-sm font-medium text-foreground">
               {intl.formatMessage({ id: "bot.section.memory" })}
             </h2>
             <span className="text-ui-xs text-muted-foreground">
               {intl.formatMessage({ id: "bot.memory.count" }, { count: String(memory.length) })}
             </span>
-          </div>
-          {visibleMemory.length === 0 ? (
-            <p className="text-ui-xs text-muted-foreground">
-              {intl.formatMessage({ id: "bot.memory.empty" })}
-            </p>
-          ) : (
+            {visibleMemory.length === 0 ? (
+              <p className="text-ui-xs text-muted-foreground">
+                {intl.formatMessage({ id: "bot.memory.empty" })}
+              </p>
+            ) : (
+              <ul className="flex flex-col">
+                {visibleMemory.map((record) => (
+                  <MemoryRow key={record.id} record={record} />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-1">
+            <h2 className="text-ui-sm font-medium text-foreground">
+              {intl.formatMessage({ id: "bot.section.capabilities" })}
+            </h2>
             <ul className="flex flex-col">
-              {visibleMemory.map((record) => (
-                <MemoryRow key={record.id} record={record} />
+              {(capabilities?.entries ?? []).map((entry) => (
+                <CapabilityRow key={entry.domain} entry={entry} />
               ))}
             </ul>
-          )}
-        </section>
+          </section>
+        </aside>
       </div>
     </div>
   );

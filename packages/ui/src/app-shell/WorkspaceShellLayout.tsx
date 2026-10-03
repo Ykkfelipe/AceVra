@@ -1832,8 +1832,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                           </AutomationsMainBreadcrumbFrame>
                         </main>
                       ) : workspaceMainView === "bot" ? (
-                        // Bot 是与 Coding Sessions 平级的独立 section：不进 task 列表，
-                        // 只读 Bot 服务面。数据由 BotSection 内部按需加载。
+                        // Bot 是与 Coding Sessions 平级的独立 section：不进 task 列表。
+                        // 对话跑在专用 Bot workspace 上，会话栈复用单 pane 宿主。
                         <main className="flex h-full min-h-0 flex-1 flex-col bg-background">
                           <ScopedErrorBoundary
                             scope="bot"
@@ -1841,7 +1841,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                             variant="panel"
                             className="h-full"
                           >
-                            <BotSection />
+                            <BotSection isDesktop={isDesktop === true} />
                           </ScopedErrorBoundary>
                         </main>
                       ) : workspaceMainView === "plugin-store" ? (

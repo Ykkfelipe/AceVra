@@ -119,6 +119,37 @@ test("conversation pointer is idempotent and clearing it keeps identity", async 
   });
 });
 
+test("stale-pointer recovery clears only the pointer", async () => {
+  await withTempRoot(async (paths) => {
+    const service = makeService(paths);
+    // 先建立完整的 Bot 状态：档案被改过、有记忆、有指针。
+    await service.updateProfile({ displayName: "Nova", style: { tone: "direct" } });
+    const memory = await service.rememberMemory({
+      category: "goal",
+      title: "Ship the Bot conversation",
+      summary: "",
+    });
+    await service.setConversationSession("sess_gone");
+    const before = await service.getIdentity();
+
+    // 宿主发现指针已失效（sessionNotFound）后的恢复动作。
+    const recovered = await service.setConversationSession(null);
+    assert.equal(recovered.sessionId, null);
+
+    // 只有 conversation.json 变了；identity/profile/memory 一律不动（spec §13.4）。
+    const after = await service.getIdentity();
+    assert.deepEqual(after, before);
+    assert.deepEqual(
+      (await service.listMemory()).map((entry) => entry.id),
+      [memory.id],
+    );
+
+    // 单调前进：恢复后可以直接开始新对话。
+    const restarted = await service.setConversationSession("sess_new");
+    assert.equal(restarted.sessionId, "sess_new");
+  });
+});
+
 test("missing documents fall back to defaults without error", async () => {
   await withTempRoot(async (paths) => {
     const service = makeService(paths);

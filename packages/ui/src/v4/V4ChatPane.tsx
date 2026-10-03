@@ -44,6 +44,8 @@ interface V4ChatPaneProps {
   onSessionCreated?: (sessionId: string) => void;
   /** deleteSession：删除当前会话后回到 draft。 */
   onSessionDeleted?: () => void;
+  /** 绑定的 session 已不存在（sessionNotFound）时通知持有指针的宿主。 */
+  onSessionUnavailable?: () => void;
   /** 草稿态 composer contextHeader（m5，壳层构造下发）。 */
   draftComposerHeader?: ReactNode;
   gitSummary?: GitRepositorySummary | null;
@@ -92,6 +94,7 @@ export function V4ChatPane({
   provider,
   onSessionCreated,
   onSessionDeleted,
+  onSessionUnavailable,
   draftComposerHeader,
   gitSummary,
   gitDirtyFileCount,
@@ -137,6 +140,7 @@ export function V4ChatPane({
         provider={provider}
         onSessionCreated={onSessionCreated}
         onSessionDeleted={onSessionDeleted}
+        onSessionUnavailable={onSessionUnavailable}
         draftComposerHeader={draftComposerHeader}
         gitSummary={gitSummary}
         gitDirtyFileCount={gitDirtyFileCount}
