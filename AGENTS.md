@@ -24,6 +24,7 @@
 | 未使用依赖与导出 | `pnpm knip`                               |
 | 导出引用查询     | `pnpm dep:refs --list-exports <file>`     |
 | 构建产物盘点     | `pnpm artifacts:report`（只读，不删除）   |
+| Worktree 盘点    | `pnpm worktrees:report`（只读，不删除）   |
 
 测试入口以目标包当前的 `package.json` 和实际测试文件为准，不假定存在统一的单测或 E2E 命令。
 
@@ -56,6 +57,15 @@
 - 临时插桩/诊断构建在取证完成、诊断改动还原并重建干净候选后必须删除；无活跃调查时不得同时保留诊断树与多份干净候选树。
 - 自动清理必须路径限定且保守。源码、`.git`、`node_modules`、userData/会话数据、本地 profile、签名证书与 keychain、TCC 状态、已接受的测试证据/报告、`.spike` 永不在产物清理中删除。
 - 打包前运行 `pnpm artifacts:report` 盘点产物体积与陈旧代次；脚本只报告、不删除，普通源码开发不因其失败。
+
+## Worktree 与磁盘预算
+
+每个链接 worktree 独立安装依赖（约 3 GB `node_modules` 加约 260 MB `.zcode-runtime`），是磁盘增长的主要来源，曾因同时保留 9 个 worktree 把磁盘占到只剩 13 GB。
+
+- 链接 worktree 同时最多保留 3 个（不含主检出）。新建前运行 `pnpm worktrees:report`；已达上限或磁盘剩余低于 25 GB 时，先复用空闲 worktree（`git switch -c <新分支>`）或移除已完成的 worktree，再新建。
+- 并行子代理优先复用已有 worktree，不为每个子任务新建。分支已推送且不再继续的 worktree 用 `git worktree remove <路径>` 移除；分支与提交仍保留在 Git 中，需要时可重新检出。
+- 暂停但还要回来的 worktree 进入冷存：`pnpm worktrees:cold <名称>` 删除其 `node_modules`、`.turbo` 与 `packages/*/{dist,out}`，恢复时在该 worktree 运行 `pnpm install`。这是上文「不得以腾空间为由删除 `node_modules`」的唯一例外，仅限非主检出、非当前且无进程占用的链接 worktree；脚本对这三种情况会拒绝执行。
+- 不在 worktree 内堆积未跟踪的大文件（截图、`.spike` 数据）；需要保留的移入主检出的 `.spike/`，否则删除后再移除 worktree。
 
 ## 实现与验证
 

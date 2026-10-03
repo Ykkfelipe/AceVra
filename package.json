@@ -39,6 +39,8 @@
     "release:accept:installed": "node scripts/release/accept-local-alpha-installed.mjs",
     "release:compact:candidate": "node scripts/release/compact-local-alpha-artifacts.mjs",
     "artifacts:report": "node scripts/release/artifact-report.mjs",
+    "worktrees:report": "node scripts/worktree-storage.mjs",
+    "worktrees:cold": "node scripts/worktree-storage.mjs --cold",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix --fix-suggestions",
     "bootstrap": "node scripts/bootstrap.mjs",
