@@ -36,6 +36,15 @@
 - `CONTEXT.md`：插件商店领域词汇；修改相关 UI 前阅读。
 - `DESIGN.md`：UI 设计规范；修改 UI 前阅读。
 
+## 并行子代理技能（`.agents/skills/`）
+
+主代理拆分并行子代理时，让子代理先读对应 SKILL.md（子代理无会话记忆，prompt 必须自包含）：
+
+- `cua-system-map`：Computer Workspace 全链路所有权、执行 provenance、症状→边界速查、各层测试入口。
+- `cua-live-acceptance`：已安装候选的实时验收手册（fixture、zero-steal、mini panel/安全条探针、证据）。
+- `alpha-packaging-release`：本地打包/验证/安装/压实流水线与产物策略陷阱。
+- `parallel-cua-workbreakdown`：并行拆分规则、机器级串行点、自包含交接模板、合并职责。
+
 ## 本地构建产物管理
 
 本地 alpha 打包一律使用固定工作区 `release/0.1.0-alpha.1/` 下的 `build/`、`validation/`、`handoff/`。普通迭代构建禁止创建 `build-<sha>/`、`candidate-<sha>/`、`validation-<sha>/`、`handoff-<sha>/` 或时间戳等价物；Git 是历史记录，编译产物可随时重建。操作步骤见 `release/0.1.0-alpha.1/HOW_TO_UPDATE.md`。
