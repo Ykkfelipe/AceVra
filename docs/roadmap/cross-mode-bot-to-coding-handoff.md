@@ -65,3 +65,16 @@ Desktop live (AceVra Dev from this worktree, profile `~/.zcode-acevra-dev`, fixt
 - Handoff sessions use the target workspace's default model; live tests should first select the Starter
   coding plan and GLM-5.3-Flash Low (the default GLM-5.3 Max hit the usage limit).
 - Remote projects are not offered as targets in this milestone.
+
+## Follow-up on `fix/work-on-this-bot-model` (2026-10-03)
+
+- **Model continuity:** the handoff sends the Ace conversation's persisted selection
+  (`snapshot.config.modelSelection`) as `createSession.config`. Live: the Coding session ran on
+  `account:zai-start-plan` · GLM-5.3-Flash · low (same as Ace) and the first turn completed.
+- **Tasks target:** "Work in → Tasks (no project folder)" uses the same app-managed conversation
+  workspace as Coding's Tasks → New task; the session lands under Tasks. Live: origin, task index
+  (+1, Bot rows unchanged), `conversation.json` unchanged, Continue with Ace verified.
+- **Recorded, not fixed:** the target picker (like Automations / Saved Workflows, via
+  `buildAutomationWorkspaceOptions`) hides only tabs already flagged `unavailable-local-directory`. A
+  project folder deleted while the app runs, or never re-checked, is still offered. Fix belongs to the
+  shared workspace-availability detection, not to Work on this.

@@ -17,6 +17,7 @@ import {
   type HandoffObjectRef,
 } from "@zcode/shared/cross-mode";
 import { uuidv7 } from "@zcode/shared";
+import type { SessionConfigState } from "@zcode/shared/zcode-protocol-v4";
 import { Button } from "@/components/ui/button.js";
 import { Checkbox } from "@/components/ui/checkbox.js";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog.js";
@@ -45,6 +46,14 @@ import {
 
 type ExcerptStatus = "loading" | "ready" | "error";
 
+/** 交接落点：Tasks（无项目文件夹，app 管理的对话工作区）或一个可写的本机项目。 */
+export type WorkOnThisTarget =
+  | { kind: "tasks" }
+  | { kind: "project"; project: AutomationWorkspaceOption };
+
+/** Select 的保留值；项目键是 workspace key（路径/identity），不会与它冲突。 */
+export const TASKS_TARGET_KEY = "__tasks__";
+
 export interface WorkOnThisDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -54,9 +63,13 @@ export interface WorkOnThisDialogProps {
   conversationTitle: string | null;
   projects: readonly AutomationWorkspaceOption[];
   pending: boolean;
+  /** modelSelection = 本对话上次使用的模型（快照尚未就绪时为 undefined）。 */
+  /** Tasks（无项目）是否可作为落点：宿主提供了对话工作区解析能力时为 true。 */
+  tasksAvailable: boolean;
   onConfirm: (
-    project: AutomationWorkspaceOption,
+    target: WorkOnThisTarget,
     confirmation: HandoffConfirmation,
+    modelSelection: SessionConfigState["modelSelection"],
   ) => Promise<{ ok: true } | { ok: false; message: string | null }>;
 }
 
@@ -72,14 +85,16 @@ function WorkOnThisDialogBody({
   conversationRef,
   conversationTitle,
   projects,
+  tasksAvailable,
   pending,
   onConfirm,
 }: WorkOnThisDialogProps) {
   const { intl } = useZCodeIntl();
   const [identity] = useState(() => ({ handoffId: uuidv7(), createdAt: Date.now() }));
-  const [projectKey, setProjectKey] = useState<string | null>(() => {
+  const [targetKey, setTargetKey] = useState<string | null>(() => {
     const first = projects[0];
-    return first ? resolveAutomationWorkspaceSelectionKey(first) : null;
+    if (first) return resolveAutomationWorkspaceSelectionKey(first);
+    return tasksAvailable ? TASKS_TARGET_KEY : null;
   });
   const [objective, setObjective] = useState(() => defaultHandoffObjective(conversationTitle));
   const [notes, setNotes] = useState("");
@@ -122,10 +137,13 @@ function WorkOnThisDialogBody({
     setExcerptStatus("ready");
   }, [conversationRef, intl, rowsSnapshot]);
 
-  const project = useMemo(
-    () => projects.find((option) => resolveAutomationWorkspaceSelectionKey(option) === projectKey),
-    [projectKey, projects],
-  );
+  const target = useMemo<WorkOnThisTarget | null>(() => {
+    if (targetKey === TASKS_TARGET_KEY) return tasksAvailable ? { kind: "tasks" } : null;
+    const project = projects.find(
+      (option) => resolveAutomationWorkspaceSelectionKey(option) === targetKey,
+    );
+    return project ? { kind: "project", project } : null;
+  }, [projects, targetKey, tasksAvailable]);
 
   const draft = useMemo(
     () =>
@@ -150,7 +168,7 @@ function WorkOnThisDialogBody({
   );
   const blockingIssues = viewModel?.issues.filter((issue) => issue.severity === "error") ?? [];
   const objectiveMissing = objective.trim().length === 0;
-  const canStart = Boolean(project && preview && viewModel && !viewModel.blocked) && !pending;
+  const canStart = Boolean(target && preview && viewModel && !viewModel.blocked) && !pending;
 
   const toggleExcerpt = (itemId: string, included: boolean) => {
     setExcerptItems(
@@ -159,14 +177,18 @@ function WorkOnThisDialogBody({
   };
 
   const handleStart = async () => {
-    if (!project || !preview || !canStart) return;
+    if (!target || !preview || !canStart) return;
     const confirmed = confirmHandoffPreview(preview);
     if (!confirmed.ok || !confirmed.session.confirmation) {
       setError(intl.formatMessage({ id: "bot.workOnThis.error.blocked" }));
       return;
     }
     setError(null);
-    const result = await onConfirm(project, confirmed.session.confirmation);
+    const result = await onConfirm(
+      target,
+      confirmed.session.confirmation,
+      rowsSnapshot.status === "ready" ? rowsSnapshot.modelSelection : undefined,
+    );
     if (!mountedRef.current) return;
     if (result.ok) {
       onOpenChange(false);
@@ -207,7 +229,7 @@ function WorkOnThisDialogBody({
             <Label className="text-ui-sm text-foreground-subtle">
               {intl.formatMessage({ id: "bot.workOnThis.project" })}
             </Label>
-            {projects.length === 0 ? (
+            {projects.length === 0 && !tasksAvailable ? (
               <p
                 className="text-ui-sm text-foreground-subtle"
                 data-testid="bot-work-on-this-no-projects"
@@ -216,14 +238,19 @@ function WorkOnThisDialogBody({
               </p>
             ) : (
               <Select
-                value={projectKey ?? undefined}
-                onValueChange={setProjectKey}
+                value={targetKey ?? undefined}
+                onValueChange={setTargetKey}
                 disabled={pending}
               >
                 <SelectTrigger data-testid="bot-work-on-this-project">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {tasksAvailable ? (
+                    <SelectItem value={TASKS_TARGET_KEY}>
+                      {intl.formatMessage({ id: "bot.workOnThis.tasksTarget" })}
+                    </SelectItem>
+                  ) : null}
                   {projects.map((option) => {
                     const key = resolveAutomationWorkspaceSelectionKey(option);
                     return (

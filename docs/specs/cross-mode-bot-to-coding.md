@@ -29,8 +29,12 @@ as usual. The frozen flow matrix is unchanged (`bot → multitask` stays disallo
    `bot-conversation-actions` slot shows **Work on this** (hidden for a fresh draft: there is nothing to
    reference yet).
 2. The dialog shows, all driven by the contract preview view model (`buildHandoffPreviewViewModel`):
-   - **Project** — pick one of the open local Coding projects (`buildAutomationWorkspaceOptions(tabs)`,
-     remote workspaces excluded in this milestone). Required.
+   - **Where** — **Tasks (no project folder)** or one of the open writable local Coding projects
+     (`buildAutomationWorkspaceOptions(tabs)`, remote workspaces excluded in this milestone). Tasks is
+     the same app-managed conversation workspace the Coding sidebar's Tasks → New task uses: it is
+     resolved at confirm time through `onResolveConversationWorkspace`
+     (`fileService.ensureConversationWorkspace()`) and the session opens under Tasks
+     (`workspacePurpose: "conversation"`). Default: the first open project, else Tasks.
    - **Objective** — editable, prefilled from the conversation title (1–500 chars).
    - **Context to carry** — explicit labeled items with include toggles and the byte budget:
      - _Notes for the work_ — free text the user writes (standard).
@@ -41,7 +45,11 @@ as usual. The frozen flow matrix is unchanged (`bot → multitask` stays disallo
    - **Returns to** — "Ace · summary" (fixed `returnPolicy: "summary"`).
    - Blocking issues (sorted, from the contract) replace a silent disabled button.
 3. **Start in Coding** freezes the snapshot (`confirmHandoffPreview`) and sends one `createSession`
-   with `crossModeHandoff.confirmation` to the target project's runtime.
+   with `crossModeHandoff.confirmation` to the target project's runtime. The work continues on **the
+   model the Ace conversation last used**: the Bot session's persisted `snapshot.config.modelSelection`
+   (provider, model and effort) is sent as `createSession.config.modelSelection`, so the Coding session
+   does not fall back to the runtime default (which can be a different plan and hit its usage limit).
+   If the Bot session has no persisted selection, `config` is omitted and the runtime default applies.
 4. The CLI admits the snapshot, creates and persists the Coding session, records the origin, and starts
    the first turn with the rendered handoff. The desktop switches to that session in Coding.
 5. The Coding session shows a **Started from Ace** notice (objective) with **Continue with Ace**, which
@@ -63,6 +71,7 @@ conversations, connector/account data. Bot memory is a model-only, non-persisted
 | `snapshot.crossModeOrigin`                          | v4 projection (seeded from the entry, like `sharedContextImport`)               | Static metadata: no row, no revision bump.                                                                                                                                                  |
 | Bot conversation selection (`conversation.json`)    | Bot module (unchanged)                                                          | The handoff never writes it. Only an explicit **Continue with Ace** selects.                                                                                                                |
 | Coding task index                                   | Host task-index syncer (unchanged)                                              | Only the new `interactive` session enters it, like any Coding session.                                                                                                                      |
+| Model for the handoff session                       | Bot session's persisted selection → existing `createSession.config`             | Applied by the CLI before the readiness check and first turn (existing path).                                                                                                               |
 
 ## 4. Protocol (additive, Cross-Mode-generic)
 
@@ -169,6 +178,8 @@ navigation only (no summary transfer yet).
    Coding state.
 9. No new Bot row appears in the Coding task index; no `personal_bot` row in `tasks-index.sqlite`.
 10. **Continue with Ace** opens the Bot view on the originating conversation.
+
+11. The Coding session starts on the Ace conversation's last-used provider, model and effort.
 
 Tests: shared (`crossModeOrigin` schemas/projection), bootstrap (intake admit/reject/persist/render,
 handler pre-validation), UI (excerpt projection, draft defaults, dialog gating).

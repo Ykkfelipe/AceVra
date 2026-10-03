@@ -1005,10 +1005,18 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   // Cross-Mode「Work on this」accepted 后切到新的 Coding 会话：复用运行历史同一条导航
   // （补开/激活目标 workspace → 选中会话 → 切回 chat 主视图）。Bot 选择不受影响。
   const handleOpenCrossModeCodingSession = useCallback(
-    (target: { workspacePath: string; workspaceIdentity?: string }, sessionId: string) => {
+    (
+      target: { workspacePath: string; workspaceIdentity?: string; workspacePurpose?: "conversation" },
+      sessionId: string,
+    ) => {
+      // Tasks（无项目文件夹）落点：先按「对话」用途登记 tab（与 Tasks → New task 同一登记），
+      // 否则通用导航会把对话工作区当成普通项目补开。
+      if (target.workspacePurpose === "conversation") {
+        tabStoreApi.getState().addTab(target.workspacePath, { workspacePurpose: "conversation" });
+      }
       handleSelectTaskInChat(target.workspacePath, sessionId, target.workspaceIdentity);
     },
-    [handleSelectTaskInChat],
+    [handleSelectTaskInChat, tabStoreApi],
   );
   // 工作流运行历史「查看实例」：先回到发起它的会话（侧栏页只在 chat 视图里可见），再开实例详情页。
   const handleOpenSavedWorkflowRun = useCallback(
@@ -1942,6 +1950,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                                 isWindowsDesktop={isWindowsDesktop}
                                 reserveLeadingWindowControls={!isSidebarVisible}
                                 onOpenCodingSession={handleOpenCrossModeCodingSession}
+                                onResolveTasksWorkspace={onResolveConversationWorkspace}
                               />
                             </ScopedErrorBoundary>
                           </main>
