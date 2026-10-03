@@ -37,6 +37,7 @@ export * from "./workflow-run-settings-command.js";
 export * from "./multitask-handoff-command.js";
 export * from "./shared-context-ref.js";
 export * from "./shared-context-import.js";
+export * from "./cross-mode-origin.js";
 export * from "./input-intent.js";
 export * from "./submission.js";
 export * from "./fork.js";
