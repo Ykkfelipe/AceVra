@@ -9,7 +9,9 @@ export function multitaskActorPolicy(persona: PersonaSpec): Partial<AgentRuntime
   return {
     ...(worker.modelSelection ? { modelSelection: worker.modelSelection } : {}),
     ...(worker.maxTurns ? { maxTurns: worker.maxTurns } : {}),
-    mode: worker.permissionMode ?? "auto",
+    // 不在这里兜底成 "auto"：runtime 的 mode "auto" 尚未实现，会让冻结重放出来的 worker
+    // 直接被权限层拒绝。留空时由 actor 创建路径沿用既有的模式继承。
+    ...(worker.permissionMode ? { mode: worker.permissionMode } : {}),
     toolAllowlist: worker.tools,
     toolDisallowlist: [
       ...workflowActorToolPolicy().toolDisallowlist,

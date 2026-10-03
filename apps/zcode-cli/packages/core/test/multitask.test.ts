@@ -84,8 +84,22 @@ test("freezes profiles and rejects unknown or unsupported policy", () => {
   assert.match(script, /Expert/);
   assert.match(script, /reasoningLevel/);
   assert.match(script, /"maxTurns":7/);
+  assert.match(script, /"permissionMode":"auto"/);
   assert.throws(() => buildMultitaskScript(input, []), /Unknown/);
   assert.throws(() => buildMultitaskScript(input, [{ ...profile, skills: ["skill"] }]), /M1/);
+});
+
+// 回归：未声明 permissionMode 的 profile 曾被兜底成 "auto"，而 runtime 的 mode "auto"
+// 尚未实现，会让 worker 的 Read/Grep 全部被权限层拒绝（mode.auto.unimplemented）。
+test("omits permissionMode when the profile does not declare one", () => {
+  const input = MultitaskInputSchema.parse({
+    ...graph(),
+    workers: [worker("runtime"), { ...worker("ui"), profile: "plain" }],
+  });
+  const script = buildMultitaskScript(input, [
+    { name: "plain", source: "user", description: "Plain", systemPrompt: "Plain" },
+  ]);
+  assert.doesNotMatch(script, /permissionMode/);
 });
 
 test("Multitask uses the Workflow display, approval and background lifecycle", async () => {

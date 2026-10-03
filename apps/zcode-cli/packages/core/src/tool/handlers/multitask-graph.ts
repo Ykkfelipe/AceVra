@@ -67,7 +67,10 @@ export function buildMultitaskScript(
         ...(tools ? { tools } : {}),
         ...(profile.disallowedTools ? { disallowedTools: profile.disallowedTools } : {}),
         ...(profile.maxTurns ? { maxTurns: profile.maxTurns } : {}),
-        permissionMode: profile.permissionMode ?? "auto",
+        // profile 未声明 permissionMode 时必须留空：undefined 让既有 subagent 继承规则接管
+        // （普通 worker 继承父会话模式，内置 Explore 用 yolo）。写死 "auto" 会命中
+        // PermissionService 的 mode.auto.unimplemented 分支，把 worker 的 Read/Grep 全部拒掉。
+        ...(profile.permissionMode ? { permissionMode: profile.permissionMode } : {}),
       },
     };
     return `const w${index} = agent(${JSON.stringify(`${worker.id}: ${worker.role}`)}, ${JSON.stringify(persona)});`;

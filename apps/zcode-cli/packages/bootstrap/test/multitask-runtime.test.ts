@@ -105,7 +105,8 @@ test("real Workflow harness runs readers concurrently, excludes writers, passes 
       verify: "result-verify",
     });
     assert.equal(journal.listActors("m1-run").length, 3);
-    assert.equal(journal.listActors("m1-run")[0].persona.worker?.permissionMode, "auto");
+    // profile 未声明 permissionMode 时 persona 必须留空，由既有继承规则决定 worker 模式。
+    assert.equal(journal.listActors("m1-run")[0].persona.worker?.permissionMode, undefined);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
@@ -113,6 +114,11 @@ test("real Workflow harness runs readers concurrently, excludes writers, passes 
 
 test("actor profile applies model, permission, tool deny and turn limit without changing Workflow defaults", () => {
   assert.deepEqual(multitaskActorPolicy({ system: "normal Workflow" }), {});
+  // 回归：worker 未声明 permissionMode 时不能兜底成 mode "auto"（runtime 尚未实现，权限层会全拒）。
+  assert.equal(
+    multitaskActorPolicy({ worker: { profile: "p", access: "read", tools: ["Read"] } }).mode,
+    undefined,
+  );
   const policy = multitaskActorPolicy({
     worker: {
       profile: "saved",
