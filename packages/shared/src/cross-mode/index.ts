@@ -13,3 +13,9 @@ export * from "./errors.js";
 export * from "./context.js";
 export * from "./handoff-packet.js";
 export * from "./handoff-return.js";
+
+// M2（已准备）：预览会话与准入流程；执行端口与持久化是隔离的集成点，不含 Bot/Multitask 接线。
+export * from "./flow-errors.js";
+export * from "./ports.js";
+export * from "./preview-session.js";
+export * from "./admission.js";
