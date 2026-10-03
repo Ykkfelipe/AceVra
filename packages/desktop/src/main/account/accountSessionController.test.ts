@@ -263,3 +263,58 @@ test("the view discloses a non-remembered session only when persistence is unava
   assert.equal(make(true).getView().rememberSession, undefined);
   assert.equal(make().getView().rememberSession, undefined);
 });
+
+test("a 401 reported by another account endpoint signs the user out with a reason", async () => {
+  // The device client reports a rejected bearer here, not through the /v1/me check.
+  const { controller, settled } = setup(() => json(200, ME));
+  await controller.start();
+  await controller.signIn();
+  await settled("ready");
+  controller.rejectSession();
+  const view = await settled("signedOut");
+  assert.equal(view.detail, "session_rejected");
+  assert.equal(view.profile, undefined);
+});
+
+test("a late admission 200 cannot re-assert ready after a 401 signed the user out", async () => {
+  let release: (() => void) | null = null;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { controller } = setup(() => json(200, ME));
+  await controller.start();
+  await controller.signIn();
+  // Admit, then reject the session while the projection is still settling.
+  controller.rejectSession();
+  release!();
+  await new Promise((r) => setImmediate(r));
+  const view = controller.getView();
+  assert.notEqual(view.phase, "ready");
+  assert.equal(view.detail, "session_rejected");
+  await gate;
+});
+
+test("rejectSession is a no-op for a build with no account configuration", async () => {
+  const controller = createAccountSessionController({
+    apiBaseUrl: null,
+    tokenSource: null,
+    preference: memoryPreference().store,
+    fetch,
+  });
+  controller.rejectSession();
+  const view = controller.getView();
+  assert.equal(view.phase, "signedOut");
+  // Local-only builds must never claim a session was rejected.
+  assert.equal(view.detail, undefined);
+});
+
+test("rejecting an already-rejected session does not republish", async () => {
+  const { controller } = setup(() => json(200, ME));
+  await controller.start();
+  let publishes = 0;
+  controller.onViewChanged(() => publishes++);
+  controller.rejectSession();
+  const after = publishes;
+  controller.rejectSession();
+  assert.equal(publishes, after);
+});

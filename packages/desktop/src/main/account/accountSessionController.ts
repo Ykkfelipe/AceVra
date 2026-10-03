@@ -115,6 +115,23 @@ export function createAccountSessionController(deps: AccountSessionControllerDep
     void checkAdmission(generation);
   }
 
+  /**
+   * The backend rejected the bearer on any account endpoint, not just `/v1/me`.
+   *
+   * A 401 means this session can no longer prove who it is. It is not a retryable
+   * failure, so the projection goes to signed out with the reason attached and the UI
+   * offers sign-in again. The generation bump drops any admission check already in
+   * flight, so a slow 200 from the previous session cannot re-assert `ready` after a
+   * later 401 signed the user out.
+   */
+  function rejectSession(): void {
+    if (!configured) return;
+    // Already signed out with the same reason: nothing to publish.
+    if (view.phase === "signedOut" && view.detail === "session_rejected") return;
+    generation += 1;
+    set({ phase: "signedOut", detail: "session_rejected" }, ["profile"]);
+  }
+
   return {
     getView: (): AccountView => view,
     onViewChanged(listener: (next: AccountView) => void) {
@@ -159,6 +176,8 @@ export function createAccountSessionController(deps: AccountSessionControllerDep
       await deps.preference.write("local").catch(() => undefined);
       set({ choice: "local" });
     },
+    /** Called by the device client when any account request comes back 401. */
+    rejectSession,
     dispose() {
       disposeSession?.();
       listeners.clear();

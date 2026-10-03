@@ -81,6 +81,9 @@ export function initAccountMain(options: {
               computerUseSupported: resolveCuaOsSupport().kind === "supported",
             }),
           }),
+          // A rejected bearer on any device/task call is a session-level fact; the
+          // controller owns the transition to signed out so the UI offers sign-in.
+          onUnauthorized: () => controller.rejectSession(),
         })
       : null;
   let wasReady = false;

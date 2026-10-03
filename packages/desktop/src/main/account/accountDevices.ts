@@ -21,6 +21,12 @@ export interface AccountDevicesDeps {
   describe(): DeviceDescriptor | Promise<DeviceDescriptor>;
   heartbeatMs?: number;
   timers?: { setInterval: typeof setInterval; clearInterval: typeof clearInterval };
+  /**
+   * Called when any account request comes back 401 — the bearer can no longer prove
+   * who it is. The session controller owns the transition to signed out; the device
+   * client never decides what a rejected session means.
+   */
+  onUnauthorized?(): void;
 }
 
 const EMPTY: AccountDevicesView = { registration: "none", thisDeviceId: null, devices: [] };
@@ -53,6 +59,10 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
         redirect: "error",
       });
       const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      // A 401 is a session-level fact, not a per-endpoint one. Report it once here so
+      // every caller — heartbeat, register, list, rename, revoke, pairing — surfaces a
+      // rejected session instead of degrading into "devices unavailable".
+      if (response.status === 401) deps.onUnauthorized?.();
       return { status: response.status, json };
     } catch {
       return null;

@@ -189,3 +189,51 @@ test("pairing lookup maps backend outcomes; approve/reject map decisions; nothin
   assert.deepEqual(await h.devices.decidePairing("p1", "approve"), { status: "approved" });
   assert.deepEqual(await h.devices.decidePairing("p1", "reject"), { status: "not_pending" });
 });
+
+test("a 401 from any account call is reported to the session owner", async () => {
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async () => json(401, { error: "unauthenticated" })) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  assert.equal(unauthorized, 1, "register reported");
+  await devices.list();
+  assert.equal(unauthorized, 2, "list reported");
+});
+
+test("a 403 device_revoked is not reported as an unauthorized session", async () => {
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async () => json(403, { error: "device_revoked" })) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  await devices.list();
+  assert.equal(unauthorized, 0, "a revoked device is not a rejected session");
+});
+
+test("a network failure is not reported as an unauthorized session", async () => {
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async () => {
+      throw new TypeError("down");
+    }) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  await devices.list();
+  assert.equal(unauthorized, 0, "being offline is not a rejected session");
+});
