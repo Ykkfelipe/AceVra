@@ -69,6 +69,11 @@ packages/desktop/.e2e-artifacts/
 packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
+# Computer Use 现场验收的 spike 证据树（约 1 GB：run 证据、fixture、live 探针脚本）。
+# 只保留在本地磁盘、永不入库；不得用 git clean 清理（见 AGENTS.md 产物管理）。
+.spike/
+# 误落在仓库根的安装包元数据副本；规范产物路径 packages/desktop/out/metadata/ 已由 out/ 忽略。
+/build-meta.json
 
 # Release build outputs and verified handoff evidence are never committed.
 release/0.1.0-alpha.1/build/
