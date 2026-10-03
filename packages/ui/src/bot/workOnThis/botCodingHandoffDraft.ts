@@ -17,7 +17,7 @@ import {
   type HandoffObjectRef,
   type HandoffPacket,
 } from "@zcode/shared/cross-mode";
-import type { ZCodeMessageWithParts } from "@zcode/shared";
+import type { ConversationRow, UserInputRow } from "@zcode/shared/zcode-protocol-v4";
 
 export interface BotConversationExcerpt {
   readonly messageId: string;
@@ -35,24 +35,6 @@ const EXCERPT_MAX_BYTES = 1200;
 const DEFAULT_EXCERPT_BUDGET_BYTES = HANDOFF_CONTEXT_LIMITS.maxIncludedTotalBytes - 2048;
 const OBJECTIVE_MAX_LENGTH = 500;
 
-/** 只接受用户在界面上看得到的真实对话：合成/注入/model-only 消息一律跳过。 */
-function isConversationMessage(message: ZCodeMessageWithParts): boolean {
-  const info = message.info;
-  if ((info.semantics?.uiVisibility ?? "visible") !== "visible") return false;
-  if (info.role === "assistant") return true;
-  if (info.synthetic || info.source || info.visibility === "model-only") return false;
-  return (info.semantics?.origin ?? "real_user") === "real_user";
-}
-
-function visibleText(message: ZCodeMessageWithParts): string {
-  return message.parts
-    .flatMap((part) =>
-      part.type === "text" && !part.synthetic && !part.ignored ? [part.text.trim()] : [],
-    )
-    .filter((text) => text.length > 0)
-    .join("\n\n");
-}
-
 /** 按 UTF-8 字节截断（不切断代理对），超长时以省略号结尾。 */
 export function truncateToBytes(text: string, maxBytes: number): string {
   if (handoffContextItemByteLength(text) <= maxBytes) return text;
@@ -64,22 +46,58 @@ export function truncateToBytes(text: string, maxBytes: number): string {
   return `${result.trimEnd()}…`;
 }
 
-/** transcript → 最近的可见文本摘录（旧 → 新）。 */
+/** userInput 只取真实用户输入；引擎附加的尾注（epilogue）不属于用户说过的话。 */
+function realUserText(row: UserInputRow): string {
+  const text = row.epilogueStart === undefined ? row.text : row.text.slice(0, row.epilogueStart);
+  return text.trim();
+}
+
+/**
+ * v4 会话行 → 最近的可见文本摘录（旧 → 新）。数据源是 Bot 对话面正在渲染的同一份投影：
+ * - 用户：origin = realUser 的 userInput（后台结果、目标续写、mailbox、合成输入一律跳过）；
+ * - Ace：已结束的 assistantText，同一轮内被工具调用切开的多段正文合并成一条；
+ * - 推理、工具、产物、子代理、hook、时间线标记都不是对话内容，不提供。
+ */
 export function extractBotConversationExcerpts(
-  messages: readonly ZCodeMessageWithParts[],
+  rows: readonly ConversationRow[],
 ): BotConversationExcerpt[] {
   const excerpts: BotConversationExcerpt[] = [];
-  for (const message of messages) {
-    const role = message.info.role;
-    if (!isConversationMessage(message)) continue;
-    const text = visibleText(message);
-    if (!text) continue;
-    excerpts.push({
-      messageId: message.info.messageId,
-      role,
-      text: truncateToBytes(text, EXCERPT_MAX_BYTES),
-    });
+  let open: { turnId: string; id: string; parts: string[] } | null = null;
+  const flush = () => {
+    if (!open) return;
+    const text = open.parts.join("\n\n").trim();
+    if (text) {
+      excerpts.push({
+        messageId: open.id,
+        role: "assistant",
+        text: truncateToBytes(text, EXCERPT_MAX_BYTES),
+      });
+    }
+    open = null;
+  };
+  for (const row of rows) {
+    if (row.kind === "userInput") {
+      flush();
+      if (row.origin !== "realUser") continue;
+      const text = realUserText(row);
+      if (!text) continue;
+      excerpts.push({
+        messageId: row.entityId ?? `row-${String(row.rowId)}`,
+        role: "user",
+        text: truncateToBytes(text, EXCERPT_MAX_BYTES),
+      });
+      continue;
+    }
+    if (row.kind === "assistantText") {
+      if (row.state === "streaming" || row.state === "failed") continue;
+      if (open && open.turnId !== row.turnId) flush();
+      if (!open) {
+        open = { turnId: row.turnId, id: row.entityId ?? `row-${String(row.rowId)}`, parts: [] };
+      }
+      open.parts.push(row.text);
+    }
   }
+  flush();
   return excerpts.slice(-MAX_EXCERPT_CANDIDATES);
 }
 

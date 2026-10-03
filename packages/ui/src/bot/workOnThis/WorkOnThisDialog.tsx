@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select.js";
 import { Textarea } from "@/components/ui/textarea.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
+import { useConversationRowsSnapshot } from "@/hooks/useConversationRowsSnapshot.js";
 import { logger } from "@/logger.js";
 import {
   buildExcerptContextItems,
@@ -76,7 +76,6 @@ function WorkOnThisDialogBody({
   onConfirm,
 }: WorkOnThisDialogProps) {
   const { intl } = useZCodeIntl();
-  const { zcodeSessionService } = useWorkspaceServices(botWorkspacePath);
   const [identity] = useState(() => ({ handoffId: uuidv7(), createdAt: Date.now() }));
   const [projectKey, setProjectKey] = useState<string | null>(() => {
     const first = projects[0];
@@ -96,35 +95,32 @@ function WorkOnThisDialogBody({
     };
   }, []);
 
-  // 只读取**本**对话的 transcript；记忆不是持久消息，读不到也带不走。
+  // 只读取**本**对话的可见行（对话面正在渲染的同一份投影）；记忆是 model-only attachment，
+  // 不会成为可见行，读不到也带不走。摘录只在首次就绪时生成一次，之后的流式更新不重置勾选。
+  const rowsSnapshot = useConversationRowsSnapshot({
+    workspacePath: botWorkspacePath,
+    sessionId: conversationRef.id,
+  });
+  const excerptsBuiltRef = useRef(false);
   useEffect(() => {
-    let cancelled = false;
-    void zcodeSessionService
-      .readSessionMessages({ workspacePath: botWorkspacePath, sessionId: conversationRef.id })
-      .then((messages) => {
-        if (cancelled) return;
-        const excerpts = extractBotConversationExcerpts(messages);
-        setExcerptItems(
-          buildExcerptContextItems(excerpts, conversationRef, {
-            excerpt: (role) =>
-              intl.formatMessage({
-                id: role === "user" ? "bot.workOnThis.excerpt.user" : "bot.workOnThis.excerpt.ace",
-              }),
+    if (excerptsBuiltRef.current) return;
+    if (rowsSnapshot.status === "error") {
+      logger.warn("[bot] 无法读取对话摘录", { error: rowsSnapshot.message });
+      setExcerptStatus("error");
+      return;
+    }
+    if (rowsSnapshot.status !== "ready") return;
+    excerptsBuiltRef.current = true;
+    setExcerptItems(
+      buildExcerptContextItems(extractBotConversationExcerpts(rowsSnapshot.rows), conversationRef, {
+        excerpt: (role) =>
+          intl.formatMessage({
+            id: role === "user" ? "bot.workOnThis.excerpt.user" : "bot.workOnThis.excerpt.ace",
           }),
-        );
-        setExcerptStatus("ready");
-      })
-      .catch((readError: unknown) => {
-        if (cancelled) return;
-        logger.warn("[bot] 无法读取对话摘录", {
-          error: readError instanceof Error ? readError.message : String(readError),
-        });
-        setExcerptStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [botWorkspacePath, conversationRef, intl, zcodeSessionService]);
+      }),
+    );
+    setExcerptStatus("ready");
+  }, [conversationRef, intl, rowsSnapshot]);
 
   const project = useMemo(
     () => projects.find((option) => resolveAutomationWorkspaceSelectionKey(option) === projectKey),

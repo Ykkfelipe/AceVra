@@ -34,7 +34,8 @@ as usual. The frozen flow matrix is unchanged (`bot → multitask` stays disallo
    - **Objective** — editable, prefilled from the conversation title (1–500 chars).
    - **Context to carry** — explicit labeled items with include toggles and the byte budget:
      - _Notes for the work_ — free text the user writes (standard).
-     - _Recent conversation_ — the latest user/assistant **text** messages of _this_ conversation as
+     - _Recent conversation_ — the latest real-user inputs and completed Ace replies of _this_
+       conversation (v4 `userInput` with `origin: realUser`, `assistantText` merged per turn) as
        separate excerpts (standard). The most recent ones that fit the budget start included; older
        ones start excluded. Tool output, attachments, images and system parts are never offered.
    - **Returns to** — "Ace · summary" (fixed `returnPolicy: "summary"`).
@@ -48,20 +49,20 @@ as usual. The frozen flow matrix is unchanged (`bot → multitask` stays disallo
 
 Not carried, ever (no UI to add them): the personal memory store, the Bot identity/profile, other Bot
 conversations, connector/account data. Bot memory is a model-only, non-persisted attachment
-(`personal-bot.md` §14), so the transcript read for excerpts cannot contain memory records.
+(`personal-bot.md` §14), so it never becomes a visible conversation row and cannot appear in excerpts.
 
 ## 3. Ownership
 
-| State / behavior                                    | Owner                                                                           | Notes                                                                                   |
-| --------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Packet, context caps, preview, confirmation         | `@zcode/shared/cross-mode` (frozen M1/M2)                                       | UI only calls contract functions; no local caps or scoring.                             |
-| Which excerpts exist (projection of the transcript) | Bot UI (`packages/ui/src/bot/workOnThis/`)                                      | Pure function over `readSessionMessages`; creates items via `createHandoffContextItem`. |
-| Admission + execution (destination work creation)   | CLI Cross-Mode coding intake (`bootstrap/src/app/cross-mode-coding-handoff.ts`) | Re-parses the snapshot, admits via `createHandoffAdmissionService`, executes.           |
-| The Coding session                                  | CLI `AgentRuntime` + session store (unchanged)                                  | Normal `interactive`; never `personal_bot`, so no memory injection.                     |
-| Durable origin                                      | Session entry `v4/cross_mode_origin` on the **Coding** session                  | One entry per session; written once by the intake; read-only afterwards.                |
-| `snapshot.crossModeOrigin`                          | v4 projection (seeded from the entry, like `sharedContextImport`)               | Static metadata: no row, no revision bump.                                              |
-| Bot conversation selection (`conversation.json`)    | Bot module (unchanged)                                                          | The handoff never writes it. Only an explicit **Continue with Ace** selects.            |
-| Coding task index                                   | Host task-index syncer (unchanged)                                              | Only the new `interactive` session enters it, like any Coding session.                  |
+| State / behavior                                    | Owner                                                                           | Notes                                                                                                                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Packet, context caps, preview, confirmation         | `@zcode/shared/cross-mode` (frozen M1/M2)                                       | UI only calls contract functions; no local caps or scoring.                                                                                                                                 |
+| Which excerpts exist (projection of the transcript) | Bot UI (`packages/ui/src/bot/workOnThis/`)                                      | Pure function over the conversation's v4 rows (the same projection store the Bot pane renders, leased via the workspace connection registry); creates items via `createHandoffContextItem`. |
+| Admission + execution (destination work creation)   | CLI Cross-Mode coding intake (`bootstrap/src/app/cross-mode-coding-handoff.ts`) | Re-parses the snapshot, admits via `createHandoffAdmissionService`, executes.                                                                                                               |
+| The Coding session                                  | CLI `AgentRuntime` + session store (unchanged)                                  | Normal `interactive`; never `personal_bot`, so no memory injection.                                                                                                                         |
+| Durable origin                                      | Session entry `v4/cross_mode_origin` on the **Coding** session                  | One entry per session; written once by the intake; read-only afterwards.                                                                                                                    |
+| `snapshot.crossModeOrigin`                          | v4 projection (seeded from the entry, like `sharedContextImport`)               | Static metadata: no row, no revision bump.                                                                                                                                                  |
+| Bot conversation selection (`conversation.json`)    | Bot module (unchanged)                                                          | The handoff never writes it. Only an explicit **Continue with Ace** selects.                                                                                                                |
+| Coding task index                                   | Host task-index syncer (unchanged)                                              | Only the new `interactive` session enters it, like any Coding session.                                                                                                                      |
 
 ## 4. Protocol (additive, Cross-Mode-generic)
 
@@ -99,7 +100,7 @@ sequenceDiagram
   participant Intake as Cross-Mode coding intake
   participant Store as Session store
   User->>Bot: Work on this
-  Bot->>Bot: readSessionMessages(Bot session) → excerpts (text only)
+  Bot->>Bot: lease Bot session projection → rows → excerpts (text only)
   Bot->>Contract: createHandoffPacket(bot→coding, sourceRefs=[conversation:<id>])
   User->>Bot: edit objective / toggle items / pick project
   Bot->>Contract: confirmHandoffPreview → HandoffConfirmation

@@ -14,7 +14,6 @@ import { register } from "node:module";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ZCodeMessageWithParts } from "@zcode/shared";
 import {
   beginHandoffPreview,
   confirmHandoffPreview,
@@ -22,7 +21,7 @@ import {
   setHandoffContextItemIncluded,
   validateHandoffPacketTransfer,
 } from "@zcode/shared/cross-mode";
-import type { CrossModeOriginState } from "@zcode/shared/zcode-protocol-v4";
+import type { ConversationRow, CrossModeOriginState } from "@zcode/shared/zcode-protocol-v4";
 
 register("./uiAssetStubLoader.mjs", import.meta.url);
 const { ZCodeIntlProvider } = await import("../src/i18n/IntlProvider.js");
@@ -42,92 +41,66 @@ const { botConversationIdOfOrigin } = await import("../src/crossMode/CrossModeOr
 const CONVERSATION = { kind: "conversation" as const, id: "sess_bot_1" };
 const LABELS = { excerpt: (role: "user" | "assistant") => (role === "user" ? "You" : "Ace") };
 
-let sequence = 0;
-function userMessage(
+let rowId = 0;
+function base(turnId: string) {
+  rowId += 1;
+  return { rowId, turnId, entityId: `e${String(rowId)}`, createdAt: rowId, createdAtSeq: rowId };
+}
+function userRow(
   text: string,
-  info: Record<string, unknown> = {},
-  parts?: ZCodeMessageWithParts["parts"],
-): ZCodeMessageWithParts {
-  sequence += 1;
-  const messageId = `m${String(sequence)}`;
+  turnId: string,
+  extra: Record<string, unknown> = {},
+): ConversationRow {
   return {
-    info: {
-      messageId,
-      sessionId: "sess_bot_1",
-      role: "user",
-      time: { created: sequence },
-      agent: "build",
-      ...info,
-    },
-    parts: parts ?? [
-      { partId: `p${messageId}`, sessionId: "sess_bot_1", messageId, type: "text", text },
-    ],
-  } as ZCodeMessageWithParts;
+    ...base(turnId),
+    kind: "userInput",
+    text,
+    origin: "realUser",
+    ...extra,
+  } as ConversationRow;
+}
+function assistantRow(text: string, turnId: string, state = "complete"): ConversationRow {
+  return { ...base(turnId), kind: "assistantText", text, state } as ConversationRow;
+}
+function reasoningRow(text: string, turnId: string): ConversationRow {
+  return { ...base(turnId), kind: "reasoning", text, state: "complete" } as ConversationRow;
 }
 
-function assistantMessage(text: string, extraParts: unknown[] = []): ZCodeMessageWithParts {
-  sequence += 1;
-  const messageId = `m${String(sequence)}`;
-  return {
-    info: {
-      messageId,
-      sessionId: "sess_bot_1",
-      role: "assistant",
-      time: { created: sequence },
-      parentMessageId: "m0",
-      agent: "build",
-      path: { cwd: "/bot", root: "/bot" },
-      cost: 0,
-      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    },
-    parts: [
-      {
-        partId: `r${messageId}`,
-        sessionId: "sess_bot_1",
-        messageId,
-        type: "reasoning",
-        text: "SECRET-REASONING",
-      },
-      ...extraParts,
-      { partId: `p${messageId}`, sessionId: "sess_bot_1", messageId, type: "text", text },
-    ],
-  } as unknown as ZCodeMessageWithParts;
-}
-
-test("excerpts keep only visible conversation text from this transcript", () => {
+test("excerpts keep only real conversation text from this transcript", () => {
   const excerpts = extractBotConversationExcerpts([
-    userMessage("I want reminders in the app"),
-    userMessage("INJECTED-BACKGROUND", { synthetic: true, source: "background_task" }),
-    userMessage("MODEL-ONLY", { visibility: "model-only" }),
-    assistantMessage("We could add a settings page for reminders."),
-    userMessage("", {}, [
-      {
-        partId: "px",
-        sessionId: "sess_bot_1",
-        messageId: "mx",
-        type: "text",
-        text: "SYNTH",
-        synthetic: true,
-      },
-    ] as ZCodeMessageWithParts["parts"]),
+    userRow("I want reminders in the app", "t1"),
+    reasoningRow("SECRET-REASONING", "t1"),
+    assistantRow("We could add", "t1"),
+    assistantRow("a settings page for reminders.", "t1"),
+    userRow("INJECTED-BACKGROUND", "t2", { origin: "backgroundResult" }),
+    assistantRow("STILL-STREAMING", "t2", "streaming"),
+    userRow("Sounds good. ENGINE-EPILOGUE", "t3", { epilogueStart: 12 }),
   ]);
   assert.deepEqual(
     excerpts.map((excerpt) => [excerpt.role, excerpt.text]),
     [
       ["user", "I want reminders in the app"],
-      ["assistant", "We could add a settings page for reminders."],
+      ["assistant", "We could add\n\na settings page for reminders."],
+      ["user", "Sounds good."],
     ],
   );
   const joined = JSON.stringify(excerpts);
-  for (const forbidden of ["INJECTED-BACKGROUND", "MODEL-ONLY", "SYNTH", "SECRET-REASONING"]) {
+  for (const forbidden of [
+    "INJECTED-BACKGROUND",
+    "STILL-STREAMING",
+    "ENGINE-EPILOGUE",
+    "SECRET-REASONING",
+  ]) {
     assert.equal(joined.includes(forbidden), false, forbidden);
   }
 });
 
 test("only the most recent excerpts start included; older ones are explicit opt-in", () => {
-  const messages = Array.from({ length: 7 }, (_, index) => userMessage(`message ${String(index)}`));
+  const rows = Array.from({ length: 7 }, (_, index) =>
+    userRow(`message ${String(index)}`, `t${String(index)}`),
+  );
   const items = buildExcerptContextItems(
-    extractBotConversationExcerpts(messages),
+    extractBotConversationExcerpts(rows),
     CONVERSATION,
     LABELS,
   );
@@ -148,13 +121,16 @@ test("long messages are truncated under the per-item budget without splitting ch
   const truncated = truncateToBytes(long, 1200);
   assert.ok(new TextEncoder().encode(truncated).byteLength <= 1200);
   assert.ok(truncated.endsWith("…"));
-  const [excerpt] = extractBotConversationExcerpts([userMessage(long)]);
+  const [excerpt] = extractBotConversationExcerpts([userRow(long, "t1")]);
   assert.ok(excerpt && new TextEncoder().encode(excerpt.text).byteLength <= 1200);
 });
 
 test("draft is a transferable bot → coding packet with only explicit context", () => {
   const excerptItems = buildExcerptContextItems(
-    extractBotConversationExcerpts([userMessage("Add reminders"), assistantMessage("Sounds good")]),
+    extractBotConversationExcerpts([
+      userRow("Add reminders", "t1"),
+      assistantRow("Sounds good", "t1"),
+    ]),
     CONVERSATION,
     LABELS,
   );
