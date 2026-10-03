@@ -315,6 +315,18 @@ export interface SessionPaneProps {
   /** 隐藏副屏的 child 已不存在时，由宿主移除对应 tab。 */
   onSelectionSideChatUnavailable?: () => void;
   /**
+   * 宿主绑定的 session 已不存在（sessionNotFound）时通知宿主。
+   * 调用方持有该 session 的持久指针（如 Personal Bot 的 conversation shell）时，
+   * 据此清掉指针并回落到 draft，而不是把错误留在界面上。
+   */
+  onSessionUnavailable?: () => void;
+  /**
+   * 本 pane 新建会话时要带上的 session 类型标签（只允许可创建类型，如 personal_bot）。
+   * 必须在下发 createSession / 草稿预热时带上：类型在创建期决定，之后无法更改。
+   * 缺省不传 = interactive，既有 coding 路径行为不变。
+   */
+  createSessionTaskType?: string;
+  /**
    * Focus 层：全局快捷键（Esc stop）与 add-to-chat 事件只路由到
    * focused pane。单 pane 消费者（V4ChatPane）缺省 true。
    */
@@ -508,6 +520,8 @@ export function SessionPane({
   provider,
   onSessionCreated,
   onSelectionSideChatUnavailable,
+  onSessionUnavailable,
+  createSessionTaskType,
   focused = true,
   telemetryVisible = true,
   onSplitRight,
@@ -564,6 +578,13 @@ export function SessionPane({
     useServices();
   const { intl, locale } = useZCodeIntl();
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
+
+  // 本 pane 新建会话的 session 类型标签；缺省为空对象，coding 路径的 createSession 载荷
+  // 逐字节不变。类型只在创建期有效（首发是对该会话的 sendText，之后无法改类型）。
+  const createSessionTaskPayload = useMemo(
+    () => (createSessionTaskType ? { taskType: createSessionTaskType } : {}),
+    [createSessionTaskType],
+  );
   const baseWorkspaceServices = useBaseWorkspaceServices();
   const workspaceHomePath = useWorkspaceHomePath({
     workspacePath,
@@ -2409,6 +2430,7 @@ export function SessionPane({
     workspaceKey,
     paneId,
     invalidationVersion: draftRuntimeInvalidationVersion,
+    sessionTaskType: createSessionTaskType,
     // SessionDataLayer 来自 workspace connection registry：同 transport generation 的 pane/remount
     // 共享 identity；provider wrapper 重建产生的新 sendCommand 函数不能误判为 transport 换代。
     transportIdentity: layer,
@@ -2551,6 +2573,20 @@ export function SessionPane({
     // 副屏是临时 UI 绑定；持久 child 丢失后清 tab，下一次框选按父会话重建。
     onSelectionSideChatUnavailable?.();
   }, [onSelectionSideChatUnavailable, selectionSideChat, state.lastError, state.status]);
+
+  // 宿主绑定的 session 在别处消失（例如未持久化的 draft 被回收，或用户删除了它）：
+  // 只有 sessionNotFound 才算“不存在”，传输抖动/turn 失败不能触发清理，
+  // 否则会把一次可恢复的错误升级成丢失对话指针。同一 sessionId 只上报一次，
+  // 避免宿主尚未完成清理时重复触发。
+  const reportedUnavailableSessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || state.status !== "error" || !state.lastError?.includes("sessionNotFound")) {
+      return;
+    }
+    if (reportedUnavailableSessionIdRef.current === sessionId) return;
+    reportedUnavailableSessionIdRef.current = sessionId;
+    onSessionUnavailable?.();
+  }, [onSessionUnavailable, sessionId, state.lastError, state.status]);
 
   const settleCurrentQueueInputs = useCallback((targetSessionId: string) => {
     const current = snapshotRef.current;
@@ -2864,7 +2900,7 @@ export function SessionPane({
         );
         const createAck = await dispatchSubmissionCommand(
           "createSession",
-          { workspaceId: workspaceKey, ...draftConfigPayload },
+          { workspaceId: workspaceKey, ...draftConfigPayload, ...createSessionTaskPayload },
           null,
         );
         if (createAck.status !== "accepted") {
@@ -2950,6 +2986,7 @@ export function SessionPane({
               workspaceId: workspaceKey,
               firstInput: { text: effectiveText, ...submission },
               ...draftConfigPayload,
+              ...createSessionTaskPayload,
             },
             null,
             undefined,
@@ -2978,7 +3015,7 @@ export function SessionPane({
         // 不做任何附件上传，也不会让非 ready 附件绕过 composer 门禁。
         const createAck = await dispatchSubmissionCommand(
           "createSession",
-          { workspaceId: workspaceKey, ...draftConfigPayload },
+          { workspaceId: workspaceKey, ...draftConfigPayload, ...createSessionTaskPayload },
           null,
         );
         if (createAck.status !== "accepted") {

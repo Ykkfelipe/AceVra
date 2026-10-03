@@ -6,6 +6,7 @@ import { useZCodeStore } from "@/store/StoreProvider.js";
 import { getVisibleTaskMetas, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { useTaskQueryCacheStore } from "@/store/taskQueryCacheStore.js";
 import { useAppPanels } from "@/hooks/useAppPanels.js";
+import { useBotService } from "@/hooks/useBotHome.js";
 import { useGitAutoRefresh } from "@/hooks/useGitAutoRefresh.js";
 import { useGitRepository } from "@/hooks/useGitRepository.js";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard.js";
@@ -852,6 +853,9 @@ export function App({
     preserveNextSettingsExit();
     setWorkspaceMainView("plugin-store");
   }, [preserveNextSettingsExit]);
+  const handleNavigateToBotMain = useCallback(() => {
+    setWorkspaceMainView("bot");
+  }, []);
   const handleOpenAutomationConsumed = useCallback(() => {
     setOpenAutomationId(null);
     setOpenAutomationTab(null);
@@ -860,6 +864,7 @@ export function App({
     handleSelectTask,
     handleOpenAutomations,
     handleOpenPluginStore,
+    handleOpenBot,
     handleTaskNavBack,
     handleTaskNavForward,
     canGoBack,
@@ -874,7 +879,10 @@ export function App({
     onNavigateToTask: handleNavigateToTaskMain,
     onNavigateToAutomations: handleNavigateToAutomationsMain,
     onNavigateToPluginStore: handleNavigateToPluginStoreMain,
+    onNavigateToBot: handleNavigateToBotMain,
   });
+  // Bot 是机器本地能力：服务缺失（旧 host / 纯 web）时隐藏入口，而不是给出必然失败的按钮。
+  const botService = useBotService();
   const handleOpenPluginStoreForScope = useCallback(
     (_target: PluginStoreOpenTarget = {}) => {
       // Workspace Marketplace 已收敛为全局入口。兼容旧事件中的 Workspace key，但返回
@@ -1134,6 +1142,8 @@ export function App({
         onOpenAutomationConsumed={handleOpenAutomationConsumed}
         handleOpenAutomations={handleOpenAutomations}
         handleOpenPluginStore={handleOpenPluginStoreForScope}
+        handleOpenBot={botService ? handleOpenBot : undefined}
+        botActive={botService !== undefined && workspaceMainView === "bot"}
         handleManageInstalledPlugins={handleManageInstalledPlugins}
         onConnectRemote={onConnectRemote}
         onSelectRemoteProject={onSelectRemoteProject}

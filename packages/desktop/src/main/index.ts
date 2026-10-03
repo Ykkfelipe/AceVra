@@ -57,6 +57,7 @@ import {
   buildRuntimeProcessEnvPatch,
   captureLoginShellEnvSnapshot,
   getConversationWorkspaceDir,
+  getPersonalBotWorkspaceDir,
   getDataBaseDir,
   getZCodeDataRootDir,
   normalizeRuntimeProcessEnv,
@@ -923,6 +924,7 @@ const primaryWindowCoordinator = createPrimaryWindowCoordinator({
       settingsFile,
       // dataBaseDir 可能在 bootstrap 设置阶段被覆盖，必须在真正解析启动工作区时再取值。
       conversationWorkspaceDir: getConversationWorkspaceDir(),
+      personalBotWorkspaceDir: getPersonalBotWorkspaceDir(),
       logger,
     });
   },

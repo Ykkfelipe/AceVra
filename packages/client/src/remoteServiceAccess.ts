@@ -40,6 +40,7 @@ import {
   ICommandsService,
   IHooksService,
   IMemoryService,
+  IBotService,
   ISettingsSyncService,
   IFeedbackService,
   IPromptAttachmentTransferService,
@@ -99,6 +100,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
   readonly commandsService: ICommandsService;
   readonly hooksService: IHooksService;
   readonly memoryService: IMemoryService;
+  // botService 在 IServiceAccessor 上可选（旧 host / 测试 double 可能没有），
+  // 但本机 host 始终注册该 descriptor；UI 侧 Bot 入口只在本地 workspace 显示。
+  readonly botService: IBotService;
   readonly settingsSyncService: ISettingsSyncService;
   readonly feedbackService: IFeedbackService;
   readonly promptAttachmentTransferService: IPromptAttachmentTransferService;
@@ -241,6 +245,9 @@ export class RemoteServiceAccess implements IServiceAccessor {
     );
     this.memoryService = ProxyChannel.toService<IMemoryService>(
       channelClient.getChannel(IMemoryService.channelName),
+    );
+    this.botService = ProxyChannel.toService<IBotService>(
+      channelClient.getChannel(IBotService.channelName),
     );
     this.settingsSyncService = ProxyChannel.toService<ISettingsSyncService>(
       channelClient.getChannel(ISettingsSyncService.channelName),

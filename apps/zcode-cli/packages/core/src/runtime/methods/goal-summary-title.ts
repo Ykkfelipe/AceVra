@@ -1,6 +1,7 @@
 import { traceContextToLogContext } from "../deps.js";
 import type { TraceContext } from "../deps.js";
 import type { AgentTelemetryCausation } from "@zcode/contracts";
+import { isConversationalSessionTaskType } from "@zcode/contracts";
 import type { AgentRuntimeInternal } from "../internal.js";
 import {
   GOAL_SUMMARY_TITLE_QUERY_SOURCE,
@@ -232,7 +233,7 @@ function shouldAttemptGoalSummaryTitleGeneration(
   if (!runtime.config.titleGeneration) return false;
   if (!runtime.sessionStore) return false;
   if (runtime.config.parentSessionId) return false;
-  if (runtime.config.taskType && runtime.config.taskType !== "interactive") return false;
+  if (!isConversationalSessionTaskType(runtime.config.taskType)) return false;
   if (targetID.trim().length === 0) return false;
   return normalizeTitleInput(input).length > 0;
 }

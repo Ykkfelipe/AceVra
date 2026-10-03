@@ -17,6 +17,7 @@ import {
   CalendarClock,
   Clock3,
   Cloud,
+  Bot,
   Folder,
   FolderOpen,
   Hash,
@@ -261,6 +262,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenPluginStore,
   automationsActive = false,
   pluginStoreActive = false,
+  onOpenBot,
+  botActive = false,
   onFileTreeOpenChange,
 }: {
   workspacePath: string;
@@ -313,6 +316,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onOpenPluginStore?: () => void;
   automationsActive?: boolean;
   pluginStoreActive?: boolean;
+  /** Personal Bot 入口；bot 服务不可用时缺省隐藏。 */
+  onOpenBot?: () => void;
+  botActive?: boolean;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
   const { intl, localePreference, setLocalePreference } = useZCodeIntl();
@@ -1316,6 +1322,23 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 }
               />
             ) : null} */}
+            {onOpenBot ? (
+              <Button
+                variant="ghost"
+                onClick={onOpenBot}
+                data-icon="inline-start"
+                data-testid="bot-sidebar-open"
+                size="lg"
+                aria-pressed={botActive}
+                className={cn(
+                  "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
+                  botActive && "bg-selected text-foreground",
+                )}
+              >
+                <Bot className="size-4" />
+                {intl.formatMessage({ id: "bot.nav.open" })}
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               onClick={handleOpenAutomationsMain}

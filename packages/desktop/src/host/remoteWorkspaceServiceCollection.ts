@@ -32,6 +32,7 @@ import {
   ICommandsService,
   IHooksService,
   IMemoryService,
+  IBotService,
   ISettingsSyncService,
   IPromptAttachmentTransferService,
   type IServiceAccessor,
@@ -61,6 +62,7 @@ import {
   createServiceLogger,
   createSubagentsService,
   createMemoryService,
+  createNodeBotService,
   createRemoteConversationShareArtifactSource,
   OAuthCredentialRepo,
 } from "@zcode/services/node";
@@ -359,6 +361,9 @@ export function createRemoteWorkspaceServiceCollection(params: {
     .register(ISubagentsService, createSubagentsService({ isDesktopRuntime: true }))
     .register(IHooksService, params.connectionServices.hooksService)
     .register(IMemoryService, createMemoryService())
+    // Personal Bot（M1）：只在本机 host 注册；Bot 数据落在本机数据根，
+    // 不随远端 workspace 漂移。
+    .register(IBotService, createNodeBotService())
     .register(
       ISettingsSyncService,
       createSettingsSyncService({ settingService: localSettingService }),

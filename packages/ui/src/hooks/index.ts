@@ -54,3 +54,6 @@ export { useGitActions } from "./useGitActions.js";
 export { useTaskNativeSessionLogFile } from "./useTaskNativeSessionLogFile.js";
 export { useTaskSessionFilePath } from "./useTaskSessionFilePath.js";
 export { useUsageStats } from "./useUsageStats.js";
+
+// Personal Bot：身份/档案、记忆、能力面与对话外壳
+export { useBotHome, useBotService } from "./useBotHome.js";

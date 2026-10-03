@@ -13,6 +13,7 @@ import { TID_APP_HEADER } from "@zcode/shared";
 import { sidePaneTerminalSessionRegistry } from "@/terminal/sidePaneTerminalSessionRegistry.js";
 import { V4ChatPane } from "@/v4/V4ChatPane.js";
 import { V4WorkspaceChatArea } from "@/v4/V4WorkspaceChatArea.js";
+import { BotSection } from "@/bot/BotSection.js";
 import {
   V4SplitPaneEntryProvider,
   type V4SplitPaneSessionTarget,
@@ -200,6 +201,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   onOpenAutomationConsumed,
   handleOpenAutomations,
   handleOpenPluginStore,
+  handleOpenBot,
+  botActive = false,
   handleManageInstalledPlugins,
   onConnectRemote,
   onSelectRemoteProject,
@@ -1629,6 +1632,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                     automationsActive={workspaceMainView === "automations"}
                     onOpenPluginStore={handleOpenPluginStore}
                     pluginStoreActive={workspaceMainView === "plugin-store"}
+                    onOpenBot={handleOpenBot}
+                    botActive={botActive}
                     onFileTreeOpenChange={setIsSidebarFileTreeOpen}
                   />
                 </WorkflowRunOpenProvider>
@@ -1825,6 +1830,19 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                               </ScopedErrorBoundary>
                             </div>
                           </AutomationsMainBreadcrumbFrame>
+                        </main>
+                      ) : workspaceMainView === "bot" ? (
+                        // Bot 是与 Coding Sessions 平级的独立 section：不进 task 列表。
+                        // 对话跑在专用 Bot workspace 上，会话栈复用单 pane 宿主。
+                        <main className="flex h-full min-h-0 flex-1 flex-col bg-background">
+                          <ScopedErrorBoundary
+                            scope="bot"
+                            resetKeys={workspaceOnlyResetKeys}
+                            variant="panel"
+                            className="h-full"
+                          >
+                            <BotSection isDesktop={isDesktop === true} />
+                          </ScopedErrorBoundary>
                         </main>
                       ) : workspaceMainView === "plugin-store" ? (
                         <main className="flex h-full min-h-0 flex-1 flex-col bg-background">

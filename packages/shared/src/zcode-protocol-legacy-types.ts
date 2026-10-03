@@ -90,7 +90,19 @@ export const zcodeSessionKindSchema = z.enum([
   "workflow_child",
   "subagent_child",
   "nested_workflow_child",
+  "personal_bot",
 ]);
+
+/**
+ * 允许调用方在创建会话时显式指定的类型。
+ *
+ * 其余类型（fork/workflow_child/subagent_child/…）都是宿主内部派生产物，外部指定会绕过
+ * 各自的构造约束，因此这里只开放 Personal Bot 对话：它只是「不进 Coding Sessions 列表」的
+ * 归类标签，不带来任何额外权限。payload 用 zod 默认 strip，旧 CLI 静默丢弃该键（fail-closed）。
+ */
+export const zcodeCreatableSessionTaskTypes = ["personal_bot"] as const;
+
+export const zcodeCreatableSessionTaskTypeSchema = z.enum(zcodeCreatableSessionTaskTypes);
 export const zcodeSessionGoalSchema = z
   .object({
     sessionId: nonEmptyString,

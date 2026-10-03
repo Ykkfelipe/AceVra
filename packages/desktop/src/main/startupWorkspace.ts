@@ -107,15 +107,49 @@ export function createOpenWorkspaceStartupBootstrap(workspacePath: string): Star
   };
 }
 
+/**
+ * Personal Bot 的 backing workspace：M2 Phase 1 只保证目录存在（mkdir-only）。
+ *
+ * 刻意不加进 initialWorkspacePath / workspacePurpose / agentWarmupTargets / 任务索引：
+ * Bot 不是用户打开的 workspace，它没有 tab，也不该出现在 Coding Sessions 列表里。
+ * CLI runtime 由首次会话订阅按需拉起（lazy），因此这里不预热、不常驻进程。
+ *
+ * 必须建目录的原因：spawn 在请求 cwd 不存在时会回退到 conversation workspace，而会话的
+ * workingDirectory 仍是 Bot 路径，两者不一致会让相对路径的文件操作落在错误的目录上。
+ *
+ * 失败只告警、不阻断启动：Bot 目录不可创建时用户仍要能进入应用并看到真实错误，
+ * 而不是整个应用起不来。
+ */
+async function ensurePersonalBotWorkspace(
+  personalBotWorkspaceDir: string,
+  logger?: StartupWorkspaceLogger,
+): Promise<void> {
+  try {
+    await mkdir(personalBotWorkspaceDir, { recursive: true });
+  } catch (error) {
+    logger?.warn?.(
+      "[startup-workspace] could not create the Personal Bot workspace:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 export async function resolveStartupWindowBootstrap({
   settingsFile,
   conversationWorkspaceDir,
+  personalBotWorkspaceDir,
   logger,
 }: {
   settingsFile: string;
   conversationWorkspaceDir: string;
+  /** Personal Bot 专用 backing workspace；只创建目录，不进 tab / 预热 / 任务索引。 */
+  personalBotWorkspaceDir: string;
   logger?: StartupWorkspaceLogger;
 }): Promise<StartupWindowBootstrap> {
+  // Personal Bot 目录与启动分支无关，必须在所有分支之前创建：
+  // 有持久化 session 的正常启动路径不会走到下面两个 conversationWorkspaceDir 的 mkdir。
+  await ensurePersonalBotWorkspace(personalBotWorkspaceDir, logger);
+
   const settings = await readStartupSettings(settingsFile, logger);
   const sessions = settings.lastWorkspaceSession ?? [];
 

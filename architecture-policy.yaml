@@ -89,6 +89,14 @@ modules:
     layers: { domain: domain, app: app, adapters: adapters }
     layerOrder: [domain, app, adapters]
     owner: computer-use
+  - id: bot
+    roots: [packages/services/src/bot]
+    managed: true
+    requires: [shared, services]
+    publicEntrypoints: [packages/services/src/bot/contract.ts]
+    layers: { domain: domain, app: app, adapters: adapters }
+    layerOrder: [domain, app, adapters]
+    owner: personal-bot
 
 global:
   maxFileLines: 400

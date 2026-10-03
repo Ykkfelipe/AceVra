@@ -64,6 +64,7 @@ import type {
   SessionProjection,
   SessionStorePort,
   ContextSourcePort,
+  PersonalMemoryContextPort,
   DynamicWorkflowRunPort,
   DynamicWorkflowSnippetPort,
   ModelCatalogPort,
@@ -371,6 +372,11 @@ export interface AgentRuntimeDeps {
   /** M2F：Run-on 目标进程执行端口（bootstrap 按会话注入）；存在即注册执行目标工具。 */
   executionTargetPort?: ExecutionTargetPort;
   contextSourcePort?: ContextSourcePort;
+  /**
+   * Personal Bot M2 Phase 2：每轮取回 host 渲染好的有界个人记忆上下文。
+   * 只按 personal_bot 会话注入（gate 在 injection 方法内），缺省不注入。
+   */
+  personalMemoryPort?: PersonalMemoryContextPort;
   eventSink?: SessionEventSink;
   logger?: Logger;
   traceContext?: TraceContext;

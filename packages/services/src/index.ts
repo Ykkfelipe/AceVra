@@ -225,6 +225,52 @@ export { IUsageStatsService } from "./usage-stats/usageStats.js";
 // Storage（资源管理器「存储」tab）：数据类型在 @zcode/shared；这里只导出服务接口与卷分组纯函数
 export type { IStorageService } from "./storage/contract.js";
 
+// Personal Bot（M1）：Identity/profile, conversation pointer, personal memory, capability surface.
+// IBotService is both a type (interface) and value (descriptor).
+export {
+  IBotService,
+  BotStoreCorruptError,
+  isBotStoreCorruptError,
+  BOT_CAPABILITY_DOMAINS,
+  DEFAULT_BOT_DESCRIPTOR,
+  DEFAULT_BOT_DISPLAY_NAME,
+  DEFAULT_BOT_STYLE,
+  DEFAULT_MAX_MEMORY_RECORDS,
+  MAX_BOT_DESCRIPTOR_LENGTH,
+  MAX_BOT_DISPLAY_NAME_LENGTH,
+  MAX_MEMORY_CONTEXT_BYTES,
+  MAX_MEMORY_SUMMARY_LENGTH,
+  MAX_MEMORY_TAGS,
+  MAX_MEMORY_TITLE_LENGTH,
+  PERSONAL_MEMORY_CATEGORIES,
+} from "./bot/contract.js";
+export type {
+  BotAccent,
+  BotAvatar,
+  BotCapabilityAccess,
+  BotCapabilityAvailability,
+  BotCapabilityDomain,
+  BotCapabilityEntry,
+  BotCapabilitySurface,
+  BotConversationShell,
+  BotIdentity,
+  BotIdentityView,
+  BotMemoryContextRequest,
+  BotMemoryListEntry,
+  BotProfile,
+  BotProfilePatch,
+  BotStyle,
+  BotTone,
+  BotVerbosity,
+  BotWorkspaceRef,
+  PersonalMemoryCategory,
+  PersonalMemoryContext,
+  PersonalMemoryInput,
+  PersonalMemoryRecord,
+  PersonalMemorySelection,
+  PersonalMemorySource,
+} from "./bot/contract.js";
+
 // CodingPlanSubscription service — ICodingPlanSubscriptionService is both a type (interface) and value (descriptor)
 export {
   ICodingPlanSubscriptionService,

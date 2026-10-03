@@ -1107,6 +1107,7 @@ export function createConversationV4Gateway(
       mcpServers,
       offPeakToolEnabled,
       dynamicWorkflowEnabled,
+      taskType,
     }) => {
       // workspaceId 双形态（Workspace Identity 约束）：
       // - 本地工作区 = workspacePath（identity 缺省时的 fallback）；
@@ -1130,6 +1131,9 @@ export function createConversationV4Gateway(
         // v4 createSession 必须与 legacy session/create 等价透传，否则无界面创建的会话
         // 会绕过 Host 的灰度判定，只剩进程级缺省。
         ...(dynamicWorkflowEnabled === true ? { dynamicWorkflowEnabled: true } : {}),
+        // Personal Bot 对话标签：唯一可由调用方指定的 session 类型。
+        // 缺省不下发 = interactive，既有创建路径行为不变。
+        ...(taskType ? { taskType } : {}),
       });
       return { sessionId: created.sessionId };
     },

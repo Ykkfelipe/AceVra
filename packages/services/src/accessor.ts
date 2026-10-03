@@ -37,6 +37,7 @@ import type { ISubagentsService } from "./subagents/subagents.js";
 import type { ICommandsService } from "./commands/commands.js";
 import type { IHooksService } from "./hooks/hooks.js";
 import type { IMemoryService } from "./memory/memory.js";
+import type { IBotService } from "./bot/contract.js";
 import type { ISettingsSyncService } from "./settings-sync/settingsSync.js";
 import type { IFeedbackService } from "./feedback/feedback.js";
 import type { IPromptAttachmentTransferService } from "./prompt-attachment-transfer/promptAttachmentTransfer.js";
@@ -103,6 +104,11 @@ export interface IServiceAccessor {
   readonly commandsService: ICommandsService;
   readonly hooksService: IHooksService;
   readonly memoryService: IMemoryService;
+  /**
+   * Personal Bot（M1）：身份/档案、对话指针、个人记忆与能力面。
+   * 旧 host / 测试 double 可不提供；UI 在缺省时隐藏 Bot 入口而不是报错。
+   */
+  readonly botService?: IBotService;
   readonly settingsSyncService: ISettingsSyncService;
   readonly feedbackService: IFeedbackService;
   readonly promptAttachmentTransferService: IPromptAttachmentTransferService;

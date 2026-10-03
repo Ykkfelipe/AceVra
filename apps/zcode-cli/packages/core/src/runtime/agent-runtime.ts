@@ -35,6 +35,7 @@ import type {
   DynamicWorkflowRunProgressPayload,
   UserInputAutoResolutionUpdatedPayload,
   ContextSourcePort,
+  PersonalMemoryContextPort,
   ExecutionPort,
   FileSystemPort,
   ImageProcessorPort,
@@ -169,6 +170,7 @@ export class AgentRuntime {
   private memoryIndexContent?: string;
   private memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   private contextSourcePort?: ContextSourcePort;
+  private personalMemoryPort?: PersonalMemoryContextPort;
   private skillPort?: SkillPort;
   private mcpPort?: McpPort;
   private mcpStartupPromise?: Promise<McpConnectionSnapshot>;
@@ -283,6 +285,7 @@ export class AgentRuntime {
     this.runtimeCommandQueue = createRuntimeCommandQueue();
     this.workingDirectory = config.workingDirectory ?? ".";
     this.contextSourcePort = deps.contextSourcePort;
+    this.personalMemoryPort = deps.personalMemoryPort;
     this.skillPort = deps.skillPort;
     this.mcpPort = deps.mcpPort;
     this.runtimeTaskRegistry = deps.runtimeTaskRegistry ?? new InMemoryRuntimeTaskRegistry();

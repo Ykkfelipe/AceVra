@@ -164,6 +164,11 @@ export const ServiceChannels = {
    * 通道只暴露清单与分块读取；注册是宿主内部能力。描述符不含宿主路径。
    */
   TaskArtifacts: "task-artifacts",
+  /**
+   * Personal Bot（M1）：Bot 身份/档案、对话指针、个人记忆与能力面声明。
+   * 只承载 Bot 自有事实；会话消息、模型、权限仍走各自既有通道。
+   */
+  Bot: "bot",
 } as const;
 
 export type ServiceChannelName = (typeof ServiceChannels)[keyof typeof ServiceChannels];

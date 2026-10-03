@@ -5,6 +5,7 @@ import {
   canGoBack as navCanGoBack,
   canGoForward as navCanGoForward,
   isAutomationsNavEntry,
+  isBotNavEntry,
   isPluginStoreNavEntry,
   type AutomationsNavigationTab,
 } from "@/lib/taskNavigationHistory.js";
@@ -41,6 +42,7 @@ export function useWorkspaceTaskNavigation({
   onNavigateToTask,
   onNavigateToAutomations,
   onNavigateToPluginStore,
+  onNavigateToBot,
 }: {
   intl: { formatMessage: (descriptor: { id: string }) => string };
   workspaceAbsPath: string;
@@ -49,6 +51,7 @@ export function useWorkspaceTaskNavigation({
   onNavigateToTask?: () => void;
   onNavigateToAutomations?: (target: AutomationsNavigationTarget) => void;
   onNavigateToPluginStore?: (target: Omit<AutomationsNavigationTarget, "automationId">) => void;
+  onNavigateToBot?: () => void;
 }) {
   // 跨 workspace 选择会先同步切换 tab，但本次 React render 捕获的 ambient
   // services 仍可能属于旧 remote attachment。local 目标必须固定从 window base attachment
@@ -59,6 +62,7 @@ export function useWorkspaceTaskNavigation({
   const taskNavHistory = useZCodeSessionStore((s) => s.taskNavHistory);
   const taskNavPushAutomations = useZCodeSessionStore((s) => s.taskNavPushAutomations);
   const taskNavPushPluginStore = useZCodeSessionStore((s) => s.taskNavPushPluginStore);
+  const taskNavPushBot = useZCodeSessionStore((s) => s.taskNavPushBot);
   const taskNavGoBack = useZCodeSessionStore((s) => s.taskNavGoBack);
   const taskNavGoForward = useZCodeSessionStore((s) => s.taskNavGoForward);
   const removeTaskFromNavHistory = useZCodeSessionStore((s) => s.removeTaskFromNavHistory);
@@ -224,6 +228,13 @@ export function useWorkspaceTaskNavigation({
     onNavigateToPluginStore?.({ workspacePath: workspaceAbsPath, workspaceIdentity });
   }, [onNavigateToPluginStore, taskNavPushPluginStore, workspaceAbsPath, workspaceIdentity]);
 
+  const handleOpenBot = useCallback(() => {
+    // Bot 与 Automations/Plugin Store 同属 workspace shell 的顶级视图，
+    // 必须同样入栈，否则顶部前进/后退无法回到 Bot。
+    taskNavPushBot(workspaceAbsPath, workspaceIdentity);
+    onNavigateToBot?.();
+  }, [onNavigateToBot, taskNavPushBot, workspaceAbsPath, workspaceIdentity]);
+
   const handleTaskNavBack = useCallback(() => {
     const currentWorkspaceState = useZCodeSessionStore
       .getState()
@@ -277,6 +288,16 @@ export function useWorkspaceTaskNavigation({
         onNavigateToPluginStore?.(currentEntry);
         return;
       }
+      if (isBotNavEntry(currentEntry)) {
+        activateTabByPath(
+          currentEntry.workspacePath,
+          currentEntry.workspaceIdentity
+            ? { workspaceIdentity: currentEntry.workspaceIdentity }
+            : undefined,
+        );
+        onNavigateToBot?.();
+        return;
+      }
       const navWorkspaceState = useZCodeSessionStore
         .getState()
         .getWorkspaceState(currentEntry.workspacePath, currentEntry.workspaceIdentity);
@@ -305,6 +326,7 @@ export function useWorkspaceTaskNavigation({
     handleSelectTask,
     intl,
     onNavigateToAutomations,
+    onNavigateToBot,
     onNavigateToPluginStore,
     removeTaskFromNavHistory,
     taskNavGoBack,
@@ -363,6 +385,16 @@ export function useWorkspaceTaskNavigation({
         onNavigateToPluginStore?.(currentEntry);
         return;
       }
+      if (isBotNavEntry(currentEntry)) {
+        activateTabByPath(
+          currentEntry.workspacePath,
+          currentEntry.workspaceIdentity
+            ? { workspaceIdentity: currentEntry.workspaceIdentity }
+            : undefined,
+        );
+        onNavigateToBot?.();
+        return;
+      }
       const navWorkspaceState = useZCodeSessionStore
         .getState()
         .getWorkspaceState(currentEntry.workspacePath, currentEntry.workspaceIdentity);
@@ -410,6 +442,7 @@ export function useWorkspaceTaskNavigation({
     handleSelectTask,
     handleOpenAutomations,
     handleOpenPluginStore,
+    handleOpenBot,
     handleTaskNavBack,
     handleTaskNavForward,
     canGoBack,

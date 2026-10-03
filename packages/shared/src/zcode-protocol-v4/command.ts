@@ -29,6 +29,7 @@ import {
 } from "../zcode-protocol/index.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
 import { submissionExecutionTargetSchema } from "../execution-target-protocol.js";
+import { zcodeCreatableSessionTaskTypeSchema } from "../zcode-protocol-legacy-types.js";
 export type { SharedContextRef } from "./shared-context-ref.js";
 
 const createSessionRequestedConfigSchema = z.object({
@@ -69,6 +70,9 @@ export const commandPayloadSchemas = {
     offPeakToolEnabled: z.boolean().optional(),
     // 动态工作流灰度 flag，与 offPeakToolEnabled 同一模式。
     dynamicWorkflowEnabled: z.boolean().optional(),
+    // Personal Bot 对话的类型标签（只接受 zcodeCreatableSessionTaskTypes）。
+    // 缺省 = interactive；旧 CLI 丢弃该键，会话退化为普通 interactive（降级而非损坏）。
+    taskType: zcodeCreatableSessionTaskTypeSchema.optional(),
   }),
   // 父会话由 envelope.sessionId 指定；服务端从父 record 派生完整运行配置。
   // firstInput 存在时，child 创建完成后立即启动首条普通输入；缺省则保持空副屏。
