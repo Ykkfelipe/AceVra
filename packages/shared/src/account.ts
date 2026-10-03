@@ -252,3 +252,63 @@ export const AccountChannels = {
 export const ACCOUNT_RENDERER_SCHEME = "acevra-account";
 export const ACCOUNT_RENDERER_HOST = "renderer";
 export const ACCOUNT_RENDERER_ORIGIN = `${ACCOUNT_RENDERER_SCHEME}://${ACCOUNT_RENDERER_HOST}`;
+
+/**
+ * A human login session. This is NOT a device: a session is one login to AceVra,
+ * while a device is a machine this account may drive. They have separate
+ * identifiers, separate registries and separate routes.
+ *
+ * `current` is decided by the backend from the verified JWT, never by the client.
+ */
+export interface AccountSession {
+  id: string;
+  status: string;
+  /** Unix milliseconds, as Clerk reports them. */
+  createdAt: number;
+  lastActiveAt: number;
+  /** Clerk's own activity facts; null when Clerk recorded none. Never invented. */
+  deviceType: string | null;
+  browserName: string | null;
+  country: string | null;
+  current: boolean;
+}
+
+export interface AccountSessionsView {
+  sessions: AccountSession[];
+}
+
+export type AccountSessionRevokeResult =
+  | { status: "revoked" }
+  | { status: "not_found" | "unavailable" };
+
+/**
+ * Runtime validation of the backend `/v1/sessions` body; anything else is a failure
+ * rather than a partially-trusted list.
+ */
+export function parseAccountSessions(body: unknown): AccountSessionsView | null {
+  if (typeof body !== "object" || body === null) return null;
+  const sessions = (body as { sessions?: unknown }).sessions;
+  if (!Array.isArray(sessions)) return null;
+  const parsed: AccountSession[] = [];
+  for (const entry of sessions) {
+    if (typeof entry !== "object" || entry === null) return null;
+    const value = entry as Record<string, unknown>;
+    if (typeof value.id !== "string" || !value.id) return null;
+    if (typeof value.status !== "string") return null;
+    if (typeof value.createdAt !== "number" || typeof value.lastActiveAt !== "number") return null;
+    if (typeof value.current !== "boolean") return null;
+    const nullable = (key: "deviceType" | "browserName" | "country") =>
+      typeof value[key] === "string" ? value[key] : null;
+    parsed.push({
+      id: value.id,
+      status: value.status,
+      createdAt: value.createdAt,
+      lastActiveAt: value.lastActiveAt,
+      deviceType: nullable("deviceType"),
+      browserName: nullable("browserName"),
+      country: nullable("country"),
+      current: value.current,
+    });
+  }
+  return { sessions: parsed };
+}
