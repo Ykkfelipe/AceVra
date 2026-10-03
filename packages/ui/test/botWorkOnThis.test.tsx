@@ -216,3 +216,39 @@ test("new copy exists in both locales", () => {
   );
   assert.deepEqual(zhKeys.sort(), keys.sort());
 });
+
+test("the handoff continues on the model the Ace conversation last used", async () => {
+  const { buildCrossModeCreateSessionPayload } =
+    await import("../src/hooks/useCrossModeCodingLaunch.js");
+  const packet = buildBotCodingHandoffDraft({
+    conversationRef: CONVERSATION,
+    objective: "Add reminders",
+    notes: "",
+    notesLabel: "Notes for the work",
+    excerptItems: [],
+  });
+  const confirmed = confirmHandoffPreview(beginHandoffPreview(packet));
+  assert.ok(confirmed.ok && confirmed.session.confirmation);
+  if (!confirmed.ok || !confirmed.session.confirmation) return;
+  const target = { workspacePath: "/repo/app" };
+  const botSelection = {
+    providerId: "zai-start-plan",
+    modelId: "glm-5.3-flash",
+    options: { reasoningLevel: "low" },
+  };
+  const payload = buildCrossModeCreateSessionPayload(
+    target,
+    confirmed.session.confirmation,
+    botSelection,
+  );
+  // 走既有 createSession.config：provider、model 与 effort 一并沿用。
+  assert.deepEqual(payload.config, { modelSelection: botSelection });
+  assert.equal(payload.crossModeHandoff?.confirmation.handoffId, packet.handoffId);
+  assert.equal(payload.workspaceId, "/repo/app");
+  // 来源对话没有持久选择时不伪造 config，交给运行时默认。
+  const withoutSelection = buildCrossModeCreateSessionPayload(
+    target,
+    confirmed.session.confirmation,
+  );
+  assert.equal("config" in withoutSelection, false);
+});

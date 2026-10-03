@@ -5,16 +5,22 @@
  * ConversationProjectionStore——会话正在屏上时这就是对话面正在渲染的那一份（warm，无额外订阅）；
  * 不在屏上时按普通冷订阅打开，卸载时释放租约（keep-warm 语义由数据层负责）。
  *
- * 只返回尾部窗口（snapshot.rows.window）：调用方用于「最近的对话」，不需要全量历史。
+ * 只返回尾部窗口（snapshot.rows.window）：调用方用于「最近的对话」，不需要全量历史；
+ * 另带会话持久化的模型选择，供交接沿用同一模型。
  */
 import { useEffect, useState } from "react";
-import type { ConversationRow } from "@zcode/shared/zcode-protocol-v4";
+import type { ConversationRow, SessionConfigState } from "@zcode/shared/zcode-protocol-v4";
 import { useServices } from "@/hooks/useServices.js";
 import { acquireWorkspaceConnection } from "@/v4/workspaceConnectionRegistry.js";
 
 export type ConversationRowsSnapshot =
   | { status: "loading" }
-  | { status: "ready"; rows: readonly ConversationRow[] }
+  | {
+      status: "ready";
+      rows: readonly ConversationRow[];
+      /** 会话持久化的模型选择（上次实际使用的 provider/model/effort）；稀疏，可能缺省。 */
+      modelSelection: SessionConfigState["modelSelection"];
+    }
   | { status: "error"; message: string | null };
 
 export function useConversationRowsSnapshot(params: {
@@ -31,7 +37,11 @@ export function useConversationRowsSnapshot(params: {
     const read = () => {
       const current = session.store.getState();
       if (current.snapshot) {
-        setState({ status: "ready", rows: current.snapshot.rows.window });
+        setState({
+          status: "ready",
+          rows: current.snapshot.rows.window,
+          modelSelection: current.snapshot.config.modelSelection,
+        });
       } else if (current.status === "error") {
         setState({ status: "error", message: current.lastError });
       }

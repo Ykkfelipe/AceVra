@@ -10,7 +10,11 @@
  */
 import { useCallback, useRef, useState } from "react";
 import type { HandoffConfirmation } from "@zcode/shared/cross-mode";
-import type { CrossModeOriginState } from "@zcode/shared/zcode-protocol-v4";
+import type {
+  CommandPayloadMap,
+  CrossModeOriginState,
+  SessionConfigState,
+} from "@zcode/shared/zcode-protocol-v4";
 import { useServices } from "@/hooks/useServices.js";
 import { logger } from "@/logger.js";
 import { createCommandEnvelope } from "@/v4/commandFactory.js";
@@ -20,6 +24,8 @@ import { acquireWorkspaceConnection } from "@/v4/workspaceConnectionRegistry.js"
 export interface CrossModeCodingTarget {
   workspacePath: string;
   workspaceIdentity?: string;
+  /** "conversation" = Tasks（无项目文件夹）的 app 管理工作区；导航时按该用途登记 tab。 */
+  workspacePurpose?: "conversation";
 }
 
 export type CrossModeCodingLaunchResult =
@@ -28,6 +34,25 @@ export type CrossModeCodingLaunchResult =
 
 export function crossModeCodingWorkspaceId(target: CrossModeCodingTarget): string {
   return target.workspaceIdentity?.trim() || target.workspacePath;
+}
+
+/**
+ * 交接 createSession 载荷。modelSelection = 来源 Ace 对话上次使用的选择（provider/model/effort）：
+ * 修复：缺省时 Coding 会话落到 CLI 运行时默认模型（实机为另一套餐的 GLM-5.3 · Max，首轮即撞用量上限），
+ * 而不是用户在 Ace 里正在用的模型。走既有 createSession.config，CLI 在就绪检查与首轮之前应用。
+ */
+export function buildCrossModeCreateSessionPayload(
+  target: CrossModeCodingTarget,
+  confirmation: HandoffConfirmation,
+  modelSelection?: SessionConfigState["modelSelection"],
+): CommandPayloadMap["createSession"] {
+  return {
+    workspaceId: crossModeCodingWorkspaceId(target),
+    ...(modelSelection ? { config: { modelSelection } } : {}),
+    crossModeHandoff: {
+      confirmation: { ...confirmation, warnings: [...confirmation.warnings] },
+    },
+  };
 }
 
 export function useCrossModeCodingLaunch(params: {
@@ -43,6 +68,7 @@ export function useCrossModeCodingLaunch(params: {
     async (
       target: CrossModeCodingTarget,
       confirmation: HandoffConfirmation,
+      modelSelection?: SessionConfigState["modelSelection"],
     ): Promise<CrossModeCodingLaunchResult> => {
       if (pendingRef.current) return { ok: false, message: null };
       pendingRef.current = true;
@@ -58,12 +84,7 @@ export function useCrossModeCodingLaunch(params: {
         const ack = await lease.transport.sendCommand(
           createCommandEnvelope({
             type: "createSession",
-            payload: {
-              workspaceId: crossModeCodingWorkspaceId(target),
-              crossModeHandoff: {
-                confirmation: { ...confirmation, warnings: [...confirmation.warnings] },
-              },
-            },
+            payload: buildCrossModeCreateSessionPayload(target, confirmation, modelSelection),
             sessionId: null,
           }),
         );

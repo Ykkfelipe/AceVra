@@ -64,6 +64,11 @@ interface BotSectionProps {
    * 缺省 = 宿主不支持跨模式导航，动作不显示。
    */
   onOpenCodingSession?: (target: CrossModeCodingTarget, sessionId: string) => void;
+  /**
+   * 解析 Tasks（无项目文件夹）的对话工作区路径（与 Coding 侧栏 Tasks → New task 同一能力）。
+   * 缺省 = 不提供 Tasks 落点。
+   */
+  onResolveTasksWorkspace?: () => Promise<string>;
 }
 
 export function BotSection({
@@ -73,6 +78,7 @@ export function BotSection({
   isWindowsDesktop = false,
   reserveLeadingWindowControls = false,
   onOpenCodingSession,
+  onResolveTasksWorkspace,
 }: BotSectionProps) {
   const { intl } = useZCodeIntl();
   const {
@@ -255,17 +261,33 @@ export function BotSection({
           conversationRef={conversationRef}
           conversationTitle={selectedRow?.title ?? null}
           projects={codingProjects}
+          tasksAvailable={Boolean(onResolveTasksWorkspace)}
           pending={codingHandoffPending}
-          onConfirm={async (project, confirmation) => {
-            const result = await launchCodingHandoff(
-              {
-                workspacePath: project.workspacePath,
-                ...(project.workspaceIdentity
-                  ? { workspaceIdentity: project.workspaceIdentity }
+          onConfirm={async (target, confirmation, modelSelection) => {
+            let codingTarget: CrossModeCodingTarget;
+            if (target.kind === "tasks") {
+              if (!onResolveTasksWorkspace) return { ok: false, message: null };
+              try {
+                // 确认时才确保对话工作区存在：打开对话框本身不产生任何副作用。
+                codingTarget = {
+                  workspacePath: await onResolveTasksWorkspace(),
+                  workspacePurpose: "conversation",
+                };
+              } catch (error) {
+                return {
+                  ok: false,
+                  message: error instanceof Error ? error.message : null,
+                };
+              }
+            } else {
+              codingTarget = {
+                workspacePath: target.project.workspacePath,
+                ...(target.project.workspaceIdentity
+                  ? { workspaceIdentity: target.project.workspaceIdentity }
                   : {}),
-              },
-              confirmation,
-            );
+              };
+            }
+            const result = await launchCodingHandoff(codingTarget, confirmation, modelSelection);
             return result.ok ? { ok: true } : { ok: false, message: result.message };
           }}
         />
