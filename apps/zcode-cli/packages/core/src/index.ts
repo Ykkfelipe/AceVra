@@ -184,3 +184,6 @@ export type {
   SessionEventSink,
 } from "@zcode/contracts";
 export { LogLevel, SessionEventType } from "@zcode/contracts";
+
+// Cross-mode adoption（Multitask 侧）：Coding → Multitask 提交映射 + Multitask → Coding 返回。
+export * from "./cross-mode/index.js";
