@@ -25,6 +25,10 @@ import {
   zcodeExecutionTargetParamsSchema,
   zcodeExecutionTargetResultSchema,
 } from "../execution-target-protocol.js";
+import {
+  zcodePersonalMemoryContextParamsSchema,
+  zcodePersonalMemoryContextResultSchema,
+} from "../personal-memory-protocol.js";
 export * from "../process-diagnostic.js";
 import { errorAttributionSchema } from "../zcode-protocol-v4/snapshot.js";
 import { modelSelectionSchema } from "../model-selection.js";
@@ -3768,6 +3772,9 @@ export const zcodeProtocolMethods = {
   interactionBrowserExecute: "interaction/browserExecute",
   // M2F：agent 经 host 调用 Desktop main 的 IRemoteProcessService（list/start/read/cancel）。
   interactionExecutionTarget: "interaction/executionTarget",
+  // Personal Bot M2 Phase 2：agent 每轮向 host 索要**已渲染**的有界个人记忆上下文。
+  // 只传渲染结果，原始记录与预算参数都不跨界。
+  interactionPersonalMemoryContext: "interaction/personalMemoryContext",
 } as const;
 
 export type ZCodeProtocolMethod = (typeof zcodeProtocolMethods)[keyof typeof zcodeProtocolMethods];
@@ -3796,6 +3803,10 @@ export const zcodeProtocolSessionMethodContracts = {
   [zcodeProtocolMethods.interactionExecutionTarget]: {
     params: zcodeExecutionTargetParamsSchema,
     result: zcodeExecutionTargetResultSchema,
+  },
+  [zcodeProtocolMethods.interactionPersonalMemoryContext]: {
+    params: zcodePersonalMemoryContextParamsSchema,
+    result: zcodePersonalMemoryContextResultSchema,
   },
 } as const satisfies Partial<
   Record<ZCodeProtocolMethod, { params: z.ZodTypeAny; result: z.ZodTypeAny }>
