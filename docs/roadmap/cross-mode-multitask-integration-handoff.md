@@ -15,7 +15,7 @@ contract with the frozen Multitask M2 implementation.
 | Feature | Ref | Notes |
 | --- | --- | --- |
 | Shared base | `c02e24c` | merge base of both features (`origin/release/0.1.0-alpha` at freeze time) |
-| Multitask | `feature/multitask-m2` @ `e39802a` | frozen M2; integration branch starts here |
+| Multitask | `feature/multitask-m2` @ **`024183c`** | frozen M2 + resume-evidence fix; supersedes `e39802a` (the branch started there) |
 | Cross-Mode contract | `feature/cross-mode` @ `b5b4ca1` | frozen M1 contract + M2 preview/admission scaffold |
 | Multitask adoption | `feature/multitask` @ `ef14646` | `aabd8a8` (contract snapshot sync) + `ef14646` (adapters); the premature commits documented in the M2 handoff |
 
@@ -27,7 +27,9 @@ e39802a  M2 frozen head
 f12e995  merge feature/multitask@ef14646 (aabd8a8, ef14646)
 22c9d55  fix(cli-build): resolve @zcode/shared/cross-mode in the agent bundle
 6315cf2  test(integration): Cross-Mode × Multitask handoff scenarios on real seams
-<this>   docs: integration handoff
+d202a8c  docs: integration handoff
+891672f  merge feature/multitask-m2@024183c (resume-evidence fix; supersedes e39802a)
+<this>   docs: record the 024183c baseline update
 ```
 
 Single canonical contract: after both merges `packages/shared/src/cross-mode/**`
@@ -35,6 +37,36 @@ is byte-identical to `b5b4ca1` (0-line diff). `aabd8a8`'s synced copy deduped
 cleanly. No second copy exists anywhere; the Multitask adapters only import it.
 Unrelated sibling branches were not merged. `origin/release/0.1.0-alpha`
 (`0da09de`) has drifted 3 commits; a dry-run merge with it is conflict-free.
+
+## Baseline update: Multitask M2 `024183c` (2026-10-03)
+
+`024183c` (carry worker evidence across Stop/resume for the same task) was
+merged `--no-ff` as-is in `891672f`; it was not reimplemented here. It touches no
+integration-owned file, so the merge was conflict-free. Verified on the merge
+head, from a clean detached checkout (`../AceVra-integration-verify` at
+`891672f`), because another session was concurrently editing the integration
+worktree (see risks):
+
+- every M2-owned file equals `024183c` (0-line diff); Cross-Mode contract,
+  shared `exports` and barrel still byte-identical to `b5b4ca1`;
+- tests **86 passed**: shared Cross-Mode 39, CLI 38 (M2 core 11, runtime 9,
+  evidence 3, adoption 9, integration harness 6), UI 7, build guard 2;
+- root + `@zcode/{core,bootstrap,contracts,dynamic-workflow,cli}` typecheck,
+  lint (0 errors), architecture (0 violations) clean;
+- `@zcode/cli build`, `build:desktop-agent` and the real dev start resolve
+  `@zcode/shared/cross-mode` (contract bundled once, fix present).
+
+Live on the merge head (`~/.zcode-acevra-dev`, GLM-5.3-Flash Low):
+
+| Scenario | Run | Result |
+| --- | --- | --- |
+| Stop → resume → reuse | `dwfrun-2ea8eb09` | **PASS**: stopped after slow's 9th tool call with quick done; resumed. slow **Done · "11 tool calls (9 before stop)"** (`priorAttempts` 9 = journaled pre-stop snapshot), no `Unverified`; quick **Reused**, model calls frozen at 2 (last 04:53:59, resume 04:54:32), journal `ask#1 ok cached:1`, never re-queued |
+| Normal Workflow | `dwfrun-c75067fe` | **PASS**: "Run this workflow?" gate, timeline UI, "Workflow completed", 0 reports, 0 worker personas, 0 evidence-bearing progress events |
+
+The resumed worker also made one new `Read` in this run, so the submit-only
+resume path (the exact case behind the old `Unverified`) is pinned by M2's
+mutation-checked regression test rather than by this run; the carried 9 calls
+are visibly credited live.
 
 ## Build/export fix (`22c9d55`)
 
@@ -166,10 +198,19 @@ to the run port fails 5 of 6 scenarios (wrong-flow never reaches submission).
    for imported subpaths but does not auto-derive aliases.
 5. Release drift: `origin/release/0.1.0-alpha` gained 3 unrelated commits
    (saved CUA workflows, formatting); dry-run merge is clean.
+6. **Concurrent writer in this worktree.** During the `024183c` update another
+   session left uncommitted executor-milestone work here
+   (`bootstrap/src/app/cross-mode-handoff-{executor,service}.ts`, a
+   `cross-mode-handoff` protocol command handler, edits to `core/runtime.ts`,
+   `core/index.ts`, `bootstrap/app/types.ts`, shared `zcode-protocol-v4/command.ts`).
+   It does not typecheck yet (`MultitaskHandoffContextItemDraft.provenance.kind`
+   vs `string`). It was not modified or committed by this update; the committed
+   head was verified from a clean checkout.
 
 ## Merge recommendation
 
-**Safe to merge into the shared release baseline as a coexistence integration.**
+**Safe to merge into the shared release baseline as a coexistence integration**
+(re-confirmed on the `024183c` baseline at `891672f`).
 The build break is fixed with a guard. Both features' suites and live behavior
 are unchanged, the contract has one canonical surface, and ownership is clean.
 The handoff seams compose correctly through the real confirmation and lifecycle
