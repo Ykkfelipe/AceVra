@@ -1,221 +1,177 @@
 /**
- * Personal Bot 主视图：一个持续的 Ace 对话，而不是一次 coding session。
+ * Personal Bot 主视图：一个持续的 Ace 对话空间，而不是一次 coding session。
  *
- * 结构对齐参考产品的共同骨架（AceVra 自己的视觉语言）：对话是绝对主区域
- * （BotConversation 复用既有单 pane 会话栈），顶部只留一条窄的身份条，
- * 右侧是 Memory / Computers / Capabilities 三个标签页的上下文面板。
+ * 结构（docs/specs/personal-bot.md §16）：对话是绝对主区域（BotConversation 复用既有单 pane
+ * 会话栈），顶部只留一条窄的 Ace 身份/对话标题条，右侧是 Memory / Computers / Capabilities
+ * 上下文检查器。Coding 的 WorkspaceHeader（项目、git、终端、侧面板开关）不进入这个视图。
  *
- * 数据只经 Bot 服务面读取；不读 Bot 数据文件，也不把 Bot 混进 Coding Sessions 列表。
- * Computers 标签页只读展示账户设备注册表，管理动作仍归账户区。
+ * 状态全部来自 BotWorkspaceProvider；本组件只持有「检查器是否展开」这一项每位用户的界面偏好。
  */
-import { RefreshCw } from "lucide-react";
+import { useCallback, useState, type CSSProperties } from "react";
+import { PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.js";
-import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
-import { Spinner } from "@/components/ui/spinner.js";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
-import { useBotHome } from "@/hooks/useBotHome.js";
+import { cn } from "@/components/lib/utils.js";
+import { ControlHintTooltip } from "@/ControlHintTooltip.js";
+import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { BotComputersPanel } from "@/bot/BotComputersPanel.js";
 import { BotConversation } from "@/bot/BotConversation.js";
-import type {
-  BotCapabilityAvailability,
-  BotCapabilityEntry,
-  PersonalMemoryRecord,
-} from "@zcode/services";
+import { BotInspector } from "@/bot/BotInspector.js";
+import { botAvatarInitial } from "@/bot/BotConversationSidebar.js";
+import { useBotWorkspace } from "@/bot/BotWorkspaceProvider.js";
 
-const MAX_VISIBLE_MEMORY = 8;
+const INSPECTOR_OPEN_STORAGE_KEY = "zcode:bot:inspector-open";
+/**
+ * 侧栏收起时顶部浮层（红绿灯 + 侧栏开关 + 前进/后退）压在主区左上角，与 WorkspaceHeader 的
+ * pl-58 / pl-38 同源；主区左侧已有全局导航栏，所以扣掉栏宽。
+ */
+const MAC_LEADING_OVERLAY_PX = 232;
+const COMPACT_LEADING_OVERLAY_PX = 152;
 
-function initialOf(displayName: string): string {
-  return displayName.trim().slice(0, 1).toUpperCase() || "A";
+function readInspectorOpen(): boolean {
+  try {
+    return window.localStorage.getItem(INSPECTOR_OPEN_STORAGE_KEY) !== "false";
+  } catch {
+    return true;
+  }
 }
 
-function availabilityMessageId(availability: BotCapabilityAvailability): string {
-  if (availability === "available") return "bot.capability.available";
-  if (availability === "planned") return "bot.capability.planned";
-  return "bot.capability.notConfigured";
-}
-
-function MemoryRow({ record }: { record: PersonalMemoryRecord }) {
-  const { intl } = useZCodeIntl();
-  return (
-    <li className="flex flex-col gap-1 border-b border-border/60 py-2 last:border-b-0">
-      <div className="flex items-center gap-2">
-        <Badge variant="outline">
-          {intl.formatMessage({ id: `bot.memory.category.${record.category}` })}
-        </Badge>
-        <span className="min-w-0 truncate text-ui-sm text-foreground">{record.title}</span>
-      </div>
-      {record.summary ? (
-        <p className="line-clamp-2 text-ui-xs text-muted-foreground">{record.summary}</p>
-      ) : null}
-    </li>
-  );
-}
-
-function CapabilityRow({ entry }: { entry: BotCapabilityEntry }) {
-  const { intl } = useZCodeIntl();
-  return (
-    <li className="flex items-center justify-between gap-3 border-b border-border/60 py-2 last:border-b-0">
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-ui-sm text-foreground">
-          {intl.formatMessage({ id: `bot.capability.domain.${entry.domain}` })}
-        </span>
-        <span className="truncate text-ui-xs text-muted-foreground">{entry.summary}</span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {entry.requiresApproval ? (
-          <Badge variant="ghost">{intl.formatMessage({ id: "bot.capability.approval" })}</Badge>
-        ) : null}
-        <Badge variant={entry.availability === "available" ? "secondary" : "outline"}>
-          {intl.formatMessage({ id: availabilityMessageId(entry.availability) })}
-        </Badge>
-      </div>
-    </li>
-  );
+function writeInspectorOpen(open: boolean): void {
+  try {
+    window.localStorage.setItem(INSPECTOR_OPEN_STORAGE_KEY, String(open));
+  } catch {
+    // 本地存储不可用（隐私模式等）时只是不记忆偏好。
+  }
 }
 
 interface BotSectionProps {
   isDesktop?: boolean;
+  isMacDesktop?: boolean;
+  isMacFullscreen?: boolean;
+  isWindowsDesktop?: boolean;
+  /** 二级侧栏收起时，为左上角浮层让位。 */
+  reserveLeadingWindowControls?: boolean;
 }
 
-export function BotSection({ isDesktop = false }: BotSectionProps) {
+export function BotSection({
+  isDesktop = false,
+  isMacDesktop = false,
+  isMacFullscreen = false,
+  isWindowsDesktop = false,
+  reserveLeadingWindowControls = false,
+}: BotSectionProps) {
   const { intl } = useZCodeIntl();
-  const { identity, memory, capabilities, loading, error, available, refresh } = useBotHome();
+  const { available, home, rows, selectedSessionId, refreshHistory } = useBotWorkspace();
+  const [inspectorOpen, setInspectorOpen] = useState(readInspectorOpen);
+  const usesInlineWindowControls = Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop));
+
+  const toggleInspector = useCallback(() => {
+    const next = !inspectorOpen;
+    setInspectorOpen(next);
+    writeInspectorOpen(next);
+  }, [inspectorOpen]);
+
+  const handleRefresh = useCallback(() => {
+    void home.refresh();
+    refreshHistory();
+  }, [home, refreshHistory]);
 
   if (!available) {
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-background px-6">
-        <p className="text-ui-sm text-muted-foreground">
+        <p className="text-ui-sm text-foreground-subtle">
           {intl.formatMessage({ id: "bot.unavailable" })}
         </p>
       </div>
     );
   }
 
-  const displayName = identity?.profile.displayName ?? "";
-  const visibleMemory = memory.slice(0, MAX_VISIBLE_MEMORY);
+  const displayName =
+    home.identity?.profile.displayName || intl.formatMessage({ id: "bot.fallbackName" });
+  const selectedRow = selectedSessionId
+    ? rows.find((row) => row.sessionId === selectedSessionId)
+    : undefined;
+  const conversationTitle =
+    selectedRow?.title || intl.formatMessage({ id: "bot.header.newConversation" });
+  const leadingOverlayPx =
+    isMacDesktop && !isMacFullscreen ? MAC_LEADING_OVERLAY_PX : COMPACT_LEADING_OVERLAY_PX;
+  const headerStyle: CSSProperties | undefined =
+    isDesktop && reserveLeadingWindowControls
+      ? {
+          paddingLeft: `calc(${leadingOverlayPx}px - var(--workspace-global-rail-width, 0px))`,
+        }
+      : undefined;
+  const inspectorToggleLabel = intl.formatMessage({
+    id: inspectorOpen ? "bot.header.hideInspector" : "bot.header.showInspector",
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background" data-testid="bot-section">
-      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 md:px-5">
-        <Avatar size="lg">
-          <AvatarFallback>{initialOf(displayName)}</AvatarFallback>
+      <header
+        style={headerStyle}
+        className={cn(
+          "flex h-12 shrink-0 items-center gap-2 border-b border-border pl-4",
+          usesInlineWindowControls ? "pr-0" : "pr-3",
+          isDesktop && "[app-region:drag]",
+        )}
+      >
+        <Avatar size="sm">
+          <AvatarFallback>{botAvatarInitial(displayName)}</AvatarFallback>
         </Avatar>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h1 className="truncate text-ui-base font-medium text-foreground">
-            {displayName || intl.formatMessage({ id: "bot.fallbackName" })}
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <span className="shrink-0 text-ui-base font-medium text-foreground">{displayName}</span>
+          <span aria-hidden className="shrink-0 text-ui-sm text-foreground-subtlest">
+            /
+          </span>
+          <h1
+            className="min-w-0 truncate text-ui-base text-foreground-subtle"
+            data-testid="bot-conversation-title"
+          >
+            {conversationTitle}
           </h1>
-          <p className="truncate text-ui-xs text-muted-foreground">
-            {identity?.profile.descriptor ?? ""}
-          </p>
         </div>
-        {identity ? (
-          <div className="hidden shrink-0 items-center gap-1 lg:flex">
-            <Badge variant="outline">
-              {intl.formatMessage({ id: `bot.style.tone.${identity.profile.style.tone}` })}
-            </Badge>
-            <Badge variant="outline">
-              {intl.formatMessage({
-                id: `bot.style.verbosity.${identity.profile.style.verbosity}`,
-              })}
-            </Badge>
-          </div>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void refresh()}
-          aria-label={intl.formatMessage({ id: "bot.refresh" })}
-        >
-          <RefreshCw className="size-4" />
-        </Button>
+        {/* 预留给后续显式的「Work on this」交接动作（Cross-Mode）；V2 不渲染任何内容。 */}
+        <div
+          data-testid="bot-conversation-actions"
+          className="flex shrink-0 items-center gap-1 [app-region:no-drag]"
+        />
+        <div className="flex shrink-0 items-center gap-1 [app-region:no-drag]">
+          <ControlHintTooltip title={intl.formatMessage({ id: "bot.refresh" })}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleRefresh}
+              aria-label={intl.formatMessage({ id: "bot.refresh" })}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          </ControlHintTooltip>
+          <ControlHintTooltip title={inspectorToggleLabel}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              data-testid="bot-inspector-toggle"
+              aria-pressed={inspectorOpen}
+              onClick={toggleInspector}
+              aria-label={inspectorToggleLabel}
+            >
+              {inspectorOpen ? (
+                <PanelRightClose className="size-4" />
+              ) : (
+                <PanelRightOpen className="size-4" />
+              )}
+            </Button>
+          </ControlHintTooltip>
+          {usesInlineWindowControls ? <DesktopWindowControls /> : null}
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* 对话是主区域：始终渲染，不因侧栏数据加载状态而延迟。 */}
-        <div className="flex min-h-0 flex-1 flex-col">
+        {/* 对话是主区域：始终渲染，不因检查器数据加载状态而延迟。 */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <BotConversation isDesktop={isDesktop} />
         </div>
-
-        <aside className="flex w-full shrink-0 flex-col border-t border-border md:w-80 md:border-t-0 md:border-l">
-          <Tabs defaultValue="memory" className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 border-b border-border px-3 pt-3">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="memory">
-                  {intl.formatMessage({ id: "bot.tab.memory" })}
-                </TabsTrigger>
-                <TabsTrigger value="computers">
-                  {intl.formatMessage({ id: "bot.tab.computers" })}
-                </TabsTrigger>
-                <TabsTrigger value="capabilities">
-                  {intl.formatMessage({ id: "bot.tab.capabilities" })}
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent
-              value="memory"
-              className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
-            >
-              {loading ? (
-                <div className="flex items-center gap-2 text-ui-sm text-muted-foreground">
-                  <Spinner className="size-4" />
-                  {intl.formatMessage({ id: "bot.loading" })}
-                </div>
-              ) : null}
-
-              {error ? (
-                <p className="text-ui-sm text-destructive">
-                  {intl.formatMessage({ id: "bot.loadFailed" })}
-                </p>
-              ) : null}
-
-              <section className="flex flex-col gap-1">
-                <h2 className="text-ui-sm font-medium text-foreground">
-                  {intl.formatMessage({ id: "bot.section.memory" })}
-                </h2>
-                <span className="text-ui-xs text-muted-foreground">
-                  {intl.formatMessage({ id: "bot.memory.count" }, { count: String(memory.length) })}
-                </span>
-                {visibleMemory.length === 0 && !loading ? (
-                  <p className="text-ui-xs text-muted-foreground">
-                    {intl.formatMessage({ id: "bot.memory.empty" })}
-                  </p>
-                ) : (
-                  <ul className="flex flex-col">
-                    {visibleMemory.map((record) => (
-                      <MemoryRow key={record.id} record={record} />
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </TabsContent>
-
-            <TabsContent
-              value="computers"
-              className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
-            >
-              <BotComputersPanel />
-            </TabsContent>
-
-            <TabsContent
-              value="capabilities"
-              className="min-h-0 flex-1 overflow-y-auto p-4 [scrollbar-gutter:stable]"
-            >
-              <section className="flex flex-col gap-1">
-                <h2 className="text-ui-sm font-medium text-foreground">
-                  {intl.formatMessage({ id: "bot.section.capabilities" })}
-                </h2>
-                <ul className="flex flex-col">
-                  {(capabilities?.entries ?? []).map((entry) => (
-                    <CapabilityRow key={entry.domain} entry={entry} />
-                  ))}
-                </ul>
-              </section>
-            </TabsContent>
-          </Tabs>
-        </aside>
+        {inspectorOpen ? <BotInspector /> : null}
       </div>
     </div>
   );

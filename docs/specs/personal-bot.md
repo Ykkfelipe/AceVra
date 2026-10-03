@@ -639,8 +639,9 @@ control.sessionEnded)` changes. Coding hosts do not pass it.
 - Header: a single slim, draggable row with a small Ace avatar, the conversation title (or "New
   conversation") and, on the trailing side, a reserved actions slot, refresh, and an inspector toggle.
   It replaces the coding `WorkspaceHeader` for this view.
-- Composer: assistant-oriented placeholder copy ("Message Ace…") through a narrow placeholder-variant
-  prop; no new composer.
+- Composer: assistant-oriented placeholder copy through a narrow placeholder-variant prop —
+  "What can I help you with?" (empty), "Reply…" (idle with history), "Keep typing — I'll read it
+  next" (turn running); no new composer.
 - Inspector: the same Memory / Computers / Capabilities tabs (§15), restyled as a quiet context
   inspector (section headers, list rows, no stacked cards). It can be hidden from the header; the choice
   is a per-viewer convenience kept in `localStorage` (wrapped in try/catch).

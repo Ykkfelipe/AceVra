@@ -22,9 +22,7 @@ function readSource(relativePath: string): string {
 
 /** 去掉 // 行注释与 /* *\/ 块注释，避免注释里解释历史缺陷时提到类名造成误报。 */
 function stripComments(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "");
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
 }
 
 function assertNoViewportUtility(relativePath: string): void {
@@ -33,10 +31,7 @@ function assertNoViewportUtility(relativePath: string): void {
     !/\bh-dvh\b/.test(code),
     `${relativePath}: shell 组件不得自声明 h-dvh（视口高度只属于根节点，否则 /fork banner 下会裁切侧栏 footer）`,
   );
-  assert.ok(
-    !/\bh-screen\b/.test(code),
-    `${relativePath}: shell 组件不得自声明 h-screen（同上）`,
-  );
+  assert.ok(!/\bh-screen\b/.test(code), `${relativePath}: shell 组件不得自声明 h-screen（同上）`);
 }
 
 test("shell roots follow their container instead of declaring viewport height", () => {
@@ -82,10 +77,18 @@ test("sidebar keeps nav on top, a dedicated scrolling task area, and the footer 
       /\boverflow-y-auto\b/.test(scrollMatch[0]),
     "任务区必须是 flex-1 + min-h-0 + overflow-y-auto（仅该区域滚动）",
   );
-  // footer 作为滚动区域的兄弟节点出现在其后，且不在滚动容器内部。
-  const scrollStart = sidebar.indexOf("workspaceScrollRef");
-  const footerIndex = sidebar.indexOf("<WorkspaceSidebarFooter");
-  assert.ok(footerIndex > scrollStart, "footer 必须渲染在任务滚动区域之后（兄弟节点而非内部）");
+  // 账户/设置 footer 已移到全局导航栏底部（personal-bot spec §16.1）：Coding 侧栏不再渲染它，
+  // 导航栏根节点不滚动，footer 排在弹性留白之后——同样不在任何滚动容器内部。
+  assert.ok(
+    !sidebar.includes("<WorkspaceSidebarFooter"),
+    "Coding 侧栏不得再渲染账户 footer（它属于全局导航栏）",
+  );
+  const rail = stripComments(readSource("app-shell/GlobalNavRail.tsx"));
+  assert.ok(/\boverflow-hidden\b/.test(rail), "全局导航栏根节点必须 overflow-hidden（自身不滚动）");
+  const spacerIndex = rail.indexOf('className="min-h-0 flex-1"');
+  const footerIndex = rail.indexOf("<WorkspaceSidebarFooter");
+  assert.ok(spacerIndex > 0 && footerIndex > spacerIndex, "footer 必须排在导航栏弹性留白之后");
+  assert.ok(/layout="rail"/.test(rail), "导航栏使用 footer 的 rail 布局");
 });
 
 test("the web entry splits device banner and app inside one height-owning flex column", () => {

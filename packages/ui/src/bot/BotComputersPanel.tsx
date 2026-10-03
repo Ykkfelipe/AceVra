@@ -39,11 +39,11 @@ function ComputerRow({ device, role }: { device: AccountDevice; role: ComputerRo
       data-type={device.type}
     >
       <div className="flex items-center gap-2">
-        <DeviceIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <DeviceIcon className="size-4 shrink-0 text-foreground-subtle" aria-hidden />
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-ui-sm font-medium text-foreground",
-            revoked && "text-muted-foreground",
+            revoked && "text-foreground-subtle",
           )}
         >
           {device.displayName}
@@ -56,7 +56,7 @@ function ComputerRow({ device, role }: { device: AccountDevice; role: ComputerRo
           )}
         />
       </div>
-      <p className="truncate pl-6 text-ui-xs text-muted-foreground">
+      <p className="truncate pl-6 text-ui-xs text-foreground-subtle">
         {intl.formatMessage({ id: `bot.computers.role.${role}` })}
         {" · "}
         {PLATFORM_LABEL[device.platform]}
@@ -101,7 +101,7 @@ export function BotComputersPanel() {
   return (
     <div className="flex flex-col gap-2" data-testid="bot-computers-panel">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-ui-xs text-muted-foreground">
+        <span className="text-ui-xs text-foreground-subtle">
           {intl.formatMessage({ id: "bot.computers.count" }, { count: String(devices.length) })}
         </span>
         <Button
@@ -114,11 +114,11 @@ export function BotComputersPanel() {
         </Button>
       </div>
       {failed ? (
-        <p className="text-ui-xs text-muted-foreground">
+        <p className="text-ui-xs text-foreground-subtle">
           {intl.formatMessage({ id: "bot.computers.unavailable" })}
         </p>
       ) : !view ? null : devices.length === 0 ? (
-        <p className="text-ui-xs text-muted-foreground">
+        <p className="text-ui-xs text-foreground-subtle">
           {intl.formatMessage({ id: "bot.computers.empty" })}
         </p>
       ) : (

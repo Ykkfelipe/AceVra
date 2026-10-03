@@ -6985,6 +6985,28 @@ const enUS: Record<string, string> = {
   "bot.computers.capability.git": "Git",
   "bot.computers.capability.longTasks": "Long tasks",
   "bot.computers.capability.minecraft": "Minecraft",
+  // Bot Workspace V2（personal-bot spec §16）：Bot 侧栏、对话头部与全局导航栏。
+  "bot.sidebar.label": "Ace conversations",
+  "bot.sidebar.newConversation": "New conversation",
+  "bot.sidebar.untitled": "New conversation",
+  "bot.sidebar.group.today": "Today",
+  "bot.sidebar.group.yesterday": "Yesterday",
+  "bot.sidebar.group.previous7Days": "Previous 7 days",
+  "bot.sidebar.group.older": "Older",
+  "bot.sidebar.empty": "No conversations yet. Start one and it will stay here.",
+  "bot.sidebar.loading": "Loading conversations…",
+  "bot.sidebar.loadFailed": "Couldn't load your conversations.",
+  "bot.sidebar.retry": "Retry",
+  "bot.header.newConversation": "New conversation",
+  "bot.header.showInspector": "Show context panel",
+  "bot.header.hideInspector": "Hide context panel",
+  "bot.inspector.label": "Ace context",
+  "globalNav.label": "AceVra navigation",
+  "globalNav.coding": "Coding",
+  "globalNav.account": "Account",
+  "chat.placeholder.assistant.new": "What can I help you with?",
+  "chat.placeholder.assistant.followUp": "Reply…",
+  "chat.placeholder.assistant.queue": "Keep typing — I'll read it next",
 };
 
 export default enUS;

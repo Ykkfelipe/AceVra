@@ -4,7 +4,7 @@
  * 组件只通过本 hook 读 Bot 状态；不得直接读 Bot 数据文件或 session 数据库。
  * 旧 host / 测试 double 没有 botService 时返回空状态，UI 据此隐藏 Bot 入口。
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   BotCapabilitySurface,
   BotIdentityView,
@@ -39,11 +39,15 @@ interface BotHomeResult extends BotHomeState {
   refresh: () => Promise<void>;
 }
 
-export function useBotHome(): BotHomeResult {
+/**
+ * @param enabled 为 false 时不读取（例如 Bot 工作区控制器常驻挂载但 Bot 视图不可见），
+ *   已读到的数据保留；每次重新启用都会刷新一次。
+ */
+export function useBotHome(enabled = true): BotHomeResult {
   const botService = useBotService();
   const [state, setState] = useState<BotHomeState>(() => ({
     ...EMPTY_STATE,
-    loading: botService !== undefined,
+    loading: botService !== undefined && enabled,
   }));
   const generationRef = useRef(0);
 
@@ -72,12 +76,17 @@ export function useBotHome(): BotHomeResult {
   }, [botService]);
 
   useEffect(() => {
+    if (!enabled) return;
     void load();
     return () => {
-      // 卸载后不再写状态。
+      // 卸载或停用后不再写状态。
       generationRef.current += 1;
     };
-  }, [load]);
+  }, [enabled, load]);
 
-  return { ...state, available: botService !== undefined, refresh: load };
+  // 结果进入共享 context（BotWorkspaceProvider），保持引用稳定，避免无关渲染连带刷新侧栏与主区。
+  return useMemo(
+    () => ({ ...state, available: botService !== undefined, refresh: load }),
+    [botService, load, state],
+  );
 }

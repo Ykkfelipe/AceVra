@@ -119,16 +119,25 @@ export function WorkspaceHeader({
   // Linux 与 Windows 共用内联窗控，不再预留旧悬浮窗控的标题栏区域。
   const usesInlineWindowControls = Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop));
 
+  // 侧栏收起时左上角浮层（红绿灯、侧栏开关、前进/后退）压在 header 上，需要让位。
+  // 浮层从窗口左缘量起，而 header 左侧还有全局导航栏（personal-bot spec §16.1），
+  // 所以扣掉 --workspace-global-rail-width；没有导航栏的宿主变量缺省为 0，与原 pl-* 等值。
   let headerWindowControlsPaddingClass: string | false = false;
   if (shouldOffsetHeaderForWindowControls) {
     if (isMacDesktop) {
       if (hasUpdateReady) {
-        headerWindowControlsPaddingClass = isMacFullscreen ? "pl-48" : "pl-66";
+        headerWindowControlsPaddingClass = isMacFullscreen
+          ? "pl-[calc(12rem-var(--workspace-global-rail-width,0px))]"
+          : "pl-[calc(16.5rem-var(--workspace-global-rail-width,0px))]";
       } else {
-        headerWindowControlsPaddingClass = isMacFullscreen ? "pl-38" : "pl-58";
+        headerWindowControlsPaddingClass = isMacFullscreen
+          ? "pl-[calc(9.5rem-var(--workspace-global-rail-width,0px))]"
+          : "pl-[calc(14.5rem-var(--workspace-global-rail-width,0px))]";
       }
     } else {
-      headerWindowControlsPaddingClass = hasUpdateReady ? "pl-44" : "pl-38";
+      headerWindowControlsPaddingClass = hasUpdateReady
+        ? "pl-[calc(11rem-var(--workspace-global-rail-width,0px))]"
+        : "pl-[calc(9.5rem-var(--workspace-global-rail-width,0px))]";
     }
   }
 

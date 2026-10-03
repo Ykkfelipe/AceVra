@@ -5,6 +5,7 @@ import type {
   ZCodeProvider,
   ZCodeTaskChangeSummary,
 } from "@zcode/shared";
+import type { ChatPlaceholderVariant } from "@/lib/chatPlaceholder.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import type { AssistantPreviewCardsAutoOpenRequest } from "@/lib/assistantPreviewCards.js";
 import type { OpenAutomationsMain } from "@/lib/taskNavigationHistory.js";
@@ -22,7 +23,7 @@ import type {
   SyncSubagentSessionTabsRequest,
 } from "@/lib/workspaceSidePane.js";
 import { V4ConversationProvider } from "@/v4/V4ConversationContext.js";
-import { SessionPane } from "@/v4/SessionPane.js";
+import { SessionPane, type SessionPanePresentation } from "@/v4/SessionPane.js";
 import type { SessionOpenTrigger } from "@/lib/sessionOpenArmsTelemetry.js";
 import type {
   ChatSearchResultHighlightRequest,
@@ -46,6 +47,10 @@ interface V4ChatPaneProps {
   onSessionDeleted?: () => void;
   /** 绑定的 session 已不存在（sessionNotFound）时通知持有指针的宿主。 */
   onSessionUnavailable?: () => void;
+  /** 绑定会话标题/一轮收口变化的只读通知（Bot 历史据此重读）；Coding 宿主不传。 */
+  onSessionPresentationChange?: (presentation: SessionPanePresentation) => void;
+  /** composer 占位文案风格；缺省 Coding，Personal Bot 传 assistant。 */
+  composerPlaceholderVariant?: ChatPlaceholderVariant;
   /** 新建会话时要带上的 session 类型标签（如 personal_bot）；缺省 = interactive。 */
   createSessionTaskType?: string;
   /** 草稿态 composer contextHeader（m5，壳层构造下发）。 */
@@ -97,6 +102,8 @@ export function V4ChatPane({
   onSessionCreated,
   onSessionDeleted,
   onSessionUnavailable,
+  onSessionPresentationChange,
+  composerPlaceholderVariant,
   createSessionTaskType,
   draftComposerHeader,
   gitSummary,
@@ -144,6 +151,8 @@ export function V4ChatPane({
         onSessionCreated={onSessionCreated}
         onSessionDeleted={onSessionDeleted}
         onSessionUnavailable={onSessionUnavailable}
+        onSessionPresentationChange={onSessionPresentationChange}
+        composerPlaceholderVariant={composerPlaceholderVariant}
         createSessionTaskType={createSessionTaskType}
         draftComposerHeader={draftComposerHeader}
         gitSummary={gitSummary}

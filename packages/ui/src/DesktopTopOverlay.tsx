@@ -95,8 +95,13 @@ export function DesktopTopOverlay({
         paddingRight: WINDOWS_CAPTION_CONTROLS_RIGHT_INSET_VAR,
       }
     : undefined;
+  // 展开态浮层覆盖「全局导航栏 + 二级侧栏」的顶部拖拽带（personal-bot spec §16.1）；
+  // 没有导航栏的宿主（变量缺省）退回只覆盖侧栏，行为与改动前一致。
   const topOverlayWidthStyle = isSidebarVisible
-    ? { width: "var(--workspace-sidebar-panel-width)" }
+    ? {
+        width:
+          "calc(var(--workspace-global-rail-width, 0px) + var(--workspace-sidebar-panel-width))",
+      }
     : undefined;
 
   return (

@@ -101,6 +101,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   activeTaskId,
   isDesktop = false,
   className,
+  layout = "row",
 }: {
   theme: Theme;
   localeMenuValue: Locale | "system";
@@ -121,6 +122,11 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   activeTaskId?: string | null;
   isDesktop?: boolean;
   className?: string;
+  /**
+   * row = 侧栏底部整行（Settings 等页面复用）；rail = 全局导航栏底部的纵向图标位
+   * （personal-bot spec §16.1）。两种布局共用同一份账户菜单内容，不复制菜单。
+   */
+  layout?: "row" | "rail";
 }) {
   const { intl } = useZCodeIntl();
   const platform = usePlatform();
@@ -139,26 +145,29 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
     workspaceIdentity,
     workspacePath,
   });
-  const profileContent = (
-    <>
-      <Avatar key={avatarKey} size="default">
-        {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={profileBadge} /> : null}
-        <AvatarFallback className="bg-background text-foreground">
-          {user ? (
-            avatarFallbackText
-          ) : showAuthRestoreLoading ? (
-            <>
-              {/* OAuth 启动恢复未落定前，footer 之前会直接显示未登录头像，
+  const avatarNode = (
+    <Avatar key={avatarKey} size="default">
+      {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={profileBadge} /> : null}
+      <AvatarFallback className="bg-background text-foreground">
+        {user ? (
+          avatarFallbackText
+        ) : showAuthRestoreLoading ? (
+          <>
+            {/* OAuth 启动恢复未落定前，footer 之前会直接显示未登录头像，
                   用户很容易把“还在校验”误判成“已经退出”。
                   这里用 loading 图标明确表达“状态确认中”，等恢复成功或失败后再展示最终状态。 */}
-              <Loader2 className="size-4 animate-spin" />
-              <span className="sr-only">{intl.formatMessage({ id: "common.loading" })}</span>
-            </>
-          ) : (
-            <User className="size-4" />
-          )}
-        </AvatarFallback>
-      </Avatar>
+            <Loader2 className="size-4 animate-spin" />
+            <span className="sr-only">{intl.formatMessage({ id: "common.loading" })}</span>
+          </>
+        ) : (
+          <User className="size-4" />
+        )}
+      </AvatarFallback>
+    </Avatar>
+  );
+  const profileContent = (
+    <>
+      {avatarNode}
       <div className="min-w-0 flex-1 overflow-hidden text-left">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 truncate text-ui-base font-semibold text-foreground">
@@ -211,6 +220,188 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   const canResetDesktopZoom = desktopZoomLevel !== 0;
   const canZoomIn = desktopZoomLevel < DESKTOP_ZOOM_MAX_LEVEL;
   const canZoomOut = desktopZoomLevel > DESKTOP_ZOOM_MIN_LEVEL;
+  const profileMenuItems = (
+    <>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Globe className="size-4" />
+          {intl.formatMessage({ id: "settings.locale" })}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="w-48">
+          <DropdownMenuRadioGroup value={localeMenuValue} onValueChange={onLocaleChange}>
+            <DropdownMenuRadioItem value="system">
+              {intl.formatMessage({
+                id: "sidebar.settings.systemDefault",
+              })}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="en-US">
+              {intl.formatMessage({
+                id: "sidebar.settings.locale.en-US",
+              })}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="zh-CN">
+              {intl.formatMessage({
+                id: "sidebar.settings.locale.zh-CN",
+              })}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <Palette className="size-4" />
+          {intl.formatMessage({ id: "settings.themeMode" })}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="w-48">
+          <DropdownMenuRadioGroup value={theme} onValueChange={onThemeChange}>
+            <DropdownMenuRadioItem value="system">
+              {intl.formatMessage({
+                id: "sidebar.settings.systemDefault",
+              })}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="zai-dark">
+              {intl.formatMessage({
+                id: "sidebar.settings.theme.zai-dark",
+              })}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="zai-light">
+              {intl.formatMessage({
+                id: "sidebar.settings.theme.zai-light",
+              })}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>
+          <PencilRuler className="size-4" />
+          {intl.formatMessage({ id: "settings.interfaceMode" })}
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent className="w-48">
+          <DropdownMenuRadioGroup
+            value={interfaceMode}
+            onValueChange={(value) => setInterfaceMode(normalizeInterfaceMode(value))}
+          >
+            <DropdownMenuRadioItem value="coding">
+              {intl.formatMessage({ id: "settings.interfaceMode.coding" })}
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="office">
+              {intl.formatMessage({ id: "settings.interfaceMode.office" })}
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      {/* 快捷键设置：缩放子菜单 label 读生效表，设置页改绑后即时跟随 */}
+      {/* 收口重复缩放子菜单时误留了语言之后的那份，导致菜单顺序变成
+          语言→缩放→主题；账户菜单分组顺序固定为 语言→主题→界面模式→缩放→用量→登录/登出，
+          这里把唯一一份（读生效表）挪回用量摘要之前，不要再补第二份缩放子菜单。 */}
+      {isDesktop ? (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <ZoomIn className="size-4" />
+            {intl.formatMessage({ id: "sidebar.settings.interfaceZoom" })}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-50">
+            <DropdownMenuItem
+              disabled={!canZoomIn}
+              onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ZoomIn)}
+            >
+              <ZoomIn className="size-4" />
+              {intl.formatMessage({ id: "titleBar.menu.view.zoomIn" })}
+              <DropdownMenuShortcut>{zoomInShortcutLabel}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canZoomOut}
+              onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ZoomOut)}
+            >
+              <ZoomOut className="size-4" />
+              {intl.formatMessage({ id: "titleBar.menu.view.zoomOut" })}
+              <DropdownMenuShortcut>{zoomOutShortcutLabel}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canResetDesktopZoom}
+              onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ResetZoom)}
+            >
+              <Maximize className="size-4" />
+              {intl.formatMessage({ id: "titleBar.menu.view.actualSize" })}
+              <DropdownMenuShortcut>{resetZoomShortcutLabel}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      ) : null}
+      {/* 升级入口状态不再以菜单开关为生命周期边界。*/}
+      <WorkspaceSidebarFooterUsageSummaryContent
+        state={usageSummaryState}
+        onUsageClick={usageButtonClick}
+        onUpgradeClick={onUpgradeClick}
+      />
+      {onLogin && !user ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={onLogin} data-testid={TID_LOGIN_MENU_ITEM}>
+            <LogInIcon className="size-4" />
+            {intl.formatMessage({ id: "app.login" })}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+      {onLogout ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={onLogout} data-testid={TID_LOGOUT_BUTTON}>
+            <LogOut className="size-4" />
+            {intl.formatMessage({ id: "app.logout" })}
+          </DropdownMenuItem>
+        </>
+      ) : null}
+    </>
+  );
+  const settingsButton = (
+    <ControlHintTooltip title={settingsButtonLabel} side={layout === "rail" ? "right" : undefined}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-lg"
+        data-testid={TID_TASK_SETTINGS_BUTTON}
+        aria-label={settingsButtonLabel}
+        disabled={!onSettingsButtonClick}
+        onClick={onSettingsButtonClick}
+      >
+        <Settings className="size-4" />
+      </Button>
+    </ControlHintTooltip>
+  );
+
+  if (layout === "rail") {
+    return (
+      <footer
+        className={cn(
+          "flex shrink-0 flex-col items-center gap-1 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]",
+          className,
+        )}
+      >
+        {settingsButton}
+        <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
+          <ControlHintTooltip title={profileBadge} side="right">
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                className="rounded-full"
+                data-testid={TID_LOGIN_TRIGGER}
+                aria-label={profileBadge}
+              >
+                {avatarNode}
+              </Button>
+            </DropdownMenuTrigger>
+          </ControlHintTooltip>
+          <DropdownMenuContent side="right" align="end" className="w-max min-w-50" forceMount>
+            {profileMenuItems}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </footer>
+    );
+  }
 
   return (
     // footer 被 Settings 复用，页面专属边距由调用方传入，避免修改共享默认样式。
@@ -243,154 +434,10 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
           </DropdownMenuTrigger>
           {/* 菜单内容保持挂载，避免每次点击头像菜单都重建 footer 内部状态。*/}
           <DropdownMenuContent align="start" className="w-max min-w-50" forceMount>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Globe className="size-4" />
-                {intl.formatMessage({ id: "settings.locale" })}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-48">
-                <DropdownMenuRadioGroup value={localeMenuValue} onValueChange={onLocaleChange}>
-                  <DropdownMenuRadioItem value="system">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.systemDefault",
-                    })}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="en-US">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.locale.en-US",
-                    })}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="zh-CN">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.locale.zh-CN",
-                    })}
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Palette className="size-4" />
-                {intl.formatMessage({ id: "settings.themeMode" })}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-48">
-                <DropdownMenuRadioGroup value={theme} onValueChange={onThemeChange}>
-                  <DropdownMenuRadioItem value="system">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.systemDefault",
-                    })}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="zai-dark">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.theme.zai-dark",
-                    })}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="zai-light">
-                    {intl.formatMessage({
-                      id: "sidebar.settings.theme.zai-light",
-                    })}
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <PencilRuler className="size-4" />
-                {intl.formatMessage({ id: "settings.interfaceMode" })}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-48">
-                <DropdownMenuRadioGroup
-                  value={interfaceMode}
-                  onValueChange={(value) => setInterfaceMode(normalizeInterfaceMode(value))}
-                >
-                  <DropdownMenuRadioItem value="coding">
-                    {intl.formatMessage({ id: "settings.interfaceMode.coding" })}
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="office">
-                    {intl.formatMessage({ id: "settings.interfaceMode.office" })}
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            {/* 快捷键设置：缩放子菜单 label 读生效表，设置页改绑后即时跟随 */}
-            {/* 收口重复缩放子菜单时误留了语言之后的那份，导致菜单顺序变成
-                语言→缩放→主题；账户菜单分组顺序固定为 语言→主题→界面模式→缩放→用量→登录/登出，
-                这里把唯一一份（读生效表）挪回用量摘要之前，不要再补第二份缩放子菜单。 */}
-            {isDesktop ? (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <ZoomIn className="size-4" />
-                  {intl.formatMessage({ id: "sidebar.settings.interfaceZoom" })}
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-50">
-                  <DropdownMenuItem
-                    disabled={!canZoomIn}
-                    onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ZoomIn)}
-                  >
-                    <ZoomIn className="size-4" />
-                    {intl.formatMessage({ id: "titleBar.menu.view.zoomIn" })}
-                    <DropdownMenuShortcut>{zoomInShortcutLabel}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!canZoomOut}
-                    onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ZoomOut)}
-                  >
-                    <ZoomOut className="size-4" />
-                    {intl.formatMessage({ id: "titleBar.menu.view.zoomOut" })}
-                    <DropdownMenuShortcut>{zoomOutShortcutLabel}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={!canResetDesktopZoom}
-                    onSelect={() => runDesktopZoomCommand(DesktopCommandIds.ResetZoom)}
-                  >
-                    <Maximize className="size-4" />
-                    {intl.formatMessage({ id: "titleBar.menu.view.actualSize" })}
-                    <DropdownMenuShortcut>{resetZoomShortcutLabel}</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            ) : null}
-            {/* 升级入口状态不再以菜单开关为生命周期边界。*/}
-            <WorkspaceSidebarFooterUsageSummaryContent
-              state={usageSummaryState}
-              onUsageClick={usageButtonClick}
-              onUpgradeClick={onUpgradeClick}
-            />
-            {onLogin && !user ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onLogin} data-testid={TID_LOGIN_MENU_ITEM}>
-                  <LogInIcon className="size-4" />
-                  {intl.formatMessage({ id: "app.login" })}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-            {onLogout ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onLogout} data-testid={TID_LOGOUT_BUTTON}>
-                  <LogOut className="size-4" />
-                  {intl.formatMessage({ id: "app.logout" })}
-                </DropdownMenuItem>
-              </>
-            ) : null}
+            {profileMenuItems}
           </DropdownMenuContent>
         </DropdownMenu>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <ControlHintTooltip title={settingsButtonLabel}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-lg"
-              data-testid={TID_TASK_SETTINGS_BUTTON}
-              aria-label={settingsButtonLabel}
-              disabled={!onSettingsButtonClick}
-              onClick={onSettingsButtonClick}
-            >
-              <Settings className="size-4" />
-            </Button>
-          </ControlHintTooltip>
-        </div>
+        <div className="flex shrink-0 items-center gap-1.5">{settingsButton}</div>
       </div>
     </footer>
   );
