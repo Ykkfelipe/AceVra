@@ -91,6 +91,40 @@ test("freezes profiles and rejects unknown or unsupported policy", () => {
 
 // 回归：未声明 permissionMode 的 profile 曾被兜底成 "auto"，而 runtime 的 mode "auto"
 // 尚未实现，会让 worker 的 Read/Grep 全部被权限层拒绝（mode.auto.unimplemented）。
+// 回归：write worker 的 persona 曾原样带上 profile 的 "*" 通配，运行时按精确工具名求交集后
+// 工具面为空（model-io 里 toolNames: []），worker 只回一句开场白就结束 turn，永远写不了文件。
+test("write workers never carry a wildcard tool allowlist", () => {
+  const input = MultitaskInputSchema.parse({
+    ...graph(),
+    workers: [worker("runtime", "write")],
+    tasks: [task("edit", "runtime")],
+  });
+  const script = buildMultitaskScript(input, [
+    { name: "general-purpose", source: "built-in", description: "GP", systemPrompt: "GP", tools: ["*"] },
+  ]);
+  assert.doesNotMatch(script, /"tools":\["\*"\]/);
+  assert.doesNotMatch(script, /"access":"write","tools"/);
+  assert.equal(analyzeWorkflowScript(script).ok, true);
+});
+
+test("a concrete profile tool list still narrows a write worker", () => {
+  const input = MultitaskInputSchema.parse({
+    ...graph(),
+    workers: [worker("runtime", "write")],
+    tasks: [task("edit", "runtime")],
+  });
+  const script = buildMultitaskScript(input, [
+    {
+      name: "general-purpose",
+      source: "built-in",
+      description: "GP",
+      systemPrompt: "GP",
+      tools: ["Read", "Edit"],
+    },
+  ]);
+  assert.match(script, /"tools":\["Read","Edit"\]/);
+});
+
 test("omits permissionMode when the profile does not declare one", () => {
   const input = MultitaskInputSchema.parse({
     ...graph(),

@@ -119,6 +119,16 @@ test("actor profile applies model, permission, tool deny and turn limit without 
     multitaskActorPolicy({ worker: { profile: "p", access: "read", tools: ["Read"] } }).mode,
     undefined,
   );
+  // 回归：通配 "*" 进入 toolAllowlist 会按精确名求交集，把 worker 工具面清空。
+  assert.equal(
+    multitaskActorPolicy({ worker: { profile: "p", access: "write", tools: ["*"] } }).toolAllowlist,
+    undefined,
+  );
+  assert.deepEqual(
+    multitaskActorPolicy({ worker: { profile: "p", access: "read", tools: ["Read", "Grep"] } })
+      .toolAllowlist,
+    ["Read", "Grep"],
+  );
   const policy = multitaskActorPolicy({
     worker: {
       profile: "saved",

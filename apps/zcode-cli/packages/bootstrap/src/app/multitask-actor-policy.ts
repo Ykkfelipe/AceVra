@@ -12,7 +12,12 @@ export function multitaskActorPolicy(persona: PersonaSpec): Partial<AgentRuntime
     // 不在这里兜底成 "auto"：runtime 的 mode "auto" 尚未实现，会让冻结重放出来的 worker
     // 直接被权限层拒绝。留空时由 actor 创建路径沿用既有的模式继承。
     ...(worker.permissionMode ? { mode: worker.permissionMode } : {}),
-    toolAllowlist: worker.tools,
+    // 通配 "*" 必须当作"不限定"：运行时按精确工具名求交集，字面量 "*" 一个都匹配不上，
+    // 会把 worker 的工具面整体清空（模型无工具可用，turn 只说一句就结束）。
+    toolAllowlist:
+      worker.tools && worker.tools.length > 0 && !worker.tools.includes("*")
+        ? worker.tools
+        : undefined,
     toolDisallowlist: [
       ...workflowActorToolPolicy().toolDisallowlist,
       ...(worker.disallowedTools ?? []),

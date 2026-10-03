@@ -45,12 +45,19 @@ export function buildMultitaskScript(
         `Profile ${profileName} requires skills, MCP scoping or memory unsupported in Multitask M1`,
       );
     }
+    // "*" 在 persona 层是"不限定"，不能原样进入 toolAllowlist：运行时按**精确工具名**做交集
+    // （tool/handlers/index.ts 的 allowedTools.has(name)），字面量 "*" 一个都匹配不上，
+    // write worker 的工具面会被清空——表现是模型无工具可用、只回一句开场白就结束 turn。
+    // 因此只有 profile 给出具体清单时才写 tools，通配与缺省都表示沿用完整工具面（减去减法表）。
+    const concreteProfileTools = profile.tools?.filter((tool) => tool !== "*");
     const tools =
       worker.access === "read"
         ? MULTITASK_READ_TOOLS.filter(
-            (tool) => !profile.tools || profile.tools.includes("*") || profile.tools.includes(tool),
+            (tool) => !concreteProfileTools?.length || concreteProfileTools.includes(tool),
           )
-        : profile.tools;
+        : concreteProfileTools?.length
+          ? concreteProfileTools
+          : undefined;
     const persona = {
       system: [
         profile.systemPrompt,
