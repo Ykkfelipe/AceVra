@@ -4838,6 +4838,8 @@ const zhCN: Record<string, string> = {
   "chat.toolCall.multitask.evidence.edits.other": "{count} 次工作区改动",
   "chat.toolCall.multitask.evidence.commands.one": "运行 {count} 条命令",
   "chat.toolCall.multitask.evidence.commands.other": "运行 {count} 条命令",
+  "chat.toolCall.multitask.evidence.prior.one": "停止前 {count} 次",
+  "chat.toolCall.multitask.evidence.prior.other": "停止前 {count} 次",
   "chat.toolCall.multitask.evidence.toolCalls.one": "{count} 次工具调用",
   "chat.toolCall.multitask.evidence.toolCalls.other": "{count} 次工具调用",
   "chat.toolCall.workflow.card.agent": "{count} 个子代理",

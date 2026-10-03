@@ -120,7 +120,22 @@ counts it observed from that ask's `ToolCallStarted` events:
 | `commandCalls` | calls carrying a shell `command` input (e.g. tests, builds) |
 | `filesChanged` | distinct `file_path`/`notebook_path` targets of mutating calls (≤ 32) |
 
-Denied calls never start and are not counted. A worker tool allowlist narrows
+Denied calls never start and are not counted.
+
+**Evidence across resume.** A task interrupted by Stop (or a lost host) is
+re-dispatched on resume into the *same* worker session, which still holds the
+interrupted attempt's tool results; the worker may legitimately only call
+`submit_result`. Per-attempt counters would then read zero and wrongly mark the
+task `unverified`. So each per-tool `node-progress` of a Multitask worker also
+journals the attempt's evidence counts, and when the driver re-dispatches an ask
+it adds the last snapshot from every earlier life of the **same run and ask
+instance** (lives are delimited by `run-started`). Different runs (Amend mints
+a new run id) and different tasks (different ask instances) are never counted;
+completed tasks replay as `cached` and are never re-dispatched, so they stay
+`Reused` and contribute nothing. Totals feed the unchanged outcome rule; the
+carried part is also stamped as `evidence.priorAttempts` (only when the run's
+result schema declares it, so runs created before this field still validate)
+so the UI can show how much work happened before the stop. A worker tool allowlist narrows
 capabilities only: the Workflow protocol tools `submit_result` and `escalate`
 are always kept, otherwise a narrowed (read) worker could never submit a typed
 result (found live in M2: every reader failed with `ResultNotSubmitted`). Because the stamped payload is the

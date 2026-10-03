@@ -21,6 +21,8 @@ interface MultitaskEvidence {
   mutatingToolCalls: number;
   commandCalls: number;
   filesChanged: string[];
+  /** Part of the totals done in earlier attempts of this same task that were interrupted by a stop (filled in by the runtime). */
+  priorAttempts?: { toolCalls: number; worldToolCalls: number; mutatingToolCalls: number; commandCalls: number };
 }
 /** Your result for this task. */
 interface MultitaskTaskResult {
