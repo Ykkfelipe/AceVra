@@ -11,7 +11,12 @@ import {
   NodeModelSelectionConfigRepository,
   PERSONAL_PROVIDER_CONFIG_FILE_NAME,
 } from "@zcode/provider-node";
-import { getAppConfigDir as resolveAppConfigDir, getDataBaseDir, getUserHomeDir } from "./paths.js";
+import {
+  buildAgentStorageEnv,
+  getAppConfigDir as resolveAppConfigDir,
+  getDataBaseDir,
+  getUserHomeDir,
+} from "./paths.js";
 import { IAccountsService } from "./accounts/accounts.js";
 import { createAccountsService } from "./accounts/accountsServiceImpl.js";
 import { CodexAppServerBridge } from "./accounts/codexAppServerBridge.js";
@@ -2797,6 +2802,8 @@ export function createLocalServices(options: {
         // 上面 cuaProductHelperEnv 已完成代际校验与 unavailable 兜底，取代 staging 侧
         // 直接调用 buildCuaProductHelperAgentEnv 的旧路径。
         ...cuaProductHelperEnv,
+        // 显式 ZCODE_HOME profile 的 Agent 存储（插件缓存/转录）必须随之隔离，见 buildAgentStorageEnv。
+        ...buildAgentStorageEnv(),
         ...buildAgentTelemetrySpawnEnv({
           deviceMid: telemetryDeviceMid,
           runtimeSurface: options?.agentRuntimeContext?.runtimeSurface ?? "remote_workspace_host",

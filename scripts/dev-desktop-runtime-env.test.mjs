@@ -39,7 +39,10 @@ test("foreign runtime identity is removed before every dev child", () => {
       ].includes(key)
     )
       continue;
-    if (key === "ZCODE_CUA_BUNDLED_HELPER_APP_PATH") {
+    if (key === "ZCODE_HOME") {
+      // 外来数据根被移除后由隔离的 dev profile 取代，而不是继承。
+      assert.ok(env[key].endsWith("/.zcode-acevra-dev/.zcode"), env[key]);
+    } else if (key === "ZCODE_CUA_BUNDLED_HELPER_APP_PATH") {
       assert.ok(
         env[key].endsWith(
           "/.zcode-fork-cua-home/.zcode/computer-use/dev/AceVra Computer Use Dev.app",
@@ -123,4 +126,46 @@ test("process config overrides take precedence over local defaults in a clean sh
     create({ ZCODE_AGENT_SERVER_COMMAND: "/test/runtime" }).ZCODE_AGENT_SERVER_COMMAND,
     "/test/runtime",
   );
+});
+
+// Isolated data root (scripts/specs/dev-desktop-environment.md)：2026-10-02 实测 dev 与已安装
+// ZCode.app 共享 ~/.zcode，插件缓存被互相覆盖，node_repl 执行到对方的构建。
+test("without an explicit data root the dev runtime gets its own profile", () => {
+  const env = create({ PATH: "/bin" }, {}, "production", "/Users/dev");
+  assert.equal(env.ZCODE_DESKTOP_HOME_DIR, "/Users/dev/.zcode-acevra-dev");
+  assert.equal(env.ZCODE_DATA_BASE_DIR, "/Users/dev/.zcode-acevra-dev");
+  assert.equal(env.ZCODE_HOME, "/Users/dev/.zcode-acevra-dev/.zcode");
+});
+
+test("an explicit data root wins and nothing is filled in around it", () => {
+  for (const key of ["ZCODE_HOME", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_HOME_DIR"]) {
+    const env = create({ [key]: "/explicit/root" }, {}, "production", "/Users/dev");
+    assert.equal(env[key], "/explicit/root", key);
+    for (const other of ["ZCODE_HOME", "ZCODE_DATA_BASE_DIR", "ZCODE_DESKTOP_HOME_DIR"]) {
+      if (other !== key) assert.equal(env[other], undefined, `${key} → ${other}`);
+    }
+  }
+  const fromLocalConfig = create(
+    {},
+    { ZCODE_HOME: "/repo/local/.zcode" },
+    "production",
+    "/Users/dev",
+  );
+  assert.equal(fromLocalConfig.ZCODE_HOME, "/repo/local/.zcode");
+  assert.equal(fromLocalConfig.ZCODE_DATA_BASE_DIR, undefined);
+});
+
+test("the mise test-backend profile is kept as configured", () => {
+  const env = create(
+    {
+      ZCODE_HOME: "/Users/dev/.zcode-fork-dev-home/.zcode",
+      ZCODE_DATA_BASE_DIR: "/Users/dev/.zcode-fork-dev-home",
+      ZCODE_DESKTOP_HOME_DIR: "/Users/dev/.zcode-fork-dev-home",
+    },
+    {},
+    "test",
+    "/Users/dev",
+  );
+  assert.equal(env.ZCODE_HOME, "/Users/dev/.zcode-fork-dev-home/.zcode");
+  assert.equal(env.ZCODE_DATA_BASE_DIR, "/Users/dev/.zcode-fork-dev-home");
 });

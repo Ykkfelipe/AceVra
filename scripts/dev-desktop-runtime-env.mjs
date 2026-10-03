@@ -44,6 +44,9 @@ const FOREIGN_CONFIGURATION_KEYS = new Set([
   "ZCODE_RELEASE_PROFILE",
 ]);
 
+/** Development data profile under HOME (scripts/specs/dev-desktop-environment.md "Isolated data root"). */
+export const DEV_PROFILE_HOME_DIR = ".zcode-acevra-dev";
+
 const LOCAL_PATH_OVERRIDES = new Set([
   "ZCODE_CUA_BUNDLED_HELPER_APP_PATH",
   "ZCODE_BUILTIN_PROVIDER_CONFIG_FILE",
@@ -97,6 +100,19 @@ export function createDesktopDevRuntimeEnvironment(
     ) {
       env[key] = value;
     }
+  }
+  if (
+    !env.ZCODE_HOME?.trim() &&
+    !env.ZCODE_DATA_BASE_DIR?.trim() &&
+    !env.ZCODE_DESKTOP_HOME_DIR?.trim()
+  ) {
+    // 修复依据（2026-10-02 实测）：未指定数据根时 dev 落到 ~/.zcode，与已安装 ZCode.app 共享
+    // 官方插件缓存；ZCode 启动任务时把 node-repl-host 换成自己的构建，AceVra 运行中的 node_repl
+    // Worker 随即执行它（不安装 agent.computerUse）→ `agent is not defined`。显式配置优先。
+    const profileHome = join(home, DEV_PROFILE_HOME_DIR);
+    env.ZCODE_DESKTOP_HOME_DIR = profileHome;
+    env.ZCODE_DATA_BASE_DIR = profileHome;
+    env.ZCODE_HOME = join(profileHome, ".zcode");
   }
   if (
     ["1", "true", "on"].includes(env.ZCODE_CUA_HELPER_ALLOW_UNSIGNED_LOCAL?.trim().toLowerCase()) &&

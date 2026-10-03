@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { getUserHomeDir, getUserZCodeDir } from "../src/paths.js";
+import { buildAgentStorageEnv, getUserHomeDir, getUserZCodeDir } from "../src/paths.js";
 import { hasGlobalCliZCodeCuaServer } from "../src/node.js";
 import { resolveModelIODirs } from "../src/zcode-agent/modelTrajectoryFileTail.js";
 import {
@@ -119,4 +119,19 @@ test("explicit Dev Helper path is used exactly; probe shares its directory", () 
     resolveHelperAppCandidate({ ZCODE_CUA_BUNDLED_HELPER_APP_PATH: join(root, "missing.app") }),
     null,
   );
+});
+
+// 2026-10-03 实测：设了 ZCODE_HOME 的 profile（AceVra Dev、local alpha）里 Agent CLI 仍写共享
+// 的 ~/.zcode/cli，已安装 ZCode.app 覆盖 node-repl-host 插件缓存 → `agent is not defined`。
+test("an explicit ZCODE_HOME profile moves the agent CLI storage with it", () => {
+  assert.deepEqual(buildAgentStorageEnv({ ZCODE_HOME: "/profile/.zcode", HOME: "/home" }), {
+    ZCODE_STORAGE_DIR: "/profile/.zcode",
+  });
+  assert.deepEqual(
+    buildAgentStorageEnv({ ZCODE_HOME: "/profile/.zcode", ZCODE_STORAGE_DIR: "/explicit" }),
+    {},
+    "an explicit storage dir wins",
+  );
+  assert.deepEqual(buildAgentStorageEnv({ HOME: "/home" }), {}, "default HOME keeps CLI defaults");
+  assert.deepEqual(buildAgentStorageEnv({ ZCODE_HOME: "/not-a-zcode-dir" }), {});
 });

@@ -23,6 +23,30 @@ Acceptance: contaminated ZCode environment cannot point the Helper/provider/plug
 installed app; legitimate unrelated variables, clean test overrides and local configuration
 survive; source environment is immutable; both backend selections use development runtime.
 
+## Isolated data root (2026-10-03)
+
+Measured: `pnpm dev:desktop` set no data root, so AceVra Dev fell through to `~/.zcode` — the
+same root the installed upstream ZCode.app uses. Both apps seed the same official plugin cache
+path (`~/.zcode/cli/plugins/cache/zcode-plugins-official/node-repl-host/0.6.0`) with different
+builds under the same version label. When ZCode.app started a task it replaced AceVra's
+`node-repl-host` with its own (hash proven identical to ZCode.app's bundled copy), and AceVra's
+running node_repl host — which spawns each cell's Worker from that file — began executing
+ZCode's build, which never installs `agent.computerUse`: `ReferenceError: agent is not defined`
+mid-task. The two apps also overwrote each other's `v2/setting.json` and interleaved one log.
+
+Rule: after sanitizing and applying repository config, if none of `ZCODE_HOME`,
+`ZCODE_DATA_BASE_DIR` or `ZCODE_DESKTOP_HOME_DIR` is set, the launcher sets all three to one
+development profile, `~/.zcode-acevra-dev` (`ZCODE_HOME` = `<profile>/.zcode`). Any explicit
+value (clean shell, `.env.local`, or the `mise run dev` test-backend task's
+`~/.zcode-fork-dev-home`) wins and nothing is filled in around it. A foreign parent's data root is
+removed first, so it is replaced by the default rather than inherited. The Helper artifact root
+(`~/.zcode-fork-cua-home`) and its TCC identity are unaffected. The Agent CLI never reads `ZCODE_HOME` (it uses
+`ZCODE_STORAGE_DIR` or else `os.homedir()`), so the host's Agent spawn derives
+`ZCODE_STORAGE_DIR` from any explicit `ZCODE_HOME` (services `buildAgentStorageEnv`; an explicit
+`ZCODE_STORAGE_DIR` wins). This applies to every explicit profile, the local alpha included, whose
+CLI previously also wrote the shared `~/.zcode/cli`. Consequence: a fresh dev profile
+starts signed out with default settings; nothing in `~/.zcode` is moved or deleted.
+
 With local Helper admission explicitly enabled, and no explicit Helper override, the launcher
 points at the development builder's fixed `.zcode-fork-cua-home/.zcode/computer-use/dev/`
 artifact (or configured CUA_HOME). The data profile does not own a second Helper copy. The

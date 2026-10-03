@@ -84,6 +84,22 @@ export function getUserZCodeDir(env: NodeJS.ProcessEnv = process.env): string {
   return join(getUserHomeDir(env), ".zcode");
 }
 
+/**
+ * Agent CLI storage for an explicit `ZCODE_HOME` profile. The CLI resolves its own storage
+ * (official plugin cache, transcripts, memory) from `ZCODE_STORAGE_DIR` or else `os.homedir()`;
+ * it never reads `ZCODE_HOME`. 修复依据（2026-10-03 实测）：AceVra Dev 与 local alpha 都设了
+ * ZCODE_HOME，但 Agent 仍写共享的 ~/.zcode/cli，已安装 ZCode.app 会把 node-repl-host 插件缓存
+ * 换成自己的构建，运行中的 node_repl 随即 `agent is not defined`。显式 ZCODE_STORAGE_DIR 优先。
+ */
+export function buildAgentStorageEnv(env: NodeJS.ProcessEnv = process.env): {
+  ZCODE_STORAGE_DIR?: string;
+} {
+  if (env.ZCODE_STORAGE_DIR?.trim()) return {};
+  const explicitZcodeHome = env.ZCODE_HOME?.trim();
+  if (!explicitZcodeHome || basename(explicitZcodeHome) !== ".zcode") return {};
+  return { ZCODE_STORAGE_DIR: explicitZcodeHome };
+}
+
 /** {dataBaseDir}/.zcode */
 export function getZCodeDataRootDir(): string {
   return join(getDataBaseDir(), ".zcode");
