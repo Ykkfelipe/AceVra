@@ -217,3 +217,15 @@ The handoff seams compose correctly through the real confirmation and lifecycle
 paths. Not yet a user-visible handoff feature: that requires the Cross-Mode
 executor milestone, plus the Multitask evidence-across-resume follow-up for
 cleaner resumed outcomes.
+
+## Update: executor milestone landed (2026-10-03, later same day)
+
+The production executor milestone is landed on this branch — see
+`cross-mode-executor-handoff.md`. Status changes vs the risks above:
+
+- Risk #1 / #2: the production handoff path and the run-outcome → return-status
+  mapping now exist (canonical owner: the Cross-Mode handoff service). Preview
+  UI and the durable store remain open.
+- Risk #6: the uncommitted executor work is committed, typecheck-clean and
+  exercised live (`--deny` and allow paths); the `provenance.kind` mismatch was
+  a mid-work snapshot and is resolved.
