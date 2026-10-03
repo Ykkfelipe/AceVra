@@ -78,6 +78,8 @@ const enUS: Record<string, string> = {
   "acevra.account.computers.removeConfirm": "Confirm remove",
   "acevra.account.computers.none": "No computers yet.",
   "acevra.account.computers.unavailable": "Computers are temporarily unavailable.",
+  "acevra.account.computers.conflictReset": "Use this Mac with the current account",
+  "acevra.account.computers.conflictResetting": "Setting up this Mac…",
   "acevra.account.computers.conflict":
     "This installation is registered to a different AceVra account. Local features still work.",
   "acevra.account.computers.note":

@@ -70,6 +70,8 @@ const zhCN: Record<string, string> = {
   "acevra.account.computers.removeConfirm": "确认移除",
   "acevra.account.computers.none": "还没有电脑。",
   "acevra.account.computers.unavailable": "电脑列表暂时不可用。",
+  "acevra.account.computers.conflictReset": "改用当前账号登记这台 Mac",
+  "acevra.account.computers.conflictResetting": "正在配置这台 Mac…",
   "acevra.account.computers.conflict": "此安装已注册到另一个 AceVra 账号，本地功能仍可使用。",
   "acevra.account.computers.note": "移除电脑会断开它与你账号的连接，不会删除它上面的任何内容。",
   "acevra.account.computers.ssh.title": "SSH 电脑",

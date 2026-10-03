@@ -64,15 +64,17 @@ export function initAccountMain(options: {
 
   // Device registry: only meaningful while the account is ready; local features never wait on it.
   const tokenSource = testSource ?? windowSource;
+  const installationStore = createInstallationStore(
+    join(app.getPath("userData"), "acevra-installation.json"),
+  );
   const devices =
     config && tokenSource
       ? createAccountDevices({
           apiBaseUrl: config.apiBaseUrl,
           getToken: () => tokenSource.getToken(),
           fetch: options.fetch ?? fetch,
-          installationId: createInstallationStore(
-            join(app.getPath("userData"), "acevra-installation.json"),
-          ).getOrCreate,
+          installationId: installationStore.getOrCreate,
+          resetInstallationId: installationStore.reset,
           describe: async () => ({
             platform: process.platform as AccountDevice["platform"],
             displayName: describeComputerName(),
@@ -166,6 +168,7 @@ export function initAccountMain(options: {
   ipcMain.handle(AccountChannels.DeviceRevoke, (_event, id: unknown) =>
     typeof id === "string" ? (devices?.revoke(id) ?? idle) : idle,
   );
+  ipcMain.handle(AccountChannels.DeviceResetIdentity, () => devices?.resetInstallation() ?? idle);
   ipcMain.handle(AccountChannels.TargetsList, () => tasksApi.listTargets());
   ipcMain.handle(AccountChannels.TaskStart, (_event, input: unknown) => {
     const request = parseStartRequest(input);
@@ -223,6 +226,7 @@ export function initAccountMain(options: {
         AccountChannels.PairingDecide,
         AccountChannels.DeviceRename,
         AccountChannels.DeviceRevoke,
+        AccountChannels.DeviceResetIdentity,
         AccountChannels.EngineeringTools,
       ]) {
         ipcMain.removeHandler(channel);

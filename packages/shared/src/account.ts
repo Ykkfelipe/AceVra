@@ -184,6 +184,12 @@ export interface IAccountPlatform extends IRemoteProcessService {
   decidePairing(id: string, decision: "approve" | "reject"): Promise<AccountPairingDecisionResult>;
   /** Registered devices for the signed-in account (empty unless ready). */
   listDevices(): Promise<AccountDevicesView>;
+  /**
+   * Recovery from `registration: "conflict"`: this machine's installation id is already
+   * bound to another account. Mints a new local identity and registers it. Never
+   * transfers or reassigns the other account's device.
+   */
+  resetDeviceIdentity(): Promise<AccountDevicesView>;
   renameDevice(id: string, displayName: string): Promise<AccountDevicesView>;
   revokeDevice(id: string): Promise<AccountDevicesView>;
   /** Engineering-only raw process runner UI; never true in packaged builds. */
@@ -230,6 +236,7 @@ export const AccountChannels = {
   PairingDecide: "acevra-account:pairing-decide",
   DeviceRename: "acevra-account:device-rename",
   DeviceRevoke: "acevra-account:device-revoke",
+  DeviceResetIdentity: "acevra-account:device-reset-identity",
   EngineeringTools: "acevra-account:engineering-tools",
   /** main → main renderer */
   ViewChanged: "acevra-account:view-changed",

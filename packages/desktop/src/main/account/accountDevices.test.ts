@@ -159,6 +159,24 @@ test("installation identity: random UUID, stable across calls and restarts, surv
   }
 });
 
+test("installation identity: reset mints a new id, persists it, and is stable afterwards", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "av-inst-reset-"));
+  try {
+    const file = join(dir, "acevra-installation.json");
+    const store = createInstallationStore(file);
+    const first = await store.getOrCreate();
+    const second = await store.reset();
+    assert.notEqual(second, first, "reset mints a different id");
+    assert.match(second, /^[0-9a-f-]{36}$/);
+    // The new id is what later calls see, in this process and after a restart.
+    assert.equal(await store.getOrCreate(), second);
+    assert.equal(await createInstallationStore(file).getOrCreate(), second);
+    assert.deepEqual(Object.keys(JSON.parse(await readFile(file, "utf8"))), ["installationId"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("pairing lookup maps backend outcomes; approve/reject map decisions; nothing is cached", async () => {
   const PAIR = {
     id: "p1",
@@ -236,4 +254,50 @@ test("a network failure is not reported as an unauthorized session", async () =>
   await devices.start();
   await devices.list();
   assert.equal(unauthorized, 0, "being offline is not a rejected session");
+});
+
+test("conflict recovery mints a new identity and registers again", async () => {
+  let bound = "11111111-1111-4111-8111-111111111111";
+  const seen: string[] = [];
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => bound,
+    resetInstallationId: async () => {
+      bound = "22222222-2222-4222-8222-222222222222";
+      return bound;
+    },
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async (url: URL, init: RequestInit) => {
+      if (new URL(url).pathname === "/v1/devices/register") {
+        const body = JSON.parse(String(init.body));
+        seen.push(body.installationId);
+        // First claim is refused, exactly as the backend does for another account.
+        return seen.length === 1
+          ? json(409, { error: "installation_bound" })
+          : json(201, { device: DEVICE });
+      }
+      return json(200, { devices: [DEVICE] });
+    }) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  assert.equal((await devices.list()).registration, "conflict");
+  const after = await devices.resetInstallation();
+  assert.equal(after.registration, "registered");
+  assert.equal(after.thisDeviceId, "dev_1");
+  // The retry presented a NEW id; the original was never re-sent or reassigned.
+  assert.deepEqual(seen, [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+  ]);
+  assert.equal(unauthorized, 0);
+});
+
+test("reset is a no-op view when the store cannot mint a new identity", async () => {
+  const h = harness(() => json(200, { devices: [DEVICE] }));
+  await h.devices.start();
+  const view = await h.devices.resetInstallation();
+  assert.equal(view.registration, h.calls.length ? "registered" : "registered");
 });

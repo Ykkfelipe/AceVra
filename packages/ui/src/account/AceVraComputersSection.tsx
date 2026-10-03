@@ -29,6 +29,7 @@ export function AceVraComputersSection() {
   const [code, setCode] = useState("");
   const [pending, setPending] = useState<AccountPairingPreview | null>(null);
   const [pairNote, setPairNote] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const refresh = useCallback(async () => {
     setView((await account?.listDevices().catch(() => null)) ?? null);
@@ -190,12 +191,40 @@ export function AceVraComputersSection() {
         </p>
       )}
       {view.registration === "conflict" && (
-        <p className="text-ui-sm text-foreground-subtle" data-testid="acevra-device-conflict">
-          {text(
-            "computers.conflict",
-            "This installation is registered to a different AceVra account. Local features still work.",
-          )}
-        </p>
+        <div className="space-y-2" data-testid="acevra-device-conflict">
+          <p className="text-ui-sm text-foreground-subtle">
+            {text(
+              "computers.conflict",
+              "This Mac is already registered to a different AceVra account. Local features still work.",
+            )}
+          </p>
+          {/* The installation id is bound to the first account that claimed it, so there
+              is no way to re-claim it from here. Minting a new local identity registers
+              this machine again under the current account and leaves the other account's
+              device untouched — nothing is transferred or reassigned. */}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={resetting}
+            data-testid="acevra-device-reset-identity"
+            onClick={() =>
+              void (async () => {
+                setResetting(true);
+                try {
+                  setView(await account?.resetDeviceIdentity());
+                } catch {
+                  setView((await account?.listDevices().catch(() => null)) ?? null);
+                } finally {
+                  setResetting(false);
+                }
+              })()
+            }
+          >
+            {resetting
+              ? text("computers.conflictResetting", "Setting up this Mac…")
+              : text("computers.conflictReset", "Use this Mac with the current account")}
+          </Button>
+        </div>
       )}
       {view.registration === "unavailable" && (
         <p className="text-ui-sm text-foreground-subtle">
