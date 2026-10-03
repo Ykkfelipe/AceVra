@@ -248,6 +248,22 @@ export function getTasksIndexDatabasePath(): string {
   return join(getAppConfigDir(), "tasks-index.sqlite");
 }
 
+/**
+ * Personal Bot 数据根：~/.zcode/personal-bot。
+ * identity/conversation/memory 三个文档各自独立，与任何 workspace 无绑定关系。
+ */
+export function getPersonalBotRootDir(): string {
+  return join(getZCodeDataRootDir(), "personal-bot");
+}
+
+/**
+ * Personal Bot 专用 workspace：~/.zcode/workspace/personal-bot。
+ * Bot 对话落在这里，永远不是用户仓库；与 conversation backing workspace 同级但相互隔离。
+ */
+export function getPersonalBotWorkspaceDir(): string {
+  return join(getZCodeDataRootDir(), "workspace", "personal-bot");
+}
+
 /** workspace 级身份键：远程优先使用 workspaceIdentity，本地回退 workspacePath。 */
 function getWorkspaceKey(workspacePath: string, workspaceIdentity?: string): string {
   return workspaceIdentity?.trim() || workspacePath;
