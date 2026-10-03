@@ -1,3 +1,4 @@
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar.js";
 import { Button } from "@/components/ui/button.js";
 import { useAccountEngineeringTools } from "@/hooks/useAccountEngineeringTools.js";
 import { describeAccountStatus } from "./accountStatus.js";
@@ -53,12 +54,17 @@ export function AceVraAccountSection() {
           <div className="flex flex-wrap items-center gap-3">
             {profile && (
               <div className="flex min-w-0 items-center gap-3" data-testid="acevra-account-profile">
-                <span
-                  aria-hidden
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted font-medium"
-                >
-                  {name.slice(0, 1).toUpperCase()}
-                </span>
+                {/* avatarUrl has been in the contract since M2A but was never rendered.
+                    Radix shows AvatarFallback automatically when the image is absent or
+                    fails to load, so the initial is always the last resort. The fallback
+                    classes are overridden here because the shared primitive still carries
+                    bg-muted / text-muted-foreground, which styles.css does not define. */}
+                <Avatar className="size-9">
+                  {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} alt="" />}
+                  <AvatarFallback className="bg-surface text-ui-base text-foreground">
+                    {name.slice(0, 1).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <span className="truncate text-ui-base font-medium">{name}</span>
               </div>
             )}
