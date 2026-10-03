@@ -1,8 +1,9 @@
-# Personal Bot — Milestone 1 spec (identity, memory boundaries, capability surface, conversation shell)
+# Personal Bot — milestone spec (M1 foundation + M2 Phase 1 conversation)
 
-> Roadmap: `docs/roadmap/personal-bot.md`. This spec covers **M1 only**. It is the contract that
-> later milestones (voice notes, goals/ideas, Bot self-customization, live voice, Cross-Mode
-> consumption) extend; it deliberately does not implement them.
+> Roadmap: `docs/roadmap/personal-bot.md`. Sections 1–12 are **M1** (foundation); section 13 is
+> **M2 Phase 1** (the persistent Bot conversation). The contract is extended here rather than
+> rewritten: every M1 invariant stays authoritative unless section 13 explicitly narrows or
+> supersedes it.
 
 ## 1. Product rule for M1
 
@@ -241,3 +242,145 @@ Rules:
 Voice notes (both directions), goals/ideas objects, Bot appearance/self-customization tooling,
 device registry integration, real email/calendar providers, memory management UI beyond listing,
 Cross-Mode turn-time injection, and the Bot "space" sections beyond what M1 renders.
+
+---
+
+## 13. M2 Phase 1 (approved): the persistent Bot conversation
+
+Phase 1 turns the M1 foundation into the first genuinely usable persistent Ace conversation. It
+adds hosting, the conversation surface, and the pointer lifecycle — nothing else.
+
+### 13.1 Scope
+
+Ships: Bot workspace creation at startup; the Bot conversation surface; the conversation-pointer
+lifecycle; a Cross-Mode adoption helper at the published-contract level.
+
+Does **not** ship: turn-time personal-memory injection (gated to Phase 2 — it touches shared
+protocol and CLI bootstrap files another worker is actively changing), capability probes,
+email/calendar/devices integrations, any change to the Bot tool surface, any Cross-Mode admission
+record or `HandoffExecutionPort`, voice, goals/ideas, self-customization.
+
+### 13.2 Bot workspace hosting
+
+- The Bot workspace `{dataBaseDir}/.zcode/workspace/personal-bot` is created at desktop startup,
+  **mkdir-only**, mirroring how `conversationWorkspaceDir` is created. A failure to create it is
+  logged and does not abort startup.
+- It must **not** be added to `initialWorkspacePath`, `workspacePurpose`, `agentWarmupTargets`, the
+  tab store, or the Coding task/session index. It is a backing directory, not a workspace the user
+  opens.
+- The runtime stays **lazy**: the CLI process for the Bot `workspaceKey` is spawned by the first
+  conversation subscription, exactly like any other workspace. No always-on agent process is
+  created for the Bot.
+- Rationale for mkdir at all: the spawn path falls back to the conversation directory when the
+  requested cwd does not exist, while the session's `workingDirectory` stays the Bot path — which
+  would make relative file operations resolve against the wrong directory.
+
+### 13.3 Conversation surface
+
+- The Bot section hosts a **single-pane conversation** built from the existing primitives
+  (`V4ChatPane` = `V4ConversationProvider` + `SessionPane`). The workbench host
+  (`V4WorkspaceChatArea`) is **not** used: its pane tree and workbench groups are global and not
+  workspace-scoped, so embedding it would render and mutate the user's coding split panes.
+- Composer, streaming, tool rendering, permission dialogs, rewind and draft prewarm are **reused as
+  is**. The Bot adds no message persistence, no streaming path, no tool renderer, no permission
+  handling, and no second conversation runtime.
+- The Bot conversation is created with `taskType: "personal_bot"` (M1 §8) in the Bot workspace.
+- Bot conversations stay outside the Coding Sessions index in Phase 1 (M1 §8 unchanged). The
+  consequence — no session list, search or notifications for Bot conversations — is accepted for
+  this phase; a Bot-scoped projection is a separate decision.
+
+### 13.4 Conversation-pointer lifecycle
+
+`BotConversationShell.sessionId` remains the **sole durable authority** for which session the Bot
+uses. The lifecycle is:
+
+```text
+open Bot
+  → read shell pointer
+      ├─ null           → draft (first send creates the session)
+      └─ non-null       → validate (read-only, no runtime spawn)
+                            ├─ exists → bind
+                            └─ missing → clear pointer → draft
+  → onSessionCreated  → setConversationSession(newId)
+  → onSessionDeleted  → setConversationSession(null)
+  → session disappears while open (reactive race) → clear pointer → draft
+```
+
+Invariants:
+
+- Validation must not spawn a runtime: it uses a read-only, existing-only session read. This keeps
+  "open the Bot" from paying for a cold runtime just to discover a stale pointer.
+- Clearing a stale pointer touches **only** `conversation.json`. Identity, profile and personal
+  memory are never affected by pointer recovery (M1 §4 separation is preserved).
+- Recovery is silent and forward-moving: the user gets a fresh draft, not an error loop.
+- A session that was opened but never sent into is still a server-side draft and legitimately
+  disappears; falling back to a draft is correct, not a fault.
+- The pointer is written on the accepted create/delete boundaries only — never optimistically
+  before the CLI acknowledges the session.
+
+### 13.5 `activeTaskId` containment (CQ2 resolution)
+
+Verified from source during implementation:
+
+- `SessionPane` never reads or writes `zcodeSessionStore.activeTaskId`; it reports a created session
+  through its `onSessionCreated` prop and the shell decides what to do. `V4ChatPane` and
+  `V4ConversationProvider` have zero `activeTaskId` coupling.
+- Every `paneId`-keyed state in `SessionPane` (scroll memory, draft prewarm) is additionally keyed
+  by `workspaceKey`, so reusing `paneId="workspace-main"` for the dedicated Bot workspace cannot
+  collide with a coding pane.
+- The only store write on the draft-send path is `promoteGroupedDraftTask`, gated on a per-workspace
+  `groupedDraftTask`. Only the coding grouped-draft feature sets it, and it is never set for the Bot
+  workspace key.
+
+Therefore the Bot module stays the sole authority for "which session the Bot uses", and
+`activeTaskId` is not involved at all. **No containment change is required.**
+
+### 13.6 Cross-Mode adoption (published-contract level only)
+
+- The Bot conversation reference is `{ kind: "conversation", id: <shell.sessionId> }`, conforming to
+  Cross-Mode's published `handoffObjectRefSchema` (id charset/length and the `conversation` object
+  kind). The helper is a pure projection of the shell; it adds no state.
+- Personal Bot creates **no** Cross-Mode admission records and implements **no**
+  `HandoffExecutionPort`. Destination work creation stays with Cross-Mode's executor milestone.
+- Personal memory must **never** be carried into handoff context automatically. The frozen contract
+  starts `personal`/`sensitive` context items excluded and requires explicit user inclusion; auto
+  carrying memory would bypass that rule and M1 §6.2's bounded-retrieval boundary.
+- The adoption is verified against the frozen contract rather than a hand-written copy of its rules.
+
+### 13.7 Failure semantics (Phase 1)
+
+| Failure                                   | Behaviour                                                                   |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| Bot workspace directory cannot be created | Logged; startup continues; the Bot surface reports the failure when opened. |
+| Shell pointer points at a missing session | Pointer cleared; fresh draft; identity/memory untouched.                    |
+| Session disappears while the Bot is open  | Same clear-and-draft reaction via the subscription error.                   |
+| `conversation.json` unusable              | M1 behaviour: `BotStoreCorruptError`, file preserved, no silent reset.      |
+| `IBotService` unavailable (old host)      | Bot entry hidden (M1 behaviour).                                            |
+| Bot workspace runtime fails to start      | Surfaced by the normal conversation error path; no Bot-specific retry loop. |
+
+### 13.8 Acceptance scenarios (Phase 1)
+
+1. First Bot launch: the Bot workspace directory exists after startup; the Bot section shows a draft
+   with no error; identity and profile render.
+2. Send a message: a `personal_bot` session is created in the Bot workspace, the pointer is
+   persisted, and the reply streams through the ordinary path with tool rows and permission prompts.
+3. Restart and resume: after relaunch the Bot binds the same session with an intact transcript and
+   no second session created.
+4. Bot ↔ Coding navigation: opening the Bot and returning to a coding session leaves the coding
+   transcript and its split panes untouched; the Bot conversation never appears in the Coding
+   Sessions list.
+5. Stale pointer recovery: deleting the pointed-at session and reopening the Bot clears the pointer
+   and produces a fresh draft, with identity and memory unchanged.
+6. Cross-Mode reference: the helper returns a ref that satisfies the frozen contract for a shell
+   with a session, and `null` without one; it never contains memory content.
+
+### 13.9 Deferred to M2 Phase 2 (gated)
+
+Turn-time personal-memory injection. It is designed (a per-turn system-reminder source mirroring
+`capability_context`, fed by a CLI→host read of `IBotService.buildMemoryContext()` with defaults,
+fail-open and text-only on the wire) but must not be implemented while another worker holds the
+shared protocol and CLI bootstrap files. It must not be implemented against a private or in-progress
+sibling implementation.
+
+Also deferred: Bot tool-surface decisions (whether the Bot may invoke `Multitask`/`Agent`/`Task`),
+a Bot-scoped session projection, capability probes, and every domain expansion.
