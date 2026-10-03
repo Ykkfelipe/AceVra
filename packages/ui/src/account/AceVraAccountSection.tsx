@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button.js";
 import { useAccountEngineeringTools } from "@/hooks/useAccountEngineeringTools.js";
 import { describeAccountStatus } from "./accountStatus.js";
 import { AceVraComputersSection } from "./AceVraComputersSection.js";
+import { AceVraSessionsSection } from "./AceVraSessionsSection.js";
 import { AceVraTasksSection } from "./AceVraTasksSection.js";
 import { SshComputersSection } from "./SshComputersSection.js";
 import { useAccountText } from "./useAccountText.js";
@@ -106,6 +107,13 @@ export function AceVraAccountSection() {
               )}
             </div>
           </div>
+          {/* Login sessions come first and are labelled as such: they are not devices,
+              and putting them above "Computers" keeps the two concepts apart. */}
+          {ready && (
+            <div className="space-y-6 border-t border-card-border pt-4">
+              <AceVraSessionsSection />
+            </div>
+          )}
           {ready && <AceVraComputersSection />}
           {/* Shown whenever persistence is unavailable, not only once signed in: this is
               exactly when the user is not being asked to sign in again. */}
