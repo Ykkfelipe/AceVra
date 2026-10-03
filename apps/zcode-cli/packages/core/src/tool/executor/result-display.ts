@@ -1,5 +1,7 @@
 import {
   RESPOND_TO_COORDINATOR_TOOL_NAME,
+  RemoteComputerOutputSchema,
+  REMOTE_COMPUTER_TOOL_NAME,
   RespondToCoordinatorOutputSchema,
   MCP_TOOL_DISPLAY_MAX_DESCRIPTION_CHARS,
   MCP_TOOL_DISPLAY_MAX_NAME_CHARS,
@@ -122,6 +124,8 @@ export function createToolResultDisplay(
   },
 ): ToolResultDisplayPayload | undefined {
   if (toolName === "Bash") return createBashResultDisplay(output);
+
+  if (toolName === REMOTE_COMPUTER_TOOL_NAME) return createRemoteComputerDisplay(output);
 
   const cuaToolName = readCuaToolName(toolName);
   if (cuaToolName) {
@@ -466,12 +470,38 @@ function createNodeReplDisplay(
   };
 }
 
+/**
+ * RemoteComputer（acevra-agent-computer.md §3.5）截图 display：两通道与本地 CUA 同构。
+ * 仅 screenshot 动作产 display；showToUser=true → image（聊天主流），否则 observationImage
+ * （工具详情缩略图）。超过 256KB 的图不进 display（truncated 标记），模型结果不受影响。
+ */
+function createRemoteComputerDisplay(output: unknown): ToolResultDisplayPayload | undefined {
+  const parsed = RemoteComputerOutputSchema.safeParse(output);
+  if (!parsed.success) return undefined;
+  const data = parsed.data;
+  if (data.action !== "screenshot" || !data.image) return undefined;
+
+  const base64 = data.image.base64;
+  // 与 CUA inline media 同一单图上限；contracts 侧 remoteComputerToolResultDisplayPayloadSchema
+  // 的 max(256KB) 是第二道闸，这里先判以拿到 truncated 语义而不是整块校验失败。
+  const overCap = Buffer.byteLength(base64, "utf8") > 256 * 1024;
+  const fitImage = overCap ? undefined : { base64, mimeType: data.image.mimeType };
+  const userVisible = data.showToUser === true;
+  return {
+    kind: "remote_computer",
+    targetId: data.targetId,
+    action: data.action,
+    ...(fitImage && userVisible ? { image: fitImage } : {}),
+    ...(fitImage && !userVisible ? { observationImage: fitImage } : {}),
+    ...(overCap ? { truncated: true } : {}),
+  };
+}
+
 function compactTaskStopDisplayMessage(output: {
   command?: string;
   message: string;
   task_id: string;
-}): string {
-  if (output.command === undefined) {
+}): string {  if (output.command === undefined) {
     return output.message;
   }
 

@@ -153,3 +153,51 @@ test("CUA-1.6: observation screenshots never reach the conversation flow, only t
   assert.match(html, /node-repl-observation-images/);
   assert.match(html, /src="data:image\/png;base64,aW1hZ2U=/);
 });
+
+const smallImage = { base64: "ZGVsbA==", mimeType: "image/jpeg" };
+
+function remoteComputerRow(display: Record<string, unknown>): ConversationRow[] {
+  return [
+    {
+      kind: "toolCall",
+      rowId: 11,
+      turnId: "turn",
+      createdAt: 3,
+      createdAtSeq: 3,
+      toolCallId: "remote-shot",
+      toolName: "RemoteComputer",
+      status: "success",
+      inputText: "{}",
+      display,
+    },
+  ].map((row) => conversationRowSchema.parse(row));
+}
+
+test("a user-requested RemoteComputer screenshot renders inline in the chat flow", () => {
+  const html = render(
+    <ConversationComputerImages
+      rows={remoteComputerRow({
+        kind: "remote_computer",
+        targetId: "ssh:dell",
+        action: "screenshot",
+        image: smallImage,
+      })}
+    />,
+  );
+  assert.match(html, /data-computer-screenshot-result/);
+  assert.match(html, /src="data:image\/jpeg;base64,ZGVsbA==/);
+});
+
+test("an agent-internal RemoteComputer screenshot never enters the chat flow", () => {
+  const html = render(
+    <ConversationComputerImages
+      rows={remoteComputerRow({
+        kind: "remote_computer",
+        targetId: "ssh:dell",
+        action: "screenshot",
+        observationImage: smallImage,
+      })}
+    />,
+  );
+  assert.doesNotMatch(html, /<img/);
+});

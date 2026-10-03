@@ -105,7 +105,7 @@ import {
   isVideoChatComposerAttachment,
   type ChatComposerAttachment,
 } from "@/lib/chatAttachments.js";
-import { resolveChatPlaceholderKey } from "@/lib/chatPlaceholder.js";
+import { resolveChatPlaceholderKey, type ChatPlaceholderVariant } from "@/lib/chatPlaceholder.js";
 import { resolveChatEnterShortcut } from "@/lib/mobileTextInput.js";
 import { appendPromptHistoryEntry } from "@/lib/promptHistory.js";
 import {
@@ -368,6 +368,8 @@ function arePromptHistoryEntriesEqual(left: readonly string[], right: readonly s
 
 interface ConversationComposerProps {
   snapshot: ConversationSnapshot | null;
+  /** 占位文案风格；缺省 Coding，Personal Bot 传 assistant。 */
+  placeholderVariant?: ChatPlaceholderVariant;
   /** 草稿 scope（sessionId；draft 态 null → "__draft__" scope）。 */
   sessionId?: string | null;
   /** Skill catalog authority；草稿预热完成后为 prewarmSessionId，不改变 task/draft 身份。 */
@@ -589,6 +591,7 @@ function ConversationComposerImpl({
   suppressGoalCommands = false,
   appSlashCommands,
   onDropTargetControllerChange,
+  placeholderVariant = "default",
 }: ConversationComposerProps) {
   const { intl, locale } = useZCodeIntl();
   const services = useOptionalServices();
@@ -1670,6 +1673,7 @@ function ConversationComposerImpl({
       isTaskProcessing: canStop,
       compactNewTask: false,
       inputRejected: mode === "reject",
+      variant: placeholderVariant,
     }),
   });
   const sendTooltipTitle = intl.formatMessage({

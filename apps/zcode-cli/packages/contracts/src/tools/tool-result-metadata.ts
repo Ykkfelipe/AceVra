@@ -253,6 +253,35 @@ const bashOutputDisplaySchema = z
   })
   .strict();
 
+/**
+ * RemoteComputer（§3.5）截图 display 的两通道与本地 Computer Use 同构：
+ * - image：用户要看的那张（工具入参 showToUser），投影进聊天主流；
+ * - observationImage：agent 自查用的，只在工具卡详情里出缩略图。
+ * 上限沿用 CUA inline media 单图 256KB；超限不产 display 图（truncated 标记），模型结果不受影响。
+ */
+export const remoteComputerToolResultDisplayPayloadSchema = z
+  .object({
+    kind: z.literal("remote_computer"),
+    targetId: z.string().min(1).max(128),
+    action: z.string().min(1).max(32),
+    image: z
+      .object({
+        base64: z.string().min(1).max(256 * 1024),
+        mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/iu),
+      })
+      .strict()
+      .optional(),
+    observationImage: z
+      .object({
+        base64: z.string().min(1).max(256 * 1024),
+        mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/iu),
+      })
+      .strict()
+      .optional(),
+    truncated: z.boolean().optional(),
+  })
+  .strict();
+
 export const toolResultDisplayPayloadSchema = z.discriminatedUnion("kind", [
   bashOutputDisplaySchema,
   fileDiffToolResultDisplayPayloadSchema,
@@ -262,6 +291,7 @@ export const toolResultDisplayPayloadSchema = z.discriminatedUnion("kind", [
   respondToCoordinatorToolResultDisplayPayloadSchema,
   cuaToolResultDisplayPayloadSchema,
   nodeReplImageToolResultDisplayPayloadSchema,
+  remoteComputerToolResultDisplayPayloadSchema,
   mcpToolResultDisplayPayloadSchema,
   createWorkflowToolResultDisplayPayloadSchema,
   getWorkflowRunToolResultDisplayPayloadSchema,

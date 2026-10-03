@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- ZCode Protocol 的 session/workspace 方法共享同一个 server context 与 snapshot helpers，迁移期先集中维护。 */
 import { observeSessionDebug } from "./session-debug.js";
 import {
-  TASK_LIST_SESSION_TYPES,
-  isTaskListSessionType,
-} from "../zcode-protocol-v4/task-list-session-membership.js";
+  isSessionInListProjection,
+  sessionListProjectionTaskTypes,
+} from "../zcode-protocol-v4/session-list-projection.js";
 import { resolveEffectiveBashShellSelection } from "@zcode/adapters/exec";
 import { inputIntentMetadata } from "../zcode-protocol-v4/commands/input-intent.js";
 import { createModelExecutionContext } from "./model-execution.js";
@@ -1635,7 +1635,8 @@ export async function listSessions(context: ZCodeProtocolAgentServerContext, raw
             directory: params.workspace?.workspacePath,
             includeArchived: params.includeArchived,
             limit: params.limit ?? 50,
-            taskTypes: [...TASK_LIST_SESSION_TYPES],
+            // 列表投影决定成员：缺省 Coding 任务列表；personal-bot 只取 Bot 对话（spec §16.3）。
+            taskTypes: sessionListProjectionTaskTypes(params.projection),
           })
         : []
   ).filter((session): session is SessionInfo => {
@@ -1658,7 +1659,7 @@ export async function listSessions(context: ZCodeProtocolAgentServerContext, raw
   if (params.sessionIds) return { sessions };
   for (const record of context.sessions.values()) {
     if (record.persistence === "deferred") continue;
-    if (!isTaskListSessionType(record.taskType)) continue;
+    if (!isSessionInListProjection(params.projection, record.taskType)) continue;
     if (storedIds.has(record.app.sessionId)) continue;
     if (params.workspace && params.workspace.workspaceKey !== record.workspace.workspaceKey)
       continue;

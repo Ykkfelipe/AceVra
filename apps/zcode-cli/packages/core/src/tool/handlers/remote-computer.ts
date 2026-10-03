@@ -83,6 +83,8 @@ const remoteComputerHandler: ToolHandler = async (input, context) => {
         ? `Screenshot of ${result.screen.width}x${result.screen.height}. Coordinates for actions are pixels in this image.`
         : `Done. Take a screenshot to see the result.`,
     ...(result.image ? { image: result.image } : {}),
+    // §3.5：把模型声明的「用户要看」意图带回输出，display 管线据此分流聊天主流/工具详情。
+    ...(parsed.showToUser ? { showToUser: true } : {}),
   };
   return output;
 };
@@ -120,6 +122,7 @@ export const remoteComputerToolEntry: ToolEntry = {
       "Sees and operates the screen of another of the user's computers reached over SSH (ExecutionTargets kind 'ssh' with capability computerUse), e.g. their Windows PC. The user watches it live in the Computer panel and can take control or stop you at any time.",
       "- Use it only when the user asked you to use that computer. Never for this Mac (local computer use stays as it is).",
       "- Start with action 'screenshot'; coordinates are pixels in that screenshot. Take another screenshot after actions to check the result.",
+      "- showToUser (screenshots only): set true when the user asked to see the screen or the screenshot itself is the deliverable — it is then shown in the conversation. Leave it out for your own verification shots; those stay in the tool details.",
       "- If the user takes control or uses that computer, you are paused (error says so): wait and tell the user; do not retry in a loop.",
       "- Unsaved-document safety (spec §3.4): the computer may show the user's restored app sessions. Never dismiss a Save / Don't save / Discard / Replace dialog for a document you did not create this turn — stop and ask the user, or choose the non-destructive option. Type only into a fresh empty document you created this turn. Never send ctrl+a, delete or alt+f4 without a fresh screenshot confirming the target.",
       "- Offline computers fail; nothing is ever done on this Mac instead.",

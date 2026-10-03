@@ -35,6 +35,7 @@ import {
 } from "@/lib/workflowToolNames.js";
 import { CuaToolCallBlock, isCuaToolCall } from "@/ToolCallBlocks/renderers/cua.js";
 import { CuaGroupToolCallBlock } from "@/ToolCallBlocks/renderers/cua-group.js";
+import { RemoteComputerToolCallBlock } from "@/ToolCallBlocks/renderers/remote-computer.js";
 import { GoalToolCallBlock } from "@/ToolCallBlocks/renderers/goal.js";
 import { NodeReplToolCallBlock } from "@/ToolCallBlocks/renderers/node-repl.js";
 import { McpToolCallBlock, readMcpToolPresentation } from "@/ToolCallBlocks/renderers/mcp.js";
@@ -66,6 +67,13 @@ export function resolveToolCallRenderer(context: ToolCallBlockRenderContext) {
   }
   if (isCuaToolCall(context.toolCallNode.toolCall)) {
     return CuaToolCallBlock;
+  }
+
+  // RemoteComputer（acevra-agent-computer.md §3.5）按名分流：identity 回 unknown 会掉进
+  // raw JSON 兜底卡，观察类截图缩略图就无处渲染。chat 主流的 image 通道在
+  // ConversationComputerImages，与本卡无关。
+  if (context.toolCallNode.toolCall.kind === "RemoteComputer") {
+    return RemoteComputerToolCallBlock;
   }
 
   const identity = resolveToolCallIdentity(context.toolCallNode.toolCall);

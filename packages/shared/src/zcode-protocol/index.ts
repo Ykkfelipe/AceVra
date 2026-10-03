@@ -58,6 +58,7 @@ import {
   zcodeSessionStatusSchema,
   zcodeSessionKindSchema,
   zcodeCreatableSessionTaskTypeSchema,
+  zcodeSessionListProjectionSchema,
   zcodeSessionGoalSchema,
   zcodeSessionGoalVerificationSchema,
   zcodeSessionGoalVerificationTimelineSchema,
@@ -1689,8 +1690,20 @@ export const zcodeSessionListParamsSchema = z
     sessionIds: z.array(nonEmptyString).min(1).max(64).optional(),
     includeArchived: z.boolean().default(false),
     limit: z.number().int().positive().optional(),
+    // 列表投影：缺省 = Coding 任务列表；personal-bot = Bot 对话历史（personal-bot spec §16.3）。
+    projection: zcodeSessionListProjectionSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((params, ctx) => {
+    // Bot 历史只属于 Bot 专用 workspace；不带 workspace 会把所有 workspace 的 Bot 会话混在一起。
+    if (params.projection === "personal-bot" && !params.workspace && !params.sessionIds) {
+      ctx.addIssue({
+        code: "custom",
+        message: "projection personal-bot requires workspace",
+        path: ["workspace"],
+      });
+    }
+  });
 export type ZCodeSessionListParams = z.infer<typeof zcodeSessionListParamsSchema>;
 
 export const zcodeSessionSubagentsParamsSchema = z

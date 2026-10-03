@@ -13,11 +13,8 @@ import {
 } from "react";
 import {
   Archive,
-  Blocks,
-  CalendarClock,
   Clock3,
   Cloud,
-  Bot,
   Folder,
   FolderOpen,
   Hash,
@@ -27,7 +24,6 @@ import {
   MessageCirclePlus,
   Minimize2,
   Plus,
-  Search,
   X,
 } from "lucide-react";
 import {
@@ -47,12 +43,11 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import type { Locale, RemoteTarget, UserInfo, ZCodeTaskMeta } from "@zcode/shared";
+import type { RemoteTarget, ZCodeTaskMeta } from "@zcode/shared";
 import { BUILTIN_MODEL_PROVIDER_IDS } from "@zcode/shared";
 import {
   TID_CONVERSATION_NEW_TASK,
   TID_CONVERSATION_SECTION,
-  TID_AUTOMATIONS_OPEN,
   TID_PROJECT_ADD,
   TID_PROJECT_SECTION,
   TID_SIDEBAR,
@@ -75,7 +70,6 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { logger } from "@/logger.js";
 import { NewTaskButtonGroup } from "@/NewTaskButtonGroup.js";
 import { selectWorkspaceZCodeState, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
-import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
 import { isWorkspaceReadOnly, isWorkspaceTab, type WorkspaceTabState } from "@/store/tabStore.js";
 import { useWorkspaceTaskLists } from "@/hooks/useWorkspaceTaskLists.js";
@@ -90,7 +84,6 @@ import {
   readSidebarPurposeSectionPreferences,
   reorderSidebarPurposeSections,
 } from "@/lib/sidebarPurposeSectionPreferences.js";
-import { useShortcutCommandLabel } from "@/shortcuts/useShortcutBindings.js";
 import { setPendingSettingsSectionIntent } from "@/lib/settingsNavigation.js";
 import { buildTaskWorkspaceKey } from "@/lib/taskQueryCache.js";
 import {
@@ -109,12 +102,10 @@ import {
   persistGroupedTaskCollapsedGroupIds,
   readGroupedTaskCollapsedGroupIds,
 } from "@/lib/groupedTaskExpansionPreference.js";
-import type { Theme } from "@/useTheme.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import { WorkspaceFileTree } from "@/WorkspaceFileTree.js";
 import { WorkspaceArchivedTasksFlatSection } from "@/WorkspaceArchivedTasksFlatSection.js";
-import { WorkspaceSidebarFooter } from "@/WorkspaceSidebarFooter.js";
 import { WorkspacePinnedTasksSection } from "@/WorkspacePinnedTasksSection.js";
 import { WorkspaceTimelineTasksSection } from "@/WorkspaceTimelineTasksSection.js";
 import { WorkspaceGroupedTasksSection } from "@/WorkspaceGroupedTasksSection.js";
@@ -130,7 +121,6 @@ import {
 } from "@/WorkspaceSidebar/taskGroupTogglePresentation.js";
 import { WorkspacePurposeSection } from "@/WorkspaceSidebar/WorkspacePurposeSection.js";
 import { cn } from "@/components/lib/utils.js";
-import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import {
   resolveWorkspaceDragGlobalIndices,
   resolveWorkspaceDragExpanded,
@@ -223,7 +213,7 @@ function resolveSidebarTaskViewMode(params: {
 
 export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   workspacePath,
-  workspaceRemoteSessionId,
+  workspaceRemoteSessionId: _workspaceRemoteSessionId,
   activePreviewPath,
   onSelectTask,
   onStartDraftInWorkspace,
@@ -234,14 +224,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateConversationTask,
   onOpenFolderFromWorkspaceMenu,
   onOpenRemoteWorkspace,
-  theme,
   onConnectRemote: _onConnectRemote,
   onSelectRemoteProject: _onSelectRemoteProject,
   onCancelRemoteProject: _onCancelRemoteProject,
   onReconnectRemoteWorkspace,
-  onLogout,
-  onLogin,
-  user,
   reconnectingRemoteWorkspaceKeys,
   remoteWorkspaceErrorByWorkspaceKey,
   reconnectingRemoteWorkspaceLogsByWorkspaceKey = EMPTY_RECONNECTING_REMOTE_WORKSPACE_LOGS_BY_WORKSPACE_KEY,
@@ -257,13 +243,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onGoForward: _onGoForward,
   goBackShortcutLabel: _goBackShortcutLabel,
   goForwardShortcutLabel: _goForwardShortcutLabel,
-  onOpenCommandCenter,
   onOpenAutomations,
-  onOpenPluginStore,
-  automationsActive = false,
-  pluginStoreActive = false,
-  onOpenBot,
-  botActive = false,
   onFileTreeOpenChange,
 }: {
   workspacePath: string;
@@ -284,7 +264,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onCreateConversationTask: () => void;
   onOpenFolderFromWorkspaceMenu: () => void;
   onOpenRemoteWorkspace?: () => void;
-  theme: Theme;
   onConnectRemote: (options: RemoteTarget, requestId?: string) => Promise<string>;
   onSelectRemoteProject: (
     sessionId: string,
@@ -293,9 +272,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   ) => Promise<void>;
   onCancelRemoteProject: (sessionId: string) => Promise<void>;
   onReconnectRemoteWorkspace: (workspaceKey: string) => Promise<void>;
-  onLogout?: () => void;
-  onLogin?: () => void;
-  user?: UserInfo | null;
   reconnectingRemoteWorkspaceKeys: string[];
   remoteWorkspaceErrorByWorkspaceKey: Record<string, string>;
   reconnectingRemoteWorkspaceLogsByWorkspaceKey?: Record<string, RemoteConnectionLogEntry[]>;
@@ -311,17 +287,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   onGoForward?: () => void;
   goBackShortcutLabel?: string;
   goForwardShortcutLabel?: string;
-  onOpenCommandCenter: () => void;
   onOpenAutomations?: () => void;
-  onOpenPluginStore?: () => void;
-  automationsActive?: boolean;
-  pluginStoreActive?: boolean;
-  /** Personal Bot 入口；bot 服务不可用时缺省隐藏。 */
-  onOpenBot?: () => void;
-  botActive?: boolean;
   onFileTreeOpenChange?: (open: boolean) => void;
 }) {
-  const { intl, localePreference, setLocalePreference } = useZCodeIntl();
+  const { intl } = useZCodeIntl();
   const handleTaskRowSelect = useCallback(
     (
       targetWorkspacePath: string,
@@ -341,7 +310,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     },
     [onSelectTask],
   );
-  const { openCodingPlanUpgrade } = useCodingPlanUpgradeDialog();
   const bumpTaskListVersion = useZCodeSessionStore((state) => state.bumpTaskListVersion);
   const workspaceIdentity = useTabStore((state) => {
     if (!state.activeTabId) {
@@ -363,12 +331,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
         id: "workspaceSidebar.unavailableLocalDirectory",
       })
     : undefined;
-  const setTheme = useZCodeStore((state) => state.setTheme);
-  const commandCenterShortcutLabel = useShortcutCommandLabel("openCommandCenter");
   const tabs = useTabStore((state) => state.tabs);
   const activateTab = useTabStore((state) => state.activateTab);
   const closeTab = useTabStore((state) => state.closeTab);
-  const openSettingsTab = useTabStore((state) => state.openSettingsTab);
   const expandedWorkspacePaths = useTabStore((state) => state.expandedWorkspacePaths);
   const toggleWorkspaceExpanded = useTabStore((state) => state.toggleWorkspaceExpanded);
   const reorderWorkspaceTabs = useTabStore((state) => state.reorderWorkspaceTabs);
@@ -632,7 +597,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
-  const localeMenuValue = localePreference === "system" ? "system" : localePreference;
   const workspaceTaskLists = useWorkspaceTaskLists({
     workspaceTabs: projectWorkspaceTabs,
     activeWorkspacePath: workspacePath,
@@ -727,52 +691,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     [activeWorkspaceDragId, projectWorkspaceTabs],
   );
 
-  const handleThemeChange = useCallback(
-    (value: string) => {
-      if (
-        value === "light" ||
-        value === "dark" ||
-        value === "zai-light" ||
-        value === "zai-dark" ||
-        value === "system"
-      ) {
-        setTheme(value);
-      }
-    },
-    [setTheme],
-  );
-
-  const handleLocaleChange = useCallback(
-    (value: string) => {
-      if (value === "system") {
-        setLocalePreference("system");
-        return;
-      }
-      if (value === "zh-CN" || value === "en-US") {
-        setLocalePreference(value as Locale);
-      }
-    },
-    [setLocalePreference],
-  );
-
-  const handleOpenPluginStoreMain = useCallback(() => {
-    onOpenPluginStore?.();
-  }, [onOpenPluginStore]);
   const handleOpenAutomationsMain = useCallback(() => {
     onOpenAutomations?.();
   }, [onOpenAutomations]);
-  const handleOpenCodingPlanUpgrade = useCallback(
-    (
-      providerId: string,
-      funnelContext?: import("@/lib/codingPlanFunnelTelemetry.js").CodingPlanFunnelContext,
-    ) => {
-      openCodingPlanUpgrade({
-        providerId,
-        funnelContext,
-      });
-    },
-    [openCodingPlanUpgrade],
-  );
   const activeTaskId = useZCodeSessionStore(
     (state) =>
       // Web 远程控制从全局 task 入口进入远端 workspace 时，会先按
@@ -1289,86 +1210,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                 }}
               />
             </WorkspaceNewTaskTooltip>
-            <Button
-              variant="ghost"
-              onClick={onOpenCommandCenter}
-              data-icon="inline-start"
-              size="lg"
-              className="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
-            >
-              <Search className="size-4" />
-              <span className="min-w-0 flex-1 truncate text-left">
-                {intl.formatMessage({ id: "commandCenter.open" })}
-              </span>
-              <span className="ml-auto shrink-0 text-ui-xs font-normal text-foreground-subtlest">
-                {commandCenterShortcutLabel}
-              </span>
-            </Button>
-            {/* 远程入口展示策略统一走 useRemoteConnectionEntryVisibility，避免与其他入口出现分叉。*/}
-            {/* {showRemoteConnectionEntry ? (
-              <SSHDialog
-                onConnect={onConnectRemote}
-                onSelectProject={onSelectRemoteProject}
-                onCancelSession={onCancelRemoteProject}
-                isWindowsDesktop={isWindowsDesktop}
-                triggerVariant="ghost"
-                triggerSize="lg"
-                triggerClassName="w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground"
-                trigger={
-                  <>
-                    <Cloud className="size-4" />
-                    <span>{intl.formatMessage({ id: "remote.trigger" })}</span>
-                  </>
-                }
-              />
-            ) : null} */}
-            {onOpenBot ? (
-              <Button
-                variant="ghost"
-                onClick={onOpenBot}
-                data-icon="inline-start"
-                data-testid="bot-sidebar-open"
-                size="lg"
-                aria-pressed={botActive}
-                className={cn(
-                  "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                  botActive && "bg-selected text-foreground",
-                )}
-              >
-                <Bot className="size-4" />
-                {intl.formatMessage({ id: "bot.nav.open" })}
-              </Button>
-            ) : null}
-            <Button
-              variant="ghost"
-              onClick={handleOpenAutomationsMain}
-              data-icon="inline-start"
-              data-testid={TID_AUTOMATIONS_OPEN}
-              size="lg"
-              aria-pressed={automationsActive}
-              className={cn(
-                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                automationsActive && "bg-selected text-foreground",
-              )}
-            >
-              <CalendarClock className="size-4" />
-              {intl.formatMessage({ id: "workspace.openScheduledSettings" })}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={handleOpenPluginStoreMain}
-              data-icon="inline-start"
-              data-testid="plugin-store-sidebar-open"
-              size="lg"
-              aria-pressed={pluginStoreActive}
-              className={cn(
-                "w-full justify-start gap-2 text-foreground hover:bg-surface-hover hover:text-foreground",
-                pluginStoreActive && "bg-selected text-foreground",
-              )}
-            >
-              <Blocks className="size-4" />
-              {intl.formatMessage({ id: "workspace.openPluginsSettings" })}
-            </Button>
+            {/* Search / Bot / Automations / Plugins 是全局目的地，已移到全局导航栏（personal-bot spec §16.1）。 */}
           </div>
 
           <div className="relative flex min-h-0 flex-1 flex-col">
@@ -1665,24 +1507,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
             </div>
           </div>
 
-          <WorkspaceSidebarFooter
-            className="pr-3"
-            theme={theme}
-            localeMenuValue={localeMenuValue}
-            onLocaleChange={handleLocaleChange}
-            onThemeChange={handleThemeChange}
-            onSettingsButtonClick={openSettingsTab}
-            onUsageClick={openSettingsTab}
-            onUpgradeClick={handleOpenCodingPlanUpgrade}
-            onLogin={onLogin}
-            onLogout={onLogout}
-            user={user}
-            workspacePath={workspacePath}
-            workspaceIdentity={workspaceIdentity}
-            workspaceRemoteSessionId={workspaceRemoteSessionId}
-            activeTaskId={activeTaskId}
-            isDesktop={isDesktop}
-          />
+          {/* 账户/设置 footer 已移到全局导航栏底部（personal-bot spec §16.1）。 */}
         </div>
         <div
           className={cn(

@@ -1,4 +1,4 @@
-# Personal Bot — milestone spec (M1 foundation + M2 Phase 1 conversation)
+# Personal Bot — milestone spec (M1 foundation, M2 conversation, Bot Workspace V2)
 
 > Roadmap: `docs/roadmap/personal-bot.md`. Sections 1–12 are **M1** (foundation); section 13 is
 > **M2 Phase 1** (the persistent Bot conversation). The contract is extended here rather than
@@ -526,3 +526,167 @@ state; `BotConversationShell.sessionId` remains the sole durable conversation au
 memory retrieval stays behind `IBotService.buildMemoryContext()` with §14's wire limits; no Bot
 entries in Coding Sessions; Computer Use execution is untouched (this surface only _displays_ the
 device registry).
+
+---
+
+## 16. Bot Workspace V2 (approved): a separate workspace, many Ace conversations
+
+V1 of the surface was functionally correct but still read as "another coding chat": the coding
+Project/Tasks sidebar and the coding `WorkspaceHeader` stayed on screen around the Bot. V2 makes the
+Bot a separate AceVra workspace. The rule:
+
+> **Global navigation stays global; the secondary workspace navigation changes completely when Bot
+> is selected.**
+
+Information architecture is inspired by reference personal-assistant products; the visual language is
+AceVra's own (`DESIGN.md` tokens only, light and dark both validated).
+
+### 16.1 Shell structure
+
+```text
+Global rail | Secondary sidebar              | Main                         | Inspector (Bot only)
+(always)    | Coding → New task, Group/      | Coding → WorkspaceHeader +   |
+            |   Project, Projects, Tasks     |   V4WorkspaceChatArea        |
+            | Bot    → Ace, + New            | Bot    → Ace header +        | Memory
+            |   conversation, Today /        |   V4ChatPane (unchanged)     | Computers
+            |   Yesterday / Previous 7 days /|                              | Capabilities
+            |   Older                        |                              |
+```
+
+- **Global rail** (`GlobalNavRail`, narrow, always visible on desktop and wide Web): owns the top-level
+  destinations — Coding, Bot, Search (command center), Scheduled (Automations), Plugins — and, at the
+  bottom, the account menu and Settings. It only dispatches the **existing** handlers
+  (`handleSelectTask` / chat view, `handleOpenBot`, `onOpenCommandCenter`, `handleOpenAutomations`,
+  `handleOpenPluginStore`, the existing footer account menu, `openSettingsTab`); it adds no new
+  navigation state. Bot appears only when `IBotService` exists (M1 rule unchanged).
+- **Secondary sidebar** is contextual and keeps its resizable/collapsible panel. Collapsing hides only
+  the secondary sidebar; the rail stays. Under the mobile breakpoint the rail travels with the
+  drawer (it is hidden whenever the drawer is closed) so a phone never loses horizontal space.
+- When **Bot** is the main view, nothing coding-specific renders: no `WorkspaceSidebar` content
+  (Group/Project toggle, Projects, Conversations, pinned tasks), no coding `WorkspaceHeader`
+  (project/task title, git, terminal, side-pane toggles), no terminal panel, no side pane.
+- Coding, Automations and Plugins keep their current content; only their entry buttons move to the
+  rail.
+
+### 16.2 Ownership (one owner per fact)
+
+| State                                                      | Owner                                                                           | Notes                                                                                          |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Which conversation is selected (durable)                   | `bot` module — `BotConversationShell.sessionId` (`conversation.json`)           | Unchanged sole authority (§13.4). Now means "the selected Ace conversation".                   |
+| Bot conversation history (which exist, title, times)       | CLI `SqliteSessionStore`, read through `session/list` projection `personal-bot` | Derived on read. No Bot-side copy, cache file or index.                                        |
+| Messages / turns                                           | CLI `AgentRuntime` (unchanged)                                                  |                                                                                                |
+| Coding task index (`tasks-index.sqlite`)                   | Host task-index syncer, fed only by `sessions-index`                            | `sessions-index` membership stays `TASK_LIST_SESSION_TYPES`; Bot never enters it.              |
+| Bot workspace UI state (rows on screen, pending selection) | `BotWorkspaceProvider` (React, renderer)                                        | A mirror of the two owners above; it writes only through `IBotService.setConversationSession`. |
+| Device registry (Computers tab)                            | Account (`IPlatformService.account.listDevices()`)                              | Unchanged (§15.2).                                                                             |
+
+### 16.3 History projection: `session/list` with `projection: "personal-bot"`
+
+- `zcodeSessionListParamsSchema` gains an optional, closed `projection` enum:
+  `"task-list"` (default, today's behaviour) | `"personal-bot"`. The schema stays `.strict()`, so a
+  caller cannot pass arbitrary task types; there is no free-form `taskTypes` on the wire.
+- `"personal-bot"` returns only `taskType === "personal_bot"` sessions, from the store **and** the
+  live, non-deferred runtime records, filtered to the requested workspace. It requires `workspace`
+  (the Bot workspace from the shell); a request without it is a protocol error.
+- `"task-list"` (or no projection) is byte-for-byte today's membership: `personal_bot` stays excluded,
+  so Coding Sessions, the command center and the task index are unaffected.
+- The `sessions-index` topic and the host task-index syncer are **not** touched. They feed
+  `tasks-index.sqlite`; widening them would write Bot sessions into the coding index.
+- The host passes `projection` through `IZCodeSessionService.listSessions` →
+  `zcodeAgentService.listSessions` unchanged. The Bot UI composes `IBotService` (for the workspace
+  path and pointer) with `IZCodeSessionService` (for the list) in a UI hook; the `bot` module takes no
+  dependency on the session service.
+- Rows carry `sessionId`, `title`, `titleSource`, `createdAt`, `updatedAt` (`ZCodeSessionInfo`). The
+  sidebar shows title (fallback "New conversation") and a relative timestamp; grouping is by
+  `updatedAt` in local time: Today / Yesterday / Previous 7 days / Older, newest first.
+- Reading the list starts the Bot workspace runtime if it is not running. This is still lazy (§13.2):
+  it happens when the user opens Bot, never at app startup.
+
+### 16.4 Event order
+
+```text
+open Bot
+  ├─ IBotService.getConversationShell()          → pointer (selected id | null)
+  └─ zcodeSessionService.listSessions(personal-bot) → rows        (parallel; generation-guarded)
+  pane binds pointer (null → draft)
+
+select row R           → UI selects R immediately → setConversationSession(R) → pane binds R
+                          (sessionNotFound → §13.4 clear pointer → draft → refresh rows)
++ New conversation     → UI selects draft         → setConversationSession(null)
+                          previous rows stay: they come from the store, not from the pointer
+first send in draft    → SessionPane creates personal_bot session → onSessionCreated(id)
+                          → setConversationSession(id) → refresh rows
+title / turn settles   → SessionPane onSessionPresentationChange({sessionId,title,sessionEnded})
+                          → refresh rows (coalesced: one in flight + one trailing)
+delete current         → onSessionDeleted → setConversationSession(null) → refresh rows
+```
+
+Rules:
+
+- Pointer writes still happen only on accepted boundaries (selection click, CLI-acknowledged
+  create/delete). The service serializes writes per document; the last click wins.
+- List reads are generation-guarded: a slower, older response never overwrites a newer one.
+- A refresh failure keeps the last rows on screen and shows an inline error; it never clears the
+  pointer and never blocks the conversation.
+- No timers or polling. Freshness comes from the events above.
+- The new pane callback `onSessionPresentationChange` is a narrow, read-only notification (same
+  precedent as `onSessionUnavailable`): it fires when `(sessionId, meta.title,
+control.sessionEnded)` changes. Coding hosts do not pass it.
+
+### 16.5 Main conversation and inspector
+
+- The conversation stays `V4ChatPane` with `createSessionTaskType="personal_bot"`, unchanged
+  streaming, restart/resume, memory injection (§14) and pointer semantics (§13.4).
+- Header: a single slim, draggable row with a small Ace avatar, the conversation title (or "New
+  conversation") and, on the trailing side, a reserved actions slot, refresh, and an inspector toggle.
+  It replaces the coding `WorkspaceHeader` for this view.
+- Composer: assistant-oriented placeholder copy through a narrow placeholder-variant prop —
+  "What can I help you with?" (empty), "Reply…" (idle with history), "Keep typing — I'll read it
+  next" (turn running); no new composer.
+- Inspector: the same Memory / Computers / Capabilities tabs (§15). The **Computers tab hosts the
+  live Computer pane** from `acevra-agent-computer.md` §3.3 — the same `ComputerPane` the coding
+  side pane uses (live screen stream, Working / Idle / Offline status, Take control / Give back /
+  Resume / Stop), reading the same SSH computer list the user configures in Settings → Computers.
+  No second machine registry: the account-device pairing stays in Settings. The pane's **Stop ends
+  the owning chat turn** (only when that job's session is the selected Bot conversation), and the
+  pane's expand/collapse widens/narrows the inspector (per-viewer convenience, not persisted).
+  **Auto-open:** when the agent's first `RemoteComputer` action of the selected conversation is
+  announced by Main (`computers.onSessionStarted`, once per conversation), the Bot view reveals the
+  inspector if hidden, switches it to the Computers tab and selects that computer — the same
+  surface contract as the coding side pane. It can be hidden from the header; the choice
+  is a per-viewer convenience kept in `localStorage` (wrapped in try/catch).
+- **Cross-Mode preparation:** the header's trailing actions slot (`data-testid="bot-conversation-actions"`)
+  is the reserved location for a future explicit "Work on this" action. It renders nothing in V2. No
+  handoff behaviour, admission record or Multitask change ships here (§13.6 unchanged).
+
+### 16.6 Failure semantics (V2)
+
+| Failure                                      | Behaviour                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| History read fails (runtime down, old CLI)   | Inline "couldn't load conversations" + retry; conversation still usable.  |
+| Old CLI rejects `projection`                 | Same as above (strict schema); no fallback to the coding list.            |
+| Selected row's session was deleted elsewhere | §13.4 self-heal: pointer cleared, draft, rows refreshed.                  |
+| Pointer write fails                          | Logged at warn; UI keeps the selection for this session (as §13.4).       |
+| `IBotService` missing                        | Bot rail entry hidden; nothing else changes.                              |
+| Coding workspace folder missing (read-only)  | Coding composer stays hidden as today; Bot (own workspace) is unaffected. |
+
+### 16.7 Acceptance scenarios (V2)
+
+1. Selecting Bot removes every coding Project/Task/session element and the coding header.
+2. Bot shows its own sidebar with Ace, "+ New conversation" and grouped history.
+3. "+ New conversation" then a first message creates a distinct `personal_bot` session.
+4. Several Bot conversations stay visible and selectable.
+5. Switching conversations restores the matching transcript.
+6. Restart keeps the history and reopens the selected conversation.
+7. Bot sessions never appear in Coding Sessions/Tasks, the command center or `tasks-index.sqlite`.
+8. Personal memory injection stays `personal_bot`-only (§14 tests unchanged).
+9. Memory / Computers / Capabilities still work.
+10. Bot → Coding → Bot keeps the coding selection and the Bot selection.
+11. Auth sign-in/out behaviour is unchanged.
+12. Workflow / Multitask / Cross-Mode code paths are unchanged.
+13. Light and dark modes have no obvious layout defects.
+
+### 16.8 Out of scope
+
+Automatic mode routing, Cross-Mode handoff behaviour, Multitask changes, Auth changes, avatar
+customization, routines/cron jobs, new assistant/persona systems, renaming/deleting conversations from
+the sidebar, and unrelated visual redesigns of Coding, Automations or Plugins.

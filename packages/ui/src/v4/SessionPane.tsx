@@ -62,6 +62,7 @@ import type {
 import { toast } from "@/components/ui/toast.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { DEFAULT_CODE_PREVIEW_SETTINGS } from "@/lib/codePreviewSettings.js";
+import type { ChatPlaceholderVariant } from "@/lib/chatPlaceholder.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 import type { OpenAutomationsMain } from "@/lib/taskNavigationHistory.js";
 import { WORKSPACE_FILE_DRAG_MIME } from "@/lib/workspaceFileDrag.js";
@@ -289,6 +290,13 @@ import {
   type ConversationSelectionReference,
 } from "@/lib/conversationSelectionReference.js";
 
+/** 宿主可观察的会话展示事实（只读）。 */
+export interface SessionPanePresentation {
+  sessionId: string;
+  title: string;
+  sessionEnded: boolean;
+}
+
 export interface SessionPaneProps {
   paneId: string;
   sessionId: string | null;
@@ -320,6 +328,14 @@ export interface SessionPaneProps {
    * 据此清掉指针并回落到 draft，而不是把错误留在界面上。
    */
   onSessionUnavailable?: () => void;
+  /**
+   * 绑定会话的展示事实（标题、一轮是否收口）变化时的只读通知。
+   * 持有自己会话列表投影的宿主（如 Personal Bot 历史）据此重读列表，不需要轮询；
+   * 只上报与当前 sessionId 一致的 snapshot。Coding 宿主不传。
+   */
+  onSessionPresentationChange?: (presentation: SessionPanePresentation) => void;
+  /** composer 占位文案风格；缺省 Coding，Personal Bot 传 assistant。 */
+  composerPlaceholderVariant?: ChatPlaceholderVariant;
   /**
    * 本 pane 新建会话时要带上的 session 类型标签（只允许可创建类型，如 personal_bot）。
    * 必须在下发 createSession / 草稿预热时带上：类型在创建期决定，之后无法更改。
@@ -521,6 +537,8 @@ export function SessionPane({
   onSessionCreated,
   onSelectionSideChatUnavailable,
   onSessionUnavailable,
+  onSessionPresentationChange,
+  composerPlaceholderVariant,
   createSessionTaskType,
   focused = true,
   telemetryVisible = true,
@@ -2588,6 +2606,31 @@ export function SessionPane({
     onSessionUnavailable?.();
   }, [onSessionUnavailable, sessionId, state.lastError, state.status]);
 
+  // 展示事实变化的只读通知：切换会话瞬间 snapshot 可能仍是上一个会话，必须按 sessionId 对齐，
+  // 否则宿主会把旧会话的标题记到新会话头上。同一组事实只上报一次。
+  const presentationSnapshotSessionId = snapshot?.sessionId ?? null;
+  const presentationTitle = snapshot?.meta.title ?? "";
+  const presentationSessionEnded = snapshot?.control.sessionEnded ?? false;
+  const reportedPresentationKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!onSessionPresentationChange || !sessionId) return;
+    if (presentationSnapshotSessionId !== sessionId) return;
+    const key = `${sessionId}\u0000${presentationTitle}\u0000${String(presentationSessionEnded)}`;
+    if (reportedPresentationKeyRef.current === key) return;
+    reportedPresentationKeyRef.current = key;
+    onSessionPresentationChange({
+      sessionId,
+      title: presentationTitle,
+      sessionEnded: presentationSessionEnded,
+    });
+  }, [
+    onSessionPresentationChange,
+    presentationSessionEnded,
+    presentationSnapshotSessionId,
+    presentationTitle,
+    sessionId,
+  ]);
+
   const settleCurrentQueueInputs = useCallback((targetSessionId: string) => {
     const current = snapshotRef.current;
     if (!current || current.sessionId !== targetSessionId) return;
@@ -4550,6 +4593,7 @@ export function SessionPane({
   const composerNode = readOnly ? null : (
     <ConversationComposer
       key="conversation-composer"
+      placeholderVariant={composerPlaceholderVariant}
       // Snapshot 仍服务用量、路由与运行态；工具栏的 mode/model 只读下方 Composer Draft。
       snapshot={snapshot}
       sessionId={sessionId}
