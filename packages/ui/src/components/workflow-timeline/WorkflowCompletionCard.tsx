@@ -46,6 +46,8 @@ export interface WorkflowCompletionCardProps {
   renderPreview?: (artifact: WorkflowCompletionArtifact) => ReactNode;
   onOpenRun?: () => void;
   onOpenArtifact?: (artifactId: string) => void;
+  /** 这条 run 是 Multitask：种类词说产品名而不是「Workflow」。 */
+  multitask?: boolean;
   testIdKey: string;
 }
 
@@ -155,6 +157,7 @@ export function WorkflowCompletionCard({
   artifacts,
   artifactsTruncated = false,
   figures,
+  multitask = false,
   name,
   onOpenArtifact,
   onOpenRun,
@@ -163,6 +166,9 @@ export function WorkflowCompletionCard({
 }: WorkflowCompletionCardProps) {
   const { intl, locale } = useZCodeIntl();
   const format = intl.formatMessage.bind(intl);
+  const kindLabel = format({
+    id: multitask ? "chat.toolCall.multitask.card.completed" : WORKFLOW_RUN_KIND_ID.completed,
+  });
   const labels = useMemo(
     () => buildPresetLabels((descriptor, values) => intl.formatMessage(descriptor, values)),
     [intl],
@@ -194,14 +200,14 @@ export function WorkflowCompletionCard({
 
   return (
     <section
-      aria-label={format({ id: WORKFLOW_RUN_KIND_ID.completed })}
+      aria-label={kindLabel}
       className="wf-motion wf-arrive flex w-full min-w-0 flex-col gap-2.5 rounded-xl border border-border/70 bg-card/70 px-3.5 pb-3 pt-1.5"
       data-testid={`workflow-completion-card-${testIdKey}`}
       data-workflow-completion-card="true"
     >
       <WorkflowCardHeader
         expanded={false}
-        kind={format({ id: WORKFLOW_RUN_KIND_ID.completed })}
+        kind={kindLabel}
         name={name}
         status={<WorkflowRunStatus status="completed" testId="workflow-completion-status" />}
         {...(onOpenRun === undefined ? {} : { onOpenDetails: onOpenRun })}

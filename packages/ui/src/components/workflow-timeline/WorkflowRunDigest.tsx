@@ -27,6 +27,8 @@ import {
   type WorkflowRunSettingsHost,
 } from "./WorkflowRunSettingsPopover.js";
 import { timelineHeight, WorkflowTimeline } from "./WorkflowTimeline.js";
+import { isMultitaskRun } from "./multitask-board-model.js";
+import { MultitaskWorkerBoard, type MultitaskWorkerOpenRequest } from "./MultitaskWorkerBoard.js";
 
 /** 下方运行卡默认展开，无箭头但仍可收起；状态由标题表达。 */
 export interface WorkflowRunDigestProps {
@@ -55,6 +57,8 @@ export interface WorkflowRunDigestProps {
   onCancel?: () => void;
   /** 点一枚药丸开那个子代理的 transcript；缺席即药丸不可点。 */
   onOpenPill?: (pill: TimelinePill) => void;
+  /** Multitask worker 行里「打开对话记录」；缺席即不渲染该入口。 */
+  onOpenWorker?: (request: MultitaskWorkerOpenRequest) => void;
   /** 点脚本药丸开脚本 transcript、落到那一站；缺席即脚本药丸不可点。 */
   onOpenWorkspace?: (pill: TimelinePill) => void;
   /** 点一枚产物药丸开产物 tab；缺席即产物药丸禁用。 */
@@ -79,6 +83,7 @@ export function WorkflowRunDigest({
   onOpenArtifact,
   onOpenPill,
   onOpenRun,
+  onOpenWorker,
   onOpenWorkspace,
   onResume,
   onCancel,
@@ -101,7 +106,9 @@ export function WorkflowRunDigest({
         : undefined,
     [graph, run],
   );
-  const hasRail = model !== undefined && model.stations.length > 0;
+  // Multitask run 以 worker 为主视图：阶段线留给详情侧板（高级视图），卡上画 worker 行。
+  const multitask = isMultitaskRun(run);
+  const hasRail = multitask || (model !== undefined && model.stations.length > 0);
   const shown = useMemo(
     () =>
       expanded || !model
@@ -127,8 +134,11 @@ export function WorkflowRunDigest({
   // 细节串的最后一段是子代理模型名（没指定过模型就没有这一段），强度与规范串进 tooltip。
   const cardDetail = workflowCardDetail(format, model, graph, run, subagentModelProviderName);
   const live = summary?.status === "running";
+  // 同一个 run 在卡与发起行上叫同一个产品名：Multitask run 不说「Workflow running」。
+  const kindId =
+    summary === undefined ? WORKFLOW_RUN_ENDED_KIND_ID : workflowRunKindMessageId(summary);
   const kind = format({
-    id: summary === undefined ? WORKFLOW_RUN_ENDED_KIND_ID : workflowRunKindMessageId(summary),
+    id: multitask ? kindId.replace("chat.toolCall.workflow.card.", "chat.toolCall.multitask.card.") : kindId,
   });
   const questionsLabel =
     pendingQuestions > 0
@@ -240,7 +250,11 @@ export function WorkflowRunDigest({
         }
         {...(onOpenRun === undefined ? {} : { onOpenDetails: () => onOpenRun() })}
       />
-      {shown === undefined || !hasRail ? null : (
+      {multitask && run !== undefined ? (
+        expanded ? (
+          <MultitaskWorkerBoard run={run} {...(onOpenWorker === undefined ? {} : { onOpenWorker })} />
+        ) : null
+      ) : shown === undefined || !hasRail ? null : (
         // 收起时只隐藏代理，保留阶段线作为运行进度概览。
         <div
           className={cn("wf-digest-plot overflow-hidden")}

@@ -1,3 +1,4 @@
+import { isMultitaskRun } from "@/components/workflow-timeline/multitask-board-model.js";
 import { useMemo } from "react";
 import type { WorkflowRunArtifactSummary } from "@zcode/shared/zcode-protocol-v4";
 import {
@@ -87,6 +88,8 @@ export function ConversationWorkflowCompletion({
 
   const shared = {
     artifactsTruncated: completion.artifactsTruncated,
+    // 活投影在场才认得出 Multitask；冷态（run 已出投影）退回 Workflow 的中性说法。
+    multitask: isMultitaskRun(run),
     figures,
     name: completion.name,
     testIdKey: turnKey,
