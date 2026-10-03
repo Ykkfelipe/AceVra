@@ -28,6 +28,7 @@ export const ZCODE_KNOWN_TOOL_NAMES = [
   "Task",
   "Skill",
   "CreateWorkflow",
+  "Multitask",
   // 修订入口：登记进 workflow family 让确认窗
   // 按 family 选中运行确认块；工具行侧则按名先分流（resolveRenderer.ts），family 兜底不会吞掉它。
   "AmendWorkflow",
@@ -87,6 +88,7 @@ const TOOL_FAMILY_BY_NAME: Record<ZCodeKnownToolName, ZCodeToolFamily> = {
   Task: "agent",
   Skill: "skill",
   CreateWorkflow: "workflow",
+  Multitask: "workflow",
   AmendWorkflow: "workflow",
   submit_result: "workflow",
 };

@@ -22,6 +22,7 @@ import type {
   WorkspaceHookPolicyProvider,
 } from "@zcode/core";
 import type {
+  MultitaskHandoffStartRejectionReason,
   WorkspaceHookReviewDecision,
   WorkspaceHookTrustRevokeTarget,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -30,6 +31,7 @@ import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selectio
 export type { ZCodeModelOption } from "@zcode/shared";
 import type { ModelProviderSourceTitle } from "../model-config.js";
 import type { ZCodeInstalledPluginData } from "../plugins.js";
+import type { MultitaskHandoffStartRequest } from "./cross-mode-handoff-service.js";
 import type {
   AutomationPort,
   OffPeakPort,
@@ -290,6 +292,17 @@ export interface SetLocaleResult {
   traceId: TraceContext["traceId"];
 }
 
+/** Cross-Mode handoff 发起结果（结构化分支，不 throw；供命令层映射 ACK）。 */
+export type ZCodeAppMultitaskHandoffStartResult =
+  | {
+      ok: true;
+      handoffId: string;
+      status: "accepted" | "rejected";
+      externalRef: { kind: string; id: string } | null;
+      reason: string | null;
+    }
+  | { ok: false; reason: MultitaskHandoffStartRejectionReason; message?: string };
+
 export interface ZCodeApp {
   readonly sessionId: SessionId;
   readonly traceId: string;
@@ -441,6 +454,15 @@ export interface ZCodeApp {
     scope?: "project" | "global";
     args?: Record<string, unknown>;
   }): Promise<StartSavedWorkflowRunResult>;
+  /**
+   * Cross-Mode handoff（Coding → Multitask）：归一化冻结 packet → 冻结快照 → 准入 →
+   * 经目标会话 Multitask **既有的**提交路径执行。运行确认闸门、run 生命周期、后台登记与
+   * 完成通知全部沿用既有实现，本能力不复制任何一侧状态。可选能力；宿主未接时命令层回
+   * 能力不支持错误。注意：返回前会等待运行确认裁决——未确认前不会产生任何 run。
+   */
+  startMultitaskHandoff?(
+    input: Omit<MultitaskHandoffStartRequest, "traceContext">,
+  ): Promise<ZCodeAppMultitaskHandoffStartResult>;
   /**
    * GUI「配置」改一个 run 的子代理模型与并发上界：以同一份脚本修订出新 run，不经模型轮、不开确认窗。可选能力：端口
    * 缺席、或端口不带 `amend` / `getScript` 时不注册（网关回能力不支持错误）。失败以结构化 `reason`

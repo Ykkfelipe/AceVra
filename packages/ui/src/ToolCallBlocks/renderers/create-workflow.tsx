@@ -27,7 +27,7 @@ import {
   workflowRunKindMessageId,
 } from "@/components/workflow-timeline/WorkflowCardChrome.js";
 import { WorkflowTimeline } from "@/components/workflow-timeline/WorkflowTimeline.js";
-import { isAmendWorkflowToolCall } from "@/lib/workflowToolNames.js";
+import { isAmendWorkflowToolCall, isMultitaskToolCall } from "@/lib/workflowToolNames.js";
 import {
   isPlainRecord,
   readWorkflowAmendTarget,
@@ -76,6 +76,8 @@ export function CreateWorkflowToolCallBlock(context: ToolCallBlockRenderContext)
   const { intl } = useZCodeIntl();
   const { toolCall } = context.toolCallNode;
   const amend = isAmendWorkflowToolCall(toolCall);
+  const kindLabelOverride =
+    context.kindLabelOverride ?? (isMultitaskToolCall(toolCall) ? "Multitask" : undefined);
   const amendTarget = amend ? readWorkflowAmendTarget(toolCall.input) : undefined;
 
   const display = useMemo(() => readWorkflowDisplay(toolCall.raw), [toolCall.raw]);
@@ -235,7 +237,7 @@ export function CreateWorkflowToolCallBlock(context: ToolCallBlockRenderContext)
           canToggle={!summaryOnly && canToggle}
           forceOpen={!summaryOnly && forceOpen}
           kindLabel={
-            context.kindLabelOverride ??
+            kindLabelOverride ??
             intl.formatMessage({
               id: readWorkflowPrelaunchKindMessageId(
                 {
@@ -272,7 +274,7 @@ export function CreateWorkflowToolCallBlock(context: ToolCallBlockRenderContext)
     workflowRun !== undefined
       ? workflowRunKindMessageId(workflowRun)
       : readWorkflowKindMessageId(toolCall.raw, context.isRunning, amend);
-  const kindText = context.kindLabelOverride ?? intl.formatMessage({ id: kindId });
+  const kindText = kindLabelOverride ?? intl.formatMessage({ id: kindId });
   // 种类词按文案换（编写中 → 待确认 → 运行中）：换词动画由表头自己包，见 WorkflowCardHeader。
   const live = workflowRun !== undefined ? workflowRun.status === "running" : context.isRunning;
   const status =

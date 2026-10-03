@@ -14,6 +14,10 @@ import {
   amendWorkflowRunSettingsResultSchema,
 } from "./workflow-run-settings-command.js";
 import {
+  startMultitaskHandoffCommandSchema,
+  startMultitaskHandoffResultSchema,
+} from "./multitask-handoff-command.js";
+import {
   workspaceHookReviewCommandTargetSchema,
   workspaceHookReviewDecisionSchema,
   workspaceHookTrustRevokeTargetSchema,
@@ -253,6 +257,9 @@ export const commandPayloadSchemas = {
   // amendWorkflowRunSettings：run 卡 / 详情页的「配置」直接请 agent 以新设置修订 run，不经模型轮。载荷、结果与拒绝
   // 词表见 workflow-run-settings-command.ts；能力缺席 → V4CapabilityUnsupportedError。
   amendWorkflowRunSettings: amendWorkflowRunSettingsPayloadSchema,
+  // startMultitaskHandoff：Coding → Multitask 跨模式交接入口（载荷、结果与拒绝词表见
+  // multitask-handoff-command.ts；能力缺席 → V4CapabilityUnsupportedError）。
+  startMultitaskHandoff: startMultitaskHandoffCommandSchema,
   renameSession: z.object({ title: z.string() }),
   deleteSession: z.object({}),
   discardSharedContext: z.object({ contextId: z.string().trim().min(1) }).strict(),
@@ -420,6 +427,7 @@ export const commandResultSchema = z.discriminatedUnion("type", [
     runId: z.string().min(1),
     toolCallId: z.string().min(1),
   }),
+  startMultitaskHandoffResultSchema,
   amendWorkflowRunSettingsResultSchema,
   z.object({
     // messageId 只在 TurnStarted 后作为旁路归因补齐；Core admission ACK 不等待

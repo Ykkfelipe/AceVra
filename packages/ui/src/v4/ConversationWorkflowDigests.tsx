@@ -1,4 +1,5 @@
 import type { TimelinePill } from "@/components/workflow-timeline/timeline-model.js";
+import type { MultitaskWorkerOpenRequest } from "@/components/workflow-timeline/MultitaskWorkerBoard.js";
 import { WorkflowRunDigest } from "@/components/workflow-timeline/WorkflowRunDigest.js";
 import type { WorkflowRunSettingsHost } from "@/components/workflow-timeline/WorkflowRunSettingsPopover.js";
 import { WorkflowSettingsChangeRow } from "@/components/workflow-timeline/WorkflowSettingsChangeRow.js";
@@ -77,6 +78,12 @@ export function ConversationWorkflowDigests({
                 });
               }
             : undefined;
+        // Multitask worker 行：与药丸同一条打开路径（同一个 tab），只是身份直接来自 actor。
+        const onOpenWorker =
+          context.onOpenWorkflowActor && sessionId && summary?.run
+            ? (request: MultitaskWorkerOpenRequest) =>
+                context.onOpenWorkflowActor?.({ parentSessionId: sessionId, runId, ...request })
+            : undefined;
         // 脚本药丸：与工具卡同一条路，开同一个 tab。
         const onOpenWorkspace =
           context.onOpenWorkflowWorkspace && sessionId && summary?.run
@@ -145,6 +152,7 @@ export function ConversationWorkflowDigests({
             {...(onResume === undefined ? {} : { onResume })}
             {...(onCancel === undefined ? {} : { onCancel })}
             {...(onOpenPill === undefined ? {} : { onOpenPill })}
+            {...(onOpenWorker === undefined ? {} : { onOpenWorker })}
             {...(onOpenWorkspace === undefined ? {} : { onOpenWorkspace })}
             {...(onOpenArtifact === undefined ? {} : { onOpenArtifact })}
             {...(settingsHost === undefined ? {} : { settingsHost })}

@@ -377,3 +377,6 @@ export {
   taskArtifactMimeForFileName,
   taskArtifactRowType,
 } from "./task-artifacts.js";
+
+// Cross-Mode Continuity 契约（milestone 1：仅契约与边界；不切换模式、不派发工作）。
+export * from "./cross-mode/index.js";

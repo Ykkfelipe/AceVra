@@ -13,6 +13,8 @@ export type {
   AgentRuntimeConfig,
   AgentRuntimeDeps,
   ConversationRewindResult,
+  ExecuteToolsOptions,
+  ExecuteToolsResult,
   ExecuteTurnOptions,
   ModelExecutionContext,
   PromptAdmissionOptions,

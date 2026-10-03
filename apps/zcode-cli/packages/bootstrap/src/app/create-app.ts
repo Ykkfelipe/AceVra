@@ -86,6 +86,13 @@ import { createModelCatalogPort } from "./model-catalog-port.js";
 import { createDynamicWorkflowRunProgressSink } from "./dynamic-workflow-run-progress-sink.js";
 import { createScriptWorkflowAgentRuntime } from "./script-workflow-child-runtime.js";
 import { workflowActorModelPolicy } from "./workflow-actor-model.js";
+import { multitaskActorPolicy } from "./multitask-actor-policy.js";
+import {
+  createCrossModeMultitaskHandoffService,
+  readMultitaskRunTasks,
+  type MultitaskHandoffStartRequest,
+} from "./cross-mode-handoff-service.js";
+import { MultitaskHandoffSessionBusyError } from "./cross-mode-handoff-executor.js";
 import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
 import {
   createNodeReplBrowserBroker,
@@ -610,6 +617,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                   // actor 的工具面是减法（全集减去会悬挂/越权的交互工具），只能经 configOverrides
                   // 表达（request.opts.tools 只有 allowlist）。
                   ...workflowActorToolPolicy(),
+                  ...multitaskActorPolicy(persona),
                   // 模型面：`runSubagentModel` 是本 run 自己的选择（`subagent_model`），在场时整条
                   // 覆盖，排在 pin 之上——主代理不受它影响。没有它也没有 pin 就不覆盖——child runtime
                   // 的基线本就是父会话当前模型（工厂的基线，见 script-workflow-child-runtime.ts）。
@@ -619,7 +627,9 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                   ...workflowActorModelPolicy(
                     {
                       parentSelection: getRuntime().getSessionModelSelection(),
-                      ...(runSubagentModel === undefined ? {} : { runSelection: runSubagentModel }),
+                      ...((runSubagentModel ?? persona.worker?.modelSelection) === undefined
+                        ? {}
+                        : { runSelection: runSubagentModel ?? persona.worker?.modelSelection }),
                     },
                     pinnedModel,
                   ).configOverrides,
@@ -718,6 +728,49 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       fileSystemPort,
       logger,
     });
+
+    // ── Cross-Mode handoff（生产 HandoffExecutionPort 接线）─────────────────────────
+    // Coding → Multitask：归一化冻结 packet → 准入 → 经目标会话**既有**的 Multitask 提交
+    // 路径执行（runtime.scheduleTools/executeTools）——运行确认闸门、run 生命周期、后台登记
+    // 与完成通知全部沿用既有实现；本接线不复制任何一侧状态、不静默绕过确认。
+    // 能力面无条件注册：目标不可用（Multitask 工具不在场）是可重试的业务拒绝，与「宿主没有
+    // 该能力」是两件事（后者由宿主演进时根本不注册方法表达）。
+    const crossModeHandoffService = createCrossModeMultitaskHandoffService({
+      host: {
+        scheduleTools: (toolCalls) => getRuntime().scheduleTools(toolCalls),
+        executeTools: (toolCalls, schedule, executeOptions) => {
+          // 提交只能发生在会话空闲时：有活动 turn 就拒（可重试），绝不与 turn 并发执行。
+          if (getRuntime().getActiveTurnInfo() !== undefined) {
+            throw new MultitaskHandoffSessionBusyError();
+          }
+          return getRuntime().executeTools(toolCalls, schedule, executeOptions);
+        },
+      },
+    });
+    // run 结算的自动回流：只认 completed（产物 = 逐任务报告；partial 由报告内容推出）。
+    // stopped 是**可 resume** 的中间态——这里绝不抢跑，避免挡掉 resume 后的 completed 回流。
+    const unsubscribeCrossModeHandoffSettled = dynamicWorkflowRunPort?.subscribeRunSettled(
+      ({ runId }) => {
+        void (async () => {
+          const handoffId = crossModeHandoffService.handoffForRun(runId);
+          if (!handoffId) return;
+          const detail = await dynamicWorkflowRunPort.getRunDetail?.(runId);
+          if (!detail || detail.status !== "completed") return;
+          await crossModeHandoffService.completeFromRun(handoffId, {
+            runId,
+            runStatus: detail.status,
+            tasks: readMultitaskRunTasks(detail.result),
+          });
+        })().catch((error: unknown) => {
+          logger?.warn?.("Cross-mode handoff return failed", {
+            errorMessage: error instanceof Error ? error.message : String(error),
+            event: "cross_mode.handoff.return_failed",
+            module: "bootstrap.app",
+            runId,
+          });
+        });
+      },
+    );
     // 模型目录：工具层把用户说的模型名解析成 workflow run 的子代理选型（model-catalog-port.ts）。
     const modelCatalogPort = createModelCatalogPort({
       registry: options.providerRegistry,
@@ -852,7 +905,12 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       // 引擎活在本 App 的闭包里，关掉 App 而不停它，journal 行会停在 running 等下一次孤儿收敛。
       ...(dynamicWorkflowRunPort === undefined
         ? {}
-        : { closeDynamicWorkflowRuns: () => dynamicWorkflowRunPort.close() }),
+        : {
+            closeDynamicWorkflowRuns: () => {
+              unsubscribeCrossModeHandoffSettled?.();
+              return dynamicWorkflowRunPort.close();
+            },
+          }),
       configResult,
       configuredMcpServers,
       ...(options.configuredDefaultModelSelection
@@ -1253,6 +1311,34 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
               return await getRuntime().startSavedWorkflowRun({ ...input, traceContext });
             },
           }),
+      // Cross-Mode handoff（生产执行方）：命令层已做传输层校验；这里先看会话是否空闲
+      // （有活动 turn → session_busy，可重试），再走 handoff 服务的 归一化 → 准入 → 提交。
+      // 返回前等待运行确认闸门裁决——与 Multitask 工具调用同一条等待语义。
+      startMultitaskHandoff: async (input: Omit<MultitaskHandoffStartRequest, "traceContext">) => {
+        if (getRuntime().getActiveTurnInfo() !== undefined) {
+          return { ok: false as const, reason: "session_busy" as const };
+        }
+        try {
+          const outcome = await crossModeHandoffService.start({ ...input, traceContext });
+          if (!outcome.ok) {
+            return { ok: false as const, reason: outcome.reason, message: outcome.message };
+          }
+          const record = outcome.record;
+          return {
+            ok: true as const,
+            handoffId: record.handoffId,
+            status: record.status === "accepted" ? ("accepted" as const) : ("rejected" as const),
+            externalRef: record.externalRef,
+            reason: record.rejectionReason,
+          };
+        } catch (error) {
+          return {
+            ok: false as const,
+            reason: "start_failed" as const,
+            message: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
       // GUI「配置」。它
       // 沿用前驱的脚本，所以端口必须既能 amend 又能读回脚本；缺一就不注册，GUI 拿到能力不支持。
       // 与 startSavedWorkflow 同一条用户执行边界：冷恢复的会话先恢复 Session 边界再落设置轮。

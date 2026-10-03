@@ -24,6 +24,7 @@ const EXPLORE_AGENT_ALLOWED_TOOL_SET = new Set<string>(EXPLORE_AGENT_ALLOWED_TOO
  * 长期解法是把 workflow child 的交互事件也镜像到父会话，随执行引擎落地时一并处理
  */
 const WORKFLOW_CHILD_DISALLOWED_TOOLS = [
+  "Multitask",
   CREATE_WORKFLOW_TOOL_NAME,
   // AmendWorkflow 与 CreateWorkflow 同一道 alwaysAsk 门、同一种嵌套编排，因同一个根因入列。
   AMEND_WORKFLOW_TOOL_NAME,

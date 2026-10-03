@@ -49,7 +49,16 @@ export interface ActorToolCounts {
   toolCalls: number;
   /** 其中看或动了外部世界的那些（读文件、跑命令、访问网络）；为 0 即这条 ask 是纯的。 */
   worldToolCalls: number;
+  /** 其中被判为改写工作区的那些（`isWorkspaceMutatingToolCall`）。Multitask 证据用。 */
+  mutatingToolCalls: number;
+  /** 其中入参带 shell `command` 的那些（测试、构建、脚本）。Multitask 证据用。 */
+  commandCalls: number;
+  /** 改写类调用触达的不同文件路径（`file_path` / `notebook_path`），至多 {@link MAX_CHANGED_FILES} 条。 */
+  filesChanged: string[];
 }
+
+/** 证据里列出的改动文件上限：证据是给人看的线索，不是完整清单，越界的路径不再收录。 */
+const MAX_CHANGED_FILES = 32;
 
 interface ActorToolActivity {
   /** 换 ask 时归零：计数重新数，下一个 ask 的第一笔写入要重新上报一次。 */
@@ -66,23 +75,42 @@ interface ActorToolActivity {
 export function createActorToolActivity(handlers: {
   /** 当前 ask 的子代理即将执行一个会改写工作区的工具（每个 ask 至多一次）。 */
   onMutating(): void;
+  /** 一次工具调用真正开跑、计数与 lastTool 已更新之后（每次调用一次）。 */
+  onToolStarted?(): void;
 }): ActorToolActivity {
   let reported = false;
   let toolCalls = 0;
   let worldToolCalls = 0;
+  let mutatingToolCalls = 0;
+  let commandCalls = 0;
+  const filesChanged = new Set<string>();
   let lastTool: AskLastTool | undefined;
   /** toolCallId → scheduled 时的名字与入参，等 started 来认领。 */
   const scheduled = new Map<string, ToolCallSummaryHold>();
   let unsubscribeEvents: (() => void) | undefined;
+  const countMutation = (input: unknown): void => {
+    mutatingToolCalls++;
+    const changed = readInputString(input, "file_path") ?? readInputString(input, "notebook_path");
+    if (changed !== undefined && filesChanged.size < MAX_CHANGED_FILES) filesChanged.add(changed);
+  };
   return {
     reset: () => {
       reported = false;
       toolCalls = 0;
       worldToolCalls = 0;
+      mutatingToolCalls = 0;
+      commandCalls = 0;
+      filesChanged.clear();
       lastTool = undefined;
       scheduled.clear();
     },
-    counts: () => ({ toolCalls, worldToolCalls }),
+    counts: () => ({
+      toolCalls,
+      worldToolCalls,
+      mutatingToolCalls,
+      commandCalls,
+      filesChanged: [...filesChanged],
+    }),
     lastTool: () => lastTool,
     observe: (runtime, sessionId) => {
       if (typeof (runtime as Partial<AgentRuntime>).subscribeEvents !== "function") return;
@@ -104,7 +132,11 @@ export function createActorToolActivity(handlers: {
             }) ?? lastTool;
           toolCalls++;
           if (isWorldTouchingToolCall(capability)) worldToolCalls++;
-          if (!isWorkspaceMutatingToolCall(capability)) return;
+          if (readInputString(hold?.input, "command") !== undefined) commandCalls++;
+          const mutating = isWorkspaceMutatingToolCall(capability);
+          if (mutating) countMutation(hold?.input);
+          handlers.onToolStarted?.();
+          if (!mutating) return;
           if (reported) return;
           reported = true;
           handlers.onMutating();
@@ -135,4 +167,11 @@ function holdScheduled(
     if (oldest.done === true) return;
     scheduled.delete(oldest.value);
   }
+}
+
+/** 入参里某个键的非空字符串值；入参不是对象或键不是非空字符串时缺席。 */
+function readInputString(input: unknown, key: string): string | undefined {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return undefined;
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }

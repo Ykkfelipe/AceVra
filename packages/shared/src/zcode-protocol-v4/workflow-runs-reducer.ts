@@ -158,12 +158,14 @@ function applyWorkflowRunEvent(
       // 出生阶段名：`actor-created` 是 actor 的出生事件，戳只在这里到，
       // 没有后续事件可以携带或改写它。
       const phaseName = boundedPhaseName(nonEmptyString(payload.phaseName));
+      const access = readWorkerAccess(payload.persona);
       const actor: WorkflowRunActor = {
         siteId: ref.siteId,
         ordinal: ref.ordinal,
         ...(name ? { name } : {}),
         ...(derived.actorSessionId ? { sessionId: derived.actorSessionId } : {}),
         ...(phaseName === undefined ? {} : { phaseName }),
+        ...(access === undefined ? {} : { access }),
         // 占位值：紧接着的 withDerivedWorkflowActorStatuses 会按节点与 run 终态重算。
         status: "waiting",
       };
@@ -638,4 +640,13 @@ function boundedActorName(name: string | undefined): string | undefined {
  */
 function boundedPhaseName(name: string | undefined): string | undefined {
   return name === undefined ? undefined : name.slice(0, WORKFLOW_RUNS_LIMITS.maxPhaseNameLength);
+}
+
+/** persona.worker.access（Multitask 冻结的读写权限）；不是 Multitask worker 或读不出时缺席。 */
+function readWorkerAccess(persona: unknown): "read" | "write" | undefined {
+  if (typeof persona !== "object" || persona === null) return undefined;
+  const worker = (persona as { worker?: unknown }).worker;
+  if (typeof worker !== "object" || worker === null) return undefined;
+  const access = (worker as { access?: unknown }).access;
+  return access === "read" || access === "write" ? access : undefined;
 }

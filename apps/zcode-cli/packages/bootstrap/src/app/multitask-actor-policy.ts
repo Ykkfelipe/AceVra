@@ -1,0 +1,37 @@
+import { ESCALATE_TOOL_NAME, SUBMIT_RESULT_TOOL_NAME } from "@zcode/contracts";
+import type { PersonaSpec } from "@zcode/dynamic-workflow";
+import type { AgentRuntimeConfig } from "@zcode/core";
+import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
+
+/** Frozen admission policy is reconstructed by the existing journal/replay path. */
+export function multitaskActorPolicy(persona: PersonaSpec): Partial<AgentRuntimeConfig> {
+  const worker = persona.worker;
+  if (!worker) return {};
+  return {
+    ...(worker.modelSelection ? { modelSelection: worker.modelSelection } : {}),
+    ...(worker.maxTurns ? { maxTurns: worker.maxTurns } : {}),
+    // 不在这里兜底成 "auto"：runtime 的 mode "auto" 尚未实现，会让冻结重放出来的 worker
+    // 直接被权限层拒绝。留空时由 actor 创建路径沿用既有的模式继承。
+    ...(worker.permissionMode ? { mode: worker.permissionMode } : {}),
+    // 通配 "*" 必须当作"不限定"：运行时按精确工具名求交集，字面量 "*" 一个都匹配不上，
+    // 会把 worker 的工具面整体清空（模型无工具可用，turn 只说一句就结束）。
+    // M2 live 回归：read worker 的白名单只有 Read/Glob/Grep/WebFetch/WebSearch，把 submit_result 与
+    // escalate 一起滤掉了——typed 任务下 worker 根本交不了结果，每个 reader 都以 ResultNotSubmitted 失败
+    // （model-io 实测 toolNames 里没有 submit_result）。白名单收窄的是 worker 的**能力**，Workflow 的
+    // 协议工具是运行时收结果 / 提问的通道，不属于能力面，必须恒在。
+    toolAllowlist:
+      worker.tools && worker.tools.length > 0 && !worker.tools.includes("*")
+        ? [...new Set([...worker.tools, SUBMIT_RESULT_TOOL_NAME, ESCALATE_TOOL_NAME])]
+        : undefined,
+    toolDisallowlist: [
+      ...workflowActorToolPolicy().toolDisallowlist,
+      ...(worker.disallowedTools ?? []),
+      // M1 是浅层协调；子 worker 不得绕过 subagents.enabled 再开编排或恢复其他 run。
+      "Agent",
+      "Task",
+      "Workflow",
+      "ResumeWorkflowRun",
+      "SaveWorkflow",
+    ],
+  };
+}

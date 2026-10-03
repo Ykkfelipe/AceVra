@@ -30,6 +30,16 @@ declare interface Node<T> extends PromiseLike<T> {}
 declare interface AgentPersona {
   /** System prompt describing the actor's role. */
   system?: string;
+  /** Frozen per-worker policy supplied by Multitask admission. */
+  worker?: {
+    profile: string;
+    access: "read" | "write";
+    modelSelection?: { providerId: string; modelId: string; options?: { reasoningLevel?: string } };
+    tools?: readonly string[];
+    disallowedTools?: readonly string[];
+    maxTurns?: number;
+    permissionMode?: "auto" | "plan";
+  };
 }
 
 /**

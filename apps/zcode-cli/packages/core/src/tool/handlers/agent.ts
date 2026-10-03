@@ -120,6 +120,7 @@ function buildAgentProviderDescription(
     ...(options.dynamicWorkflowEnabled === false
       ? []
       : [
+          'If the user explicitly asks for Multitask or parallel workers, use Multitask for a bounded task graph and synthesize its final results yourself.',
           '- If the user explicitly asks for a workflow ("use a workflow", "使用 workflow", "用工作流", or any phrasing naming workflow/工作流 as the means), the CreateWorkflow tool is mandatory: do not use this tool instead, however small the task.',
         ]),
   ].join("\n");

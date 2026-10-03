@@ -10,12 +10,14 @@ export function WorkflowToolSummary({
   summary,
   onOpen,
   amend = false,
+  multitask = false,
 }: {
   toolCallId: string;
   summary: WorkflowRunCardSummary;
   onOpen?: () => void;
   /** AmendWorkflow 发起行：种类词换成「工作流已调整」。 */
   amend?: boolean;
+  multitask?: boolean;
 }) {
   const { intl } = useZCodeIntl();
   // ToolLayout 是 memo 组件：primaryText 若是内联 JSX，每次渲染都会打破 memo（reactStableReferences 测试会拦下）。
@@ -59,9 +61,13 @@ export function WorkflowToolSummary({
       <ToolLayout
         toolId={toolCallId}
         icon={WORKFLOW_CARD_ICON}
-        kindLabel={intl.formatMessage({
-          id: amend ? "chat.toolCall.workflow.amend.amended" : "chat.toolCall.workflow.ran",
-        })}
+        kindLabel={
+          multitask
+            ? "Multitask"
+            : intl.formatMessage({
+                id: amend ? "chat.toolCall.workflow.amend.amended" : "chat.toolCall.workflow.ran",
+              })
+        }
         canToggle={false}
         primaryText={primaryText}
         summaryAction={

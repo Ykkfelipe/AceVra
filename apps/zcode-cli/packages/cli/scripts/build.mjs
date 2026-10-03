@@ -192,6 +192,10 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/workspace-hook-trust-store-file.ts",
   ),
+  // Cross-Mode 冻结契约的唯一入口；Multitask 采纳层（core/src/cross-mode）首次把它带进 CLI 打包闭包。
+  // 漏声明会被通用前缀改写成 `src/index.ts/cross-mode`（Cross-Mode × Multitask 集成时实测，
+  // 回归见 test/buildAliases.test.mjs）。
+  "@zcode/shared/cross-mode": resolve(rootDirectory, "../../packages/shared/src/cross-mode/index.ts"),
   "@zcode/shared/zcodeEndpoint": resolve(
     rootDirectory,
     "../../packages/shared/src/zcodeEndpoint.ts",

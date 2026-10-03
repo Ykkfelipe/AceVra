@@ -48,6 +48,8 @@ interface ActorModelActivityHandlers {
    * 不在飞就不报）。引擎据此关闭 amend-resume 的导入缓存。
    */
   onMutating?(instance: InstanceRef): void;
+  /** 在飞 ask 的一次工具调用开跑了（每次一次）；driver 据此给 Multitask worker 报进行中的进度。 */
+  onToolStarted?(): void;
 }
 
 /**
@@ -72,6 +74,8 @@ export interface ActorModelActivity {
    * 同一个 reset 归零，同一个 ask 内累加，nudge 起的新一轮算第二个 turn。
    */
   noteTurnResolved(): AskProgress;
+  /** 进行中这一轮的进度（不计轮）：`turn` 是正在跑的那一轮，工具计数、lastTool 与证据快照取此刻值。 */
+  progressNow(): AskProgress;
   /** 订阅 runtime 的会话事件（模型状态 + 工具调用）；最小 stub runtime 没有 subscribeEvents 时空操作。 */
   observe(runtime: AgentRuntime, sessionId: SessionId): void;
   unsubscribe(): void;
@@ -128,6 +132,7 @@ export function createActorModelActivity(input: {
       const instance = live?.();
       if (instance !== undefined) handlers.onMutating?.(instance);
     },
+    onToolStarted: () => handlers.onToolStarted?.(),
   });
 
   const anyExecuting = (): boolean => {
@@ -203,6 +208,17 @@ export function createActorModelActivity(input: {
         turn: turnsResolved,
         toolCalls: toolActivity.counts().toolCalls,
         ...(lastTool === undefined ? {} : { lastTool }),
+      };
+    },
+    progressNow: () => {
+      const lastTool = toolActivity.lastTool();
+      const evidence = toolActivity.counts();
+      return {
+        turn: turnsResolved + 1,
+        toolCalls: evidence.toolCalls,
+        ...(lastTool === undefined ? {} : { lastTool }),
+        // 证据快照随进度落 journal：被 Stop 打断的尝试在 resume 后仍能被同一任务累计。
+        evidence,
       };
     },
     observe: (runtime, sessionId) => {

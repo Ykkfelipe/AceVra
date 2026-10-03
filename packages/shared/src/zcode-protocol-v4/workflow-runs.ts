@@ -131,6 +131,12 @@ export const workflowRunActorSchema = z.object({
   sessionId: z.string().min(1).max(256).optional(),
   status: z.enum(["waiting", "running", "completed"]),
   /**
+   * Multitask worker 的冻结读写权限（取自 `actor-created` 的 persona.worker.access）。
+   * 在场即这是 Multitask run 的 worker：UI 据此走 worker-first 视图并标出只读 / 写入。
+   * 普通 Workflow actor 没有 worker 策略，整键缺席。
+   */
+  access: z.enum(["read", "write"]).optional(),
+  /**
    * 这个实例**出生**在哪个阶段：它的 ordinal 被铸造的那一刻，控制流所在的 `phase("…")` 标记名。UI 按**名字**与 `phases[].name`
    * 关联——名字是引擎与分析器唯一共享的词汇，所以界与 `maxPhaseNameLength` 同值。
    *
