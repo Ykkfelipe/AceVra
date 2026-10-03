@@ -83,6 +83,7 @@ export {
   getUserZCodeDir,
   getZCodeDataRootDir,
   getConversationWorkspaceDir,
+  getPersonalBotWorkspaceDir,
   getAppConfigDir,
   getExportLogStageDir,
   getExportLogDir,
