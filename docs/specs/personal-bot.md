@@ -654,9 +654,12 @@ control.sessionEnded)` changes. Coding hosts do not pass it.
   inspector if hidden, switches it to the Computers tab and selects that computer — the same
   surface contract as the coding side pane. It can be hidden from the header; the choice
   is a per-viewer convenience kept in `localStorage` (wrapped in try/catch).
-- **Cross-Mode preparation:** the header's trailing actions slot (`data-testid="bot-conversation-actions"`)
-  is the reserved location for a future explicit "Work on this" action. It renders nothing in V2. No
-  handoff behaviour, admission record or Multitask change ships here (§13.6 unchanged).
+- **Cross-Mode:** the header's trailing actions slot (`data-testid="bot-conversation-actions"`)
+  hosts the explicit **Work on this** action (Bot → Coding), specified in
+  `docs/specs/cross-mode-bot-to-coding.md`. Bot still creates no admission record and implements no
+  execution port (§13.6): it only builds the frozen-contract draft from its own conversation and hands the
+  confirmed snapshot to the target Coding runtime. It never writes `conversation.json` for a handoff and
+  never offers personal memory or profile data as context.
 
 ### 16.6 Failure semantics (V2)
 
