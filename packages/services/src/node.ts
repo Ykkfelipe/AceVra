@@ -2595,6 +2595,19 @@ export function createLocalServices(options: {
   // OffPeakTaskService 单例在下方 DI register IIFE 中创建（晚于 agent service）；
   // 用前向引用 holder 惰性绑定——offPeak/create 协议请求只会发生在服务集合装配完成后。
   let offPeakTaskServiceForAgent: OffPeakTaskService | undefined;
+  // Personal Bot：Bot 服务在 service collection 装配时才创建，而 agent 服务需要更早拿到
+  // 解析器。用与 offPeakTaskServiceForAgent 相同的惰性持有者，调用时再取值。
+  let botServiceForAgent: IBotService | undefined;
+
+  /**
+   * 创建 Bot 服务并登记到惰性持有者。注册进 collection 的实例与记忆解析器读取的实例
+   * 必须是同一个，否则会出现两份并行状态（Bot 文档是单写者）。
+   */
+  function createAndHoldNodeBotService(): IBotService {
+    const service = createNodeBotService();
+    botServiceForAgent = service;
+    return service;
+  }
   // Task artifacts（phase 11）：宿主内部注册表。通道只暴露 delivery facade（list/read）；
   // 注册面仅注入给 browser-use 桥插桩与 Codex 投影等宿主内部集成。
   const taskArtifactRegistry = new TaskArtifactRegistry();
@@ -2614,6 +2627,19 @@ export function createLocalServices(options: {
     ...(modelSelectionReadinessSource ? { modelSelectionReadinessSource } : {}),
     authorizeLocalMediaPreviewPath: options?.authorizeLocalMediaPreviewPath,
     ...offPeakToolWiring,
+    // 个人记忆上下文：只把 Bot 模块渲染好的有界文本交回 agent。
+    // 不传 maxRecords/maxBytes——预算由 Bot 模块独占，协议里也没有这些字段。
+    personalMemoryContextResolver: async (request) => {
+      const bot = botServiceForAgent;
+      if (!bot) return { text: "", omittedCount: 0, byteLength: 0 };
+      const context = await bot.buildMemoryContext({ query: request.query });
+      // 显式只回三个字段：selected 里的原始记录绝不跨界。
+      return {
+        text: context.text,
+        omittedCount: context.omittedCount,
+        byteLength: context.byteLength,
+      };
+    },
     // 动态工作流灰度：与 Off-Peak 不同，
     // 这里不按 serviceAuthorityMode 裁剪——SSH/WSL/Docker 的 desktop-attached-remote Host
     // 是它自己那些 workspace 的唯一裁决者，灰度开启时远程 workspace 同样提供工作流。
@@ -3266,7 +3292,7 @@ export function createLocalServices(options: {
       }),
     )
     .register(IMemoryService, createMemoryService())
-    .register(IBotService, createNodeBotService())
+    .register(IBotService, createAndHoldNodeBotService())
     .register(ISettingsSyncService, createSettingsSyncService({ settingService }))
     .register(
       IFeedbackService,

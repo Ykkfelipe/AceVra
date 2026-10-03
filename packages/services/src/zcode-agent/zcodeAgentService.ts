@@ -313,6 +313,10 @@ import {
 import { handleBrowserExecuteRequest, handleBrowserListRequest } from "./zcodeAgentBrowserRpc.js";
 import { handleExecutionTargetRequest } from "./zcodeAgentExecutionTargetRpc.js";
 import {
+  handlePersonalMemoryContextRequest,
+  type PersonalMemoryContextResolver,
+} from "./zcodeAgentPersonalMemoryRpc.js";
+import {
   createCuaOperationTurnTracker,
   type CuaOperationWorkspaceTarget,
   type CuaOperationStateReporter,
@@ -905,6 +909,11 @@ interface CreateZCodeAgentServiceOptions extends Omit<
    * ExecutionTargets/RunOnTarget/TargetTask，反向请求一律 unavailable。
    */
   executionTargetExecutor?: ExecutionTargetExecutor;
+  /**
+   * Personal Bot M2 Phase 2：个人记忆上下文解析器，由 Bot 模块提供。
+   * 只有渲染好的有界文本会回到 agent；缺省时该请求返回空上下文（fail-open）。
+   */
+  personalMemoryContextResolver?: PersonalMemoryContextResolver;
   /**
    * 官方 Server MCP 身份头解析器。Agent 进程不持有用户身份权威，
    * 经 interaction/requestOfficialMcpAuthHeaders 向 host 索取本次请求的身份头。
@@ -2467,6 +2476,16 @@ export function createZCodeAgentService(
             requestId: request.id,
             params: request.params,
             workspace,
+          });
+          return;
+        }
+
+        if (request.method === zcodeProtocolMethods.interactionPersonalMemoryContext) {
+          handlePersonalMemoryContextRequest({
+            client,
+            resolver: options?.personalMemoryContextResolver,
+            requestId: request.id,
+            params: request.params,
           });
           return;
         }

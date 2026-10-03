@@ -34,6 +34,7 @@ import type {
   AutomationPort,
   OffPeakPort,
   ExecutionTargetPort,
+  PersonalMemoryContextPort,
   BackgroundTaskCancelResult,
   CollaborationMode,
   ContextSourcePort,
@@ -183,6 +184,11 @@ export interface ZCodeAppOptions {
   automationPort?: AutomationPort;
   offPeakPort?: OffPeakPort;
   executionTargetPort?: ExecutionTargetPort;
+  /**
+   * Personal Bot M2 Phase 2：每轮取回 host 渲染好的有界个人记忆上下文。
+   * 只有 personal_bot 会话会被 bootstrap 注入该 port；缺省 = 不注入。
+   */
+  personalMemoryPort?: PersonalMemoryContextPort;
   /** 首次真实用户执行或 cold-resume fallback 时解析一次，之后由 app 生命周期缓存。 */
   resolveInitialBashShellSelection?: () => Promise<ExecutionShellSelection | undefined>;
   /** Trusted embedder policy; workspace/project files cannot populate this field. */

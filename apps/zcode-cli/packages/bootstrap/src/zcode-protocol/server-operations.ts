@@ -108,6 +108,7 @@ import { createProtocolInteractionBroker } from "./interaction-broker.js";
 import { createProtocolAutomationPort } from "./automation-port.js";
 import { createProtocolOffPeakPort } from "./offpeak-port.js";
 import { createProtocolExecutionTargetPort } from "./execution-target-port.js";
+import { createProtocolPersonalMemoryContextPort } from "./personal-memory-port.js";
 import { createProtocolBrowserControlBroker } from "./browser-control-broker.js";
 import { mapComputerUseOperationEvent } from "./computer-use-operation-event.js";
 import { protocolMcpServersToRuntimeMcpConfig } from "./protocol-mcp-config.js";
@@ -3386,6 +3387,13 @@ async function createRecord(
     !workspace.workspaceIdentity?.trim()
       ? {
           executionTargetPort: createProtocolExecutionTargetPort(context, () => ownSessionRecord),
+        }
+      : {}),
+    // Personal Bot M2 Phase 2：个人记忆上下文端口。只给 personal_bot 会话注入——
+    // 非 Bot 会话根本没有这个 port，从结构上不可能拿到个人记忆（core 侧还有一道门禁）。
+    ...(taskType === "personal_bot"
+      ? {
+          personalMemoryPort: createProtocolPersonalMemoryContextPort(context, () => ownSessionRecord),
         }
       : {}),
     resolveInitialBashShellSelection: startupPreferences.resolveInitialBashShellSelection,
