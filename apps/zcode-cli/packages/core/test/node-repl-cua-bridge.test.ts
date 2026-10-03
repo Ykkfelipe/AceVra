@@ -55,6 +55,20 @@ function fakeBroker() {
             },
           };
         }
+        if (input.toolName === "screenshot") {
+          return {
+            content: [
+              {
+                type: "image",
+                data: Buffer.from("frame").toString("base64"),
+                mimeType: "image/png",
+                inline_screenshot: true,
+                requested_by_user: input.arguments?.for_user === true,
+              },
+              { type: "text", text: "frame facts" },
+            ],
+          };
+        }
         return { content: [{ type: "text", text: `fake:${input.toolName}` }] };
       },
     },
@@ -100,7 +114,11 @@ test("core handler cells expose the shared Computer Use bridge and wire the faca
       `const r = await globalThis.agent.computerUse.get_app_state({ pid: 1 });
        return JSON.stringify(r?.content?.[0]?.text ?? null);`,
     );
-    assert.match(String(call.result ?? ""), /observed/u, `facade round-trip failed: ${JSON.stringify(call.result)}`);
+    assert.match(
+      String(call.result ?? ""),
+      /observed/u,
+      `facade round-trip failed: ${JSON.stringify(call.result)}`,
+    );
     assert.deepEqual(calls, ["get_app_state"]);
   } finally {
     disposeNodeReplSession(SESSION_ID);
@@ -114,7 +132,11 @@ test("core handler fails closed without capability: bridge present, calls report
   try {
     const session = getNodeReplSessionForTest(context);
     const ordinary = await runCell(session, "return JSON.stringify({ ok: 1 + 1 });");
-    assert.match(String(ordinary.result ?? ""), /"ok":2/u, `ordinary JS must keep working: ${JSON.stringify(ordinary)}`);
+    assert.match(
+      String(ordinary.result ?? ""),
+      /"ok":2/u,
+      `ordinary JS must keep working: ${JSON.stringify(ordinary)}`,
+    );
 
     const denied = await runCell(
       session,
@@ -204,4 +226,42 @@ test("a host-recorded operation alone produces a node_repl display carrying cuaO
     _meta: { "zcode/nodeReplCuaOperation": "<script>" },
   });
   assert.equal(invalid, undefined);
+});
+
+test("CUA-1.6: observation screenshots split from user-requested ones at the bridge", async () => {
+  const { broker } = fakeBroker();
+  setCoreCuaBrokerFactoryForTest(() => broker);
+  const context = testContext({ sessionId: "test-session-cua-observation" });
+  try {
+    const session = getNodeReplSessionForTest(context);
+    // 默认截图是观察帧：模型照样看到（model content），但不进聊天 images。
+    const observation = await runCell(
+      session,
+      `await globalThis.agent.computerUse.screenshot({ pid: 1 }); return "ok";`,
+    );
+    assert.equal(observation.images, undefined, "observation frame must not enter chat images");
+    assert.equal(observation.observationImages?.length, 1);
+    assert.equal(observation.observationImages?.[0]?.mimeType, "image/png");
+
+    // for_user:true 的帧进 run 输出（聊天可见），observation 通道保持为空。
+    const requested = await runCell(
+      session,
+      `await globalThis.agent.computerUse.screenshot({ pid: 1, for_user: true }); return "ok";`,
+    );
+    assert.equal(requested.images?.length, 1, "requested frame must reach the chat");
+    assert.equal(requested.observationImages, undefined);
+
+    // 两类帧都必须到达模型内容通道（core 面：formatJsModelContent 消费这两个列表）。
+    const observationDisplay = await import("../src/tool/executor/result-display.js");
+    const coreDisplay = observationDisplay.createToolResultDisplay("js", {
+      logs: "",
+      observationImages: observation.observationImages ?? [],
+    });
+    assert.ok(coreDisplay, "observation-only output still produces a display");
+    assert.equal(coreDisplay.images, undefined, "observation images stay out of display.images");
+    assert.equal(coreDisplay.observationImages?.length, 1);
+  } finally {
+    disposeNodeReplSession("test-session-cua-observation");
+    setCoreCuaBrokerFactoryForTest(undefined);
+  }
 });

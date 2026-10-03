@@ -167,7 +167,9 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
     : undefined;
   const visibleError =
     toolCall.status === "failed" ? (model.error?.summary ?? context.errorText) : undefined;
-  const hasTechnicalDetails = Boolean(model.code || model.error?.stack);
+  const hasTechnicalDetails = Boolean(
+    model.code || model.error?.stack || (model.observationImages?.length ?? 0) > 0,
+  );
   const hasVisibleResult = Boolean(
     visibleError || model.resultText || model.images.length > 0 || model.persistedResult,
   );
@@ -228,12 +230,24 @@ export function NodeReplToolCallBlock(context: ToolCallBlockRenderContext) {
               wrapLabel={wrapLinesLabel}
             />
           </div>
-        ) : !context.isRunning && model.images.length === 0 ? (
+        ) : !context.isRunning &&
+          model.images.length === 0 &&
+          !(model.observationImages && model.observationImages.length > 0) ? (
           <p className="text-ui-base text-foreground-subtle">{noResultLabel}</p>
         ) : null}
 
-        {model.images.length > 0 ? (
+        {model.images.length > 0 && !model.imagesInConversation ? (
           <NodeReplImageGrid images={model.images} resultImageLabel={resultImageLabel} />
+        ) : null}
+
+        {/* 观察类截图（agent 自用；CUA-1.6）：只在步骤展开区以缩略图呈现，绝不进对话主流。 */}
+        {model.observationImages && model.observationImages.length > 0 ? (
+          <div data-testid="node-repl-observation-images">
+            <NodeReplImageGrid
+              images={model.observationImages}
+              resultImageLabel={resultImageLabel}
+            />
+          </div>
         ) : null}
 
         {model.persistedResult && fullResultLabel ? (

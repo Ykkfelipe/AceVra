@@ -34,6 +34,7 @@ import {
   CUA_REQUEST_ACCESS_STATUS_META_KEY,
   cuaRequestAccessStatusSchema,
 } from "@zcode/zcode-cua/request-access-contract";
+import { ZCODE_MCP_NODE_REPL_OBSERVATION_IMAGE_CONTENT_INDICES_META_KEY } from "@zcode/contracts/mcp";
 
 const MAX_DISPLAY_DIFF_HUNKS = 8;
 const MAX_DISPLAY_DIFF_LINES = 160;
@@ -41,6 +42,21 @@ const MAX_SEND_MESSAGE_DISPLAY_FIELD_BYTES = 4 * 1024;
 const MAX_TASK_STOP_DISPLAY_FIELD_BYTES = 16 * 1024;
 export const MAX_NODE_REPL_DISPLAY_IMAGE_BASE64_BYTES = 200 * 1024;
 const MAX_NODE_REPL_DISPLAY_IMAGES = 2;
+/** 观察类截图在 display 里只保留 1 张（详情缩略图用，绝不进聊天主流）。 */
+const MAX_NODE_REPL_DISPLAY_OBSERVATION_IMAGES = 1;
+
+/** MCP content 中被宿主标记为观察类截图的 image block 索引。 */
+function readNodeReplObservationImageIndices(output: Record<string, unknown>): Set<number> {
+  const meta = isRecord(output._meta) ? output._meta : undefined;
+  const value = meta?.[ZCODE_MCP_NODE_REPL_OBSERVATION_IMAGE_CONTENT_INDICES_META_KEY];
+  if (!Array.isArray(value)) return new Set<number>();
+  const contentLength = Array.isArray(output.content) ? output.content.length : 0;
+  return new Set(
+    value.filter(
+      (index): index is number => Number.isInteger(index) && index >= 0 && index < contentLength,
+    ),
+  );
+}
 
 export function createMcpToolDisplay(
   metadata:
@@ -373,15 +389,20 @@ function createNodeReplDisplay(
   if (toolName !== "js" && toolName !== "mcp__node_repl__js") return undefined;
   if (!isRecord(output)) return undefined;
 
-  const candidates = [
-    ...(Array.isArray(output.images) ? output.images : []),
-    ...(Array.isArray(output.content) ? output.content : []),
-  ];
+  // 观察类截图分流（CUA-1.6）：display.images 只留用户要求/显式 emit 的图；观察帧进
+  // observationImages，UI 只在步骤详情渲染缩略图，聊天主流不出现。MCP 面经宿主写入的
+  // content 索引识别；core 直连面读 JsOutput.observationImages。
+  const observationIndices = readNodeReplObservationImageIndices(output);
   const images: Array<{ base64: string; mimeType: string }> = [];
+  const observationImages: Array<{ base64: string; mimeType: string }> = [];
   let truncated = false;
 
-  for (const candidate of candidates) {
-    if (!isRecord(candidate)) continue;
+  const addImage = (
+    candidate: unknown,
+    sink: Array<{ base64: string; mimeType: string }>,
+    maxCount: number,
+  ): void => {
+    if (!isRecord(candidate)) return;
     const mimeType = candidate.mimeType;
     const encoded = candidate.base64 ?? candidate.data;
     if (
@@ -389,7 +410,7 @@ function createNodeReplDisplay(
       !/^image\/[a-z0-9.+-]+$/iu.test(mimeType) ||
       typeof encoded !== "string"
     ) {
-      continue;
+      return;
     }
     const base64 = encoded.startsWith("data:")
       ? encoded.slice(Math.max(0, encoded.indexOf(",") + 1))
@@ -399,13 +420,31 @@ function createNodeReplDisplay(
       Buffer.byteLength(base64, "utf8") > MAX_NODE_REPL_DISPLAY_IMAGE_BASE64_BYTES
     ) {
       truncated = true;
-      continue;
+      return;
     }
-    if (images.length >= MAX_NODE_REPL_DISPLAY_IMAGES) {
+    if (sink.length >= maxCount) {
       truncated = true;
-      continue;
+      return;
     }
-    images.push({ base64, mimeType });
+    sink.push({ base64, mimeType });
+  };
+
+  for (const candidate of Array.isArray(output.images) ? output.images : []) {
+    addImage(candidate, images, MAX_NODE_REPL_DISPLAY_IMAGES);
+  }
+  for (const candidate of Array.isArray(output.observationImages) ? output.observationImages : []) {
+    addImage(candidate, observationImages, MAX_NODE_REPL_DISPLAY_OBSERVATION_IMAGES);
+  }
+  if (Array.isArray(output.content)) {
+    output.content.forEach((candidate, index) => {
+      addImage(
+        candidate,
+        observationIndices.has(index) ? observationImages : images,
+        observationIndices.has(index)
+          ? MAX_NODE_REPL_DISPLAY_OBSERVATION_IMAGES
+          : MAX_NODE_REPL_DISPLAY_IMAGES,
+      );
+    });
   }
 
   // 纯动作 cell（点击、输入）没有截图，但仍要把 App 身份投影给工具卡的 leading icon；
@@ -414,10 +453,13 @@ function createNodeReplDisplay(
   // 观察类 cell（get_app_state）既无截图也未必有 app 关联，但仍是一次 Computer Use 操作；
   // 有 canonical 操作名就产出 display，UI 才能用产品标签取代模型自拟的标题。
   const cuaOperation = readNodeReplCuaOperation(output);
-  if (images.length === 0 && !app && !cuaOperation) return undefined;
+  if (images.length === 0 && observationImages.length === 0 && !app && !cuaOperation) {
+    return undefined;
+  }
   return {
     kind: "node_repl_images",
     ...(images.length > 0 ? { images } : {}),
+    ...(observationImages.length > 0 ? { observationImages } : {}),
     ...(app ? { app } : {}),
     ...(cuaOperation ? { cuaOperation } : {}),
     ...(truncated ? { truncated: true } : {}),

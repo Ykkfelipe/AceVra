@@ -177,6 +177,22 @@ export const nodeReplImageToolResultDisplayPayloadSchema = z
       .min(1)
       .max(2)
       .optional(),
+    // 观察类截图（agent 自用；CUA-1.6）：只在工具详情里渲染缩略图，绝不进聊天主流。
+    observationImages: z
+      .array(
+        z
+          .object({
+            base64: z
+              .string()
+              .min(1)
+              .max(200 * 1024),
+            mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/iu),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(1)
+      .optional(),
     app: nodeReplCuaAppDisplaySchema.optional(),
     // 宿主 CUA bridge 记录的 canonical Computer Use 操作（如 observe / workspace_click）；
     // 模型代码不可写。UI 据此渲染 AceVra 自有的本地化动作标签，而不是模型自拟的 title。

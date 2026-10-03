@@ -2,6 +2,7 @@ import {
   ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY,
   ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY,
   ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY,
+  ZCODE_MCP_NODE_REPL_OBSERVATION_IMAGE_CONTENT_INDICES_META_KEY,
 } from "@zcode/contracts/mcp";
 import { isOfficialCuaImageRefText } from "@zcode/zcode-cua/frame-contract";
 import { CUA_APP_ASSOCIATIONS_META_KEY } from "@zcode/zcode-cua/host-display-contract";
@@ -115,6 +116,20 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
   const structuredContentResult = [...structuredResults]
     .reverse()
     .find((structured) => structured.structuredContent !== undefined);
+  // 观察类截图（CUA-1.6）：模型照样看到（追加在 image-first 序列之后），但宿主按 content 索引
+  // 标记，display 构造据此把它们从聊天可见的 images 里分离。与结构化结果同款逐字节去重。
+  const observationImageBlocks = (run.observationImages ?? [])
+    .filter(
+      (image) =>
+        !structuredContent.some(
+          (block) => block.type === "image" && (block as { data?: string }).data === image.base64,
+        ),
+    )
+    .map((image) => ({
+      type: "image" as const,
+      data: image.base64,
+      mimeType: image.mimeType,
+    }));
   const structuredIsError = structuredResults.some((structured) => structured.isError === true);
   if (run.error) {
     // node_repl 若用 message-only 隐藏通用 MCP 失败前缀，只消费
@@ -155,9 +170,13 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
             mimeType: image.mimeType,
           }))
       : []),
+    ...observationImageBlocks,
     ...(embedded?.content ?? []),
     ...(textParts.length > 0 ? [{ type: "text" as const, text: textParts.join("\n") }] : []),
   ];
+  const observationImageContentIndices = observationImageBlocks
+    .map((block) => content.indexOf(block))
+    .filter((index) => index >= 0);
 
   return {
     content: content.length > 0 ? content : [{ type: "text" as const, text: "(no output)" }],
@@ -183,6 +202,12 @@ export function toMcpRunResult(run: NodeReplRunResult): CallToolResult {
               ? {
                   [ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY]:
                     browserScreenshotContentIndices,
+                }
+              : {}),
+            ...(observationImageContentIndices.length > 0
+              ? {
+                  [ZCODE_MCP_NODE_REPL_OBSERVATION_IMAGE_CONTENT_INDICES_META_KEY]:
+                    observationImageContentIndices,
                 }
               : {}),
           },

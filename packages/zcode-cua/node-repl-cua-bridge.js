@@ -149,10 +149,17 @@ export function createComputerUseBridgeGlobals(input) {
       );
       assertActive();
       if (result.responseMeta) input.session().mergeResponseMeta(result.responseMeta);
-      // 用户要的截图：运行时随 screenshot 结果带回的 PNG 以图片块进入本次 cell 输出（聊天可见），
-      // 并从返回给 cell 的对象里移除，模型代码不会把整张图 stringify 进文本。
-      const inlineImage = takeInlineScreenshot(result.result);
-      if (inlineImage) input.session().emitHostImage?.(inlineImage);
+      // 截图按 requested_by_user 分流（CUA-1.6）：用户要求的帧进 run 输出（聊天可见），
+      // 观察帧走 observation 通道——模型照样看到（这是它的眼睛），聊天里只在步骤详情留缩略图。
+      // 两类都从返回对象移除，模型代码不会把整张图 stringify 进文本。
+      const screenshot = takeInlineScreenshot(result.result);
+      if (screenshot) {
+        if (screenshot.requestedByUser) {
+          input.session().emitHostImage?.(screenshot.image);
+        } else {
+          input.session().recordObservationImage?.(screenshot.image);
+        }
+      }
       // 目标应用身份必须在这里取：broker 响应是模型看不见也改不了的一跳。
       const app = readPrimaryAppIdentity(result.result);
       if (app) input.session().recordCuaAppIdentity(app);
@@ -163,7 +170,10 @@ export function createComputerUseBridgeGlobals(input) {
   return { [NODE_REPL_CUA_BRIDGE_SYMBOL]: bridge };
 }
 
-/** Remove and return the runtime's inline screenshot image block, if the result carries one. */
+/**
+ * Remove and return the runtime's inline screenshot image block, if the result carries one.
+ * Blocks without `requested_by_user` are agent observations (safe default: never chat-inline).
+ */
 function takeInlineScreenshot(result) {
   if (!result || typeof result !== "object" || !Array.isArray(result.content)) return undefined;
   const index = result.content.findIndex(
@@ -171,9 +181,11 @@ function takeInlineScreenshot(result) {
   );
   if (index < 0) return undefined;
   const [block] = result.content.splice(index, 1);
-  return typeof block.data === "string" && typeof block.mimeType === "string"
-    ? { base64: block.data, mimeType: block.mimeType }
-    : undefined;
+  if (typeof block.data !== "string" || typeof block.mimeType !== "string") return undefined;
+  return {
+    image: { base64: block.data, mimeType: block.mimeType },
+    requestedByUser: block.requested_by_user === true,
+  };
 }
 
 const CUA_OPERATION_PATTERN = /^[a-z0-9_.]{1,64}$/iu;

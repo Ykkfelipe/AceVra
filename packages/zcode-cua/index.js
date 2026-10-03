@@ -279,12 +279,15 @@ export function createComputerUseRuntime(options = {}) {
             : (input?.arguments ?? {});
           result = await callWithRecovery(broker, method, params);
         }
-        // 用户要求的截图（screenshot 工具，不是常规 get_app_state 观察）：读取 Helper 刚写的帧，
-        // 以图片块带回，由 node_repl bridge 放进聊天。帧路径本身仍不出运行时。
+        // 截图分两等（CUA-1.6）：cell 带 for_user:true 才是「用户要求看屏幕」，其余都是
+        // agent 自用观察。requested_by_user 由运行时在这里落定，下游只能读取不能推断。
         const screenshotImage =
           toolName === "screenshot" || toolName === "computer.screenshot"
             ? await readScreenshotImage(result)
             : undefined;
+        if (screenshotImage) {
+          screenshotImage.requested_by_user = input?.arguments?.for_user === true;
+        }
         // The model-facing boundary. `observe` answers with a host path to the frame it wrote;
         // that path is a host-internal detail, so it is replaced here by the opaque reference and
         // the whole result is bounded before it is serialized into model context.

@@ -25,9 +25,11 @@ export function formatJsModelContent(output: unknown): ModelMessageContent {
   const text = parts.length > 0 ? parts.join("\n") : "(no output)";
   // nodeRepl.emitImage 收集的图片 → image 内容块（dataUrl），让模型直接"看"到截图。
   // Canonical result order puts emitted rasters before their textual summary.
-  if (o.images && o.images.length > 0) {
+  // 观察类截图（CUA-1.6）也在这里给模型——它是 agent 的眼睛；display 侧另行分流。
+  const allImages = [...(o.images ?? []), ...(o.observationImages ?? [])];
+  if (allImages.length > 0) {
     const blocks: ModelMessageContentBlock[] = [];
-    for (const img of o.images) {
+    for (const img of allImages) {
       blocks.push({
         type: "image",
         mediaType: img.mimeType,

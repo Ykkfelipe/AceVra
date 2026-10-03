@@ -67,10 +67,23 @@ describe("screenshot is delivered inline", () => {
     const image = result.content.find((block) => block.type === "image");
     assert.ok(image, JSON.stringify(result.content.map((b) => b.type)));
     assert.equal(image.inline_screenshot, true);
+    // CUA-1.6：默认截图是 agent 观察帧，运行时必须显式标记非用户要求。
+    assert.equal(image.requested_by_user, false);
     assert.equal(image.mimeType, "image/png");
     assert.equal(Buffer.from(image.data, "base64").equals(PNG), true);
     const text = result.content.find((block) => block.type === "text").text;
     assert.equal(text.includes(dir), false, "the host frame path never reaches the model");
+  });
+
+  it("for_user:true marks the frame as user-requested", async () => {
+    const result = await cua().execute({
+      toolName: "screenshot",
+      arguments: { pid: 42, for_user: true },
+      context: LOCAL,
+    });
+    const image = result.content.find((block) => block.type === "image");
+    assert.ok(image);
+    assert.equal(image.requested_by_user, true);
   });
 
   it("get_app_state stays reference-only", async () => {

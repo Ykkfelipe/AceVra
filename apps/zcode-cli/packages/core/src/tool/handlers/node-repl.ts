@@ -14,10 +14,7 @@ import {
   prepareComputerUseRuntimeGlobals,
   type NodeReplCuaBroker,
 } from "@zcode/zcode-cua/node-repl-cua-bridge";
-import {
-  coreNodeReplCuaDocumentationRoot,
-  createCoreNodeReplCuaBroker,
-} from "./node-repl-cua.js";
+import { coreNodeReplCuaDocumentationRoot, createCoreNodeReplCuaBroker } from "./node-repl-cua.js";
 import type { ToolEntry, ToolExecutionContext, ToolHandler } from "../types.js";
 import { formatJsModelContent } from "./node-repl-model-content.js";
 
@@ -344,12 +341,13 @@ const jsHandler: ToolHandler = async (input, context): Promise<JsOutput> => {
     activeToolContexts.delete(context.sessionId);
   }
   const browserScreenshotPaths = await persistBrowserScreenshotPaths(runResult, context);
-  const { result, logs, error, images, responseMeta } = runResult;
+  const { result, logs, error, images, observationImages, responseMeta } = runResult;
   return {
     ...(result !== undefined ? { result } : {}),
     logs,
     ...(error ? { error } : {}),
     ...(images && images.length > 0 ? { images } : {}),
+    ...(observationImages && observationImages.length > 0 ? { observationImages } : {}),
     ...(browserScreenshotPaths.length > 0 ? { browserScreenshotPaths } : {}),
     ...(responseMeta ? { responseMeta } : {}),
   };

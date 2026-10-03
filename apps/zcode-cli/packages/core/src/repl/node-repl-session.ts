@@ -41,6 +41,8 @@ export interface NodeReplCuaAppIdentity {
 export interface NodeReplWriteSink {
   write(text: string): void;
   images: NodeReplImage[];
+  /** 观察类截图（agent 自用）：模型可见，但不进入聊天 display 的 images。 */
+  observationImages: NodeReplImage[];
   browserScreenshots: NodeReplImage[];
   structuredResults: NodeReplStructuredResult[];
   responseMeta: Record<string, unknown>;
@@ -57,6 +59,8 @@ export interface NodeReplRunResult {
   error?: { name: string; message: string; stack?: string; code?: string };
   /** 本次 run 期间 nodeRepl.emitImage 收集的图片（如截图）。 */
   images?: NodeReplImage[];
+  /** 本次 run 期间收集的观察类截图；模型可见，display 只允许在详情里出缩略图。 */
+  observationImages?: NodeReplImage[];
   /** images 中确认来自本次显式 tab.screenshot() 的索引。 */
   browserScreenshotImageIndices?: number[];
   /** SDK 通过专用通道写入的结构化结果；优先级高于 console/REPL 回显。 */
@@ -394,6 +398,17 @@ export class NodeReplSession {
     this.currentSink.cuaOperations.push(operation);
   }
 
+  /**
+   * CUA bridge 记录一张观察类截图（agent 自用，非用户要求）。
+   *
+   * 与 emitHostImage 分流：模型内容仍包含该图（formatJsModelContent），但工具 display 不得
+   * 把它当作聊天可见结果——UI 只在步骤详情里渲染缩略图。
+   */
+  recordObservationImage(image: NodeReplImage): void {
+    if (!this.currentSink) return;
+    this.currentSink.observationImages.push(image);
+  }
+
   /** 执行一段代码；signal 支持取消（超时/停止）。 */
   async run(
     code: string,
@@ -411,6 +426,7 @@ export class NodeReplSession {
     }
     let buffer = "";
     const images: NodeReplImage[] = [];
+    const observationImages: NodeReplImage[] = [];
     const browserScreenshots: NodeReplImage[] = [];
     const structuredResults: NodeReplStructuredResult[] = [];
     const responseMeta: Record<string, unknown> = {};
@@ -424,6 +440,7 @@ export class NodeReplSession {
         buffer += (buffer ? "\n" : "") + text;
       },
       images,
+      observationImages,
       browserScreenshots,
       structuredResults,
       responseMeta,
@@ -455,6 +472,7 @@ export class NodeReplSession {
         result: stringifyReplResult(value),
         logs: buffer,
         ...(images.length > 0 ? { images } : {}),
+        ...(observationImages.length > 0 ? { observationImages } : {}),
         ...browserScreenshotIndexResult(images, browserScreenshots),
         ...(structuredResults.length > 0 ? { structuredResults } : {}),
         ...(Object.keys(responseMeta).length > 0 ? { responseMeta } : {}),
@@ -484,6 +502,7 @@ export class NodeReplSession {
         logs: buffer,
         error: normalized,
         ...(images.length > 0 ? { images } : {}),
+        ...(observationImages.length > 0 ? { observationImages } : {}),
         ...browserScreenshotIndexResult(images, browserScreenshots),
         ...(structuredResults.length > 0 ? { structuredResults } : {}),
         ...(Object.keys(responseMeta).length > 0 ? { responseMeta } : {}),

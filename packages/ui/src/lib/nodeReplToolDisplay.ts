@@ -1,5 +1,12 @@
 import type { TaskChatToolCall as ChatToolCall } from "@/lib/taskChatMessageTypes.js";
 import { findNodeReplComputerOperation } from "@/lib/nodeReplCuaOperation.js";
+import {
+  extractImages,
+  findCuaApp,
+  findObservationImages,
+  hasBrowserTurnEndDisplay,
+  hasComputerImageDisplay,
+} from "@/lib/nodeReplDisplayScan.js";
 
 export type NodeReplOperation = "run" | "reset" | "add-module-dir";
 
@@ -39,6 +46,12 @@ export interface NodeReplDisplayModel {
   resultText?: string;
   error?: NodeReplDisplayError;
   images: NodeReplDisplayImage[];
+  /**
+   * 观察类截图（agent 自用，CUA-1.6）：display 侧与聊天可见 images 分流；只在工具详情
+   * 折叠区渲染缩略图，绝不进对话主流。
+   */
+  observationImages?: NodeReplDisplayImage[];
+  imagesInConversation?: boolean;
   persistedResult?: NodeReplPersistedResult;
   displaySource?: "browser_turn_end";
   app?: NodeReplCuaApp;
@@ -48,7 +61,6 @@ const IMPLEMENTATION_TITLE_PATTERN = /(?:\bjs\b|\bjavascript\b|node[\s_-]*repl)/
 const LEADING_BLANK_LINES_PATTERN = /^(?:[ \t]*\r?\n)+/;
 const PROJECTED_COMPLETION_MARKER_PATTERN = /(^|\n)=> /g;
 const PROJECTED_IMAGE_PLACEHOLDER_PATTERN = /^\[Attached image\/[^\]]+\]$/u;
-const IMAGE_MIME_TYPE_PATTERN = /^image\/[a-z0-9.+-]+$/iu;
 const PERSISTED_OUTPUT_PATTERN =
   /^<persisted-output>\s*\nOutput too large \(([^)]+)\)\. Full output saved to: ([^\n]+)\n\nPreview \([^)]+\):\n([\s\S]*?)\n<\/persisted-output>\s*$/;
 
@@ -288,87 +300,6 @@ function extractError(value: unknown, depth = 0): NodeReplDisplayError | undefin
   return undefined;
 }
 
-function extractImages(values: unknown[]): NodeReplDisplayImage[] {
-  const images: NodeReplDisplayImage[] = [];
-  const seen = new Set<string>();
-  const visited = new Set<object>();
-  const addImage = (value: Record<string, unknown>) => {
-    // 旧 built-in result 使用 {images:[{base64,mimeType}]}，真实 MCP
-    // 使用 content 里的 {type:"image",data,mimeType}。专用 renderer 必须兼容两种历史形态。
-    const base64 = readNonEmptyString(value.base64) ?? readNonEmptyString(value.data);
-    const mimeType = readNonEmptyString(value.mimeType)?.trim();
-    if (!base64 || !mimeType || !IMAGE_MIME_TYPE_PATTERN.test(mimeType)) {
-      return;
-    }
-    const key = `${mimeType}:${base64.length}:${base64.slice(0, 24)}`;
-    if (seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    images.push({ base64, mimeType });
-  };
-  const visit = (value: unknown): void => {
-    if (!value || typeof value !== "object" || visited.has(value)) return;
-    visited.add(value);
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    if (!isRecord(value)) return;
-    if (value.type === "image" || "base64" in value) addImage(value);
-    for (const child of Object.values(value)) visit(child);
-  };
-
-  for (const value of values) {
-    visit(value);
-  }
-
-  return images;
-}
-
-/**
- * 从 raw 里找 node_repl display 携带的 App 身份。
- *
- * 与 `extractImages` / `hasBrowserTurnEndDisplay` 同款递归：实时 tool.updated 把 display 放在
- * raw.result 内，终态 snapshot 则把 completed part 的 metadata 直接当作 raw，只扫一个固定位置
- * 会让对话结束后图标消失。
- */
-function findCuaApp(value: unknown, visited = new Set<object>()): NodeReplCuaApp | undefined {
-  if (!value || typeof value !== "object" || visited.has(value)) return undefined;
-  visited.add(value);
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findCuaApp(item, visited);
-      if (found) return found;
-    }
-    return undefined;
-  }
-  if (!isRecord(value)) return undefined;
-  if (value.kind === "node_repl_images" && isRecord(value.app)) {
-    const appKey = readNonEmptyString(value.app.appKey)?.trim();
-    if (appKey) {
-      const displayName = readNonEmptyString(value.app.displayName)?.trim();
-      return { appKey, ...(displayName ? { displayName } : {}) };
-    }
-  }
-  for (const item of Object.values(value)) {
-    const found = findCuaApp(item, visited);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-function hasBrowserTurnEndDisplay(value: unknown, visited = new Set<object>()): boolean {
-  if (!value || typeof value !== "object" || visited.has(value)) return false;
-  visited.add(value);
-  if (Array.isArray(value)) {
-    return value.some((item) => hasBrowserTurnEndDisplay(item, visited));
-  }
-  if (!isRecord(value)) return false;
-  if (value.kind === "node_repl_images" && value.source === "browser_turn_end") return true;
-  return Object.values(value).some((item) => hasBrowserTurnEndDisplay(item, visited));
-}
-
 function parsePersistedResult(text: string | undefined): {
   resultText?: string;
   persistedResult?: NodeReplPersistedResult;
@@ -425,6 +356,7 @@ export function buildNodeReplDisplayModel(toolCall: ChatToolCall): NodeReplDispl
       images.length > 0,
     ),
   );
+  const observationImages = findObservationImages(toolCall.raw);
 
   return {
     operation: resolveOperation(toolCall),
@@ -446,5 +378,8 @@ export function buildNodeReplDisplayModel(toolCall: ChatToolCall): NodeReplDispl
         ? outputCandidates.map((candidate) => extractError(candidate)).find(Boolean)
         : undefined),
     images,
+    // 修复依据：只隐藏已由 conversation display 在折叠区外展示的图片；旧结果仍可在详情查看。
+    ...(hasComputerImageDisplay(toolCall.raw) ? { imagesInConversation: true } : {}),
+    ...(observationImages.length > 0 ? { observationImages } : {}),
   };
 }

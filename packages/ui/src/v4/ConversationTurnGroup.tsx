@@ -29,6 +29,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible.js";
 import { ToolCallBlock } from "@/ToolCallBlocks.js";
+import { ConversationComputerImages } from "@/v4/ConversationComputerImages.js";
 import {
   CronCreateAutomationCard,
   isCronAutomationCardToolCall,
@@ -1415,6 +1416,7 @@ function ConversationTurnGroupImpl({
           {!isOfficeMode && unit.header?.fileChanges ? (
             <ConversationFileSummaryPanel header={unit.header} context={context} />
           ) : null}
+          <ConversationComputerImages rows={unit.assistantWorkRows} />
           {unit.browserTurnEndRows.length > 0 ? (
             // 自动截图表达轮次结束时页面最终状态；放在 assistant work 内会
             // 穿插到 Website 预览和 file diff 摘要之间。它应是操作栏之前的最后一个内容块。

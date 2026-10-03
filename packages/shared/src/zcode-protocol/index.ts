@@ -94,6 +94,7 @@ const protocolInstantSchema = z.union([timestampMsSchema, nonEmptyString, z.date
 export const zcodeNodeReplImageToolResultDisplaySchema = z
   .object({
     kind: z.literal("node_repl_images"),
+    // 可选：观察类截图 cell（CUA-1.6）只有 observationImages，images 缺席。
     images: z
       .array(
         z
@@ -107,7 +108,24 @@ export const zcodeNodeReplImageToolResultDisplaySchema = z
           .strict(),
       )
       .min(1)
-      .max(2),
+      .max(2)
+      .optional(),
+    // 观察类截图（agent 自用）：只在工具详情里渲染缩略图，绝不进聊天主流。
+    observationImages: z
+      .array(
+        z
+          .object({
+            base64: z
+              .string()
+              .min(1)
+              .max(200 * 1024),
+            mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/iu),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(1)
+      .optional(),
     // 宿主 CUA bridge 记录的 canonical Computer Use 操作（如 observe / workspace_click）；
     // 模型代码不可写。UI 据此渲染 AceVra 自有的本地化动作标签，而不是模型自拟的 title。
     cuaOperation: z

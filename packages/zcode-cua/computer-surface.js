@@ -31,9 +31,9 @@ export const COMPUTER_USE_SURFACE = Object.freeze([
   {
     name: "screenshot",
     kind: "read",
-    args: "{ pid: integer, window_id?: integer }",
+    args: "{ pid: integer, window_id?: integer, for_user?: boolean }",
     returns:
-      "same as get_app_state; the window image is also shown to the user in the chat automatically (use this, never screencapture or a /tmp file, when the user asks to see the screen)",
+      "same as get_app_state; pass for_user: true ONLY when the user asked to see the screen — that frame is shown in the chat. Without it the frame is your own observation: you still see it, but the chat shows only a small thumbnail in the step details (use this, never screencapture or a /tmp file, when the user asks to see the screen)",
   },
   { name: "request_access", kind: "read", args: "{}", returns: "permission and capability status" },
   {

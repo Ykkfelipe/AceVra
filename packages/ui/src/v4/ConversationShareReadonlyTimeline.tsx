@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/collapsible.js";
 import { TooltipProvider } from "@/components/ui/tooltip.js";
 import { ToolLayout } from "@/ToolCallBlocks/ToolLayout.js";
+import { ConversationComputerImages } from "@/v4/ConversationComputerImages.js";
 import { ConversationUserInputBody } from "@/v4/ConversationUserInputBody.js";
 import { ConversationUserInputContent } from "@/v4/ConversationUserInputContent.js";
 import { PluginReferenceIconProvider } from "@/v4/pluginReferenceIconContext.js";
@@ -1039,6 +1040,7 @@ function ReadonlyTurn({
             onOpenExternalUrl={onOpenExternalUrl}
           />
         ))}
+        <ConversationComputerImages rows={unit.assistantWorkRows} />
         {unit.browserTurnEndRows.length > 0 ? (
           <ReadonlyAssistantWorkItems
             rows={unit.browserTurnEndRows}

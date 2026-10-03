@@ -156,6 +156,15 @@ export const ZCODE_MCP_NODE_REPL_CUA_APP_META_KEY = "zcode/nodeReplCuaApp";
  */
 export const ZCODE_MCP_NODE_REPL_CUA_OPERATION_META_KEY = "zcode/nodeReplCuaOperation";
 /**
+ * MCP content 中观察类截图（agent 自用，非用户要求）的 image block 索引。
+ *
+ * 与 `ZCODE_MCP_BROWSER_SCREENSHOT_CONTENT_INDICES_META_KEY` 同款宿主一跳：由 node-repl-host
+ * 按 run.observationImages 的实际 content 位置写入。display 构造据此把观察帧从聊天可见的
+ * images 里分离（CUA-1.6 交付分类），模型内容不受影响——观察帧仍以 image block 到达模型。
+ */
+export const ZCODE_MCP_NODE_REPL_OBSERVATION_IMAGE_CONTENT_INDICES_META_KEY =
+  "zcode/nodeReplObservationImageContentIndices";
+/**
  * 官方 Server MCP 响应头里的 `x-request-id`，附在失败的 tool result 上（值为 string）。
  *
  * 用短前缀 `zcode/` 而不是 `com.zcode/`：这不是跨语言协议——服务端在 header 里给，客户端

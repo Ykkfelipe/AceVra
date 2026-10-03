@@ -55,6 +55,10 @@ export const JsOutputSchema = z
       .optional(),
     // nodeRepl.emitImage 收集的图片（如 tab.screenshot 的截图）；formatModelContent 会转成 image 内容块给模型。
     images: z.array(z.object({ base64: z.string(), mimeType: z.string() }).strict()).optional(),
+    // 观察类截图（agent 自用，非用户要求；CUA-1.6）：模型可见，但 display 只允许在详情里出缩略图。
+    observationImages: z
+      .array(z.object({ base64: z.string(), mimeType: z.string() }).strict())
+      .optional(),
     // 模型显式 tab.screenshot() 原始 PNG 的 session artifact 绝对路径。
     browserScreenshotPaths: z.array(z.string()).optional(),
     responseMeta: z.record(z.string(), z.unknown()).optional(),
