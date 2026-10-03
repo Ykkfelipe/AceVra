@@ -26,6 +26,7 @@ const { app, channel, tasks } = createControlPlane({
   }),
   directory: createClerkUserDirectory(config.clerkSecretKey),
   sessions: createClerkSessionDirectory(config.clerkSecretKey),
+  sessionFreshnessSeconds: config.sessionFreshnessSeconds,
   // Only trust X-Forwarded-For when explicitly deployed behind a proxy that sets it.
   clientKey: (request) =>
     (config.trustProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : null) ||

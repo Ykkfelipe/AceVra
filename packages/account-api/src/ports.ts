@@ -3,6 +3,11 @@
 export interface VerifiedHumanIdentity {
   clerkUserId: string;
   sessionId?: string;
+  /**
+   * The verified token's own `exp`, in unix milliseconds. Bounds how long a request
+   * may be admitted while Clerk's session status cannot be confirmed.
+   */
+  expiresAt?: number;
 }
 
 /** Verifies a Clerk session token. Resolves null for any invalid token. */
@@ -82,7 +87,17 @@ export interface HumanSessionDirectory {
     clerkUserId: string,
     sessionId: string,
   ): Promise<{ ok: true } | { ok: false; reason: "not_found" }>;
+  /**
+   * Is this session still live? Point-in-time, for revocation freshness.
+   *
+   * `unavailable` is required and must mean "Clerk could not be reached", never
+   * "this session is gone": conflating the two would let an outage revoke every
+   * session in the product.
+   */
+  sessionStatus(clerkUserId: string, sessionId: string): Promise<SessionLiveness>;
 }
+
+export type SessionLiveness = "active" | "not_active" | "unavailable";
 
 export interface SqlResult<T> {
   rows: T[];

@@ -5,6 +5,7 @@ import { createRateLimiter } from "./rateLimit.js";
 import { normalizePairingCode, parseEd25519PublicKey, type PairingService } from "./pairing.js";
 import type { createAccountService } from "./accounts.js";
 import type { HumanIdentityVerifier, HumanSessionDirectory } from "./ports.js";
+import type { SessionFreshness } from "./sessionFreshness.js";
 import { registerSessionRoutes } from "./sessionRoutes.js";
 import { parseProcessSpec } from "./processSpec.js";
 import type { TaskService } from "./tasks.js";
@@ -36,6 +37,12 @@ export function createAccountApp(deps: {
   tasks?: TaskService;
   /** Human login sessions. Absent = this build exposes no session listing. */
   sessions?: HumanSessionDirectory;
+  /**
+   * Revocation freshness. Present = a signed session is re-confirmed with Clerk at
+   * most once per TTL, so a remotely revoked session stops being accepted promptly.
+   * Absent = the check is off, which restores M3 behaviour (token expiry only).
+   */
+  freshness?: SessionFreshness;
   /** A task was queued: let the channel offer it now. */
   onTaskQueued?: (deviceId: string) => void;
   /** A cancel was requested for a live process: tell the node. */
@@ -85,6 +92,25 @@ export function createAccountApp(deps: {
     const token = readBearer(c.req.header("authorization"));
     const identity = token ? await deps.verifier.verify(token) : null;
     if (!identity) return { ok: false, response: c.json({ error: "unauthenticated" }, 401) };
+
+    // Revocation freshness, enforced here and nowhere else. It sits after the
+    // cryptographic check and before the ledger read, so no route body — present or
+    // future — runs for a session that has been revoked, and no individual route has
+    // to know this exists.
+    //
+    // Skipped when the token carried no `sid`: there is no session identity to
+    // revalidate, and inventing one would be a guess.
+    if (deps.freshness && identity.sessionId) {
+      const verdict = await deps.freshness.evaluate({
+        clerkUserId: identity.clerkUserId,
+        sessionId: identity.sessionId,
+        tokenExpiresAt: identity.expiresAt ?? 0,
+      });
+      if (!verdict.admit) {
+        return { ok: false, response: c.json({ error: "unauthenticated" }, 401) };
+      }
+    }
+
     try {
       const result = await deps.accounts.resolve(identity.clerkUserId);
       // Non-disclosing: a denied caller learns nothing about the ledger.

@@ -11,6 +11,11 @@ export interface AccountApiConfig {
   trustProxy: boolean;
   seedEmails: string[];
   seedClerkUserIds: string[];
+  /**
+   * How long a confirmed human-session status is trusted, in seconds. This is the
+   * maximum revocation window M3a promises. 0 disables the check.
+   */
+  sessionFreshnessSeconds: number;
 }
 
 const list = (value: string | undefined) =>
@@ -35,5 +40,8 @@ export function readAccountApiConfig(env: NodeJS.ProcessEnv = process.env): Acco
     trustProxy: env.ACEVRA_TRUST_PROXY === "1",
     seedEmails: list(env.ACEVRA_ADMISSION_SEED_EMAILS),
     seedClerkUserIds: list(env.ACEVRA_ADMISSION_SEED_CLERK_USER_IDS),
+    // 300s is the bound stated in the M3a spec: worst-case exposure is one TTL
+    // after the last confirmation, regardless of the instance's token TTL.
+    sessionFreshnessSeconds: Number(env.ACEVRA_SESSION_FRESHNESS_SECONDS ?? 300),
   };
 }

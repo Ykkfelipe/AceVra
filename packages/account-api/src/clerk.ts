@@ -4,6 +4,7 @@ import type {
   HumanIdentityVerifier,
   HumanSessionDirectory,
   HumanSessionRecord,
+  SessionLiveness,
 } from "./ports.js";
 
 /** A session list is for the user's own security review; a hard ceiling keeps it bounded. */
@@ -28,6 +29,7 @@ export function createClerkIdentityVerifier(options: {
         return {
           clerkUserId: claims.sub,
           ...(typeof claims.sid === "string" ? { sessionId: claims.sid } : {}),
+          ...(typeof claims.exp === "number" ? { expiresAt: claims.exp * 1000 } : {}),
         };
       } catch {
         // Expired, forged, wrong key or wrong party all collapse to "unauthenticated".
@@ -68,6 +70,10 @@ export function createClerkSessionDirectory(secretKey: string): HumanSessionDire
     list: (params) => client.sessions.getSessionList(params),
     get: (id) => client.sessions.getSession(id),
     revoke: (id) => client.sessions.revokeSession(id),
+    status: async (id) => {
+      const session = await client.sessions.getSession(id);
+      return { userId: session.userId, status: session.status };
+    },
   });
 }
 
@@ -84,6 +90,8 @@ export interface ClerkSessionCalls {
   }>;
   get(sessionId: string): Promise<{ userId: string }>;
   revoke(sessionId: string): Promise<unknown>;
+  /** Present only when the adapter can answer; absent means "cannot tell". */
+  status?(sessionId: string): Promise<{ userId: string; status: string }>;
 }
 
 export function createSessionDirectory(sessions: ClerkSessionCalls): HumanSessionDirectory {
@@ -133,5 +141,33 @@ export function createSessionDirectory(sessions: ClerkSessionCalls): HumanSessio
       await sessions.revoke(sessionId);
       return { ok: true };
     },
+
+    async sessionStatus(clerkUserId, sessionId) {
+      // Without a status call the freshness check cannot be answered; say so rather
+      // than guessing, so an outage is never read as a revocation.
+      if (!sessions.status) return "unavailable";
+      try {
+        const session = await sessions.status(sessionId);
+        // Ownership first: another user's session is not this session, whatever its
+        // status says.
+        if (session.userId !== clerkUserId) return "not_active";
+        return session.status === "active" ? "active" : "not_active";
+      } catch (error) {
+        return classifyLivenessFailure(error);
+      }
+    },
   };
+}
+
+/**
+ * Distinguishes "this session is gone" from "Clerk could not be reached".
+ *
+ * Only a definitive not-found or unauthorized answer counts as a revocation. A 429, a
+ * 5xx, or a network failure is an outage: treating those as revocations would let a
+ * Clerk hiccup sign every user out at once.
+ */
+function classifyLivenessFailure(error: unknown): SessionLiveness {
+  const status = (error as { status?: unknown })?.status;
+  if (status === 404 || status === 401) return "not_active";
+  return "unavailable";
 }

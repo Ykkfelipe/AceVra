@@ -59,6 +59,11 @@ export async function createTestApp(options?: {
   users?: Record<string, ClerkUserProfile>;
   /** Human sessions owned by Clerk user id, as the boundary reports them. */
   sessions?: HumanSessionDirectory;
+  /**
+   * Revocation-freshness TTL in seconds. Omit or 0 to leave the check off, which is
+   * what most suites want; the M3a suite sets it explicitly.
+   */
+  sessionFreshnessSeconds?: number;
   authorizedParties?: string[];
   rateLimit?: { limit: number; windowMs: number };
   log?: (line: string) => void;
@@ -98,6 +103,7 @@ export async function createTestApp(options?: {
     verifier,
     directory,
     sessions: options?.sessions,
+    sessionFreshnessSeconds: options?.sessionFreshnessSeconds,
     clock: () => clock.now,
     channel: options?.channel,
     tasks: options?.tasks,

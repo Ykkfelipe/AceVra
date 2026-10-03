@@ -208,6 +208,10 @@ function multiOwnerDirectory(owned: Record<string, HumanSessionRecord[]>) {
       revoked.push({ user: clerkUserId, session: sessionId });
       return { ok: true };
     },
+    sessionStatus: async (clerkUserId, sessionId) => {
+      const found = (owned[clerkUserId] ?? []).find((s) => s.id === sessionId);
+      return found ? "active" : "not_active";
+    },
   };
   return { directory, revoked, owned };
 }
@@ -420,6 +424,7 @@ test("a malformed session id never reaches the directory", async () => {
       seen.push(id);
       return directory.revokeSession(user, id);
     },
+    sessionStatus: directory.sessionStatus,
   });
   for (const bad of [
     "..%2F..%2Fusers",
