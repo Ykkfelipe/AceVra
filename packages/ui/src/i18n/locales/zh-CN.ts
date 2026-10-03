@@ -12,6 +12,8 @@ const zhCN: Record<string, string> = {
   "acevra.setup.connect": "连接",
   "acevra.setup.back": "返回",
   "acevra.setup.later": "稍后配置",
+  "acevra.setup.providerBoundary":
+    "连接模型服务商与你的 AceVra 账号是两件事，两者都不会连接你的个人数据。",
   "acevra.execution.target.unknown": "电脑",
   "acevra.execution.status.queued": "等待中",
   "acevra.execution.status.starting": "正在开始",
@@ -36,6 +38,14 @@ const zhCN: Record<string, string> = {
   "acevra.account.retry": "重试",
   "acevra.account.notRemembered": "此设备不会记住账号会话。",
   "acevra.account.signOutNote": "退出登录会保留本地对话和模型服务商。",
+  "acevra.account.signIn": "登录 AceVra",
+  "acevra.account.welcome": "欢迎使用 AceVra",
+  "acevra.account.subtitle": "登录以连接你的 AceVra 账号。对话与设备同步稍后推出。",
+  "acevra.account.continueLocally": "仅在本机使用",
+  "acevra.account.notConfiguredChoice": "此构建未启用账号登录，你仍可在本机使用 AceVra。",
+  "acevra.account.dataBoundary":
+    "登录只用于连接你的 AceVra 账号，不会让 AceVra 访问你的邮件、日历或代码。",
+  "acevra.account.deviceBoundary": "受信任的电脑需要单独添加，在登录之后进行。",
   "acevra.account.status.authenticating": "正在等待登录完成…",
   "acevra.account.status.checking": "正在检查内测资格…",
   "acevra.account.status.ready": "已连接 · 内测",

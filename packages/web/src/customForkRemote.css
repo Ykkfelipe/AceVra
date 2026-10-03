@@ -106,6 +106,62 @@
   background: var(--color-card);
 }
 
+/* Sign-in shell internals. Every color is a semantic token, so the card follows the
+   active light/dark theme without needing a dark: variant. */
+.fork-auth-card__wordmark {
+  margin: 0;
+  font-size: var(--text-ui-sm);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-foreground);
+}
+
+.fork-auth-card__header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.fork-auth-card__header h1,
+.fork-auth-card__header p {
+  margin: 0;
+}
+
+.fork-auth-card__button {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.5rem;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fork-auth-card__button:hover {
+  opacity: 0.9;
+}
+
+.fork-auth-card__button:active {
+  transform: translateY(1px);
+}
+
+.fork-auth-card__button:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+.fork-auth-card__error {
+  margin: 0;
+  color: var(--color-destructive);
+}
+
+.fork-auth-card__note {
+  margin: 0;
+  color: var(--color-foreground-subtlest);
+  line-height: 1.5;
+}
+
 @media (max-width: 767px) {
   .fork-connection-banner {
     align-items: flex-start;

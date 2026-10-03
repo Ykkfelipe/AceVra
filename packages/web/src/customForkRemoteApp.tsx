@@ -4,6 +4,11 @@ import { connectViaWebSocket } from "@zcode/client";
 import type { IPlatformService, ServerRemoteInfo } from "@zcode/shared";
 import { resolveCustomForkProductConfig } from "@zcode/shared";
 import { AppErrorBoundary, Root, ZCodeIntlProvider } from "@zcode/ui";
+import {
+  ForkSignInCard,
+  resolveForkSignInReturnTarget,
+  type ForkSignInReason,
+} from "./customForkSignIn.js";
 
 type ConnectionState =
   | "authentication-required"
@@ -71,6 +76,7 @@ export function CustomForkRemoteApp({ platform }: { platform: IPlatformService }
   const [connection, setConnection] = useState<ConnectedFork | null>(null);
   const [state, setState] = useState<ConnectionState>("connecting");
   const [device, setDevice] = useState<ForkDevice>();
+  const [signInReason, setSignInReason] = useState<ForkSignInReason>("signed-out");
   const generationRef = useRef(0);
   const retryRef = useRef(0);
   const timerRef = useRef<number | undefined>(undefined);
@@ -99,6 +105,7 @@ export function CustomForkRemoteApp({ platform }: { platform: IPlatformService }
         clerkRef.current = clerk;
         if (!clerk.loaded) await clerk.load();
         if (!clerk.user) {
+          setSignInReason("signed-out");
           setState("authentication-required");
           return;
         }
@@ -113,6 +120,9 @@ export function CustomForkRemoteApp({ platform }: { platform: IPlatformService }
         fetch("/api/server-info", { cache: "no-store" }),
       ]);
       if (ticketResponse.status === 401 || deviceResponse.status === 401) {
+        // Without a publishable key there is no Clerk instance to sign in with, so a 401
+        // is a build-configuration problem rather than a signed-out user.
+        setSignInReason(!publishableKey ? "unconfigured" : token ? "rejected" : "signed-out");
         setState("authentication-required");
         return;
       }
@@ -187,21 +197,14 @@ export function CustomForkRemoteApp({ platform }: { platform: IPlatformService }
 
   if (state === "authentication-required") {
     return (
-      <main className="fork-auth-shell">
-        <section className="fork-auth-card">
-          <h1 className="text-ui-lg font-semibold">AceVra Dev</h1>
-          <p className="text-ui-base text-foreground-subtle">Sign in to connect to this Mac.</p>
-          <button
-            type="button"
-            className="rounded-lg bg-primary px-4 py-2 text-ui-base text-primary-foreground"
-            onClick={() =>
-              void clerkRef.current?.redirectToSignIn({ redirectUrl: window.location.href })
-            }
-          >
-            Sign in with Clerk
-          </button>
-        </section>
-      </main>
+      <ForkSignInCard
+        reason={signInReason}
+        onSignIn={() => {
+          // Clerk is absent in the unconfigured case, so there is nothing to redirect to;
+          // that state renders an explanation instead of a control.
+          void clerkRef.current?.redirectToSignIn({ redirectUrl: resolveForkSignInReturnTarget() });
+        }}
+      />
     );
   }
 

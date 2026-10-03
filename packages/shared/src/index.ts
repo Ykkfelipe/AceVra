@@ -125,6 +125,7 @@ export * from "./channels.js";
 export * from "./storage.js";
 export * from "./oauth.js";
 export * from "./account.js";
+export * from "./accountSignInReturn.js";
 export * from "./execution-target-protocol.js";
 export * from "./agent-computer.js";
 export * from "./desktopMenu.js";

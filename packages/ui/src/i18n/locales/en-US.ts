@@ -14,6 +14,8 @@ const enUS: Record<string, string> = {
   "acevra.setup.connect": "Connect",
   "acevra.setup.back": "Back",
   "acevra.setup.later": "Configure later",
+  "acevra.setup.providerBoundary":
+    "Connecting a model provider is separate from your AceVra account, and neither connects your personal data.",
   "acevra.execution.target.unknown": "Computer",
   "acevra.execution.status.queued": "Waiting",
   "acevra.execution.status.starting": "Starting",
@@ -40,6 +42,16 @@ const enUS: Record<string, string> = {
   "acevra.account.retry": "Try again",
   "acevra.account.notRemembered": "Account session won't be remembered on this device.",
   "acevra.account.signOutNote": "Signing out keeps your local conversations and model providers.",
+  "acevra.account.signIn": "Sign in to AceVra",
+  "acevra.account.welcome": "Welcome to AceVra",
+  "acevra.account.subtitle":
+    "Sign in to connect your AceVra account. Conversation and device sync is coming later.",
+  "acevra.account.continueLocally": "Continue locally",
+  "acevra.account.notConfiguredChoice":
+    "Account sign-in isn't available in this build. You can keep using AceVra locally.",
+  "acevra.account.dataBoundary":
+    "Signing in connects your AceVra account only. It doesn't give AceVra access to your email, calendar or code.",
+  "acevra.account.deviceBoundary": "Trusted computers are added separately, after you sign in.",
   "acevra.account.status.authenticating": "Waiting for sign-in to finish…",
   "acevra.account.status.checking": "Checking your private-alpha access…",
   "acevra.account.status.ready": "Connected · private alpha",
