@@ -252,3 +252,84 @@ test("the handoff continues on the model the Ace conversation last used", async 
   );
   assert.equal("config" in withoutSelection, false);
 });
+
+const seamless = await import("../src/bot/workOnThis/seamlessHandoff.js");
+function project(path: string) {
+  return { workspacePath: path, label: path.split("/").pop() ?? path };
+}
+const PROJECTS = [
+  project("/p/AceVra"),
+  project("/p/LifeCraft"),
+  project("/p/Web Man Game"),
+  project("/p/x"),
+];
+
+test("destination inference picks a project only when exactly one is named", () => {
+  const excerpt = (text: string) => ({ messageId: "m", role: "user" as const, text });
+  const pick = (title: string, text = "") =>
+    seamless.inferWorkDestination(title, text ? [excerpt(text)] : [], PROJECTS);
+  assert.deepEqual(pick("Fix the acevra sidebar"), { kind: "project", project: PROJECTS[0] });
+  assert.deepEqual(pick("plan", "let's add quests to lifecraft"), {
+    kind: "project",
+    project: PROJECTS[1],
+  });
+  // 分隔符可互换：web-man-game ≈ "Web Man Game"。
+  assert.equal(pick("web-man-game physics").kind, "project");
+  // 通用对话、子串命中（AceVras / lifecrafting）、太短的名字（x）都不算明确。
+  assert.deepEqual(pick("Plan my week"), { kind: "ask", matchedCount: 0 });
+  assert.equal(pick("acevras and lifecrafting").kind, "ask");
+  assert.equal(pick("fix x").kind, "ask");
+  // 同时提到两个项目 → 问。
+  assert.deepEqual(pick("port AceVra ideas to LifeCraft"), { kind: "ask", matchedCount: 2 });
+});
+
+test("objective comes from a real title, else the latest user message", () => {
+  const ex = [
+    { messageId: "1", role: "user" as const, text: "first idea" },
+    { messageId: "2", role: "assistant" as const, text: "reply" },
+    { messageId: "3", role: "user" as const, text: "  build   the remind CLI  " },
+  ];
+  assert.equal(seamless.deriveHandoffObjective("Reminders CLI", ex), "Reminders CLI");
+  assert.equal(
+    seamless.deriveHandoffObjective("New conversation", ex, ["New conversation"]),
+    "build the remind CLI",
+  );
+  assert.equal(seamless.deriveHandoffObjective("", ex), "build the remind CLI");
+});
+
+test("automatic handoff is a confirmable bot → coding packet with recent context only", () => {
+  const rows = [
+    userRow("I want a reminders CLI for LifeCraft", "a1"),
+    assistantRow("Plan: add and list commands.", "a1"),
+  ];
+  const { packet, excerpts } = seamless.buildAutomaticHandoff({
+    conversationRef: CONVERSATION,
+    title: "Reminders CLI",
+    rows,
+    labels: LABELS,
+    notesLabel: "Notes for the work",
+  });
+  assert.equal(excerpts.length, 2);
+  assert.equal(packet.objective, "Reminders CLI");
+  assert.deepEqual(packet.sourceRefs, [CONVERSATION]);
+  assert.deepEqual(
+    packet.context.map((item) => [item.label, item.included]),
+    [
+      ["You", true],
+      ["Ace", true],
+    ],
+  );
+  assert.equal(confirmHandoffPreview(beginHandoffPreview(packet)).ok, true);
+});
+
+test("seamless copy exists in both locales", () => {
+  for (const key of [
+    "bot.workOnThis.more",
+    "bot.workOnThis.review",
+    "bot.workOnThis.pickerTitle",
+    "bot.workOnThis.pickerDescription",
+    "bot.workOnThis.starting",
+  ]) {
+    assert.ok(enUS[key] && zhCN[key], key);
+  }
+});

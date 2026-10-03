@@ -57,3 +57,52 @@ export function useConversationRowsSnapshot(params: {
 
   return state;
 }
+
+/**
+ * 一次性读取（无表单 Work on this 用）：同一条租约路径，拿到快照即释放；
+ * 会话在屏上时 store 已是 warm，通常同步返回。
+ */
+export function readConversationSnapshotOnce(params: {
+  workspacePath: string;
+  sessionId: string;
+  agentService: Parameters<typeof acquireWorkspaceConnection>[1];
+  timeoutMs?: number;
+}): Promise<{
+  rows: readonly ConversationRow[];
+  modelSelection: SessionConfigState["modelSelection"];
+}> {
+  const connection = acquireWorkspaceConnection(
+    { workspacePath: params.workspacePath },
+    params.agentService,
+  );
+  const session = connection.layer.acquire(params.sessionId);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      session.release();
+      connection.release();
+      action();
+    };
+    const read = () => {
+      const current = session.store.getState();
+      if (current.snapshot) {
+        const snapshot = current.snapshot;
+        finish(() =>
+          resolve({ rows: snapshot.rows.window, modelSelection: snapshot.config.modelSelection }),
+        );
+      } else if (current.status === "error") {
+        finish(() => reject(new Error(current.lastError ?? "conversation unavailable")));
+      }
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error("conversation load timed out"))),
+      params.timeoutMs ?? 10_000,
+    );
+    const unsubscribe = session.store.subscribe(read);
+    read();
+  });
+}

@@ -188,3 +188,55 @@ handler pre-validation), UI (excerpt projection, draft defaults, dialog gating).
 
 Bot → Multitask; changing the flow matrix; `coding → bot` summary transfer; durable admission store;
 remote target projects; Bot rename/delete; stale task-index migration; mobile layout work.
+
+## 10. Seamless switching (M3.1 — supersedes the §2 dialog as the default path)
+
+The Cross-Mode backend (§3–§7) is unchanged. Only the default interaction changes:
+`Ace → Work on this → Coding/Tasks → Continue with Ace → Ace`, with no form in either direction.
+
+### 10.1 Flow
+
+1. **Work on this** reads the current conversation's projection (the same store the Bot pane renders)
+   and derives the handoff automatically (§10.3).
+2. Destination inference (§10.2) is **clear** → the Coding/Tasks session is created and the app switches
+   immediately (button shows a spinner while the single `createSession` is in flight).
+3. Not clear → a lightweight **Work in…** picker: Tasks + writable local projects, one click each.
+   Choosing one starts immediately; the detailed form never opens.
+4. A `…` menu next to the button keeps **Review context…**, which opens the §2 dialog (objective, notes,
+   message toggles, budget) for users who explicitly want control. It is never on the default path.
+5. **Continue with Ace** stays immediate (unchanged).
+
+Failures (no model, runtime rejection) show a toast with the CLI's short reason; nothing is persisted
+(§5 rules unchanged).
+
+### 10.2 Destination inference (conservative, existing information only)
+
+Inputs: the conversation title and its recent visible text (same excerpts as §10.3), and the current
+writable local project options (`buildAutomationWorkspaceOptions`, remote excluded).
+
+- A project **matches** when its folder name (≥ 3 characters) appears in that text as a whole word,
+  case-insensitively; `-`, `_`, `.` and spaces in names are interchangeable.
+- Exactly **one** project matches → that project.
+- Zero or more than one match → **ask** (the Work in… picker, Tasks listed first).
+
+No model call, no history mining, no new index. Guessing wrong is worse than asking.
+
+### 10.3 Automatic context
+
+- **Objective:** the conversation title when it is a real title; otherwise the latest user message;
+  collapsed to one line, ≤ 500 characters.
+- **Context:** the recent visible excerpts (§2: realUser inputs, settled Ace replies merged per turn),
+  with the latest ones included up to the contract budget — the same defaults the Review dialog starts
+  from. Older excerpts stay in the packet as excluded items (auditable, never sent).
+- **Constraints:** none are synthesized (no model call to extract decisions); decisions and constraints
+  travel inside the carried excerpts.
+- Origin, model inheritance (`config.modelSelection`), Tasks target and privacy boundary as before; no
+  memory/profile/connector item can exist.
+
+### 10.4 Acceptance (M3.1)
+
+1. A conversation naming exactly one open project → Work on this switches straight to Coding, no modal.
+2. A generic conversation → Work in… picker → Tasks → session under Tasks.
+3. The first turn contains the derived objective and recent excerpts; no memory.
+4. Inherited model/effort; Continue with Ace returns to the same conversation; origin survives restart;
+   no Bot rows in the task index; `conversation.json` unchanged.

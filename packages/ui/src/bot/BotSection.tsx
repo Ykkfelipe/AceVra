@@ -8,7 +8,7 @@
  * 状态全部来自 BotWorkspaceProvider；本组件只持有「检查器是否展开」这一项每位用户的界面偏好。
  */
 import { useCallback, useMemo, useState, type CSSProperties } from "react";
-import { Hammer, PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.js";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
@@ -24,7 +24,7 @@ import {
   useCrossModeCodingLaunch,
   type CrossModeCodingTarget,
 } from "@/hooks/useCrossModeCodingLaunch.js";
-import { WorkOnThisDialog } from "@/bot/workOnThis/WorkOnThisDialog.js";
+import { WorkOnThisAction } from "@/bot/workOnThis/WorkOnThisAction.js";
 import { buildAutomationWorkspaceOptions } from "@/settings/automationWorkspaceOptions.js";
 import { useTabStore } from "@/store/TabStoreProvider.js";
 
@@ -90,7 +90,6 @@ export function BotSection({
     workspacePath,
     refreshHistory,
   } = useBotWorkspace();
-  const [workOnThisOpen, setWorkOnThisOpen] = useState(false);
   const tabs = useTabStore((store) => store.tabs);
   // 本里程碑只把工作交给本机 Coding 项目（远程项目的连接租约另议）。
   const codingProjects = useMemo(
@@ -192,18 +191,16 @@ export function BotSection({
           data-testid="bot-conversation-actions"
           className="flex shrink-0 items-center gap-1 [app-region:no-drag]"
         >
-          {conversationRef && onOpenCodingSession ? (
-            <ControlHintTooltip title={intl.formatMessage({ id: "bot.workOnThis.hint" })}>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="bot-work-on-this"
-                onClick={() => setWorkOnThisOpen(true)}
-              >
-                <Hammer data-icon="inline-start" aria-hidden="true" />
-                {intl.formatMessage({ id: "bot.workOnThis.action" })}
-              </Button>
-            </ControlHintTooltip>
+          {conversationRef && onOpenCodingSession && workspacePath ? (
+            <WorkOnThisAction
+              botWorkspacePath={workspacePath}
+              conversationRef={conversationRef}
+              conversationTitle={selectedRow?.title ?? null}
+              projects={codingProjects}
+              {...(onResolveTasksWorkspace ? { onResolveTasksWorkspace } : {})}
+              launch={launchCodingHandoff}
+              pending={codingHandoffPending}
+            />
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1 [app-region:no-drag]">
@@ -253,45 +250,6 @@ export function BotSection({
           />
         ) : null}
       </div>
-      {conversationRef && workspacePath ? (
-        <WorkOnThisDialog
-          open={workOnThisOpen}
-          onOpenChange={setWorkOnThisOpen}
-          botWorkspacePath={workspacePath}
-          conversationRef={conversationRef}
-          conversationTitle={selectedRow?.title ?? null}
-          projects={codingProjects}
-          tasksAvailable={Boolean(onResolveTasksWorkspace)}
-          pending={codingHandoffPending}
-          onConfirm={async (target, confirmation, modelSelection) => {
-            let codingTarget: CrossModeCodingTarget;
-            if (target.kind === "tasks") {
-              if (!onResolveTasksWorkspace) return { ok: false, message: null };
-              try {
-                // 确认时才确保对话工作区存在：打开对话框本身不产生任何副作用。
-                codingTarget = {
-                  workspacePath: await onResolveTasksWorkspace(),
-                  workspacePurpose: "conversation",
-                };
-              } catch (error) {
-                return {
-                  ok: false,
-                  message: error instanceof Error ? error.message : null,
-                };
-              }
-            } else {
-              codingTarget = {
-                workspacePath: target.project.workspacePath,
-                ...(target.project.workspaceIdentity
-                  ? { workspaceIdentity: target.project.workspaceIdentity }
-                  : {}),
-              };
-            }
-            const result = await launchCodingHandoff(codingTarget, confirmation, modelSelection);
-            return result.ok ? { ok: true } : { ok: false, message: result.message };
-          }}
-        />
-      ) : null}
     </div>
   );
 }
