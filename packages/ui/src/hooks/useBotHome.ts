@@ -19,7 +19,7 @@ export function useBotService(): IBotService | undefined {
   return botService;
 }
 
-export interface BotHomeState {
+interface BotHomeState {
   identity: BotIdentityView | null;
   memory: PersonalMemoryRecord[];
   capabilities: BotCapabilitySurface | null;
@@ -37,7 +37,7 @@ const EMPTY_STATE: BotHomeState = {
   error: null,
 };
 
-export interface BotHomeResult extends BotHomeState {
+interface BotHomeResult extends BotHomeState {
   available: boolean;
   refresh: () => Promise<void>;
 }

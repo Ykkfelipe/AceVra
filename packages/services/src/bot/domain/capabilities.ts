@@ -31,7 +31,7 @@ export interface BotCapabilitySurface {
   generatedAt: number;
 }
 
-export interface BotCapabilitySurfaceInput {
+interface BotCapabilitySurfaceInput {
   /** 宿主当前可执行的能力域。缺省实现的能力域一律不得标记为 available。 */
   executableDomains: readonly BotCapabilityDomain[];
   now: number;

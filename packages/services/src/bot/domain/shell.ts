@@ -26,7 +26,7 @@ export interface BotWorkspaceRef {
   key: string;
 }
 
-export interface CreateBotConversationShellInput {
+interface CreateBotConversationShellInput {
   workspace: BotWorkspaceRef;
   now: number;
 }
@@ -43,7 +43,7 @@ export function createBotConversationShell(
   };
 }
 
-export interface ShellMutationResult {
+interface ShellMutationResult {
   shell: BotConversationShell;
   /** 值未变化时为 false——调用方据此跳过写入，保证重复设置幂等。 */
   changed: boolean;

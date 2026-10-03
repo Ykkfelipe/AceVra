@@ -32,9 +32,7 @@ import {
 } from "./documents.js";
 import { BOT_STORE_VERSION, type BotStorePort } from "./ports.js";
 
-export type { BotWorkspaceRef } from "../domain/shell.js";
-
-export interface BotServiceDependencies {
+interface BotServiceDependencies {
   store: BotStorePort;
   /** 专用 Bot workspace；由宿主按数据根目录解析后注入。 */
   workspace: BotWorkspaceRef;

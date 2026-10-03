@@ -59,7 +59,7 @@ export const MAX_MEMORY_TITLE_LENGTH = 120;
 
 export const MAX_MEMORY_SUMMARY_LENGTH = 400;
 
-export const MAX_MEMORY_DETAILS_LENGTH = 2000;
+const MAX_MEMORY_DETAILS_LENGTH = 2000;
 
 export const MAX_MEMORY_TAGS = 12;
 
@@ -87,7 +87,7 @@ export interface PersonalMemoryContext {
   byteLength: number;
 }
 
-export interface PersonalMemoryLimits {
+interface PersonalMemoryLimits {
   /** 入选条数上限；字节预算属于渲染阶段（renderPersonalMemoryContext）。 */
   maxRecords?: number;
 }

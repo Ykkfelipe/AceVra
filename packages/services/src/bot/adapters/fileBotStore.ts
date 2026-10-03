@@ -10,18 +10,18 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BotStoreCorruptError, type BotStorePort } from "../app/ports.js";
 
-export interface FileBotStoreOptions {
+interface FileBotStoreOptions {
   /** Bot 数据根目录；由宿主按数据根解析后注入，测试可指向临时目录。 */
   rootDir: string;
 }
 
-export interface FileBotStorePaths {
+interface FileBotStorePaths {
   identity: string;
   conversation: string;
   memory: string;
 }
 
-export const BOT_STORE_FILE_NAMES = {
+const BOT_STORE_FILE_NAMES = {
   identity: "identity.json",
   conversation: "conversation.json",
   memory: "memory.json",
