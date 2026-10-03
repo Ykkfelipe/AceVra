@@ -14,6 +14,13 @@ export function AceVraAccountSection() {
   const text = useAccountText();
   const profile = view?.profile;
   const name = profile?.displayName?.trim() || text("unnamed", "AceVra account");
+  // Mirrors the first-run gate: the control reflects an in-flight sign-in so it cannot
+  // be re-triggered while the Account window is opening.
+  const authenticating =
+    !!view && ["authenticating", "authenticated", "admissionChecking"].includes(view.phase);
+  // Sign-out settles the projection synchronously, so it needs no pending flag of its
+  // own; the button swaps to the sign-in control as soon as the view republishes.
+  const ready = view?.phase === "ready";
   return (
     <section className="space-y-4" data-testid="acevra-account-section">
       <div>
@@ -62,7 +69,7 @@ export function AceVraAccountSection() {
               {describeAccountStatus(view, text)}
             </p>
             <div className="flex gap-2">
-              {view.phase === "ready" ? (
+              {ready ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -74,6 +81,7 @@ export function AceVraAccountSection() {
               ) : (
                 <Button
                   size="sm"
+                  disabled={authenticating}
                   data-testid="acevra-account-settings-signin"
                   onClick={() => void signIn()}
                 >
@@ -81,14 +89,21 @@ export function AceVraAccountSection() {
                 </Button>
               )}
               {(view.phase === "offline" || view.phase === "denied") && (
-                <Button variant="ghost" size="sm" onClick={() => void refresh()}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid="acevra-account-retry"
+                  onClick={() => void refresh()}
+                >
                   {text("retry", "Try again")}
                 </Button>
               )}
             </div>
           </div>
-          {view.phase === "ready" && <AceVraComputersSection />}
-          {view.phase === "ready" && view.rememberSession === false && (
+          {ready && <AceVraComputersSection />}
+          {/* Shown whenever persistence is unavailable, not only once signed in: this is
+              exactly when the user is not being asked to sign in again. */}
+          {view.rememberSession === false && (
             <p
               className="text-ui-sm text-foreground-subtle"
               data-testid="acevra-account-not-remembered"
@@ -96,7 +111,7 @@ export function AceVraAccountSection() {
               {text("notRemembered", "Account session won't be remembered on this device.")}
             </p>
           )}
-          {view.phase === "ready" && (
+          {ready && (
             <p className="text-ui-sm text-foreground-subtle">
               {text(
                 "signOutNote",
