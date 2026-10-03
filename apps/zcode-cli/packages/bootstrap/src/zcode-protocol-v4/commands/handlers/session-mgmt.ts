@@ -201,10 +201,13 @@ async function acceptHandoffIntoCreatedSession(
       "this runtime cannot accept cross-mode handoffs",
     );
   }
-  // 修复：首轮需要可用模型。若在物化/写来源之后才发现，会留下一个带来源却没有交接正文的会话；
-  // 所以在准入前先校验（record 仍是 deferred，关闭即无痕）。
+  // 修复：首轮需要可用模型。若在物化/写来源之后才发现，会留下一个带来源却没有交接正文的会话
+  // （实机隔离 HOME 复现：「Session model must be provider-qualified」）；所以在准入前先校验，
+  // record 仍是 deferred，关闭即无痕。
   try {
     await host.ensureModelReady?.(record);
+    // 与首轮 admission 同一个解析：会话没有可用的 provider-qualified 选择时在这里就失败。
+    resolveSubmittedExecutionState(record, {});
   } catch (error) {
     await closeCreatedSession();
     throw error;
