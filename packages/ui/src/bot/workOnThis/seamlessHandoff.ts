@@ -63,7 +63,10 @@ export function deriveHandoffObjective(
   placeholderTitles: readonly string[] = [],
 ): string {
   const trimmed = (title ?? "").trim();
-  const usable = trimmed && !placeholderTitles.includes(trimmed) ? trimmed : "";
+  // 修复：会话默认标题由首条输入截断而来（60 字符 + "..."），实机交接后 objective 被截断；
+  // 截断标题不是真标题，改用最近一条用户消息（完整、≤ 500 字符）。
+  const truncated = /(\.\.\.|…)$/u.test(trimmed);
+  const usable = trimmed && !truncated && !placeholderTitles.includes(trimmed) ? trimmed : "";
   if (usable) return defaultHandoffObjective(usable);
   const lastUser = [...excerpts].reverse().find((excerpt) => excerpt.role === "user");
   return defaultHandoffObjective(lastUser?.text ?? "");

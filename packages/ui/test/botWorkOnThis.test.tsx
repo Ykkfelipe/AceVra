@@ -295,6 +295,14 @@ test("objective comes from a real title, else the latest user message", () => {
     "build the remind CLI",
   );
   assert.equal(seamless.deriveHandoffObjective("", ex), "build the remind CLI");
+  // 首条输入截断出来的默认标题不是真标题。
+  assert.equal(
+    seamless.deriveHandoffObjective(
+      "Help me write a tiny Python script that renames photos in a fo...",
+      ex,
+    ),
+    "build the remind CLI",
+  );
 });
 
 test("automatic handoff is a confirmable bot → coding packet with recent context only", () => {
