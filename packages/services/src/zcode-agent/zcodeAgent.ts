@@ -49,6 +49,7 @@ import type {
   ZCodeUserInputResponse,
   ZCodeSessionEvent,
   ZCodeSessionInfo,
+  ZCodeSessionListProjection,
   ZCodeSessionMode,
   ZCodeSessionPersistence,
   ZCodeSessionSendResult,
@@ -209,6 +210,8 @@ export interface ZCodeAgentListSessionsParams extends ZCodeAgentWorkspaceTarget 
   runtimePolicy?: ZCodeAgentRuntimePolicy;
   includeArchived?: boolean;
   limit?: number;
+  /** 列表投影：缺省 = Coding 任务列表；personal-bot = Bot 对话历史（personal-bot spec §16.3）。 */
+  projection?: ZCodeSessionListProjection;
 }
 
 export interface ZCodeAgentListSessionSubagentsParams extends ZCodeAgentSessionTarget {

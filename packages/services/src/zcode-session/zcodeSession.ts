@@ -10,6 +10,7 @@ import type {
   ZCodeUserInputResponse,
   ZCodeSessionInfo,
   ZCodeSessionImportHistory,
+  ZCodeSessionListProjection,
   ZCodeSessionEvent,
   ZCodeSessionMode,
   ZCodeSessionPersistence,
@@ -58,6 +59,8 @@ export interface ZCodeSessionResumeParams extends ZCodeTaskTarget {
 export interface ZCodeSessionListParams extends ZCodeSessionWorkspaceTarget {
   includeArchived?: boolean;
   limit?: number;
+  /** 列表投影：缺省 = Coding 任务列表；personal-bot = Bot 对话历史（personal-bot spec §16.3）。 */
+  projection?: ZCodeSessionListProjection;
 }
 
 export interface ZCodeSessionReadParams extends ZCodeTaskTarget {

@@ -103,6 +103,20 @@ export const zcodeSessionKindSchema = z.enum([
 export const zcodeCreatableSessionTaskTypes = ["personal_bot"] as const;
 
 export const zcodeCreatableSessionTaskTypeSchema = z.enum(zcodeCreatableSessionTaskTypes);
+
+/**
+ * session/list 的列表投影（闭合枚举，见 docs/specs/personal-bot.md §16.3）。
+ *
+ * - `task-list`（缺省）：Coding 任务列表，成员 = CLI 的 TASK_LIST_SESSION_TYPES，不含 personal_bot；
+ * - `personal-bot`：Bot 对话历史，只含 personal_bot，且必须指定 workspace。
+ *
+ * 刻意不开放任意 taskTypes：调用方无法借列表读到 subagent/workflow child 等宿主内部会话，
+ * Bot 历史也不会反向混进 Coding 列表。
+ */
+export const zcodeSessionListProjections = ["task-list", "personal-bot"] as const;
+
+export const zcodeSessionListProjectionSchema = z.enum(zcodeSessionListProjections);
+export type ZCodeSessionListProjection = z.infer<typeof zcodeSessionListProjectionSchema>;
 export const zcodeSessionGoalSchema = z
   .object({
     sessionId: nonEmptyString,

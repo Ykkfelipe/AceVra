@@ -3854,6 +3854,8 @@ export function createZCodeAgentService(
           includeArchived: params.includeArchived ?? false,
           limit: params.limit,
           ...(params.sessionIds ? { sessionIds: params.sessionIds } : {}),
+          // 只在显式请求时下发：旧 CLI 的 strict schema 不认识该键，缺省请求保持逐字不变。
+          ...(params.projection ? { projection: params.projection } : {}),
         },
         zcodeSessionListResultSchema,
       );
