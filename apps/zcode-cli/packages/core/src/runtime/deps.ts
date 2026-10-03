@@ -196,6 +196,7 @@ export type {
   SessionTaskType,
   SessionTitleSource,
   ContextSourcePort,
+  PersonalMemoryContextPort,
   DynamicWorkflowRunPort,
   DynamicWorkflowSnippetPort,
   ModelCatalogPort,

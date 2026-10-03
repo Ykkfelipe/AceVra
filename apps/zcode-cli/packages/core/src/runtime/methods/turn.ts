@@ -56,6 +56,7 @@ import { finishOutputTokenRecovery } from "./turn-output-token-continuation.js";
 import { recordTurnUsageFact } from "./usage-observability.js";
 import { persistStableForkCompletionBoundary } from "./stable-fork-boundary.js";
 import { injectCapabilityContextFromTurn } from "./capability-context.js";
+import { injectPersonalMemoryContextFromTurn } from "./personal-memory-context.js";
 import { flushCapabilityTurnMetrics, startCapabilityTurnMetrics } from "./capability-metrics.js";
 import {
   closeGoalStateChangeReminderDeferral,
@@ -561,6 +562,13 @@ export async function executeTurnCommand(
             userInput: displayInput,
             traceContext: turnTraceContext,
             toolDisallowlist: options?.toolDisallowlist,
+          });
+          // Personal Bot 个人记忆紧随能力上下文之后（同一因果顺序）。
+          // 只有 personal_bot 会话会真正发起 host 往返并注入；门禁在方法内部，
+          // 这样“非 Bot 会话拿不到个人记忆”不依赖调用点记得判断。见 personal-bot.md §14。
+          await injectPersonalMemoryContextFromTurn(this, {
+            userInput: displayInput,
+            traceContext: turnTraceContext,
           });
         }
 

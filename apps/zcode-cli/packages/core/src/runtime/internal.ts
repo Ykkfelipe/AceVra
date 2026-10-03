@@ -13,6 +13,7 @@ import type {
   SessionMailboxPort,
   SessionStorePort,
   ContextSourcePort,
+  PersonalMemoryContextPort,
   ContextSourceSnapshot,
   ExecutionPort,
   FileSystemPort,
@@ -98,6 +99,7 @@ export interface AgentRuntimeInternal
   memoryIndexContent?: string;
   memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   contextSourcePort?: ContextSourcePort;
+  personalMemoryPort?: PersonalMemoryContextPort;
   skillPort?: SkillPort;
   mcpPort?: McpPort;
   mcpStartupPromise?: Promise<McpConnectionSnapshot>;

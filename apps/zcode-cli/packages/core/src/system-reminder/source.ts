@@ -51,6 +51,9 @@ export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
   // 能力上下文（core/specs/capability-runtime.md）：每轮按相关性重算，不持久化；
   // 热会话内按正文去重，冷恢复后下一次相关轮次重新注入。
   "capability_context",
+  // Personal Bot 个人记忆上下文（docs/specs/personal-bot.md §14）：同样每轮重算、不持久化、
+  // 按正文去重。文本由 host 侧的 Bot 模块渲染并已受条数/字节预算约束，CLI 不参与选择。
+  "personal_memory_context",
 ] as const;
 
 export type SystemReminderPrefixSource = (typeof SYSTEM_REMINDER_PREFIX_SOURCES)[number];
@@ -104,6 +107,12 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
     "sr.referenced_session_context",
   ),
   capability_context: descriptor("current_turn", "per_current_turn", true, "sr.capability_context"),
+  personal_memory_context: descriptor(
+    "current_turn",
+    "per_current_turn",
+    true,
+    "sr.personal_memory_context",
+  ),
   // Plugin 对话引用：当轮生成后按
   // model-only synthetic notice 固化，后续只追加、不改写；冷恢复按原文重建以保持缓存前缀。
   plugin_reference: descriptor("current_turn", "per_current_turn", true, "sr.plugin_reference"),
