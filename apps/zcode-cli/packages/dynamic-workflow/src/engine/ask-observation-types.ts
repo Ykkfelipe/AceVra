@@ -56,4 +56,19 @@ export interface AskProgress {
   /** 本 ask 内累计的工具调用数，与 {@link AskStats.toolCalls} 同一个计数器。 */
   toolCalls: number;
   lastTool?: AskLastTool;
+  /**
+   * 本次尝试至此观察到的执行证据（只有 Multitask worker 的逐工具进度带它）。引擎不解释，只随
+   * `node-progress` 落 journal：被 Stop 打断的尝试的证据因此在 resume 时还能读回来，
+   * 让同一任务的重派尝试把它累计进去（见 bootstrap/multitask-worker-evidence.ts）。
+   */
+  evidence?: AskEvidence;
+}
+
+/** 一次 ask 尝试的执行证据计数（driver 观察，形状与 Multitask 结果里的 evidence 一致）。 */
+export interface AskEvidence {
+  toolCalls: number;
+  worldToolCalls: number;
+  mutatingToolCalls: number;
+  commandCalls: number;
+  filesChanged: string[];
 }

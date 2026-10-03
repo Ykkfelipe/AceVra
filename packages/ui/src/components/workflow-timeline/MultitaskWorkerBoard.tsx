@@ -271,7 +271,13 @@ function evidenceText(format: Format, evidence: MultitaskEvidence): string {
     parts.push(countText(format, "chat.toolCall.multitask.evidence.edits", evidence.mutatingToolCalls));
   if (evidence.commandCalls > 0)
     parts.push(countText(format, "chat.toolCall.multitask.evidence.commands", evidence.commandCalls));
-  parts.push(toolCallsText(format, evidence.toolCalls));
+  const calls = toolCallsText(format, evidence.toolCalls);
+  // resume 后累计进来的、Stop 之前做的那部分单独说出来：它不是这次新做的，也不是缓存复用。
+  parts.push(
+    evidence.priorToolCalls === undefined
+      ? calls
+      : `${calls} (${countText(format, "chat.toolCall.multitask.evidence.prior", evidence.priorToolCalls)})`,
+  );
   return parts.join(" · ");
 }
 

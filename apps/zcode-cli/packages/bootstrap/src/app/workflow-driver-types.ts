@@ -21,6 +21,7 @@ import type {
 import type { AgentRuntime } from "@zcode/core";
 import type {
   ActorSubmitProfile,
+  AskEvidence,
   ActorRef,
   ActorSessionSeed,
   InstanceRef,
@@ -235,6 +236,11 @@ export interface SessionState {
   readonly actorName: string | undefined;
   /** 该 actor 是 Multitask worker：submit_result 载荷交引擎前由 driver 盖上运行时证据。 */
   readonly multitaskWorker: boolean;
+  /**
+   * 当前 ask 在更早生命周期里被打断的尝试留下的证据（startAsk 求出；无则缺席）。
+   * `declared`：本 run 的结果 schema 是否声明了 `evidence.priorAttempts`。
+   */
+  carriedEvidence?: { evidence: AskEvidence; declared: boolean };
   /**
    * 当前 ask 里 driver 侧瞬态重驱的次数：runner 放过来的瞬态失败（流恢复耗尽等）不结算节点，按退避曲线再起一轮。
    * startAsk 归零。

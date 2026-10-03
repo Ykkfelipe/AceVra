@@ -1003,7 +1003,7 @@ export {
   LAST_TOOL_NAME_MAX_CHARS,
   LAST_TOOL_TARGET_MAX_CHARS,
 } from "./ask-observation-types.js";
-export type { AskLastTool, AskProgress, AskStats } from "./ask-observation-types.js";
+export type { AskEvidence, AskLastTool, AskProgress, AskStats } from "./ask-observation-types.js";
 
 // ————————————————————————————————————————————————————————————————
 // 导入缓存（amend-resume）

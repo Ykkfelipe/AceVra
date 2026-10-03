@@ -69,7 +69,11 @@ import {
   type WorkflowReportSink,
   type WorldReadOp,
 } from "@zcode/dynamic-workflow";
-import { isMultitaskWorkerPersona, multitaskSubmission } from "./multitask-worker-evidence.js";
+import {
+  carriedEvidenceForAsk,
+  isMultitaskWorkerPersona,
+  multitaskSubmission,
+} from "./multitask-worker-evidence.js";
 import { executeArtifactPublish } from "./workflow-artifact-publish.js";
 import { qualityEpilogue } from "./workflow-ask-epilogue.js";
 import { ensureSubmitProfileFits } from "./workflow-driver-submit-profile.js";
@@ -305,6 +309,8 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
     state.abortController = new AbortController();
     // 上一个 ask 的 waiting / executing 相位、工具计数都不能带到这个 ask 上；瞬态重驱计数同理。
     state.modelActivity.reset();
+    // 同一任务被 Stop 打断后重派：把更早尝试的证据带上（见 multitask-worker-evidence.ts）。
+    state.carriedEvidence = carriedEvidenceForAsk(this.deps, state, instance, message);
     state.transientAttempts = 0;
     state.cancelRedrive?.();
     state.cancelRedrive = undefined;

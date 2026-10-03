@@ -5123,6 +5123,8 @@ const enUS: Record<string, string> = {
   "chat.toolCall.multitask.evidence.edits.other": "{count} workspace changes",
   "chat.toolCall.multitask.evidence.commands.one": "{count} command run",
   "chat.toolCall.multitask.evidence.commands.other": "{count} commands run",
+  "chat.toolCall.multitask.evidence.prior.one": "{count} before stop",
+  "chat.toolCall.multitask.evidence.prior.other": "{count} before stop",
   "chat.toolCall.multitask.evidence.toolCalls.one": "{count} tool call",
   "chat.toolCall.multitask.evidence.toolCalls.other": "{count} tool calls",
   "chat.toolCall.workflow.card.agent": "{count} agent",

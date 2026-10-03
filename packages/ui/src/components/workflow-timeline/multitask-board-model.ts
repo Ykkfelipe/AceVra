@@ -39,6 +39,8 @@ export interface MultitaskEvidence {
   filesChanged: string[];
   /** 报告条目里截短前的改动文件总数。 */
   filesChangedTotal?: number;
+  /** 总数里属于同一任务被 Stop 打断的更早尝试的那部分（resume 后累计进来）；缺席即全是本次新做的。 */
+  priorToolCalls?: number;
 }
 
 export interface MultitaskTaskView {
@@ -184,6 +186,8 @@ function sumEvidence(tasks: readonly MultitaskTaskView[]): MultitaskEvidence | u
     total.mutatingToolCalls += evidence!.mutatingToolCalls;
     total.commandCalls += evidence!.commandCalls;
     for (const file of evidence!.filesChanged) files.add(file);
+    if (evidence!.priorToolCalls !== undefined)
+      total.priorToolCalls = (total.priorToolCalls ?? 0) + evidence!.priorToolCalls;
     largestTaskTotal = Math.max(largestTaskTotal, evidence!.filesChangedTotal ?? 0);
   }
   total.filesChanged = [...files];
@@ -241,6 +245,11 @@ function readEvidence(value: unknown): MultitaskEvidence | undefined {
   const files = Array.isArray(record.filesChanged)
     ? record.filesChanged.filter((file): file is string => typeof file === "string")
     : [];
+  const prior = record.priorAttempts;
+  const priorToolCalls =
+    typeof prior === "object" && prior !== null && typeof (prior as { toolCalls?: unknown }).toolCalls === "number"
+      ? (prior as { toolCalls: number }).toolCalls
+      : undefined;
   return {
     toolCalls: count("toolCalls"),
     worldToolCalls: count("worldToolCalls"),
@@ -248,6 +257,7 @@ function readEvidence(value: unknown): MultitaskEvidence | undefined {
     commandCalls: count("commandCalls"),
     filesChanged: files,
     filesChangedTotal: Math.max(files.length, count("filesChangedTotal")),
+    ...(priorToolCalls === undefined || priorToolCalls <= 0 ? {} : { priorToolCalls }),
   };
 }
 

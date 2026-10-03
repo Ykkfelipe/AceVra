@@ -181,3 +181,16 @@ test("run read model exposes frozen worker access from the bounded actor persona
   assert.equal("access" in run.actors[1]!, false, "normal Workflow actors carry no access");
   assert.equal(workflowRunSchema.safeParse(run).success, true);
 });
+
+test("work carried across Stop/resume is shown as such, not as new or cached work", () => {
+  const carried = { ...evidence(12), toolCalls: 13, priorAttempts: { toolCalls: 12, worldToolCalls: 12, mutatingToolCalls: 0, commandCalls: 0 } };
+  const board = buildMultitaskBoard(multitaskRun({ reports: [report("explore", "inspect", "done", carried)] }));
+  assert.equal(board[0]!.state, "done");
+  assert.equal(board[0]!.reused, false, "re-dispatched work is not the cached Reused badge");
+  const markup = renderToStaticMarkup(
+    <ZCodeIntlProvider initialLocale="en-US" messages={enUS}>
+      <MultitaskWorkerBoard run={multitaskRun({ reports: [report("explore", "inspect", "done", carried)] })} />
+    </ZCodeIntlProvider>,
+  );
+  assert.match(markup, /13 tool calls \(12 before stop\)/);
+});

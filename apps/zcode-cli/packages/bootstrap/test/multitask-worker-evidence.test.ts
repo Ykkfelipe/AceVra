@@ -96,3 +96,75 @@ test("only Multitask workers are stamped, and model-authored evidence is overwri
   // 非对象载荷原样交给引擎，由 schema 校验与 repair 通道照常拒绝。
   assert.equal(stampMultitaskEvidence("done", counts), "done");
 });
+
+test("carried evidence counts only earlier lives of the same run and ask instance", async () => {
+  const { carriedMultitaskEvidence, carriedEvidenceForAsk, schemaDeclaresPriorAttempts } =
+    await import("../src/app/multitask-worker-evidence.js");
+  // 只用到 listEvents：按 run 分桶的事件序列，sequence 即追加序。
+  const buckets = new Map<string, { sequence: number; event: never }[]>();
+  const journal = {
+    appendEvent: (runId: string, event: never) => {
+      const list = buckets.get(runId) ?? [];
+      list.push({ sequence: list.length, event });
+      buckets.set(runId, list);
+    },
+    listEvents: (runId: string) => buckets.get(runId) ?? [],
+  };
+  const ev = (world: number, files: string[] = []) => ({
+    toolCalls: world,
+    worldToolCalls: world,
+    mutatingToolCalls: files.length,
+    commandCalls: 0,
+    filesChanged: files,
+  });
+  const b = { siteId: "ask#2", ordinal: 1 };
+  const other = { siteId: "ask#1", ordinal: 1 };
+  const progress = (instance: typeof b, world: number, files?: string[]) =>
+    ({ type: "node-progress", instance, turn: 1, toolCalls: world, evidence: ev(world, files) }) as const;
+  const started = { type: "run-started", runId: "r", caps: { maxConcurrency: 1 } } as const;
+  for (const event of [
+    started,
+    progress(b, 1),
+    progress(b, 2, ["x.ts"]), // life 1: last snapshot = 2
+    progress(other, 9), // a different task of the run: never counted for b
+    started,
+    progress(b, 4, ["y.ts"]), // life 2 (also interrupted): last snapshot = 4
+    started,
+    progress(b, 7), // current life: this attempt, not carried
+  ])
+    journal.appendEvent("r", event as never);
+  journal.appendEvent("other-run", started as never);
+  journal.appendEvent("other-run", progress(b, 50) as never);
+
+  assert.deepEqual(carriedMultitaskEvidence(journal, "r", b), {
+    toolCalls: 6,
+    worldToolCalls: 6,
+    mutatingToolCalls: 2,
+    commandCalls: 0,
+    filesChanged: ["x.ts", "y.ts"],
+  });
+  assert.equal(carriedMultitaskEvidence(journal, "fresh-run", b), undefined);
+  assert.equal(carriedMultitaskEvidence(journal, "other-run", b), undefined, "single life: nothing earlier");
+
+  // 只有 Multitask worker 的 typed ask 才累计；普通 Workflow / untyped 原样不变。
+  const message = { typed: true, schema: { properties: { evidence: { properties: {} } } } };
+  assert.equal(carriedEvidenceForAsk({ journal, runId: "r" }, { multitaskWorker: false }, b, message), undefined);
+  assert.equal(
+    carriedEvidenceForAsk({ journal, runId: "r" }, { multitaskWorker: true }, b, { typed: false }),
+    undefined,
+  );
+  // 修复之前铸的 run：schema 没声明 priorAttempts → 只累计总数，不写新键（否则校验会拒）。
+  const legacy = carriedEvidenceForAsk({ journal, runId: "r" }, { multitaskWorker: true }, b, message);
+  assert.equal(legacy?.declared, false);
+  const stamped = stampMultitaskEvidence({ status: "done", result: "r" }, ev(0), legacy) as {
+    evidence: Record<string, unknown>;
+  };
+  assert.equal(stamped.evidence.worldToolCalls, 6);
+  assert.equal("priorAttempts" in stamped.evidence, false);
+  assert.equal(
+    schemaDeclaresPriorAttempts({
+      properties: { evidence: { properties: { priorAttempts: { type: "object" } } } },
+    }),
+    true,
+  );
+});

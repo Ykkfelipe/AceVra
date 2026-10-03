@@ -432,3 +432,118 @@ test("cancellation still stops the run instead of becoming a task outcome", asyn
     await rm(cwd, { recursive: true, force: true });
   }
 });
+
+// ———————————— 回归：resume 后的证据累计（Cross-Mode 集成时 live 发现，dwfrun-80e9fcbe） ————————————
+
+/**
+ * 两世运行：第一世 a 完成、b 做了 `firstLifeTools` 次工具调用后被 Stop；第二世 resume，b 只提交结果。
+ * driver 侧的累计与盖章用**真实**函数（carriedEvidenceForAsk / multitaskSubmission），读的是真实引擎
+ * 写下的 journal——与生产 driver 的 startAsk / submit 桥接同一条路径。
+ */
+async function stopThenResume(firstLifeTools: number) {
+  const { carriedEvidenceForAsk, multitaskSubmission } = await import(
+    "../src/app/multitask-worker-evidence.js"
+  );
+  const cwd = await mkdtemp(join(tmpdir(), "acevra-multitask-carry-"));
+  try {
+    const scriptText = buildMultitaskScript(MultitaskInputSchema.parse(twoStep()), []);
+    const askSpecs = multitaskAskSpecs(scriptText);
+    const journal = new InMemoryJournalStore();
+    const dispatched: string[][] = [[], []];
+    let life = 0;
+    const bStarted = deferred();
+    const evidenceAt = (world: number) => ({ ...evidence(world), toolCalls: world });
+    const run = (signal?: AbortSignal) =>
+      runWorkflowScript({
+        scriptText,
+        cwd,
+        runId: "carry-run",
+        caps: { maxConcurrency: 1 },
+        askSpecs,
+        validate: () => [],
+        timeoutMs: 10000,
+        ...(signal ? { signal } : {}),
+        makeDriver: (sink) => ({
+          journal,
+          emit: () => {},
+          createActorSession: async (actor) => ({ id: actor.siteId }),
+          startAsk: (_session, instance, message) => {
+            const id = /^Task (\w+):/.exec(message.instructions)![1]!;
+            dispatched[life]!.push(id);
+            const state = {
+              multitaskWorker: true,
+              carriedEvidence: carriedEvidenceForAsk(
+                { journal, runId: "carry-run" },
+                { multitaskWorker: true },
+                instance,
+                message,
+              ),
+            };
+            const submit = (attemptWorld: number) =>
+              sink.askSubmitAttempted(
+                instance,
+                multitaskSubmission(
+                  { ...state, modelActivity: { toolCounts: () => evidenceAt(attemptWorld) } as never },
+                  { status: "done", result: `result-${id}` },
+                ),
+              );
+            queueMicrotask(() => {
+              if (id === "a") return submit(1);
+              if (life === 0) {
+                // 第一世：b 逐工具上报进度（与生产 driver 的 onToolStarted 同一事件），然后被 Stop。
+                for (let call = 1; call <= firstLifeTools; call++)
+                  sink.askProgress(instance, { turn: 1, toolCalls: call, evidence: evidenceAt(call) });
+                bStarted.resolve();
+                return;
+              }
+              // 第二世：同一会话里只调 submit_result——本次尝试零工具调用。
+              submit(0);
+            });
+          },
+          respondToSubmit: () => {},
+          cancelAsk: () => {},
+          executeWorldRead: async () => null,
+        }),
+      });
+    const controller = new AbortController();
+    const first = run(controller.signal);
+    await bStarted.promise;
+    controller.abort("user");
+    assert.equal((await first).status, "stopped");
+    life = 1;
+    const resumed = await run();
+    assert.equal(resumed.status, "completed");
+    return {
+      dispatched,
+      artifact: (resumed.status === "completed" ? resumed.artifact : undefined) as Record<
+        string,
+        { outcome: string; evidence?: Record<string, unknown> }
+      >,
+    };
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+}
+
+test("tool work before Stop counts for the same task when it only submits after resume", async () => {
+  const { artifact, dispatched } = await stopThenResume(3);
+  assert.equal(artifact.b!.outcome, "done", "real pre-stop work is not 'unverified'");
+  assert.equal(artifact.b!.evidence!.worldToolCalls, 3);
+  assert.deepEqual(artifact.b!.evidence!.priorAttempts, {
+    toolCalls: 3,
+    worldToolCalls: 3,
+    mutatingToolCalls: 0,
+    commandCalls: 0,
+  });
+  // 已完成的 a 在 resume 时以缓存结算：不重跑，也不把 b 的证据算到它头上。
+  assert.deepEqual(dispatched, [["a", "b"], ["b"]]);
+  assert.equal(artifact.a!.evidence!.worldToolCalls, 1);
+  assert.equal("priorAttempts" in artifact.a!.evidence!, false);
+});
+
+test("a worker with zero tool use before and after Stop is still unverified", async () => {
+  const { artifact, dispatched } = await stopThenResume(0);
+  assert.equal(artifact.b!.outcome, "unverified");
+  assert.equal(artifact.b!.evidence!.worldToolCalls, 0);
+  assert.deepEqual(dispatched, [["a", "b"], ["b"]], "cached worker a still does not rerun");
+});
