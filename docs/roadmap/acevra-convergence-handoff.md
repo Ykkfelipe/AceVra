@@ -127,3 +127,92 @@ Environment notes (not code changes):
 Phase A is green. The converged head is safe to build on for Phase B. It is
 **not** yet a `release/0.1.0-alpha` candidate: the UI-level live checks above and
 Phase B are still outstanding.
+
+---
+
+# Phase A2 — canonical baseline `8c61cc4` (frozen 2026-10-03)
+
+Two further accepted milestones converged on top of Phase A and are now the
+**canonical baseline future agents must branch from**:
+
+| Item     | Value                                                                                     |
+| -------- | ----------------------------------------------------------------------------------------- |
+| Branch   | `integration/acevra-convergence` — local == `origin` @ **`8c61cc4`** (pushed, verified)   |
+| Worktree | `/Users/felipemore/Projects/AceVra-convergence`                                           |
+| Rule     | **Frozen.** No feature work directly on this branch; new milestones branch from `8c61cc4` in fresh worktrees unless an isolated branch has a different integration plan |
+
+## History since Phase A (`58f1b0b`)
+
+```text
+58f1b0b  Phase A head (this file, initial)
+79f5db3  merge: claude/intelligent-lovelace-kede1l@83c48fe (accepted unavailable local-project notice)
+a2e5c76  merge: feature/bot-workspace-v2@8e6d9da (accepted Bot Workspace V2)
+8c61cc4  merge: reconciliation of the two milestones (both accepted merges are ancestors)
+```
+
+Both accepted milestones are verified ancestors of `8c61cc4`
+(`git merge-base --is-ancestor 83c48fe` / `8e6d9da`).
+
+## 1. Unavailable local-project notice (`83c48fe`, merged via `79f5db3`)
+
+- The coding main area explains a missing workspace folder in place of the
+  composer (`UnavailableWorkspaceNotice` / `UnavailableWorkspaceComposerNotice`,
+  spec `packages/ui/specs/unavailable-workspace-composer-notice.md`).
+- Removal UX is owned by the shared `useWorkspaceTabRemoval` transaction
+  (running-task confirm → closeTab → runtime release → cache invalidation);
+  sidebar items and the notice share it — no second close path.
+- "Open folder" reuses the existing reveal-folder platform surface.
+- The notice is scoped to Coding/project read-only state; the Bot workspace
+  (always present) never shows it.
+
+## 2. Bot Workspace V2 (`feature/bot-workspace-v2@8e6d9da`, five commits)
+
+- **Separate workspace chrome:** narrow global rail (`GlobalNavRail`) owns
+  Coding / Bot / Search / Automations / Plugins + account/settings; the
+  secondary sidebar is contextual (coding keeps Projects/Tasks; Bot gets its
+  conversation sidebar); no coding header/terminal/side-pane in the Bot view.
+- **History projection, not a copy:** Bot history derives on read from the CLI
+  session store via a closed `session/list` projection `personal-bot`
+  (workspace-scoped, `personal_bot` only). The default projection is unchanged;
+  **no Bot session ever enters `tasks-index.sqlite`**.
+- **Selection:** `conversation.json` (`IBotService.getConversationShell`) remains
+  the sole durable selection authority; the UI mirrors it with generation-guarded
+  reads and single-flight refreshes.
+- **Conversation:** production `V4ChatPane` unchanged (streaming, restart/resume,
+  `personal_bot` memory injection).
+- **Computers:** the inspector hosts the shared `ComputerPane` (live SSH screen,
+  Take control/Stop) and the canonical device registry — no second subsystem.
+  First `RemoteComputer` attach auto-opens the inspector on Computers.
+- **Screenshots:** `RemoteComputer.showToUser` is the display-channel signal —
+  user-requested screenshots attach inline in chat; agent-internal ones stay as
+  tool-card thumbnails; 256 KB inline display cap; shared by Coding and Bot.
+
+## Reconciliation conflicts (resolved, both features kept)
+
+| File                        | Resolution                                                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WorkspaceSidebar.tsx`      | 79f5db3's `useWorkspaceTabRemoval` refactor wins; Bot's rail already replaced the footer that used `openSettingsTab`.                                                  |
+| `WorkspaceShellLayout.tsx`  | Bot's view gating kept; 79f5db3's `readOnlyComposerNotice` prop added to `V4WorkspaceChatArea` (Coding only; never rendered in the Bot view).                          |
+| `locales`, `SessionPane`    | Auto-merged; en-US/zh-CN parity intact.                                                                                                                               |
+
+## Phase A2 verification (all on `8c61cc4`)
+
+Root + CLI typecheck pass; lint 0 errors / 89 warnings (baseline); architecture
+check 0 violations; `git diff --check` clean; web `vite build` passes; UI suites
+37/37 (unavailable-notice + Bot V2 + screenshot + shell contracts), CLI
+projection/display tests 12/12, shared 77/77, services 15/15.
+
+Live smoke (dev app, real runtime): Coding opens with the rail; missing-folder
+notice renders in the coding view and is absent in Bot; Bot history and selection
+restore; Bot ↔ Coding preserves both contexts; Dell live stream, inline
+user-requested screenshot, internal screenshot kept tool-only; zero new
+`personal_bot` rows in `tasks-index.sqlite`.
+
+## Known notes carried forward
+
+- The historical stale Bot row in `tasks-index.sqlite` remains a separate
+  migration/cleanup issue (predates V2; V2 itself produces zero new rows).
+- Phone-viewport visual verification of the rail/drawer remains outstanding.
+- Bot conversation rename/delete: deferred (out of V2 scope).
+- Cross-Mode "Work on this": deferred; the header actions slot
+  (`bot-conversation-actions`) stays reserved.
