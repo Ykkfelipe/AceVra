@@ -132,3 +132,66 @@ export function createLocalHostSupervisor<Host extends SupervisedHost>(deps: {
     },
   };
 }
+
+/**
+ * render-process-gone reasons that mean the primary renderer died abnormally and a reload can
+ * restore it (specs/desktop-host-unification.md "Renderer crash recovery and host stdio").
+ * `clean-exit` is deliberate; `launch-failed` / `integrity-failure` would only loop.
+ */
+const RECOVERABLE_RENDERER_GONE_REASONS = new Set([
+  "crashed",
+  "killed",
+  "oom",
+  "abnormal-exit",
+  "memory-eviction",
+]);
+
+export function isRecoverableRendererGoneReason(reason: string): boolean {
+  return RECOVERABLE_RENDERER_GONE_REASONS.has(reason);
+}
+
+/**
+ * Primary-window renderer recovery. 修复依据（2026-10-02 实测）：外部 kill 掉 renderer 后 Main
+ * 只记录 render-process-gone，窗口沦为空壳而 host/Agent/Helper 继续运行。与 Local Host 同一
+ * 所有者、同一有界策略；恢复手段是 reload，dom-ready 经既有 AttachServicePort 重新挂上存活的
+ * host，会话不受影响。Electron-free so it is testable.
+ */
+export function createRendererCrashSupervisor(deps: {
+  policy?: ReturnType<typeof createLocalHostCrashRecovery>;
+  isForceQuitting: () => boolean;
+  isWindowAlive: () => boolean;
+  reload: () => void;
+  log?: (message: string) => void;
+  schedule?: (callback: () => void, delayMs: number) => unknown;
+  cancel?: (handle: unknown) => void;
+}) {
+  const policy = deps.policy ?? createLocalHostCrashRecovery();
+  const schedule = deps.schedule ?? ((callback, delayMs) => setTimeout(callback, delayMs));
+  const cancel = deps.cancel ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  let pending: unknown = null;
+  return {
+    onRendererGone(reason: string): void {
+      const decision = policy.decide({
+        intentional: deps.isForceQuitting() || !isRecoverableRendererGoneReason(reason),
+        windowAlive: deps.isWindowAlive(),
+        isCurrent: true,
+      });
+      if (decision.action === "ignore") return;
+      if (decision.action === "give_up") {
+        deps.log?.(`renderer gone (${reason}) ${decision.attempts} times; not reloading`);
+        return;
+      }
+      deps.log?.(`renderer gone (${reason}); reload ${decision.attempt} in ${decision.delayMs}ms`);
+      if (pending !== null) cancel(pending);
+      pending = schedule(() => {
+        pending = null;
+        if (!deps.isWindowAlive() || deps.isForceQuitting()) return;
+        deps.reload();
+      }, decision.delayMs);
+    },
+    dispose(): void {
+      if (pending !== null) cancel(pending);
+      pending = null;
+    },
+  };
+}

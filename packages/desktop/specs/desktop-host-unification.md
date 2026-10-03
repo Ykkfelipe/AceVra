@@ -116,3 +116,37 @@ lazily, exactly as on a cold start.
 Acceptance: a crash restarts once and the replacement host serves commands; repeated crashes
 back off and stop after the budget; intentional disposal or quit never respawns; a controlled
 development termination (`kill -9` of the Local Host pid) recovers the window live.
+
+## Renderer crash recovery and host stdio (2026-10-03)
+
+Problem (measured on AceVra Dev, 2026-10-02 21:05): an external `pkill -f "desktop-dev/41"`
+followed by `pkill -9` killed every Electron helper whose command line carried the dev runtime
+path — the primary window's renderer, GPU, network and audio services — but not Main (its process
+title is just the app name) and not the Local Host (it retitles itself). Main logged
+`render-process-gone reason=killed` and did nothing else: the window stayed a dead shell while the
+host, Agent and Helper kept running, the task finished and played its completion sound with no
+window, and the screen-recording indicator stayed on. A second incident (18:28) showed the
+companion failure: when the `pnpm dev:desktop` harness died, the host's `console.log` hit a closed
+stdout, the unhandled stream `EPIPE` crashed the host, and every respawn died the same way within
+3 ms until Main gave up and quit.
+
+Rules:
+
+- The primary window's renderer is recovered by the same owner and the same bounded policy as the
+  Local Host (≤3 reloads per 2 min; backoff 0.5 s, 2 s, 8 s). Recoverable reasons: `crashed`,
+  `killed`, `oom`, `abnormal-exit`, `memory-eviction`. `clean-exit`, `launch-failed`,
+  `integrity-failure`, and anything while the app is force-quitting are never reloaded. Recovery
+  is `webContents.reload()`: `dom-ready` then reattaches the live Local Host through the existing
+  `AttachServicePort` path, so running sessions survive and nothing is respawned.
+- Host console output is a convenience copy; the durable record is the host-log relay to Main.
+  Host `stdout`/`stderr` ignore `EPIPE` exactly like Main's logger (one shared guard in
+  `packages/shared/src/brokenPipe.ts`); any other stream error still crashes loudly.
+
+```text
+render-process-gone(reason) ─► force-quitting or non-recoverable reason ─► log only
+   recoverable ─► bounded policy ─► reload after backoff ─► dom-ready ─► reattach existing host
+                               └─► exhausted ─► log; no further reloads
+```
+
+Acceptance: killing the renderer pid of a running dev window brings the window back with the same
+sessions; a closed parent stdout never crashes the host.

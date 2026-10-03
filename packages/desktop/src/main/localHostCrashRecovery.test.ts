@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   createLocalHostCrashRecovery,
   createLocalHostSupervisor,
+  createRendererCrashSupervisor,
 } from "./localHostCrashRecovery.js";
 
 class FakeHost extends EventEmitter {
@@ -174,4 +175,79 @@ test("a manual reload during the backoff wins; the pending crash restart does no
   w.supervisor.adopt(new FakeHost(99));
   w.runScheduled();
   assert.equal(w.hosts.length, 1, "no extra spawn from the stale crash timer");
+});
+
+// Renderer crash recovery (specs/desktop-host-unification.md "Renderer crash recovery and host
+// stdio"): 2026-10-02 实测外部 kill 掉主窗口 renderer 后窗口沦为空壳、host 仍在运行。
+function rendererHarness(overrides: { forceQuitting?: () => boolean } = {}) {
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  let reloads = 0;
+  let windowAlive = true;
+  const logs: string[] = [];
+  const supervisor = createRendererCrashSupervisor({
+    policy: createLocalHostCrashRecovery({ now: () => 0 }),
+    isForceQuitting: overrides.forceQuitting ?? (() => false),
+    isWindowAlive: () => windowAlive,
+    reload: () => {
+      reloads += 1;
+    },
+    log: (message) => logs.push(message),
+    schedule: (callback, delayMs) => {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    cancel: () => undefined,
+  });
+  return {
+    supervisor,
+    scheduled,
+    logs,
+    get reloads() {
+      return reloads;
+    },
+    closeWindow: () => {
+      windowAlive = false;
+    },
+  };
+}
+
+test("a killed renderer is reloaded after backoff, reattaching the live host", () => {
+  const h = rendererHarness();
+  h.supervisor.onRendererGone("killed");
+  assert.equal(h.scheduled.length, 1);
+  assert.equal(h.scheduled[0]?.delayMs, 500);
+  h.scheduled[0]?.callback();
+  assert.equal(h.reloads, 1);
+});
+
+test("renderer reloads are bounded and then give up", () => {
+  const h = rendererHarness();
+  for (let i = 0; i < 4; i += 1) h.supervisor.onRendererGone("crashed");
+  assert.deepEqual(
+    h.scheduled.map((entry) => entry.delayMs),
+    [500, 2_000, 8_000],
+  );
+  assert.ok(
+    h.logs.some((line) => line.includes("not reloading")),
+    h.logs.join("\n"),
+  );
+});
+
+test("clean exits, non-recoverable reasons and force-quit never reload", () => {
+  for (const reason of ["clean-exit", "launch-failed", "integrity-failure"]) {
+    const h = rendererHarness();
+    h.supervisor.onRendererGone(reason);
+    assert.equal(h.scheduled.length, 0, reason);
+  }
+  const quitting = rendererHarness({ forceQuitting: () => true });
+  quitting.supervisor.onRendererGone("killed");
+  assert.equal(quitting.scheduled.length, 0);
+});
+
+test("a window closed during the backoff is not reloaded", () => {
+  const h = rendererHarness();
+  h.supervisor.onRendererGone("oom");
+  h.closeWindow();
+  h.scheduled[0]?.callback();
+  assert.equal(h.reloads, 0);
 });

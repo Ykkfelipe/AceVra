@@ -21,6 +21,7 @@ import {
 import {
   createLocalHostCrashRecovery,
   createLocalHostSupervisor,
+  createRendererCrashSupervisor,
 } from "./localHostCrashRecovery.js";
 
 const DEFAULT_RUNTIME_PROCESS_ENV_WAIT_TIMEOUT_MS = 4_500;
@@ -146,6 +147,17 @@ export function createWindow(options: {
     },
     onExhausted: (retry) => options.onLocalHostRecoveryExhausted?.(win, retry),
     log: (message) => options.logger.warn(`[createWindow] ${message} (${label})`),
+  });
+  // 主窗口 renderer 被杀/崩溃：同一所有者、同一有界策略，reload 后 dom-ready 重新挂上存活的
+  // host（specs/desktop-host-unification.md "Renderer crash recovery and host stdio"）。
+  const rendererSupervisor = createRendererCrashSupervisor({
+    isForceQuitting: () => options.forceQuitRef.current,
+    isWindowAlive: () => !win.isDestroyed(),
+    reload: () => win.webContents.reload(),
+    log: (message) => options.logger.warn(`[createWindow] ${message} (${label})`),
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    rendererSupervisor.onRendererGone(details.reason);
   });
   scheduleArmsBrowserPerfLoadNudge(win.webContents);
   win.webContents.on("dom-ready", async () => {
@@ -291,6 +303,7 @@ export function createWindow(options: {
     cancelRuntimeProcessEnvWait?.();
     cancelRuntimeProcessEnvWait = null;
     localHostSupervisor.dispose();
+    rendererSupervisor.dispose();
     options.logger.info(`[createWindow] window closed, killing host process (${label})`);
     const child = options.windowHostProcessMap.get(wcId);
     if (child) {

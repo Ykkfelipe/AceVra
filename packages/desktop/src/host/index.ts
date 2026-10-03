@@ -98,6 +98,8 @@ import {
   type ZCodeAutomationRun,
   type ZCodeAutomationRunOutcome,
   type ModelSelection,
+  callIgnoringBrokenPipe,
+  installBrokenPipeGuards,
 } from "@zcode/shared";
 import {
   parseHostIncomingMessageEvent,
@@ -296,6 +298,9 @@ const rawConsole = {
   warn: console.warn.bind(console),
   error: console.error.bind(console),
 };
+// 异步的 stream EPIPE 不经过 try/catch，必须在流上处理（specs/desktop-host-unification.md
+// "Renderer crash recovery and host stdio"）。
+installBrokenPipeGuards([process.stdout, process.stderr]);
 
 const remoteConnectionProgressContext = createRemoteConnectionProgressContext({
   emit: ({ requestId, level, args }) => {
@@ -319,7 +324,8 @@ function writeHostLog(level: HostLogLevel, ...args: unknown[]): void {
   const prefix = formatLogPrefix("zcode-host", process.pid);
   const consoleFn =
     level === "error" ? rawConsole.error : level === "warn" ? rawConsole.warn : rawConsole.log;
-  consoleFn(prefix, ...args);
+  // 控制台只是便利副本，权威记录是下面的 host-log 中继；父 stdout 关闭不得杀死 Host。
+  callIgnoringBrokenPipe(() => consoleFn(prefix, ...args));
   reportHostLog(level, [prefix, ...args]);
 }
 

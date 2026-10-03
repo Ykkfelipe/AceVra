@@ -1,6 +1,6 @@
 import { mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { formatTimestamp } from "@zcode/shared";
+import { callIgnoringBrokenPipe, formatTimestamp, installBrokenPipeGuards } from "@zcode/shared";
 import { cleanupExpiredLogFiles, LOG_RETENTION_DAYS } from "./logRetention.js";
 import { getAppConfigDir, maybeThrowInjectedFsFault } from "@zcode/services/node";
 
@@ -29,38 +29,13 @@ if (logRetentionResult.failedFiles.length > 0) {
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
-function isBrokenPipeError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "EPIPE"
-  );
-}
-
-function ignoreBrokenPipeStreamError(error: Error): void {
-  // WDIO / dev runner 结束后可能先关闭 stdout/stderr 管道，随后主进程日志还在刷新。
-  // stream error 是异步事件，try/catch 包 console.log 不一定兜得住；这里统一吞掉 EPIPE。
-  if (!isBrokenPipeError(error)) {
-    throw error;
-  }
-}
-
-process.stdout.on("error", ignoreBrokenPipeStreamError);
-process.stderr.on("error", ignoreBrokenPipeStreamError);
+installBrokenPipeGuards([process.stdout, process.stderr]);
 
 function safeConsoleWrite(level: LogLevel, ...args: unknown[]): void {
   const consoleFn =
     level === "error" ? console.error : level === "warn" ? console.warn : console.log;
-  try {
-    consoleFn(...args);
-  } catch (error) {
-    // dev 脚本或父终端退出后，Electron main 的 stdout/stderr 管道可能已关闭。
-    // 这时 console.* 会抛 EPIPE，不能让日志输出反过来杀掉主进程；文件日志仍会继续写入。
-    if (!isBrokenPipeError(error)) {
-      throw error;
-    }
-  }
+  // dev 脚本或父终端退出后 console.* 可能抛 EPIPE；文件日志仍会继续写入。
+  callIgnoringBrokenPipe(() => consoleFn(...args));
 }
 
 function formatDate(date: Date): string {
