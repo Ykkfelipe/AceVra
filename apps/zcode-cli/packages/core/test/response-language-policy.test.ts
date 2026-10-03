@@ -55,6 +55,12 @@ test("provider-visible policy selects the latest request language and preserves 
   assert.match(policy, /system or workspace instructions/);
   assert.match(policy, /earlier conversation messages/);
   assert.match(policy, /tool output, source code, terminal output, or technical documentation/);
+  // 回归：中文 AGENTS.md 以 meta_user 注入后，模型曾整段用中文回答英文请求。
+  // 规则必须是硬要求，并点名指令文件语言不得影响回答语言。
+  assert.match(policy, /This is a hard requirement, not a preference/);
+  assert.match(policy, /workspace instruction files \(AGENTS\.md, CLAUDE\.md and similar\)/);
+  assert.match(policy, /must never change, override or dilute the language of your reply/);
+  assert.match(policy, /An English request is answered in English/);
   assert.match(policy, /Preserve code, commands, paths, identifiers, API names, and model names/);
 });
 
