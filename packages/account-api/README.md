@@ -11,14 +11,15 @@ task routing or provider secrets (those are M2B+).
 
 ## Configuration (environment only; nothing is committed)
 
-| Variable                                                                | Purpose                                                                      |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `ACEVRA_CLERK_SECRET_KEY` (required)                                    | Clerk backend secret. Backend only; never in the desktop app.                |
-| `ACEVRA_DATABASE_URL` (required)                                        | PostgreSQL connection string.                                                |
-| `ACEVRA_AUTHORIZED_PARTIES`                                             | Comma list of exact allowed token origins, e.g. `acevra-account://renderer`. |
-| `ACEVRA_CLERK_JWT_KEY`                                                  | Optional PEM key for networkless verification.                               |
-| `PORT` / `ACEVRA_API_PORT`                                              | Listen port (default 8787).                                                  |
-| `ACEVRA_ADMISSION_SEED_EMAILS` / `ACEVRA_ADMISSION_SEED_CLERK_USER_IDS` | Comma lists approved at startup.                                             |
+| Variable                                                                | Purpose                                                                                         |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `ACEVRA_CLERK_SECRET_KEY` (required)                                    | Clerk backend secret. Backend only; never in the desktop app.                                   |
+| `ACEVRA_DATABASE_URL` (required)                                        | PostgreSQL connection string.                                                                   |
+| `ACEVRA_AUTHORIZED_PARTIES`                                             | Comma list of exact allowed token origins, e.g. `acevra-account://renderer`.                    |
+| `ACEVRA_CLERK_JWT_KEY`                                                  | Optional PEM key for networkless verification.                                                  |
+| `PORT` / `ACEVRA_API_PORT`                                              | Listen port (default 8787).                                                                     |
+| `ACEVRA_ADMISSION_SEED_EMAILS` / `ACEVRA_ADMISSION_SEED_CLERK_USER_IDS` | Comma lists approved at startup.                                                                |
+| `ACEVRA_SESSION_FRESHNESS_SECONDS`                                      | Revocation-freshness TTL (default 300). `0` disables it. Unparseable falls back to the default. |
 
 ## Private-alpha admission
 

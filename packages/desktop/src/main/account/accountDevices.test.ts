@@ -159,6 +159,24 @@ test("installation identity: random UUID, stable across calls and restarts, surv
   }
 });
 
+test("installation identity: reset mints a new id, persists it, and is stable afterwards", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "av-inst-reset-"));
+  try {
+    const file = join(dir, "acevra-installation.json");
+    const store = createInstallationStore(file);
+    const first = await store.getOrCreate();
+    const second = await store.reset();
+    assert.notEqual(second, first, "reset mints a different id");
+    assert.match(second, /^[0-9a-f-]{36}$/);
+    // The new id is what later calls see, in this process and after a restart.
+    assert.equal(await store.getOrCreate(), second);
+    assert.equal(await createInstallationStore(file).getOrCreate(), second);
+    assert.deepEqual(Object.keys(JSON.parse(await readFile(file, "utf8"))), ["installationId"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("pairing lookup maps backend outcomes; approve/reject map decisions; nothing is cached", async () => {
   const PAIR = {
     id: "p1",
@@ -188,4 +206,143 @@ test("pairing lookup maps backend outcomes; approve/reject map decisions; nothin
   assert.deepEqual(await h.devices.lookupPairing("DOWN"), { status: "unavailable" });
   assert.deepEqual(await h.devices.decidePairing("p1", "approve"), { status: "approved" });
   assert.deepEqual(await h.devices.decidePairing("p1", "reject"), { status: "not_pending" });
+});
+
+test("a 401 from any account call is reported to the session owner", async () => {
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async () => json(401, { error: "unauthenticated" })) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  assert.equal(unauthorized, 1, "register reported");
+  await devices.list();
+  assert.equal(unauthorized, 2, "list reported");
+});
+
+test("a 403 device_revoked is not reported as an unauthorized session", async () => {
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async () => json(403, { error: "device_revoked" })) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  await devices.list();
+  assert.equal(unauthorized, 0, "a revoked device is not a rejected session");
+});
+
+test("a network failure is not reported as an unauthorized session", async () => {
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async () => {
+      throw new TypeError("down");
+    }) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  await devices.list();
+  assert.equal(unauthorized, 0, "being offline is not a rejected session");
+});
+
+test("conflict recovery mints a new identity and registers again", async () => {
+  let bound = "11111111-1111-4111-8111-111111111111";
+  const seen: string[] = [];
+  let unauthorized = 0;
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => bound,
+    resetInstallationId: async () => {
+      bound = "22222222-2222-4222-8222-222222222222";
+      return bound;
+    },
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async (url: URL, init: RequestInit) => {
+      if (new URL(url).pathname === "/v1/devices/register") {
+        const body = JSON.parse(String(init.body));
+        seen.push(body.installationId);
+        // First claim is refused, exactly as the backend does for another account.
+        return seen.length === 1
+          ? json(409, { error: "installation_bound" })
+          : json(201, { device: DEVICE });
+      }
+      return json(200, { devices: [DEVICE] });
+    }) as typeof fetch,
+    onUnauthorized: () => void unauthorized++,
+  });
+  await devices.start();
+  assert.equal((await devices.list()).registration, "conflict");
+  const after = await devices.resetInstallation();
+  assert.equal(after.registration, "registered");
+  assert.equal(after.thisDeviceId, "dev_1");
+  // The retry presented a NEW id; the original was never re-sent or reassigned.
+  assert.deepEqual(seen, [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+  ]);
+  assert.equal(unauthorized, 0);
+});
+
+test("reset outside a conflict does nothing, so the renderer cannot mint device rows", async () => {
+  // Every register creates a permanent row: the backend only inserts or updates. Without
+  // a conflict guard, N calls from the renderer would leave N orphaned devices.
+  const h = harness(() => json(201, { device: DEVICE }));
+  await h.devices.start();
+  const registers = () => h.calls.filter((c) => c.path === "/v1/devices/register").length;
+  assert.equal(registers(), 1);
+  const view = await h.devices.resetInstallation();
+  assert.equal(view.registration, "registered");
+  assert.equal(registers(), 1, "no second register, so no second device row");
+  assert.equal(view.thisDeviceId, "dev_1", "registration is untouched");
+});
+
+test("a failed reset leaves the conflict recovery available", async () => {
+  // The recovery control is the only way out of `conflict`. If a failed write dropped the
+  // registration state, the UI would render nothing at all and the user would be stuck.
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    resetInstallationId: async () => {
+      throw new Error("disk full");
+    },
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async (url: URL) =>
+      new URL(url).pathname === "/v1/devices/register"
+        ? json(409, { error: "installation_bound" })
+        : json(200, { devices: [] })) as typeof fetch,
+  });
+  await devices.start();
+  await assert.rejects(() => devices.resetInstallation(), /disk full/);
+  const view = await devices.list();
+  assert.equal(view.registration, "conflict", "still recoverable");
+});
+
+test("concurrent resets do not leave the cache and the file disagreeing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "av-inst-race-"));
+  try {
+    const file = join(dir, "acevra-installation.json");
+    const store = createInstallationStore(file);
+    const ids = await Promise.all([store.reset(), store.reset(), store.reset()]);
+    assert.equal(new Set(ids).size, 3, "each reset mints its own id");
+    // Exactly one id may win on disk, and the in-memory cache must agree with it,
+    // otherwise the app registers one device now and a different one after a restart.
+    const onDisk = JSON.parse(await readFile(file, "utf8")).installationId;
+    assert.equal(await store.getOrCreate(), onDisk);
+    assert.ok(ids.includes(onDisk));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

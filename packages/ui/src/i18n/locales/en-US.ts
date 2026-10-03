@@ -14,6 +14,8 @@ const enUS: Record<string, string> = {
   "acevra.setup.connect": "Connect",
   "acevra.setup.back": "Back",
   "acevra.setup.later": "Configure later",
+  "acevra.setup.providerBoundary":
+    "Connecting a model provider is separate from your AceVra account, and neither connects your personal data.",
   "acevra.execution.target.unknown": "Computer",
   "acevra.execution.status.queued": "Waiting",
   "acevra.execution.status.starting": "Starting",
@@ -40,6 +42,16 @@ const enUS: Record<string, string> = {
   "acevra.account.retry": "Try again",
   "acevra.account.notRemembered": "Account session won't be remembered on this device.",
   "acevra.account.signOutNote": "Signing out keeps your local conversations and model providers.",
+  "acevra.account.signIn": "Sign in to AceVra",
+  "acevra.account.welcome": "Welcome to AceVra",
+  "acevra.account.subtitle":
+    "Sign in to connect your AceVra account. Conversation and device sync is coming later.",
+  "acevra.account.continueLocally": "Continue locally",
+  "acevra.account.notConfiguredChoice":
+    "Account sign-in isn't available in this build. You can keep using AceVra locally.",
+  "acevra.account.dataBoundary":
+    "Signing in connects your AceVra account only. It doesn't give AceVra access to your email, calendar or code.",
+  "acevra.account.deviceBoundary": "Trusted computers are added separately, after you sign in.",
   "acevra.account.status.authenticating": "Waiting for sign-in to finish…",
   "acevra.account.status.checking": "Checking your private-alpha access…",
   "acevra.account.status.ready": "Connected · private alpha",
@@ -49,6 +61,31 @@ const enUS: Record<string, string> = {
     "AceVra Account is unreachable right now. Local features are unaffected.",
   "acevra.account.status.rejected": "Your sign-in was not accepted. Please sign in again.",
   "acevra.account.status.signedOut": "Not signed in",
+  "acevra.account.sessions.title": "Where you're signed in",
+  "acevra.account.sessions.description":
+    "Sign-ins to your AceVra account. These are not the computers your account can use.",
+  "acevra.account.sessions.loading": "Loading your sign-ins…",
+  "acevra.account.sessions.refresh": "Refresh",
+  "acevra.account.sessions.retry": "Try again",
+  "acevra.account.sessions.empty": "No other sign-ins found.",
+  "acevra.account.sessions.partial":
+    "Showing the most recent sign-ins. Some older sessions are not listed.",
+  "acevra.account.sessions.unavailable":
+    "Couldn't load your sign-ins. AceVra Account may be unreachable.",
+  "acevra.account.sessions.thisSession": "This sign-in",
+  "acevra.account.sessions.unknownDevice": "Sign-in",
+  "acevra.account.sessions.activeNow": "Active now",
+  "acevra.account.sessions.activeMinutes": "Active {n} min ago",
+  "acevra.account.sessions.activeHours": "Active {n} h ago",
+  "acevra.account.sessions.activeDays": "Active {n} d ago",
+  "acevra.account.sessions.activityUnknown": "Last activity unknown",
+  "acevra.account.sessions.revoke": "Sign out",
+  "acevra.account.sessions.revokeConfirm": "Confirm",
+  "acevra.account.sessions.revoking": "Signing out…",
+  "acevra.account.sessions.revoked": "Signed out.",
+  "acevra.account.sessions.revokeNotFound": "That session is no longer listed. Nothing to do.",
+  "acevra.account.sessions.revokeUnavailable":
+    "Couldn't end that session. Check your connection and try again.",
   "acevra.account.computers.title": "Computers",
   "acevra.account.computers.description":
     "Computers connected to your AceVra account. The agent can use them when you ask.",
@@ -66,8 +103,10 @@ const enUS: Record<string, string> = {
   "acevra.account.computers.removeConfirm": "Confirm remove",
   "acevra.account.computers.none": "No computers yet.",
   "acevra.account.computers.unavailable": "Computers are temporarily unavailable.",
+  "acevra.account.computers.conflictReset": "Use this Mac with the current account",
+  "acevra.account.computers.conflictResetting": "Setting up this Mac…",
   "acevra.account.computers.conflict":
-    "This installation is registered to a different AceVra account. Local features still work.",
+    "This Mac is already registered to a different AceVra account. Local features still work.",
   "acevra.account.computers.note":
     "Removing a computer disconnects it from your account. Nothing on it is deleted.",
   "acevra.account.computers.ssh.title": "SSH computers",

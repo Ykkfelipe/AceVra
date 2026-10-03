@@ -1,5 +1,14 @@
-import { createClerkClient, verifyToken } from "@clerk/backend";
-import type { ClerkUserDirectory, HumanIdentityVerifier } from "./ports.js";
+import { createClerkClient, verifyToken, type Session } from "@clerk/backend";
+import type {
+  ClerkUserDirectory,
+  HumanIdentityVerifier,
+  HumanSessionDirectory,
+  HumanSessionRecord,
+  SessionLiveness,
+} from "./ports.js";
+
+/** A session list is for the user's own security review; a hard ceiling keeps it bounded. */
+const MAX_SESSIONS = 100;
 
 export function createClerkIdentityVerifier(options: {
   secretKey: string;
@@ -20,6 +29,7 @@ export function createClerkIdentityVerifier(options: {
         return {
           clerkUserId: claims.sub,
           ...(typeof claims.sid === "string" ? { sessionId: claims.sid } : {}),
+          ...(typeof claims.exp === "number" ? { expiresAt: claims.exp * 1000 } : {}),
         };
       } catch {
         // Expired, forged, wrong key or wrong party all collapse to "unauthenticated".
@@ -44,4 +54,125 @@ export function createClerkUserDirectory(secretKey: string): ClerkUserDirectory 
       };
     },
   };
+}
+
+/**
+ * Human sessions, as a boundary rather than a mirror.
+ *
+ * Clerk owns this state — it issued the tokens the control plane verifies — so there
+ * is deliberately no database table here. Persisting it would duplicate an authority
+ * that can drift. M3a rejected a webhook-driven revocation denylist for the same
+ * reason: it needs a table, and on its own it is not bounded.
+ */
+export function createClerkSessionDirectory(secretKey: string): HumanSessionDirectory {
+  const client = createClerkClient({ secretKey });
+  return createSessionDirectory({
+    list: (params) => client.sessions.getSessionList(params),
+    get: (id) => client.sessions.getSession(id),
+    revoke: (id) => client.sessions.revokeSession(id),
+    status: async (id) => {
+      const session = await client.sessions.getSession(id);
+      return { userId: session.userId, status: session.status };
+    },
+  });
+}
+
+/**
+ * The two Clerk calls this needs, narrowed so the ownership fence can be tested
+ * without a network or a Clerk instance. `clerk.ts` stays the only module that
+ * knows these exist.
+ */
+export interface ClerkSessionCalls {
+  list(params: { userId: string; status: "active"; limit: number }): Promise<{
+    data: Session[];
+    /** Clerk's total for the query, which may exceed the page we asked for. */
+    totalCount?: number;
+  }>;
+  get(sessionId: string): Promise<{ userId: string }>;
+  revoke(sessionId: string): Promise<unknown>;
+  /** Present only when the adapter can answer; absent means "cannot tell". */
+  status?(sessionId: string): Promise<{ userId: string; status: string }>;
+}
+
+export function createSessionDirectory(sessions: ClerkSessionCalls): HumanSessionDirectory {
+  const toRecord = (session: Session): HumanSessionRecord => {
+    const activity = session.latestActivity;
+    return {
+      id: session.id,
+      // Only active sessions reach here (see the filter below), so this is a fact
+      // rather than a restatement of whatever Clerk happened to report.
+      status: "active",
+      createdAt: session.createdAt,
+      lastActiveAt: session.lastActiveAt,
+      deviceType: activity?.deviceType ?? null,
+      browserName: activity?.browserName ?? null,
+      country: activity?.country ?? null,
+    };
+  };
+
+  return {
+    async listActiveSessions(clerkUserId) {
+      const page = await sessions.list({
+        userId: clerkUserId,
+        status: "active",
+        limit: MAX_SESSIONS,
+      });
+      // Filter again on our side rather than trusting the query alone: this list is a
+      // security review surface, so an ended, expired or revoked session must never be
+      // presented as something the user could act on.
+      const records = page.data.filter((s) => s.status === "active").map(toRecord);
+      return {
+        sessions: records,
+        partial: (page.totalCount ?? records.length) > records.length,
+      };
+    },
+
+    async revokeSession(clerkUserId, sessionId) {
+      // Ownership first. `client.sessions.revokeSession` takes a bare id with no user
+      // scope, so without this check any authenticated user could end another account's
+      // session by id — and a 404 here also keeps us from confirming that the id exists.
+      let ownerId: string;
+      try {
+        ownerId = (await sessions.get(sessionId)).userId;
+      } catch {
+        return { ok: false, reason: "not_found" };
+      }
+      if (ownerId !== clerkUserId) return { ok: false, reason: "not_found" };
+      await sessions.revoke(sessionId);
+      return { ok: true };
+    },
+
+    async sessionStatus(clerkUserId, sessionId) {
+      // Without a status call the freshness check cannot be answered; say so rather
+      // than guessing, so an outage is never read as a revocation.
+      if (!sessions.status) return "unavailable";
+      try {
+        const session = await sessions.status(sessionId);
+        // Ownership first: another user's session is not this session, whatever its
+        // status says.
+        if (session.userId !== clerkUserId) return "not_active";
+        return session.status === "active" ? "active" : "not_active";
+      } catch (error) {
+        return classifyLivenessFailure(error);
+      }
+    },
+  };
+}
+
+/**
+ * Distinguishes "this session is gone" from "Clerk could not be reached".
+ *
+ * Only a definitive 404 counts as a revocation, and only when `status` really is an
+ * HTTP status on a number.
+ *
+ * 401 is deliberately NOT treated as a revocation. Against Clerk's backend API it
+ * means *this control plane's own credential* was rejected, not that one session
+ * ended — so classifying it as `not_active` would turn a rotated or expired secret key
+ * into a mass sign-out of every session, cached for a full TTL and re-arming on
+ * every revalidation. 403, 429, 5xx and network failures are outages for the same
+ * reason: none of them is evidence about a particular session.
+ */
+function classifyLivenessFailure(error: unknown): SessionLiveness {
+  const status = (error as { status?: unknown })?.status;
+  return status === 404 ? "not_active" : "unavailable";
 }

@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { createAccountDevices } from "./accountDevices.js";
 import { deriveDesktopCapabilities } from "./accountCapabilities.js";
 import { createAgentExecutionHandler } from "./accountAgentExecution.js";
+import { createAccountSessions } from "./accountSessions.js";
 import { createAccountTasks } from "./accountTasks.js";
 import { createLocalProcessRunner } from "./localProcessRunner.js";
 import { initComputersMain } from "../computers/computersMain.js";
@@ -64,15 +65,17 @@ export function initAccountMain(options: {
 
   // Device registry: only meaningful while the account is ready; local features never wait on it.
   const tokenSource = testSource ?? windowSource;
+  const installationStore = createInstallationStore(
+    join(app.getPath("userData"), "acevra-installation.json"),
+  );
   const devices =
     config && tokenSource
       ? createAccountDevices({
           apiBaseUrl: config.apiBaseUrl,
           getToken: () => tokenSource.getToken(),
           fetch: options.fetch ?? fetch,
-          installationId: createInstallationStore(
-            join(app.getPath("userData"), "acevra-installation.json"),
-          ).getOrCreate,
+          installationId: installationStore.getOrCreate,
+          resetInstallationId: installationStore.reset,
           describe: async () => ({
             platform: process.platform as AccountDevice["platform"],
             displayName: describeComputerName(),
@@ -81,6 +84,9 @@ export function initAccountMain(options: {
               computerUseSupported: resolveCuaOsSupport().kind === "supported",
             }),
           }),
+          // A rejected bearer on any device/task call is a session-level fact; the
+          // controller owns the transition to signed out so the UI offers sign-in.
+          onUnauthorized: () => controller.rejectSession(),
         })
       : null;
   let wasReady = false;
@@ -163,6 +169,16 @@ export function initAccountMain(options: {
   ipcMain.handle(AccountChannels.DeviceRevoke, (_event, id: unknown) =>
     typeof id === "string" ? (devices?.revoke(id) ?? idle) : idle,
   );
+  ipcMain.handle(AccountChannels.DeviceResetIdentity, () => devices?.resetInstallation() ?? idle);
+  // Human login sessions. Reuses the account transport, so a 401 here is handled
+  // exactly as a 401 from a device route is and the M2 re-auth path is unchanged.
+  const sessions = createAccountSessions(
+    devices ? (method, path, body) => devices.call(method, path, body) : null,
+  );
+  ipcMain.handle(AccountChannels.SessionsList, () => sessions.list());
+  ipcMain.handle(AccountChannels.SessionRevoke, (_event, id: unknown) =>
+    typeof id === "string" && id.length <= 128 ? sessions.revoke(id) : { status: "not_found" },
+  );
   ipcMain.handle(AccountChannels.TargetsList, () => tasksApi.listTargets());
   ipcMain.handle(AccountChannels.TaskStart, (_event, input: unknown) => {
     const request = parseStartRequest(input);
@@ -220,6 +236,9 @@ export function initAccountMain(options: {
         AccountChannels.PairingDecide,
         AccountChannels.DeviceRename,
         AccountChannels.DeviceRevoke,
+        AccountChannels.DeviceResetIdentity,
+        AccountChannels.SessionsList,
+        AccountChannels.SessionRevoke,
         AccountChannels.EngineeringTools,
       ]) {
         ipcMain.removeHandler(channel);

@@ -1,6 +1,10 @@
 import { serve } from "@hono/node-server";
 import { createAdmissionLedger } from "./accounts.js";
-import { createClerkIdentityVerifier, createClerkUserDirectory } from "./clerk.js";
+import {
+  createClerkIdentityVerifier,
+  createClerkSessionDirectory,
+  createClerkUserDirectory,
+} from "./clerk.js";
 import { readAccountApiConfig } from "./config.js";
 import { createControlPlane } from "./controlPlane.js";
 import { migrate } from "./migrate.js";
@@ -21,6 +25,8 @@ const { app, channel, tasks } = createControlPlane({
     jwtKey: config.clerkJwtKey,
   }),
   directory: createClerkUserDirectory(config.clerkSecretKey),
+  sessions: createClerkSessionDirectory(config.clerkSecretKey),
+  sessionFreshnessSeconds: config.sessionFreshnessSeconds,
   // Only trust X-Forwarded-For when explicitly deployed behind a proxy that sets it.
   clientKey: (request) =>
     (config.trustProxy ? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() : null) ||

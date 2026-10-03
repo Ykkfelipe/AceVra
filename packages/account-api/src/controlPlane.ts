@@ -3,13 +3,26 @@ import { createAccountService } from "./accounts.js";
 import { createDeviceChannel, type DeviceChannelOptions } from "./deviceChannel.js";
 import { createDeviceService } from "./devices.js";
 import { createPairingService } from "./pairing.js";
-import type { ClerkUserDirectory, HumanIdentityVerifier, SqlExecutor } from "./ports.js";
+import { createSessionFreshness } from "./sessionFreshness.js";
+import type {
+  ClerkUserDirectory,
+  HumanIdentityVerifier,
+  HumanSessionDirectory,
+  SqlExecutor,
+} from "./ports.js";
 import { createTaskService, type TaskServiceOptions } from "./tasks.js";
 
 export interface ControlPlaneDeps {
   db: SqlExecutor;
   verifier: HumanIdentityVerifier;
   directory: ClerkUserDirectory;
+  /** Human login sessions; omit to expose no session listing. */
+  sessions?: HumanSessionDirectory;
+  /**
+   * Revocation freshness TTL. Omit or 0 to disable the check, which restores M3
+   * behaviour: a signed token is accepted until its own expiry.
+   */
+  sessionFreshnessSeconds?: number;
   clock?: () => number;
   channel?: DeviceChannelOptions;
   tasks?: TaskServiceOptions;
@@ -35,6 +48,18 @@ export function createControlPlane(deps: ControlPlaneDeps) {
     nodeGraceMs: deps.nodeGraceMs,
     ...deps.tasks,
   });
+  // Built only when a session directory and a positive TTL are present: without
+  // either there is nothing to revalidate against, and a check that cannot answer
+  // must not pretend to.
+  const freshnessTtlMs = (deps.sessionFreshnessSeconds ?? 0) * 1000;
+  const freshness =
+    deps.sessions && freshnessTtlMs > 0
+      ? createSessionFreshness({
+          ttlMs: freshnessTtlMs,
+          clock,
+          check: (clerkUserId, sessionId) => deps.sessions!.sessionStatus(clerkUserId, sessionId),
+        })
+      : undefined;
   const channel = createDeviceChannel({ db: deps.db, tasks, options: deps.channel });
   channelRef = channel;
   const app = createAccountApp({
@@ -46,6 +71,8 @@ export function createControlPlane(deps: ControlPlaneDeps) {
       nodeGraceMs: deps.nodeGraceMs,
     }),
     pairings: createPairingService(deps.db, clock),
+    sessions: deps.sessions,
+    freshness,
     tasks,
     onDeviceRevoked: (id) => channel.closeDevice(id, "revoked"),
     onTaskQueued: (id) => void channel.kick(id),

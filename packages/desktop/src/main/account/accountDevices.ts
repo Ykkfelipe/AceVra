@@ -21,6 +21,17 @@ export interface AccountDevicesDeps {
   describe(): DeviceDescriptor | Promise<DeviceDescriptor>;
   heartbeatMs?: number;
   timers?: { setInterval: typeof setInterval; clearInterval: typeof clearInterval };
+  /**
+   * Called when any account request comes back 401 — the bearer can no longer prove
+   * who it is. The session controller owns the transition to signed out; the device
+   * client never decides what a rejected session means.
+   */
+  onUnauthorized?(): void;
+  /**
+   * Mints a new installation identity for this machine. Only used to recover from a
+   * conflict; the backend still binds each id to exactly one account.
+   */
+  resetInstallationId?(): Promise<string>;
 }
 
 const EMPTY: AccountDevicesView = { registration: "none", thisDeviceId: null, devices: [] };
@@ -53,6 +64,10 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
         redirect: "error",
       });
       const json = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      // A 401 is a session-level fact, not a per-endpoint one. Report it once here so
+      // every caller — heartbeat, register, list, rename, revoke, pairing — surfaces a
+      // rejected session instead of degrading into "devices unavailable".
+      if (response.status === 401) deps.onUnauthorized?.();
       return { status: response.status, json };
     } catch {
       return null;
@@ -87,43 +102,66 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
     };
   }
 
+  /** Registers (idempotently) and starts the heartbeat. Call when the account is ready. */
+  async function start(known?: string): Promise<void> {
+    generation += 1;
+    const attempt = generation;
+    stopHeartbeat();
+    const installationId = known ?? (await deps.installationId());
+    const result = await call("POST", "/v1/devices/register", {
+      installationId,
+      type: "desktop",
+      ...(await deps.describe()),
+    });
+    if (attempt !== generation) return;
+    if (!result) {
+      registration = "none";
+      return;
+    }
+    const device = result.json?.device as AccountDevice | undefined;
+    if (result.status === 200 || result.status === 201) {
+      registration = "registered";
+      thisDeviceId = device?.id ?? null;
+      timer = timers.setInterval(() => void beat(attempt), deps.heartbeatMs ?? 30_000);
+      timer.unref?.();
+    } else if (result.status === 409) {
+      // Installation belongs to another account: refuse takeover, keep local use.
+      // The user can recover with `resetInstallation()`.
+      registration = "conflict";
+      thisDeviceId = null;
+    } else if (result.status === 403 && result.json?.error === "device_revoked") {
+      registration = "revoked";
+      thisDeviceId = null;
+    } else {
+      registration = "unavailable";
+    }
+  }
+
   return {
     /** Authenticated control-plane call (null when signed out or unreachable). Shared with tasks. */
     call,
-    /** Registers (idempotently) and starts the heartbeat. Call when the account is ready. */
-    async start(): Promise<void> {
-      generation += 1;
-      const attempt = generation;
-      stopHeartbeat();
-      const installationId = await deps.installationId();
-      const result = await call("POST", "/v1/devices/register", {
-        installationId,
-        type: "desktop",
-        ...(await deps.describe()),
-      });
-      if (attempt !== generation) return;
-      if (!result) {
-        registration = "none";
-        return;
-      }
-      const device = result.json?.device as AccountDevice | undefined;
-      if (result.status === 200 || result.status === 201) {
-        registration = "registered";
-        thisDeviceId = device?.id ?? null;
-        timer = timers.setInterval(() => void beat(attempt), deps.heartbeatMs ?? 30_000);
-        timer.unref?.();
-      } else if (result.status === 409) {
-        // Installation belongs to another account: refuse takeover, keep local use.
-        registration = "conflict";
-        thisDeviceId = null;
-      } else if (result.status === 403 && result.json?.error === "device_revoked") {
-        registration = "revoked";
-        thisDeviceId = null;
-      } else {
-        registration = "unavailable";
-      }
-    },
+    start,
     thisDeviceId: () => thisDeviceId,
+    /**
+     * Recovery from `conflict`: this machine's installation id is already bound to
+     * another account, so mint a fresh one and register again.
+     *
+     * This never transfers or reassigns an existing device. The previous account keeps
+     * its row; this machine simply presents as a new device to the current account.
+     */
+    async resetInstallation(): Promise<AccountDevicesView> {
+      if (!deps.resetInstallationId) return view();
+      // Only a conflict is recoverable this way. Without this guard the renderer could
+      // mint an unbounded number of device rows: the backend only ever inserts or
+      // updates, so every call would leave a permanent orphaned row behind.
+      if (registration !== "conflict") return view();
+      // Mint first. If the write fails the previous registration is still intact, so the
+      // conflict explanation and its recovery control survive instead of the UI losing
+      // the only way out of the state it is in.
+      const nextId = await deps.resetInstallationId();
+      await start(nextId);
+      return view();
+    },
     /** Account left `ready`: stop talking to the registry. Local identity is untouched. */
     stop(): void {
       generation += 1;

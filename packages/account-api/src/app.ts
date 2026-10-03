@@ -4,7 +4,9 @@ import { secureHeaders } from "hono/secure-headers";
 import { createRateLimiter } from "./rateLimit.js";
 import { normalizePairingCode, parseEd25519PublicKey, type PairingService } from "./pairing.js";
 import type { createAccountService } from "./accounts.js";
-import type { HumanIdentityVerifier } from "./ports.js";
+import type { HumanIdentityVerifier, HumanSessionDirectory } from "./ports.js";
+import type { SessionFreshness } from "./sessionFreshness.js";
+import { registerSessionRoutes } from "./sessionRoutes.js";
 import { parseProcessSpec } from "./processSpec.js";
 import type { TaskService } from "./tasks.js";
 import {
@@ -33,6 +35,14 @@ export function createAccountApp(deps: {
   devices?: DeviceService;
   pairings?: PairingService;
   tasks?: TaskService;
+  /** Human login sessions. Absent = this build exposes no session listing. */
+  sessions?: HumanSessionDirectory;
+  /**
+   * Revocation freshness. Present = a signed session is re-confirmed with Clerk at
+   * most once per TTL, so a remotely revoked session stops being accepted promptly.
+   * Absent = the check is off, which restores M3 behaviour (token expiry only).
+   */
+  freshness?: SessionFreshness;
   /** A task was queued: let the channel offer it now. */
   onTaskQueued?: (deviceId: string) => void;
   /** A cancel was requested for a live process: tell the node. */
@@ -67,23 +77,55 @@ export function createAccountApp(deps: {
   app.get("/healthz", (c) => c.json({ ok: true }));
   /** Verifies Clerk, enforces admission, and resolves the account. The account id is always
    * server-derived; no client-supplied account or owner id is ever read. */
-  async function authenticate(
-    c: Context,
-  ): Promise<
-    | { ok: true; account: { id: string; displayName: string | null; avatarUrl: string | null } }
+  async function authenticate(c: Context): Promise<
+    | {
+        ok: true;
+        account: { id: string; displayName: string | null; avatarUrl: string | null };
+        clerkUserId: string;
+        sessionId: string | null;
+        /** The resolved account, used as a rate-limit bucket key. Never client-supplied. */
+        accountId: string;
+      }
     | { ok: false; response: Response }
   > {
     c.header("Cache-Control", "no-store");
     const token = readBearer(c.req.header("authorization"));
     const identity = token ? await deps.verifier.verify(token) : null;
     if (!identity) return { ok: false, response: c.json({ error: "unauthenticated" }, 401) };
+
+    // Revocation freshness, enforced here and nowhere else. It sits after the
+    // cryptographic check and before the ledger read, so no route body — present or
+    // future — runs for a session that has been revoked, and no individual route has
+    // to know this exists.
+    //
+    // Skipped when the token carried no `sid`: there is no session identity to
+    // revalidate, and inventing one would be a guess.
+    if (deps.freshness && identity.sessionId) {
+      const verdict = await deps.freshness.evaluate({
+        clerkUserId: identity.clerkUserId,
+        sessionId: identity.sessionId,
+        tokenExpiresAt: identity.expiresAt ?? 0,
+      });
+      if (!verdict.admit) {
+        return { ok: false, response: c.json({ error: "unauthenticated" }, 401) };
+      }
+    }
+
     try {
       const result = await deps.accounts.resolve(identity.clerkUserId);
       // Non-disclosing: a denied caller learns nothing about the ledger.
       if (!("account" in result)) {
         return { ok: false, response: c.json({ error: "not_admitted" }, 403) };
       }
-      return { ok: true, account: result.account };
+      return {
+        ok: true,
+        account: result.account,
+        // Kept server-side: the client never decides which session it is, and a token
+        // without a `sid` claim yields null rather than a guess.
+        clerkUserId: identity.clerkUserId,
+        sessionId: identity.sessionId ?? null,
+        accountId: result.account.id,
+      };
     } catch {
       return { ok: false, response: c.json({ error: "unavailable" }, 503) };
     }
@@ -102,6 +144,16 @@ export function createAccountApp(deps: {
     };
     return c.json(body);
   });
+
+  if (deps.sessions) {
+    registerSessionRoutes({
+      app,
+      sessions: deps.sessions,
+      authenticate,
+      clientKey: deps.clientKey,
+      freshness: deps.freshness,
+    });
+  }
 
   const devices = deps.devices;
   if (devices) {

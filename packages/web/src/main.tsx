@@ -12,6 +12,7 @@ import {
 } from "@zcode/ui";
 import "@zcode/ui/styles.css";
 import "./customForkRemote.css";
+import { ForkSignInCard, resolveForkSignInReturnTarget } from "./customForkSignIn.js";
 import { connectViaWebSocket } from "@zcode/client";
 import { WebCallbackPage } from "./auth/WebCallbackPage.js";
 import { createWebAuthService } from "./auth/webAuthService.js";
@@ -384,20 +385,15 @@ async function resolveWebBootstrap(): Promise<WebBootstrapResult> {
     const clerk = new Clerk(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
     await clerk.load();
     if (!clerk.user) {
+      // Same branded shell the live fork route uses, so a signed-out user never meets two
+      // different sign-in experiences depending on which entry point served the page.
       root.render(
-        <div className="flex min-h-dvh items-center justify-center bg-background p-4 text-foreground">
-          <div className="w-full max-w-md rounded-xl border border-card-border bg-card p-6">
-            <h1 className="text-lg font-semibold">AceVra Dev</h1>
-            <p className="mt-2 text-sm text-foreground-subtle">Sign in to connect to this Mac.</p>
-            <button
-              type="button"
-              className="mt-5 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
-              onClick={() => void clerk.redirectToSignIn({ redirectUrl: window.location.href })}
-            >
-              Sign in with Clerk
-            </button>
-          </div>
-        </div>,
+        <ForkSignInCard
+          reason="signed-out"
+          onSignIn={() =>
+            void clerk.redirectToSignIn({ redirectUrl: resolveForkSignInReturnTarget() })
+          }
+        />,
       );
       return { wsUrl: "" };
     }

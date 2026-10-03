@@ -3,6 +3,13 @@ import type { AceVraConnectionInput, AceVraProviderChoice } from "@zcode/service
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import { Label } from "@/components/ui/label.js";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.js";
 import { useServices } from "@/hooks/useServices.js";
 import { useZCodeStore } from "@/store/StoreProvider.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -78,13 +85,13 @@ export function AceVraFirstRun({
     });
   return (
     <main
-      className="flex min-h-screen items-center justify-center bg-background p-6"
+      className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground"
       data-testid="acevra-first-run"
     >
       <section className="w-full max-w-md space-y-6">
         <header className="space-y-2">
-          <h1 className="text-3xl font-semibold">{text("welcome", "Welcome to AceVra")}</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-ui-xl font-semibold">{text("welcome", "Welcome to AceVra")}</h1>
+          <p className="text-ui-base text-foreground-subtle">
             {text("choose", "Choose how you want to connect")}
           </p>
         </header>
@@ -159,33 +166,35 @@ export function AceVraFirstRun({
             {choice === "compatible" && (
               <div className="space-y-2">
                 <Label htmlFor="setup-format">{text("format", "API format")}</Label>
-                <select
-                  id="setup-format"
-                  className="w-full rounded-md border bg-background p-2"
+                <Select
                   value={apiType}
-                  onChange={(event) =>
-                    setApiType(event.target.value as AceVraConnectionInput["apiType"])
-                  }
+                  onValueChange={(value) => setApiType(value as AceVraConnectionInput["apiType"])}
                 >
-                  <option value="openai-chat-completions">OpenAI Chat Completions</option>
-                  <option value="openai-responses">OpenAI Responses</option>
-                  <option value="anthropic-messages">Anthropic Messages</option>
-                </select>
+                  <SelectTrigger id="setup-format" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai-chat-completions">OpenAI Chat Completions</SelectItem>
+                    <SelectItem value="openai-responses">OpenAI Responses</SelectItem>
+                    <SelectItem value="anthropic-messages">Anthropic Messages</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Label htmlFor="setup-credential-header">
                   {text("credentialHeader", "Credential header")}
                 </Label>
-                <select
-                  id="setup-credential-header"
-                  className="w-full rounded-md border bg-background p-2"
+                <Select
                   value={credentialHeader}
-                  onChange={(event) =>
-                    setCredentialHeader(event.target.value as "bearer" | "api-key")
-                  }
+                  onValueChange={(value) => setCredentialHeader(value as "bearer" | "api-key")}
                 >
-                  <option value="bearer">Authorization: Bearer</option>
-                  <option value="api-key">api-key</option>
-                </select>
-                <p className="text-sm text-muted-foreground">
+                  <SelectTrigger id="setup-credential-header" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bearer">Authorization: Bearer</SelectItem>
+                    <SelectItem value="api-key">api-key</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-ui-sm text-foreground-subtle">
                   {text(
                     "azure",
                     "Use an API-key endpoint supported by the selected format. Azure Entra sign-in is not supported here.",
@@ -204,7 +213,7 @@ export function AceVraFirstRun({
           </form>
         )}
         {error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-ui-sm text-destructive">
             {error}
           </p>
         )}
@@ -222,6 +231,17 @@ export function AceVraFirstRun({
         >
           {text("later", "Configure later")}
         </Button>
+        {/* Provider credentials and the AceVra account are separate authorities: a model
+            provider key is not an AceVra sign-in, and neither grants access to an
+            external service's data. */}
+        <footer className="space-y-1 border-t border-card-border pt-4">
+          <p className="text-ui-sm text-foreground-subtlest">
+            {text(
+              "providerBoundary",
+              "Connecting a model provider is separate from your AceVra account, and neither connects your personal data.",
+            )}
+          </p>
+        </footer>
       </section>
     </main>
   );

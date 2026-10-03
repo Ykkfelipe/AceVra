@@ -115,6 +115,24 @@ export function createAccountSessionController(deps: AccountSessionControllerDep
     void checkAdmission(generation);
   }
 
+  /**
+   * The backend rejected the bearer on an account endpoint other than `/v1/me`.
+   *
+   * This does NOT decide the outcome. It re-runs the authoritative admission check
+   * under a fresh generation, because a 401 alone is not proof that the session is
+   * gone: the token may simply have expired and Clerk may mint a fresh valid one,
+   * and a response from a superseded attempt must not be able to sign out whoever is
+   * signed in now. `/v1/me` decides, and its own fencing already covers a late 401
+   * racing a later sign-in.
+   */
+  function rejectSession(): void {
+    if (!configured || !deps.tokenSource) return;
+    // Already signed out with the reason attached: nothing to re-check.
+    if (view.phase === "signedOut" && view.detail === "session_rejected") return;
+    generation += 1;
+    void checkAdmission(generation);
+  }
+
   return {
     getView: (): AccountView => view,
     onViewChanged(listener: (next: AccountView) => void) {
@@ -159,6 +177,8 @@ export function createAccountSessionController(deps: AccountSessionControllerDep
       await deps.preference.write("local").catch(() => undefined);
       set({ choice: "local" });
     },
+    /** Called by the device client when any account request comes back 401. */
+    rejectSession,
     dispose() {
       disposeSession?.();
       listeners.clear();
