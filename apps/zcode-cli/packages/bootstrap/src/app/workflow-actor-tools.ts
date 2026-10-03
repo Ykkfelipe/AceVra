@@ -35,6 +35,7 @@ const ACTOR_DISALLOWED_TOOLS: readonly string[] = [
   ENTER_PLAN_MODE_TOOL_NAME,
   EXIT_PLAN_MODE_TOOL_NAME,
   "CreateWorkflow",
+  "Multitask",
   // 修订入口与 CreateWorkflow 同一种嵌套编排，同一个根因入列。
   "AmendWorkflow",
   READ_SESSION_CONTEXT_TOOL_NAME,

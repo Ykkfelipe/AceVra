@@ -86,7 +86,7 @@ export function isListModelsToolCall(source: WorkflowToolNameSource): boolean {
  * 每一次创建，而 family 会把修订也算进来。
  */
 export function isCreateWorkflowToolCall(source: WorkflowToolNameSource): boolean {
-  return matchesToolName(source, "createworkflow");
+  return matchesToolName(source, "createworkflow") || isMultitaskToolCall(source);
 }
 
 /**
@@ -96,4 +96,8 @@ export function isCreateWorkflowToolCall(source: WorkflowToolNameSource): boolea
  */
 export function isAmendWorkflowToolCall(source: WorkflowToolNameSource): boolean {
   return matchesToolName(source, "amendworkflow");
+}
+
+export function isMultitaskToolCall(source: WorkflowToolNameSource): boolean {
+  return matchesToolName(source, "multitask");
 }

@@ -32,7 +32,7 @@ import {
 } from "@/components/workflow-timeline/subagent-model-label.js";
 import { useWorkflowSubagentModelProviderName } from "@/hooks/useWorkflowSubagentModelProviderName.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { isAmendWorkflowToolCall } from "@/lib/workflowToolNames.js";
+import { isAmendWorkflowToolCall, isMultitaskToolCall } from "@/lib/workflowToolNames.js";
 
 /**
  * saved 来源徽标：这次运行的脚本来自项目里的一个文件，而不是模型现写的一段。
@@ -126,6 +126,7 @@ export function WorkflowPermissionBlock({
   const saved = readWorkflowSaved(request.raw);
   // 修订按工具名判（kind / title 是 v4 ask 挂上的工具名）；lineage 只对修订成立。
   const amend = isAmendWorkflowToolCall(request);
+  const multitask = isMultitaskToolCall(request);
   const amendTarget = amend ? readWorkflowAmendTarget(request.raw) : undefined;
   const predecessor = amend ? readWorkflowAmendPredecessor(request.raw) : undefined;
   // 这次修订沿用前驱的脚本：
@@ -178,7 +179,11 @@ export function WorkflowPermissionBlock({
 
   const fallbackName = intl.formatMessage({ id: "chat.toolCall.workflow.fallbackName" });
   const title = intl.formatMessage({
-    id: amend ? "chat.permission.workflow.amend.title" : "chat.permission.workflow.title",
+    id: multitask
+      ? "chat.permission.multitask.title"
+      : amend
+        ? "chat.permission.workflow.amend.title"
+        : "chat.permission.workflow.title",
   });
   const amendsLabel = intl.formatMessage({ id: "chat.permission.workflow.amends" });
   const stillRunningLabel = intl.formatMessage({ id: "chat.permission.workflow.amends.running" });

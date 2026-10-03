@@ -86,6 +86,7 @@ import { createModelCatalogPort } from "./model-catalog-port.js";
 import { createDynamicWorkflowRunProgressSink } from "./dynamic-workflow-run-progress-sink.js";
 import { createScriptWorkflowAgentRuntime } from "./script-workflow-child-runtime.js";
 import { workflowActorModelPolicy } from "./workflow-actor-model.js";
+import { multitaskActorPolicy } from "./multitask-actor-policy.js";
 import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
 import {
   createNodeReplBrowserBroker,
@@ -610,6 +611,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                   // actor 的工具面是减法（全集减去会悬挂/越权的交互工具），只能经 configOverrides
                   // 表达（request.opts.tools 只有 allowlist）。
                   ...workflowActorToolPolicy(),
+                  ...multitaskActorPolicy(persona),
                   // 模型面：`runSubagentModel` 是本 run 自己的选择（`subagent_model`），在场时整条
                   // 覆盖，排在 pin 之上——主代理不受它影响。没有它也没有 pin 就不覆盖——child runtime
                   // 的基线本就是父会话当前模型（工厂的基线，见 script-workflow-child-runtime.ts）。
@@ -619,7 +621,9 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                   ...workflowActorModelPolicy(
                     {
                       parentSelection: getRuntime().getSessionModelSelection(),
-                      ...(runSubagentModel === undefined ? {} : { runSelection: runSubagentModel }),
+                      ...((runSubagentModel ?? persona.worker?.modelSelection) === undefined
+                        ? {}
+                        : { runSelection: runSubagentModel ?? persona.worker?.modelSelection }),
                     },
                     pinnedModel,
                   ).configOverrides,

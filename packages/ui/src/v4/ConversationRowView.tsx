@@ -78,7 +78,7 @@ import { Button } from "@/components/ui/button.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { WorkflowToolSummary } from "@/v4/WorkflowToolSummary.js";
 import { readWorkflowName } from "@/ToolCallBlocks/renderers/createWorkflowInput.js";
-import { isAmendWorkflowToolCall } from "@/lib/workflowToolNames.js";
+import { isAmendWorkflowToolCall, isMultitaskToolCall } from "@/lib/workflowToolNames.js";
 import { ToolCallBlock } from "@/ToolCallBlocks.js";
 import { resolveWorkflowRunOpenToolCallId } from "@/v4/workflowRunCardJoin.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -1955,6 +1955,7 @@ const ToolCallRowView = memo(function ToolCallRowView({
           toolCallId={row.toolCallId}
           summary={workflowRun}
           amend={isAmendWorkflowToolCall(row)}
+          multitask={isMultitaskToolCall(row)}
           onOpen={
             context.onOpenWorkflowRun && sessionId
               ? () =>

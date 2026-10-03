@@ -54,7 +54,7 @@ export function refToString(ref: InstanceRef | ActorRef): string {
 /**
  * 冻结的 actor persona，交给 {@link WorkflowDriver.createActorSession}。
  *
- * persona 只剩身份（名字 + system prompt）。模型档位（`model?: "main" | "lite"`）
+ * 普通 Workflow persona 描述身份；Multitask 可额外携带冻结的 worker 策略。旧模型档位（`model?: "main" | "lite"`）
  * 与工具档位（`tools?: "default" | "readonly" | "none"`）都已退场：宿主没有 lite 模型来源，而
  * 工具档位买到的只有「裁判不能改文件」——普通子代理也不靠档位保证这一点，ask 文本说清即可。
  * 子代理一律跑在父会话当前模型上、拿完整工作工具集减去会悬挂/越权的交互工具。
@@ -64,6 +64,8 @@ export function refToString(ref: InstanceRef | ActorRef): string {
 export interface PersonaSpec {
   name?: string;
   system?: string;
+  /** Frozen admission policy, persisted with actor identity. */
+  worker?: import("./worker-policy.js").WorkerPolicy;
 }
 
 /**

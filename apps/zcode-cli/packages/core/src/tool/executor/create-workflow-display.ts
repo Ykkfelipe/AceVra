@@ -22,7 +22,11 @@ export function createCreateWorkflowDisplay(
   output: unknown,
 ): ToolResultDisplayPayload | undefined {
   // 两个启动工具共用同一个 display kind：图、草稿笔与诊断卡在 UI 侧只有一份实现
-  if (toolName !== CREATE_WORKFLOW_TOOL_NAME && toolName !== AMEND_WORKFLOW_TOOL_NAME) {
+  if (
+    toolName !== CREATE_WORKFLOW_TOOL_NAME &&
+    toolName !== AMEND_WORKFLOW_TOOL_NAME &&
+    toolName !== "Multitask"
+  ) {
     return undefined;
   }
   const parsed = CreateWorkflowOutputSchema.safeParse(output);

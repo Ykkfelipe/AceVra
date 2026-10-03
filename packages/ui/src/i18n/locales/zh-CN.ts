@@ -5567,6 +5567,7 @@ const zhCN: Record<string, string> = {
   "chat.permission.keyboardHint": "使用 Tab / 上下键选择，回车确认",
   "chat.permission.scope.commandPrefix": "命令前缀",
   "chat.permission.scope.exactCommand": "仅此命令",
+  "chat.permission.multitask.title": "运行此 Multitask 计划？",
   "chat.permission.workflow.title": "运行此工作流？",
   "chat.permission.workflow.showScript": "显示完整脚本",
   "chat.permission.workflow.hideScript": "收起完整脚本",

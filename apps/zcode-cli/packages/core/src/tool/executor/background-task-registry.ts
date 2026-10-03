@@ -39,6 +39,7 @@ type BackgroundTaskSnapshot =
 export function isDynamicWorkflowRunDispatchToolName(name: string): boolean {
   return (
     name === CREATE_WORKFLOW_TOOL_NAME ||
+    name === "Multitask" ||
     name === AMEND_WORKFLOW_TOOL_NAME ||
     name === RESUME_WORKFLOW_RUN_TOOL_NAME
   );

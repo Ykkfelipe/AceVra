@@ -5827,6 +5827,7 @@ const enUS: Record<string, string> = {
   "chat.permission.keyboardHint": "Use Tab / arrow keys to choose, then press Enter to confirm",
   "chat.permission.scope.commandPrefix": "Command prefix",
   "chat.permission.scope.exactCommand": "Exact command only",
+  "chat.permission.multitask.title": "Run this Multitask plan?",
   "chat.permission.workflow.title": "Run this workflow?",
   "chat.permission.workflow.showScript": "Show full script",
   "chat.permission.workflow.hideScript": "Hide full script",

@@ -71,6 +71,7 @@ import { taskOutputToolEntry } from "./task-output.js";
 import { taskStopToolEntry } from "./task-stop.js";
 import { readSessionContextToolEntry } from "./read-session-context.js";
 import { amendWorkflowToolEntry } from "./amend-workflow.js";
+import { createMultitaskToolEntry, multitaskToolEntry } from "./multitask.js";
 import { createWorkflowToolEntry } from "./create-workflow.js";
 import { saveWorkflowToolEntry } from "./save-workflow.js";
 import { listSavedWorkflowsToolEntry } from "./list-saved-workflows.js";
@@ -129,6 +130,7 @@ export const builtInTools: ToolEntry[] = [
   skillToolEntry,
   jsToolEntry,
   createWorkflowToolEntry,
+  multitaskToolEntry,
   amendWorkflowToolEntry,
   // 保存的定义：写侧 gate 与 CreateWorkflow 同档（alwaysAsk），读侧无 gate。
   saveWorkflowToolEntry,
@@ -164,6 +166,7 @@ export const builtInTools: ToolEntry[] = [
  */
 const DYNAMIC_WORKFLOW_TOOL_NAMES: ReadonlySet<string> = new Set([
   CREATE_WORKFLOW_TOOL_NAME,
+  "Multitask",
   AMEND_WORKFLOW_TOOL_NAME,
   SAVE_WORKFLOW_TOOL_NAME,
   LIST_SAVED_WORKFLOWS_TOOL_NAME,
@@ -320,6 +323,9 @@ function resolveBuiltInToolEntryForBranch(
   // 灰度门同时管工具面和**描述**：Agent / Task 的描述里有一条「工作流请求必须改用
   // CreateWorkflow」，关闭时那个工具不存在，留着只会把模型指向不存在的工具。用的是与注册过滤同一个
   // options.includeDynamicWorkflow，所以首次装配与分支刷新产出的描述必然一致。
+  if (entry.metadata.name === "Multitask") {
+    return createMultitaskToolEntry(options.agentProfiles);
+  }
   if (entry.metadata.name === "Agent") {
     return createAgentToolEntry({
       embeddedSearchEnabled: options.embeddedSearchEnabled,

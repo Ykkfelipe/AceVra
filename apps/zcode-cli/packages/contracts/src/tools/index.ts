@@ -33,6 +33,7 @@ export * from "./submit-result.js";
 export * from "./websearch.js";
 export * from "./workflow.js";
 export * from "./create-workflow.js";
+export * from "./multitask.js";
 // 修订入口：名字常量被 core 的
 // 分派、权限服务的 owner 规则、bootstrap 的 actor 禁用名单与 TUI/headless 旁路读走。
 export * from "./amend-workflow.js";
