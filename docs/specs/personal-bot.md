@@ -392,3 +392,95 @@ sibling implementation.
 
 Also deferred: Bot tool-surface decisions (whether the Bot may invoke `Multitask`/`Agent`/`Task`),
 a Bot-scoped session projection, capability probes, and every domain expansion.
+
+---
+
+## 14. M2 Phase 2 (approved): turn-time personal-memory injection
+
+Makes Ace's bounded personal memory available to the model on every `personal_bot` turn, while
+retrieval, scoring and privacy stay entirely inside the Bot module.
+
+### 14.1 Ownership
+
+| Concern                                          | Owner                                         |
+| ------------------------------------------------ | --------------------------------------------- |
+| Retrieval, scoring, record count and byte budget | `bot` module (`domain/memory.ts`) — unchanged |
+| Rendering into context text                      | `bot` module                                  |
+| Transporting the rendered text to the model      | CLI runtime (a per-turn reminder)             |
+| Deciding whether memory exists at all            | `bot` module (empty text = nothing)           |
+| Raw `PersonalMemoryRecord[]`                     | **never leaves the host**                     |
+
+The CLI never reads, selects, ranks or truncates personal memory. Its only job is to carry the
+already-rendered string and to enforce the gate, the dedupe and the failure policy.
+
+### 14.2 Wire contract
+
+`interaction/personalMemoryContext` (CLI → host), strict schemas on both sides.
+
+- Params: `{ requestId, sessionId, query, turnId? }`. `query` is the turn's canonical user input,
+  the same text the capability and plugin reminders use.
+- Result: `{ text, omittedCount, byteLength }`.
+- **No budget parameters cross the boundary.** `maxRecords` / `maxBytes` are not in the schema, so a
+  caller cannot widen them; a request carrying them is rejected outright rather than silently
+  accepted.
+- The host handler re-projects the response onto exactly `text` / `omittedCount` / `byteLength`, so
+  even a resolver that returns a whole context object (including `selected`) cannot put raw records
+  on the wire. This is a structural guarantee at the boundary, not a convention.
+
+### 14.3 Injection point and timing
+
+- Per turn, never at runtime/conversation initialization. The reminder is a
+  `per_current_turn` / `current_turn` source computed fresh for each turn, so memory that changes
+  between turns is reflected.
+- Injected immediately after the capability context, inside the same
+  `options?.inputVisibility !== "model-only"` guard, preserving the established
+  `user → system` causal ordering.
+- Attached as a model-only system-reminder attachment: it is **not** persisted as ordinary
+  user-visible conversation content.
+- The same body is not re-appended when it is already in history; a changed body is appended, so the
+  transcript records when memory actually changed.
+
+### 14.4 Gating
+
+`taskType === "personal_bot"` is required, enforced twice and independently:
+
+1. The port is only installed on sessions created with `taskType: "personal_bot"`, so any other
+   session has no way to reach the host (structural).
+2. The injection method re-checks the task type before touching the port, so the invariant does not
+   depend on a call site remembering to check (behavioural).
+
+A non-Bot session therefore neither receives Bot memory nor causes a host round trip.
+
+### 14.5 Failure semantics
+
+Memory is an enhancement, never a precondition. Fail-open is enforced at three layers: the protocol
+port adapter (RPC error, old host, timeout → no context), the injection method (any throw → debug log,
+turn continues), and the host handler (resolver absent or throwing → empty context, not an error).
+A memory failure must never prevent a user turn or a model response.
+
+The port uses a short timeout (1s, the same order as the execution-target refresh) because retrieval
+is a local file read; waiting longer is never worth delaying the user's turn.
+
+Malformed request params are still reported as a protocol error — "the request was invalid" and
+"there is no memory" are different facts and must not be conflated.
+
+### 14.6 Unchanged from earlier milestones
+
+Pointer authority (§13.4), the `V4ChatPane` conversation host, no Bot message persistence, the
+lazy-runtime mkdir-only Bot workspace, `personal_bot`'s exclusion from the Coding Sessions index, and
+the rule that personal memory is never automatically carried into Cross-Mode handoffs (§13.6) all
+stand. Project (coding) memory is a separate subsystem and is not affected: it is keyed to coding
+workspaces and its `isMainMemoryTaskType` gate excludes `personal_bot` exactly as before.
+
+### 14.7 Acceptance scenarios (Phase 2)
+
+1. A Bot turn whose query matches a stored memory receives the bounded context; the block is visible
+   in the provider request and is not user-visible conversation content.
+2. With 200 stored records and a narrow query, the injected context still respects the Bot module's
+   record and byte limits and reports omissions.
+3. A query with no match injects nothing (no empty block).
+4. A failing or unavailable memory path leaves the turn working and logs at debug only.
+5. A non-`personal_bot` session never receives Bot memory and never queries the host.
+6. Repeated turns with unchanged memory do not accumulate duplicate blocks.
+7. No raw personal-memory record crosses the protocol boundary.
+8. Coding sessions and Project Memory behave exactly as before.
