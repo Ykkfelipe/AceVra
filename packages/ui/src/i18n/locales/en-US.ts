@@ -81,7 +81,7 @@ const enUS: Record<string, string> = {
   "acevra.account.computers.conflictReset": "Use this Mac with the current account",
   "acevra.account.computers.conflictResetting": "Setting up this Mac…",
   "acevra.account.computers.conflict":
-    "This installation is registered to a different AceVra account. Local features still work.",
+    "This Mac is already registered to a different AceVra account. Local features still work.",
   "acevra.account.computers.note":
     "Removing a computer disconnects it from your account. Nothing on it is deleted.",
   "acevra.account.computers.ssh.title": "SSH computers",

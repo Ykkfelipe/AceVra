@@ -14,7 +14,15 @@ export function createInstallationStore(filePath: string) {
 
   const persist = async (installationId: string): Promise<string> => {
     await mkdir(dirname(filePath), { recursive: true });
-    const temp = `${filePath}.${process.pid}.tmp`;
+    // The temp name must be unique per write, not just per process: two Account windows
+    // can each invoke reset concurrently, and sharing one temp path made one rename fail
+    // while the other succeeded — leaving the cache and the file holding different ids,
+    // which orphans a device row on every launch.
+    //
+    // A failed rename leaves this scratch file behind. It is deliberately not cleaned
+    // up: accountLocalDataGuard.test.ts forbids every removal primitive in this feature,
+    // and that blunt invariant is worth more than tidying a rare-path temp file.
+    const temp = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temp, JSON.stringify({ installationId }), "utf8");
     await rename(temp, filePath);
     return installationId;

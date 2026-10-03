@@ -264,34 +264,62 @@ test("the view discloses a non-remembered session only when persistence is unava
   assert.equal(make().getView().rememberSession, undefined);
 });
 
-test("a 401 reported by another account endpoint signs the user out with a reason", async () => {
-  // The device client reports a rejected bearer here, not through the /v1/me check.
+test("a 401 on another endpoint is confirmed by /v1/me before signing anyone out", async () => {
+  // rejectSession must not take a device route's word for it: it re-runs the
+  // authoritative admission check, which still succeeds for a healthy session.
   const { controller, settled } = setup(() => json(200, ME));
   await controller.start();
   await controller.signIn();
   await settled("ready");
+  controller.rejectSession();
+  await settled("ready");
+  const view = controller.getView();
+  assert.equal(view.phase, "ready", "a surviving session is not signed out by a device 401");
+  assert.equal(view.profile?.displayName, "Ada");
+});
+
+test("a 401 on another endpoint signs the user out once /v1/me confirms it", async () => {
+  let healthy = true;
+  const { controller, settled } = setup(() => (healthy ? json(200, ME) : json(401)));
+  await controller.start();
+  await controller.signIn();
+  await settled("ready");
+  healthy = false;
   controller.rejectSession();
   const view = await settled("signedOut");
   assert.equal(view.detail, "session_rejected");
   assert.equal(view.profile, undefined);
 });
 
-test("a late admission 200 cannot re-assert ready after a 401 signed the user out", async () => {
-  let release: (() => void) | null = null;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
+test("a stale 401 from a superseded session cannot sign out the account that replaced it", async () => {
+  // Account switching is the exact path this guards: A's heartbeat is in flight when
+  // the user signs out of A and into B. A's late 401 must not land on B.
+  let releaseMe: (() => void) | null = null;
+  const gate = new Promise<void>((r) => {
+    releaseMe = r;
   });
-  const { controller } = setup(() => json(200, ME));
+  let firstCall = true;
+  const { controller, settled } = setup(async () => {
+    if (firstCall) {
+      firstCall = false;
+      return json(200, ME);
+    }
+    // B is admitted and ready; A's parked response is still outstanding.
+    return json(200, ME);
+  });
   await controller.start();
   await controller.signIn();
-  // Admit, then reject the session while the projection is still settling.
-  controller.rejectSession();
-  release!();
-  await new Promise((r) => setImmediate(r));
-  const view = controller.getView();
-  assert.notEqual(view.phase, "ready");
-  assert.equal(view.detail, "session_rejected");
+  await settled("ready");
+  // Sign out of A and into B, then let A's late 401 land.
+  await controller.signOut();
+  await settled("signedOut");
+  await controller.signIn();
+  await settled("ready");
+  releaseMe!();
   await gate;
+  controller.rejectSession();
+  await settled("ready");
+  assert.equal(controller.getView().phase, "ready");
 });
 
 test("rejectSession is a no-op for a build with no account configuration", async () => {
@@ -308,13 +336,18 @@ test("rejectSession is a no-op for a build with no account configuration", async
   assert.equal(view.detail, undefined);
 });
 
-test("rejecting an already-rejected session does not republish", async () => {
-  const { controller } = setup(() => json(200, ME));
+test("rejecting an already-rejected session does not republish or refetch", async () => {
+  let healthy = false;
+  const { controller, settled, calls } = setup(() => (healthy ? json(200, ME) : json(401)));
   await controller.start();
+  await controller.signIn();
+  await settled("signedOut");
+  assert.equal(controller.getView().detail, "session_rejected");
+  const requestsSoFar = calls.length;
   let publishes = 0;
   controller.onViewChanged(() => publishes++);
   controller.rejectSession();
-  const after = publishes;
-  controller.rejectSession();
-  assert.equal(publishes, after);
+  await new Promise((r) => setImmediate(r));
+  assert.equal(publishes, 0, "nothing republished");
+  assert.equal(calls.length, requestsSoFar, "no redundant request");
 });

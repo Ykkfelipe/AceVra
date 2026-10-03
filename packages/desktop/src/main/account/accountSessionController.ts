@@ -116,20 +116,21 @@ export function createAccountSessionController(deps: AccountSessionControllerDep
   }
 
   /**
-   * The backend rejected the bearer on any account endpoint, not just `/v1/me`.
+   * The backend rejected the bearer on an account endpoint other than `/v1/me`.
    *
-   * A 401 means this session can no longer prove who it is. It is not a retryable
-   * failure, so the projection goes to signed out with the reason attached and the UI
-   * offers sign-in again. The generation bump drops any admission check already in
-   * flight, so a slow 200 from the previous session cannot re-assert `ready` after a
-   * later 401 signed the user out.
+   * This does NOT decide the outcome. It re-runs the authoritative admission check
+   * under a fresh generation, because a 401 alone is not proof that the session is
+   * gone: the token may simply have expired and Clerk may mint a fresh valid one,
+   * and a response from a superseded attempt must not be able to sign out whoever is
+   * signed in now. `/v1/me` decides, and its own fencing already covers a late 401
+   * racing a later sign-in.
    */
   function rejectSession(): void {
-    if (!configured) return;
-    // Already signed out with the same reason: nothing to publish.
+    if (!configured || !deps.tokenSource) return;
+    // Already signed out with the reason attached: nothing to re-check.
     if (view.phase === "signedOut" && view.detail === "session_rejected") return;
     generation += 1;
-    set({ phase: "signedOut", detail: "session_rejected" }, ["profile"]);
+    void checkAdmission(generation);
   }
 
   return {

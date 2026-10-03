@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCwIcon } from "lucide-react";
 import type { AccountDevice, AccountDevicesView, AccountPairingPreview } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
@@ -31,8 +31,16 @@ export function AceVraComputersSection() {
   const [pairNote, setPairNote] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
 
+  // The 30s poll can be in flight when the user resets a conflicting identity. Without
+  // ordering, that stale list response lands after the reset and puts the UI back into
+  // `conflict` on a device that is already registered — inviting a second reset.
+  const seq = useRef(0);
+  const apply = (ticket: number, next: AccountDevicesView | null) => {
+    if (ticket === seq.current) setView(next);
+  };
   const refresh = useCallback(async () => {
-    setView((await account?.listDevices().catch(() => null)) ?? null);
+    const ticket = ++seq.current;
+    apply(ticket, (await account?.listDevices().catch(() => null)) ?? null);
   }, [account]);
   useEffect(() => {
     void refresh();
@@ -210,10 +218,12 @@ export function AceVraComputersSection() {
             onClick={() =>
               void (async () => {
                 setResetting(true);
+                const ticket = ++seq.current;
                 try {
-                  setView(await account?.resetDeviceIdentity());
+                  apply(ticket, (await account?.resetDeviceIdentity()) ?? null);
                 } catch {
-                  setView((await account?.listDevices().catch(() => null)) ?? null);
+                  const retry = ++seq.current;
+                  apply(retry, (await account?.listDevices().catch(() => null)) ?? null);
                 } finally {
                   setResetting(false);
                 }

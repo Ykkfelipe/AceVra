@@ -51,11 +51,11 @@ and the account still reads as `ready`. The user has no route back to sign-in an
 indication that anything went wrong. `/v1/me` is only re-fetched on a Clerk session
 event or an explicit `refresh()`, so in practice the stale state can persist.
 
-**M2 behavior.** A 401 from _any_ account endpoint transitions the projection to
-`signedOut` with `detail: "session_rejected"`, exactly like a `/v1/me` 401. The
-device client reports it through an `onUnauthorized` callback; the controller owns
-the transition and the generation fence still applies. This is a routing change
-only — it adds no backend surface and no new authentication.
+**M2 behavior.** A 401 from _any_ account endpoint makes the controller re-run the
+authoritative `/v1/me` admission check, which then decides: `ready` if the session is
+actually fine, `signedOut` + `session_rejected` if it is not. The device client reports
+the 401 through an `onUnauthorized` callback; it never decides the outcome itself. This
+is a routing change only — no backend surface, no new authentication.
 
 ### 2.2 Sign-out has no pending or failure state
 
@@ -66,10 +66,14 @@ controller swallows transport failure deliberately (`accountSessionController.ts
 which is correct for the projection but leaves the UI unable to distinguish
 "finished" from "still running".
 
-**M2 behavior.** The settings surface tracks a pending flag and disables the
-control while sign-out runs, then re-enables on the settled view. No new error
-channel is invented: the controller already republishes on settle, so the button
-re-enables when the projection returns to `signedOut`.
+**M2 behavior.** Only the sign-_in_ control gains a busy state, matching the
+first-run gate, so it cannot be re-triggered while the Account window opens.
+
+Sign-out deliberately does **not** get a pending flag. `signOut()` settles the
+projection synchronously before awaiting the token source
+(`accountSessionController.ts:141`), so the control swaps to the sign-in variant
+on the next render and a spinner would only ever flash. The original goal — not
+double-submitting — is met by the projection changing immediately.
 
 **No confirmation dialog, deliberately.** Sign-out deletes nothing — provider
 config, conversations, installation identity and the device registry row all survive,
@@ -155,9 +159,14 @@ overlooked.
 1. **Reuse the existing boundary unchanged.** M2 adds no credential handling, no new
    persistent auth storage, and no new account-api route or table. The only local
    write is a fresh installation UUID, which is documented as a non-secret lookup key.
-2. **A 401 is treated as "this session is no longer valid", never as "retry harder".**
-   The transition to `signedOut` is fenced by the existing generation counter, so a
-   late 401 from a superseded attempt cannot sign the user out mid-switch.
+2. **A 401 is a claim, not a verdict.** The device client reports it; the controller
+   re-runs the authoritative `/v1/me` admission check under a fresh generation instead
+   of trusting a device route. This matters twice over. A 401 on a single token often
+   just means that token expired and Clerk can mint a fresh one, and a response from a
+   superseded attempt must not be able to sign out whoever is signed in now — the first
+   implementation hard-set `signedOut` from inside `call()` and reproduced exactly that
+   bug during review. Re-checking costs one request and removes a whole class of
+   spurious sign-out.
 3. **The client is still not the authorization source.** `session_rejected` is a
    presentation state derived from an HTTP status; it grants nothing and authorizes
    nothing. Server admission remains a live ledger read.
@@ -177,11 +186,26 @@ overlooked.
 3. A network failure still reads as `offline`, not as a session failure.
 4. Sign-out reaches `signedOut`, calls the token source once, and preserves the local
    choice preference. No filesystem delete is reachable from the account feature.
-5. The settings sign-out control is disabled while sign-out is in flight.
+5. The settings sign-in control is disabled while a sign-in is in flight, and
+   sign-out flips the projection synchronously without an intermediate state.
 6. The identity block renders `avatarUrl` when present and falls back to the initial.
 7. `registration: "conflict"` renders an explanation and a recovery action; the
    action mints a new installation id and re-registers, leaving the original
    account's row untouched.
 8. `rememberSession === false` is surfaced whenever configured, not only when ready.
-9. `pnpm typecheck`, `pnpm lint`, `pnpm architecture:check --changed` pass;
-   `packages/account-api` stays 81/81; the desktop account unit tests pass.
+9. `resetInstallation()` outside a `conflict` is a no-op, so the renderer cannot mint
+   unbounded device rows (the backend never deletes).
+10. A failed reset leaves `conflict` intact, so the recovery control cannot delete itself.
+11. Concurrent resets cannot leave the in-memory cache and the on-disk id disagreeing.
+12. `pnpm typecheck`, `pnpm lint`, `pnpm architecture:check --changed` pass;
+    `packages/account-api` stays 81/81; the desktop account unit tests pass.
+
+## 6. Verification status
+
+Everything above is covered by unit tests except two items, both of which need the
+shared live Electron slot and are therefore **pending**:
+
+- the reset-identity control has no E2E scenario. Its "leaves the other account's row
+  untouched" half is asserted against a stubbed `fetch`, never a real backend;
+- the device-conflict banner and the new sign-in busy state have not been seen rendered
+  in either theme.

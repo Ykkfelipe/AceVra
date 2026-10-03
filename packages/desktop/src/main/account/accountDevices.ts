@@ -103,11 +103,11 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
   }
 
   /** Registers (idempotently) and starts the heartbeat. Call when the account is ready. */
-  async function start(): Promise<void> {
+  async function start(known?: string): Promise<void> {
     generation += 1;
     const attempt = generation;
     stopHeartbeat();
-    const installationId = await deps.installationId();
+    const installationId = known ?? (await deps.installationId());
     const result = await call("POST", "/v1/devices/register", {
       installationId,
       type: "desktop",
@@ -151,12 +151,15 @@ export function createAccountDevices(deps: AccountDevicesDeps) {
      */
     async resetInstallation(): Promise<AccountDevicesView> {
       if (!deps.resetInstallationId) return view();
-      generation += 1;
-      stopHeartbeat();
-      thisDeviceId = null;
-      registration = "none";
-      await deps.resetInstallationId();
-      await start();
+      // Only a conflict is recoverable this way. Without this guard the renderer could
+      // mint an unbounded number of device rows: the backend only ever inserts or
+      // updates, so every call would leave a permanent orphaned row behind.
+      if (registration !== "conflict") return view();
+      // Mint first. If the write fails the previous registration is still intact, so the
+      // conflict explanation and its recovery control survive instead of the UI losing
+      // the only way out of the state it is in.
+      const nextId = await deps.resetInstallationId();
+      await start(nextId);
       return view();
     },
     /** Account left `ready`: stop talking to the registry. Local identity is untouched. */

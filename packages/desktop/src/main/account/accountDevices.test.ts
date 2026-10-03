@@ -295,9 +295,54 @@ test("conflict recovery mints a new identity and registers again", async () => {
   assert.equal(unauthorized, 0);
 });
 
-test("reset is a no-op view when the store cannot mint a new identity", async () => {
-  const h = harness(() => json(200, { devices: [DEVICE] }));
+test("reset outside a conflict does nothing, so the renderer cannot mint device rows", async () => {
+  // Every register creates a permanent row: the backend only inserts or updates. Without
+  // a conflict guard, N calls from the renderer would leave N orphaned devices.
+  const h = harness(() => json(201, { device: DEVICE }));
   await h.devices.start();
+  const registers = () => h.calls.filter((c) => c.path === "/v1/devices/register").length;
+  assert.equal(registers(), 1);
   const view = await h.devices.resetInstallation();
-  assert.equal(view.registration, h.calls.length ? "registered" : "registered");
+  assert.equal(view.registration, "registered");
+  assert.equal(registers(), 1, "no second register, so no second device row");
+  assert.equal(view.thisDeviceId, "dev_1", "registration is untouched");
+});
+
+test("a failed reset leaves the conflict recovery available", async () => {
+  // The recovery control is the only way out of `conflict`. If a failed write dropped the
+  // registration state, the UI would render nothing at all and the user would be stuck.
+  const devices = createAccountDevices({
+    apiBaseUrl: "http://127.0.0.1:9",
+    getToken: async () => "tok",
+    installationId: async () => "11111111-1111-4111-8111-111111111111",
+    resetInstallationId: async () => {
+      throw new Error("disk full");
+    },
+    describe: () => ({ platform: "darwin", displayName: "Mac", capabilities: ["files"] }),
+    fetch: (async (url: URL) =>
+      new URL(url).pathname === "/v1/devices/register"
+        ? json(409, { error: "installation_bound" })
+        : json(200, { devices: [] })) as typeof fetch,
+  });
+  await devices.start();
+  await assert.rejects(() => devices.resetInstallation(), /disk full/);
+  const view = await devices.list();
+  assert.equal(view.registration, "conflict", "still recoverable");
+});
+
+test("concurrent resets do not leave the cache and the file disagreeing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "av-inst-race-"));
+  try {
+    const file = join(dir, "acevra-installation.json");
+    const store = createInstallationStore(file);
+    const ids = await Promise.all([store.reset(), store.reset(), store.reset()]);
+    assert.equal(new Set(ids).size, 3, "each reset mints its own id");
+    // Exactly one id may win on disk, and the in-memory cache must agree with it,
+    // otherwise the app registers one device now and a different one after a restart.
+    const onDisk = JSON.parse(await readFile(file, "utf8")).installationId;
+    assert.equal(await store.getOrCreate(), onDisk);
+    assert.ok(ids.includes(onDisk));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
