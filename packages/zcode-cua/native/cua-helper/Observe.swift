@@ -26,6 +26,9 @@ let supportedBrokerMethods: Set<String> = [
     "workspace_click", "workspace_type_text", "workspace_scroll", "workspace_stream",
     "workspace_confirm",
     "open_app",
+    // Runtime lease heartbeat. 修复依据（2026-10-03 实测）：dispatch 与参数校验早已存在，唯独漏登记
+    // 这里，每次心跳都被 not_authorized 拒绝，独占租约在 15 s 软窗口静默死亡。
+    "renew_lease",
 ]
 
 // MARK: - Observation bounds

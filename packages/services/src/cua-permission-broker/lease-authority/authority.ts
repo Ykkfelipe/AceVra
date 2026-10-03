@@ -8,7 +8,6 @@ import {
 import type {
   ComputerUseObservationRecord,
   ComputerUseSessionRecord,
-  ComputerUseTargetReport,
   LeaseAdmission,
   LeaseAuthority,
   LeaseRecord,
@@ -16,6 +15,8 @@ import type {
 } from "./contract.js";
 import type { ComputerUseWorkspaceSnapshot, WorkspaceProjectionReader } from "./workspace.js";
 import { createTakeoverGrants, isUserReclaimReason } from "./takeover.js";
+import { boundedText, finiteNumber, sanitizeTarget, workspaceTargetOf } from "./target-utils.js";
+import { WORKSPACE_PROJECTED_METHOD_NAMES } from "./projected-methods.js";
 
 const coded = (message: string, code: string) => Object.assign(new Error(message), { code }); // Phase 2
 
@@ -29,59 +30,11 @@ export interface LeaseAuthorityOptions {
 }
 
 const MAX_SESSIONS = 16;
-const MAX_TEXT = 160;
 
-/**
- * M3：宿主侧维护的 mini Computer 投影只跟踪 workspace 面向的方法（observe 建立帧，
- * workspace_* 是后台动作）。原生前台动作仍由既有 bar 投影表达，不混入 workspace 视图。
- */
-// press / set_value 是后台语义动作：运行时从最近一次 observe 的树解析出目标 pid 与元素中心，
-// 与 workspace_* 一样驱动本地预览的目标窗口与逻辑光标（不再只有 workspace_* 才有光标）。
-const WORKSPACE_PROJECTED_METHODS = new Set([
-  "observe",
-  "workspace_click",
-  "workspace_type_text",
-  "workspace_scroll",
-  "press",
-  "set_value",
-]);
+const LEASE_KEEPALIVE_WINDOW_MS = 30_000;
+// 活动上报里的 method 是任意字符串，集合必须按 string 判定，不能收窄成字面量元组。
+const WORKSPACE_PROJECTED_METHODS = new Set<string>(WORKSPACE_PROJECTED_METHOD_NAMES);
 const SEMANTIC_UPDATE_ONLY_METHODS = new Set(["press", "set_value"]);
-
-function workspaceTargetOf(
-  target: ComputerUseTargetReport | undefined,
-): { pid: number; windowId: number | null; appName: string | null } | undefined {
-  const pid = finiteNumber(target?.pid);
-  if (pid === undefined) return undefined;
-  return {
-    pid,
-    windowId: finiteNumber(target?.windowId) ?? null,
-    appName: boundedText(target?.app) ?? null,
-  };
-}
-
-function boundedText(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const text = value.trim();
-  return text ? text.slice(0, MAX_TEXT) : undefined;
-}
-
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function sanitizeTarget(
-  value: ComputerUseTargetReport | undefined,
-): ComputerUseTargetReport | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const target: ComputerUseTargetReport = {
-    ...(finiteNumber(value.pid) !== undefined ? { pid: value.pid } : {}),
-    ...(finiteNumber(value.windowId) !== undefined ? { windowId: value.windowId } : {}),
-    ...(boundedText(value.app) ? { app: boundedText(value.app) } : {}),
-    ...(boundedText(value.bundleId) ? { bundleId: boundedText(value.bundleId) } : {}),
-    ...(boundedText(value.window) ? { window: boundedText(value.window) } : {}),
-  };
-  return Object.keys(target).length > 0 ? target : undefined;
-}
 
 /** Single service-owned serial authority. Runtime maps remain projections only. */
 export function createLeaseAuthority(
@@ -125,6 +78,25 @@ export function createLeaseAuthority(
     lastTermination = { leaseId: record.leaseId, reason, at: now() };
   };
 
+  /**
+   * 单一所有者的惰性过期：任何读/写在触碰记录前先应用时间事实。只作用于 active 记录；
+   * reserving（等待用户 Allow）由接管授权自己的 5 分钟窗口管理。与用户收回同权撤销授权：
+   * 心跳消失意味着运行时已死，僵尸 Allow 不得再为后续任务静默放行。
+   */
+  const expireStaleLease = () => {
+    if (current?.state !== "active") return;
+    const keepaliveAt = current.keepaliveAt;
+    if (keepaliveAt !== undefined && now() - keepaliveAt <= LEASE_KEEPALIVE_WINDOW_MS) return;
+    const expired = { ...current, state: "released" as const };
+    current = expired;
+    takeover.revoke(expired.ownerSession);
+    terminate(expired, "runtime_heartbeat_lost");
+    // 修复依据（2026-10-03 split-brain 实测）：记录结束即经 Stop 同一路径结束 Helper 租约，不阻塞读取。
+    if (expired.helperLeaseId && options.releaseHelper) {
+      void options.releaseHelper(expired).catch(() => undefined);
+    }
+  };
+
   const endActiveLease = async (reason: string): Promise<boolean> => {
     takeover.revoke();
     if (!current || (current.state !== "reserving" && current.state !== "active")) return false;
@@ -151,6 +123,7 @@ export function createLeaseAuthority(
   return {
     beginAcquire: (owner) =>
       serial(() => {
+        expireStaleLease();
         if (admission.paused) {
           throw Object.assign(new Error("Computer Use is paused"), { code: "paused" });
         }
@@ -171,13 +144,20 @@ export function createLeaseAuthority(
         if (!current || current.leaseId !== leaseId || current.state !== "reserving") {
           throw coded("CUA lease generation is no longer admissible", "lease_not_owned");
         }
-        current = { ...current, state: "active", helperLeaseId, helperRequirement };
+        current = {
+          ...current,
+          state: "active",
+          helperLeaseId,
+          helperRequirement,
+          keepaliveAt: now(),
+        };
         if (helperConnectionGeneration !== undefined)
           current = { ...current, helperConnectionGeneration };
         return current;
       }),
     release: (leaseId, reason) =>
       serial(() => {
+        expireStaleLease();
         if (!current || current.leaseId !== leaseId)
           throw coded("CUA lease is not active", "invalid_lease");
         if (current.state === "released" || current.state === "stopped") return current;
@@ -189,6 +169,7 @@ export function createLeaseAuthority(
       }),
     stop: (stopOptions) =>
       serial(async () => {
+        expireStaleLease();
         if (!current || current.state === "released" || current.state === "stopped") {
           return { status: "already_stopped" as const, record: current };
         }
@@ -236,6 +217,22 @@ export function createLeaseAuthority(
     },
     getLastTermination: () => lastTermination,
     reportActivity: (report) => {
+      // 运行时 5s 心跳的续期确认是租约活性信号，不是会话活动投影：在这里为 active 记录续
+      // keepalive，不进入 mini Computer 投影，也不占用新的 sideband 方法（契约方法数有上限）。
+      // callId 携带 authority lease id，防串会话。specs/computer-use.md "The authority lease
+      // record fails open with the same heartbeat"。
+      if (boundedText(report?.method) === "renew_lease") {
+        expireStaleLease();
+        const leaseId = boundedText(report?.callId);
+        if (
+          current?.state === "active" &&
+          current.leaseId === leaseId &&
+          current.ownerSession === boundedText(report?.session)
+        ) {
+          current = { ...current, keepaliveAt: now() };
+        }
+        return;
+      }
       const sessionId = boundedText(report?.session);
       const method = boundedText(report?.method);
       const callId = boundedText(report?.callId);
@@ -388,7 +385,10 @@ export function createLeaseAuthority(
         updatedAt: snap.updatedAt,
       };
     },
-    getStatus: () => current,
+    getStatus: () => {
+      expireStaleLease();
+      return current;
+    },
     close: async () => {
       current = undefined;
       sessions.clear();

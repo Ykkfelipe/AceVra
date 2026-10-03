@@ -12,6 +12,11 @@ export interface LeaseRecord {
   readonly helperRequirement?: string;
   /** Host relay connection generation that issued `helperLeaseId` (fences stale generations). */
   readonly helperConnectionGeneration?: number;
+  /**
+   * Last runtime keepalive for an active lease (specs/computer-use.md "The authority lease record
+   * fails open with the same heartbeat"): the authority expires the record when this goes stale.
+   */
+  readonly keepaliveAt?: number;
 }
 
 /** Why the most recent lease ended (CUA-4). Kept beside the record so its shape stays stable. */

@@ -217,6 +217,10 @@ const BROKER_METHOD_KINDS = Object.freeze({
   workspace_confirm: "mutating",
   // 本地后台打开应用 / 为无窗口运行中的应用重建窗口（Helper open_app）。
   open_app: "mutating",
+  // 运行时租约心跳（protected-runtime 5s renew_lease）：Helper 的 15s 软窗口靠它续期。
+  // 漏登记会让心跳被 not_authorized 静默吞掉，任何 >15s 的思考/等待间隙都会丢租约
+  // （实测 A 用例 sleep 65 后第一次按键被 refused）。按 mutating 对待，绝不走只读重放。
+  renew_lease: "mutating",
 });
 
 export function isBrokerMethod(method) {

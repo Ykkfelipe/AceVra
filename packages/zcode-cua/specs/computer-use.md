@@ -964,6 +964,30 @@ no registration path at all, so it cannot accidentally deliver. The integration 
 just above — the frame is addressable by `observation_id`, and `sanitizeObservationResult` is the
 single place a future bridge would hook.
 
+## Screenshot delivery classes (CUA-1.6)
+
+The `screenshot` tool result image block carries `requested_by_user`, set by the
+runtime from the cell's `for_user: true` argument. This is the
+`captureIntent`-equivalent signal the deferred paragraph above anticipated; it
+lives at the same trust position as the browser path's protocol param — the
+model chooses the value, the trusted host hop records it, and nothing downstream
+may infer or overwrite it. Two classes with distinct presentation contracts
+(details in `packages/ui/specs/computer-screenshot-presentation.md`):
+
+- **Requested** (`for_user: true`): the image block keeps
+  `requested_by_user: true`; the node_repl bridge routes it through
+  `emitHostImage` so it reaches the run output and the bounded display `images`
+  — chat-visible after the response.
+- **Observation** (default): the image block is marked
+  `requested_by_user: false`; the bridge routes it through the session's
+  observation channel so the model still sees the frame (it is the agent's
+  eyes) while the conversation flow shows only a details thumbnail from the
+  display's `observationImages`.
+
+The surface documentation must state the contract so models pass `for_user`
+only when the user asked to see the screen. Blocks without the flag are treated
+as observation (safe default: never chat-inline).
+
 ## Permission semantics: readout versus functional truth
 
 The identity foundation measured that `CGPreflightScreenCaptureAccess()` is process-cached: it stays
@@ -1816,6 +1840,14 @@ only through an explicit, per-task user approval; the model can request it but n
    take back control"). Overlay windows sit above layer 0 so the Helper's `topmostWindow`
    hit-test ignores them. The overlay is presentation only: the renderer drives it from the
    global control status, and Electron main hides it if no heartbeat arrives for 4 s.
+   Presenting an overlay must never change AceVra's own process type: every
+   `setVisibleOnAllWorkspaces` call passes `skipTransformProcessType: true`. Measured 2026-10-03:
+   without it Electron implements `visibleOnFullScreen` with `app.dock.hide()`, turning AceVra into
+   a `UIElement` app on the first glow of every takeover and never back — the main window became
+   hidden and un-activatable, absent from the Dock and ⌘-Tab, while the host, Agent and task kept
+   running and played the completion sound. Trade-off accepted: the glow does not float over
+   another app's native full-screen Space (macOS reserves that for UI-element apps); the Helper's
+   Esc/physical-input reclaim does not depend on the glow.
 7. Remote/mobile and subagent contexts keep refusing foreground control (unchanged).
 8. Composer surfaces (product decision after installed acceptance): the persistent
    "Computer Use · Observing · Control…" status bar is removed in every state; only the Allow/Deny
@@ -1838,6 +1870,126 @@ model js cell ── computer.acquire_control ──▶ runtime (zcode-cua)
 
 Single owners: the lease authority owns the grant record (keyed by session, scoped to one task);
 the Helper owns the lease; Electron main owns only overlay windows.
+
+### Helper-side termination must reach the authority within one heartbeat (installed 2026-10-02 finding)
+
+Measured live: the lease was active and the model idled in a plain `sleep`; the user pressed Esc
+and moved the mouse. The Helper's tap ended the lease (`interrupted`) immediately, but nobody
+told the authority: the renderer's `getControlStatus` poll kept reporting `active`, the glow and
+pill stayed on, and pressing Esc appeared to do nothing for as long as the model idled. The
+projection only caught up when the model's next protected action surfaced the refusal.
+
+Rule: the runtime's `renew_lease` heartbeat is the propagation point. When the Helper answers the
+heartbeat with a refusal for the bound lease, the runtime must, within the same heartbeat tick:
+drop the native binding, and release the authority lease with the typed termination code
+(user-reclaim codes also delete the binding so the task never auto-reacquires against the user).
+Transport errors (`helper_disconnected` etc.) are still ignored: an unreachable Helper is not a
+terminated lease, and generation fencing handles recovery on the next action. The UI therefore
+shows control returned within one renewal interval (~5 s) plus one renderer poll, even when the
+model is mid-idle.
+
+### The authority lease record fails open with the same heartbeat (installed 2026-10-02 finding)
+
+Measured live: the model idled 40 s under an active lease, the node kernel cycled, and the
+injected `agent.computerUse` binding disappeared (`agent is not defined`). The model could never
+call `release_control`, and the runtime that owned the authority-side binding was gone — so
+nothing ever released the authority lease record. The Helper's own lease failed open within its
+15 s window (no renewals), but the authority record stayed `active` forever, the renderer's 1 s
+`getControlStatus` poll kept reporting active and heartbeating the overlay, and the glow stayed
+on screen indefinitely with no app activity.
+
+Rule: one heartbeat keeps both owners alive. Every successful runtime `renew_lease` also reports
+through the existing activity sideband (`reportActivity` with method `renew_lease` and the
+authority lease id as `callId`); the authority treats exactly that report as the record's
+keepalive — refreshing the record without storing it as session activity — so the sideband surface
+gains no new method. The authority — single owner of the record — lazily expires an `active`
+record whose last keepalive is older than 30 s (six missed intervals: slower than the Helper's own
+15 s soft window, so a live runtime can never be expired early) with termination reason
+`runtime_heartbeat_lost`, revoking the takeover grant like any user-reclaim ending. Reads
+(`getStatus`) and writes both observe the lazy expiry, so the glow dies within one renderer poll
+once the runtime is truly gone — the same fail-open semantics the Helper already applies to its
+native lease. A `reserving` record (waiting for the user's Allow) is exempt: the takeover request
+stays answerable for its own 5-minute window.
+
+When the authority expires a record this way it also asks the Helper to end the native lease
+through the same `releaseHelper` path Stop uses (fire-and-forget, never blocking the read). One
+record ending ends both: a runtime that is alive but whose keepalives are lost can never hold the
+Helper's exclusive lease while the UI already shows control returned.
+
+Attribution correction (2026-10-03): the `agent is not defined` in the measurement above was not a
+kernel cycle. AceVra Dev shared `~/.zcode` with an installed ZCode.app, which re-seeded the shared
+`node-repl-host` plugin cache with its own build; the running host's per-call Workers then loaded
+that build, which never installs `agent.computerUse` (see `scripts/specs/dev-desktop-environment.md`
+"Isolated data root"). The fail-open rule above stands independently of that cause.
+
+### Heartbeat owner fields and contract failures (2026-10-03 finding)
+
+Measured live, three runs: with hands off during a quiet hold, the glow dropped at 29.4 s every
+time — exactly the authority's 30 s keepalive window — while the model was still mid-hold. Cause:
+the heartbeat sent `owner_task` as the whole binding object instead of the task id. The Helper's
+broker gate (`validForegroundBrokerParams`: exact key set, string owner fields ≤ 128) rejected
+every `renew_lease` as `bad_request`; the heartbeat's blanket `.catch` swallowed it, so the Helper
+lease died at its 15 s soft window and no keepalive was ever sent. An earlier "idle 65 s then press
+8+9" acceptance passed only because `act()` transparently re-acquires a dead native lease under the
+same grant — that recovery masked the defect. The same swallow had already hidden the missing
+`renew_lease` broker-allowlist entry once.
+
+Rules:
+
+- Every runtime → Helper foreground call carries `owner_session` = computer session id and
+  `owner_task` = the binding's task id (strings), plus exactly the method's own fields. Runtime
+  tests drive the controller against a fake Helper that enforces the Swift gate verbatim, so a
+  malformed request fails a test instead of a live hold.
+- A heartbeat failure is classified, never swallowed wholesale. Transport failures
+  (`helper_disconnected`, `helper_exited`, `connection_closed`, `connection_generation_changed`,
+  `timeout`) stay ignored as above. Any other thrown failure (`bad_request`, `not_authorized`, …)
+  means renewal cannot succeed and the native lease will die: the runtime drops it in the same
+  tick and releases the authority lease with that typed code, so the UI turns off at once with a
+  diagnosable reason and the next protected action re-acquires under the still-valid grant.
+- The keepalive report is fire-and-forget with its rejection handled; a sideband failure never
+  surfaces as an unhandled rejection in the runtime host.
+- The runtime broker allowlist (`broker.js` `BROKER_METHOD_KINDS`) and the Helper's own gate
+  (`Observe.swift` `supportedBrokerMethods`) name exactly the same methods, enforced by
+  `test/helper-method-allowlist.test.mjs`. Measured 2026-10-03 after the owner-field fix: the first
+  heartbeat came back `not_authorized: method 'renew_lease' is not available` — the Helper had the
+  dispatch case and the parameter gate but not the allowlist entry, so renewal had never worked on
+  any build. `renew_lease` is a foreground lease operation and, like `acquire_control` /
+  `release_control`, is served only over the peer-bound host session.
+
+### Key press secure-field read (2026-10-03 finding)
+
+Measured live: under an active lease, clicks on Calculator's buttons all landed (`12 × 7` → `84`),
+but every `key_press` was refused `security_state_unreadable`. The Helper reads the focused
+element's `AXSubrole` and `AXProtectedContent` to refuse typing into secure fields, and treated any
+read error other than "attribute unsupported" as unreadable. Calculator's focused element has no
+subrole value (`kAXErrorNoValue`, -25212). Rule: unsupported (-25205), no value (-25212) and
+parameterized-unsupported (-25213) all mean "not a secure field"; any other read failure still
+refuses that one key (never the lease) and the refusal carries the attribute and AX error code as
+evidence. A positive secure/password role, subrole, or protected-content flag still ends the lease
+with `secure_field`.
+
+```mermaid
+sequenceDiagram
+  participant R as Runtime heartbeat (5 s)
+  participant H as Helper (15 s soft window)
+  participant A as Lease authority (30 s keepalive)
+  participant UI as Renderer poll (1 s) / glow
+  R->>H: renew_lease {lease_id, owner_session, owner_task}
+  alt confirmed
+    H-->>R: effect confirmed (window re-armed)
+    R->>A: reportActivity method=renew_lease callId=authority lease id
+    A-->>A: keepaliveAt = now
+  else refused (user_takeover / lease_expired …)
+    H-->>R: effect refused + code
+    R->>A: release(authority lease id, code)
+  else transport failure
+    H--xR: helper_disconnected / timeout (ignored; next action recovers)
+  else contract failure
+    H--xR: bad_request / not_authorized
+    R->>A: release(authority lease id, code)
+  end
+  UI->>A: getControlStatus (lazy expiry after 30 s without keepalive → releaseHelper)
+```
 
 ## Helper lifetime and protected recovery (installed 92454874 finding)
 
@@ -1938,6 +2090,28 @@ In exclusive foreground mode the Helper moves the real pointer to each target al
 ease-in-out path (`PointerGlide.swift`, 6–30 tagged `mouseMoved` steps, 15 ms apart, under 0.5 s)
 before `click`, `drag`, `scroll` and `move_pointer`, so the user can watch the agent work. The
 steps carry the lease marker, so they never count as the user taking control back.
+
+Agent cursor reticle (2026-10-03, product request: "bigger, nicer, futuristic, nothing that lags"):
+while the takeover glow is shown, Electron main also shows one small reticle window centred on the
+real pointer — a rotating blue→violet arc, four tick marks, a soft halo and a slow outward pulse,
+in the glow's palette. It is presentation only, owned by the same overlay lifecycle as the glow
+(created on show, destroyed on hide or heartbeat timeout), and follows the pointer by polling
+`screen.getCursorScreenPoint()` at ~60 Hz only while visible, moving the window only when the
+point changes. Same window rules as the glow: transparent, click-through, non-focusable, above
+layer 0 (the Helper's hit-test ignores it), content-protected (never in the agent's
+observations), and `skipTransformProcessType: true`. Animation is CSS transform/opacity only (GPU
+compositor, no script) and stops under Reduce Motion. During a takeover any physical pointer
+movement ends the takeover, so the reticle only ever follows the agent's pointer.
+
+System arrow while the agent drives (2026-10-03, product request "hide the Mac cursor"): the Helper
+— owner of the exclusive lease — hides the system arrow when a lease starts and shows it again in
+the single lease-ending path (`endLease`: interrupt/Esc, release, expiry, shutdown, secure field,
+generation fence), so the reticle is the only pointer the user sees. A background process may hide
+the arrow only after setting the private `SetsCursorInBackground` property on its own window-server
+connection; both private symbols are resolved at runtime with `dlsym`, and if either is missing the
+arrow simply stays visible (fail-visible, never fail-hidden). Hide/show is balanced by one flag, and
+the hide count belongs to the Helper's connection, so the window server restores the arrow if the
+Helper exits or crashes.
 
 ### Development hardened transport path
 

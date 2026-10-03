@@ -95,8 +95,9 @@ func brokerDispatch(
             "method '\(method)' is not available", code: "not_authorized",
             id: request["id"])
     }
-    if ["press", "set_value", "control_status", "acquire_control", "release_control", "activate_target",
-        "move_pointer", "click", "type_text", "key_press", "scroll", "drag"].contains(method),
+    if ["press", "set_value", "control_status", "acquire_control", "renew_lease", "release_control",
+        "activate_target", "move_pointer", "click", "type_text", "key_press", "scroll", "drag"]
+        .contains(method),
        !cuaHostConnectSessionActive {
         return brokerFail("semantic actions require the peer-bound host session",
                           code: "not_authorized", id: request["id"])

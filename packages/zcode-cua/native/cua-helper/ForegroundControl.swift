@@ -283,6 +283,8 @@ final class ForegroundController {
         lock.unlock()
         cleanupHeldInput(current)
         stopTap()
+        // 唯一的租约结束路径：用户夺回/释放/到期/关闭都在这里把系统箭头还给用户。
+        AgentCursorVisibility.show()
         releaseGlobalLock()
         lock.lock()
         ending = false
@@ -342,8 +344,12 @@ final class ForegroundController {
         lock.lock()
         lease = current
         lock.unlock()
+        // 代理驾驶期间只显示 AceVra 的准星（specs/computer-use.md "Visible agent pointer"）。
+        let arrowHidden = AgentCursorVisibility.hide()
         return foregroundResult("acquire_control", effect: "confirmed", current: current,
-                                evidence: [["kind": "exclusive_lease", "state": "active"]])
+                                evidence: [["kind": "exclusive_lease", "state": "active"],
+                                           ["kind": "agent_cursor",
+                                            "system_arrow": arrowHidden ? "hidden" : "visible"]])
     }
 
     fileprivate func checkedLease(_ params: [String: Any], observationRequired: Bool = true) -> (ForegroundLease?, String?) {
@@ -497,6 +503,7 @@ final class ForegroundController {
     fileprivate func post(_ event: CGEvent, current: ForegroundLease) -> Bool {
         guard stillActive(current) else { return false }
         tagged(event, marker: current.marker).post(tap: .cghidEventTap)
+        AgentCursorVisibility.reassert()
         return true
     }
 
@@ -967,17 +974,26 @@ extension ForegroundController {
             let role = axText(focused, kAXRoleAttribute as String) ?? ""
             let subrole = subroleStatus == .success
                 ? axText(focused, kAXSubroleAttribute as String) ?? "" : ""
-            let unsupported: [Int32] = [-25205, -25213]
+            // 属性不支持 (-25205)、无值 (-25212)、参数化属性不支持 (-25213) 都表示"不是安全字段"。
+            // 修复依据（2026-10-03 实测）：Calculator 的聚焦元素没有 subrole 值，读取返回
+            // kAXErrorNoValue (-25212)；旧列表漏了它，把"没有值"当成"读不到"，普通按键全部被拒。
+            let unsupported: [Int32] = [-25205, -25212, -25213]
             // 读不到状态只拒绝这一次按键：不能投递，但用户的租约必须活着（租约只应由
-            // 真实打断、焦点丢失或用户停止结束）。
+            // 真实打断、焦点丢失或用户停止结束）。拒绝附带 AX 错误码，便于诊断。
+            func unreadable(_ attribute: String, _ status: AXError) -> [String: Any] {
+                var refusal = foregroundRefusal("security_state_unreadable")
+                refusal["evidence"] = [["kind": "secure_state_read", "attribute": attribute,
+                                        "ax_error": Int(status.rawValue)]]
+                return refusal
+            }
             guard subroleStatus == .success || unsupported.contains(subroleStatus.rawValue) else {
-                return foregroundRefusal("security_state_unreadable")
+                return unreadable("AXSubrole", subroleStatus)
             }
             var protection: CFTypeRef?
             let protectionStatus = AXUIElementCopyAttributeValue(focused, "AXProtectedContent" as CFString,
                                                                  &protection)
             guard protectionStatus == .success || unsupported.contains(protectionStatus.rawValue) else {
-                return foregroundRefusal("security_state_unreadable")
+                return unreadable("AXProtectedContent", protectionStatus)
             }
             if role.localizedCaseInsensitiveContains("secure")
                 || subrole.localizedCaseInsensitiveContains("secure")

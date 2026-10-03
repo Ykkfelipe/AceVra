@@ -27,6 +27,15 @@ import {
 import { coded, createNativeLeaseOps } from "./protected-native-lease.js";
 import { classifyThrownFailure, failureHint } from "./transport-errors.js";
 
+/** 心跳上只有这些抛出失败表示"Helper 暂时不可达"，可以忽略；其余都是租约必死的契约失败。 */
+const HEARTBEAT_TRANSPORT_CODES = new Set([
+  "helper_disconnected",
+  "helper_exited",
+  "connection_closed",
+  "connection_generation_changed",
+  "timeout",
+]);
+
 /**
  * @param {object} deps
  * @param {(method: string, params: object, timeoutMs?: number) => Promise<any>} deps.helperCall
@@ -91,21 +100,82 @@ export function createProtectedForegroundController(deps) {
   /**
    * Heartbeat for the Helper's no-renewal safety window (`renew_lease`): a task that only thinks
    * for a while must not lose its lease (proven installed 78256d1f — a fixed 15 s lifetime turned
-   * any thinking gap into a reacquiring loop). Delivery failures are ignored here on purpose: the
-   * typed failure surfaces on the next real action, where recovery belongs. Never logs ids.
+   * any thinking gap into a reacquiring loop). It is also the propagation point for Helper-side
+   * termination (specs/computer-use.md "Helper-side termination must reach the authority within
+   * one heartbeat"): 实测 2026-10-02，用户按 Esc 后 Helper 立即以 interrupted 终止租约，但心跳把
+   * 拒绝结果整个丢弃，authority/UI 一直显示接管中，安全辉光不消失。现在收到针对本租约的明确
+   * 拒绝时，同一 tick 内 dropNative（释放 authority 租约，typed 终止码）；用户收回类代码同时
+   * 删除绑定，绝不在用户夺回后自动重新获取。传输类失败仍故意忽略：Helper 连不上不等于租约
+   * 已终止，恢复交给下一次动作的 generation fencing。Never logs ids.
+   *
+   * 修复依据（2026-10-03 实测，三次安静持有都在 29.4 s 熄灭辉光）：心跳曾把整个 binding 对象
+   * 当 owner_task 发出，Helper 门禁（validForegroundBrokerParams）每次以 bad_request 拒绝，
+   * 而 `.catch(() => undefined)` 把它当传输抖动吞掉——Helper 租约 15 s 静默死亡、keepalive
+   * 从未发出、authority 30 s 过期。现在 owner_task 用 binding.taskId；抛出的失败按类型分流：
+   * 只有传输类被忽略，契约类（bad_request / not_authorized …）同一跳以 typed code 结束原生
+   * 租约，使 UI 立即如实熄灭且原因可诊断（specs/computer-use.md "Heartbeat owner fields and
+   * contract failures"）。
    */
   const renewIntervalMs = deps.leaseRenewIntervalMs ?? 5_000;
   let renewTimer;
+  function keepAuthorityAlive(sessionId, binding, native) {
+    // 心跳确认 ⇒ 同一跳为 authority 的 active 记录续期（specs/computer-use.md "The authority
+    // lease record fails open with the same heartbeat"）。续期走既有活动 sideband：method
+    // "renew_lease" 由 authority 视为租约活性信号（callId = authority lease id），不进入会话
+    // 活动投影。投递失败只交给 authority 的 30 s 惰性过期兜底，绝不成为未处理的 rejection。
+    const authorityLeaseId = native.authorityLeaseId;
+    if (!authorityLeaseId || typeof leaseAuthority?.reportActivity !== "function") return;
+    void Promise.resolve(
+      leaseAuthority.reportActivity({
+        session: sessionId,
+        task: binding.taskId,
+        callId: authorityLeaseId,
+        method: "renew_lease",
+        phase: "completed",
+        at: now(),
+      }),
+    ).catch(() => undefined);
+  }
+  function endRefusedNative(sessionId, binding, code) {
+    if (isUserReclaimCode(code)) bindings.delete(sessionId);
+    if (isUserReclaimCode(code) || isNativeLeaseEndedCode(code)) {
+      void dropNative(binding, code).catch(() => undefined);
+    }
+  }
+  function renewOnce(sessionId, binding) {
+    // 应答只作用于发出时的那份原生租约：期间 act() 已重新获取的新租约不得被旧应答续期或结束。
+    const native = binding.native;
+    void helperCall(
+      "renew_lease",
+      { ...ownerParams(sessionId, binding.taskId), lease_id: native.helperLeaseId },
+      5_000,
+    ).then(
+      (result) => {
+        if (binding.native !== native) return;
+        if (result?.effect !== "refused") {
+          keepAuthorityAlive(sessionId, binding, native);
+          return;
+        }
+        endRefusedNative(
+          sessionId,
+          binding,
+          typeof result.code === "string" ? result.code : "invalid_lease",
+        );
+      },
+      (error) => {
+        if (binding.native !== native) return;
+        const failure = classifyThrownFailure(error);
+        if (HEARTBEAT_TRANSPORT_CODES.has(failure.code)) return;
+        // 契约类失败：续期不可能成功，原生租约必死；立即结束并带上原因，授权保留。
+        void dropNative(binding, failure.code).catch(() => undefined);
+      },
+    );
+  }
   function ensureRenewTimer() {
     if (renewTimer || !(renewIntervalMs > 0)) return;
     renewTimer = setInterval(() => {
       for (const [sessionId, binding] of bindings.entries()) {
-        if (!binding.native?.helperLeaseId) continue;
-        void helperCall(
-          "renew_lease",
-          { ...ownerParams(sessionId, binding), lease_id: binding.native.helperLeaseId },
-          5_000,
-        ).catch(() => undefined);
+        if (binding.native?.helperLeaseId) renewOnce(sessionId, binding);
       }
     }, renewIntervalMs);
     renewTimer.unref?.();

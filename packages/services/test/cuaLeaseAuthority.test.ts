@@ -204,3 +204,115 @@ test("CUA-4 activity is fenced per session, bounded, and ordered", () => {
   });
   assert.equal(authority.getSession("z"), undefined);
 });
+
+// 回归（实测 2026-10-02）：内核回收让 agent 绑定消失，release 永远不会发生，authority 的
+// active 记录与辉光常驻。规则：运行时心跳经活动 sideband（method "renew_lease"）续期；停跳
+// 超过窗口即惰性过期并撤销授权（specs/computer-use.md "The authority lease record fails open
+// with the same heartbeat"）。
+function keepaliveReport(authority: {
+  getStatus(): { leaseId: string; ownerSession: string } | undefined;
+}) {
+  const record = authority.getStatus();
+  return {
+    session: record!.ownerSession,
+    callId: record!.leaseId,
+    method: "renew_lease",
+    phase: "completed" as const,
+    at: 0,
+  };
+}
+
+test("active lease record fails open when runtime keepalives stop", async () => {
+  let clock = 1_000_000;
+  const authority = createLeaseAuthority({ now: () => clock });
+  const reservation = await authority.beginAcquire({ session: "s", task: "t" });
+  const active = await authority.commitAcquire(reservation.leaseId, "helper-lease-1", "req");
+  assert.equal(active.keepaliveAt, clock);
+
+  clock += 10_000;
+  authority.reportActivity(keepaliveReport(authority));
+  clock += 10_000;
+  assert.equal(authority.getStatus()?.state, "active", "keepalive within the window keeps it");
+
+  clock += 31_000;
+  assert.equal(authority.getStatus()?.state, "released");
+  assert.equal(authority.getLastTermination()?.reason, "runtime_heartbeat_lost");
+  assert.equal(
+    authority.takeover.grant({ session: "s", task: "t" }).state,
+    "none",
+    "stale-heartbeat expiry revokes the takeover grant like a user reclaim",
+  );
+});
+
+test("a stale active record no longer blocks the next acquire", async () => {
+  let clock = 1_000_000;
+  const authority = createLeaseAuthority({ now: () => clock });
+  const first = await authority.beginAcquire({ session: "s", task: "t1" });
+  await authority.commitAcquire(first.leaseId, "helper-lease-1", "req");
+  clock += 31_000;
+  const second = await authority.beginAcquire({ session: "s", task: "t2" });
+  assert.equal(second.state, "reserving");
+});
+
+test("keepalive after expiry never resurrects the record", async () => {
+  let clock = 1_000_000;
+  const authority = createLeaseAuthority({ now: () => clock });
+  const reservation = await authority.beginAcquire({ session: "s", task: "t" });
+  await authority.commitAcquire(reservation.leaseId, "helper-lease-1", "req");
+  clock += 31_000;
+  assert.equal(authority.getStatus()?.state, "released");
+  authority.reportActivity(keepaliveReport(authority));
+  assert.equal(authority.getStatus()?.state, "released");
+});
+
+test("renew_lease reports renew the lease without entering the activity projection", async () => {
+  let clock = 1_000_000;
+  const authority = createLeaseAuthority({ now: () => clock });
+  const reservation = await authority.beginAcquire({ session: "s", task: "t" });
+  await authority.commitAcquire(reservation.leaseId, "helper-lease-1", "req");
+  authority.reportActivity(keepaliveReport(authority));
+  assert.equal(authority.getSession("s"), undefined, "heartbeat is liveness, not session activity");
+});
+
+test("a renew_lease report from another lease id does not refresh the record", async () => {
+  let clock = 1_000_000;
+  const authority = createLeaseAuthority({ now: () => clock });
+  const reservation = await authority.beginAcquire({ session: "s", task: "t" });
+  await authority.commitAcquire(reservation.leaseId, "helper-lease-1", "req");
+  clock += 10_000;
+  authority.reportActivity({
+    session: "s",
+    callId: "not-this-lease",
+    method: "renew_lease",
+    phase: "completed",
+    at: 0,
+  });
+  clock += 21_000; // 31s since commit; the forged renew_lease must not have refreshed it
+  assert.equal(authority.getStatus()?.state, "released");
+});
+
+// 回归（2026-10-03 实测 split-brain）：UI 29 s 已显示释放，Helper 原生租约 50 s 仍存活。
+// 过期结束记录时必须经 Stop 同一路径结束 Helper 租约，且只发一次。
+test("keepalive expiry also ends the Helper lease, exactly once", async () => {
+  let clock = 1_000_000;
+  const released: Array<{ helperLeaseId?: string; ownerSession: string; ownerTask: string }> = [];
+  const authority = createLeaseAuthority({
+    now: () => clock,
+    releaseHelper: async (record) => {
+      released.push({
+        helperLeaseId: record.helperLeaseId,
+        ownerSession: record.ownerSession,
+        ownerTask: record.ownerTask,
+      });
+    },
+  });
+  const reservation = await authority.beginAcquire({ session: "s", task: "t" });
+  await authority.commitAcquire(reservation.leaseId, "helper-lease-1", "req");
+  clock += 31_000;
+  assert.equal(authority.getStatus()?.state, "released");
+  assert.equal(authority.getStatus()?.state, "released");
+  await Promise.resolve();
+  assert.deepEqual(released, [
+    { helperLeaseId: "helper-lease-1", ownerSession: "s", ownerTask: "t" },
+  ]);
+});

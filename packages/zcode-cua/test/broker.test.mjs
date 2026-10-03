@@ -75,6 +75,9 @@ describe("method registry", () => {
       "drag",
       "open_app",
       "workspace_confirm",
+      // 回归（A 用例实测）：运行时 5s 心跳 renew_lease 曾漏登记，被 not_authorized 拒绝且被
+      // 心跳静默吞掉，任何 >15s 的空窗（如 sleep 65）都会让独占租约过期、下一个动作被拒。
+      "renew_lease",
     ]) {
       assert.equal(isBrokerMethod(method), true);
       assert.equal(isReadOnlyBrokerMethod(method), false);
@@ -150,6 +153,16 @@ describe("server-side dispatch", () => {
   it("passes params through to the handler", async () => {
     const response = await dispatchRequest(backend, { method: "observe", params: { pid: 42 } });
     assert.deepEqual(response.result, { pid: 42, effect: "partial" });
+  });
+
+  it("routes the renew_lease heartbeat to its handler instead of refusing it", async () => {
+    // 回归：renew_lease 曾不在注册表里，客户端与服务端双闸都返回 not_authorized，
+    // 心跳静默失败，租约在 15s 软窗口后死亡（A 用例 sleep 65 后首次按键被拒）。
+    const response = await dispatchRequest(
+      { renew_lease: async (params) => ({ renewed: params.lease_id }) },
+      { method: "renew_lease", params: { lease_id: "lease-1" } },
+    );
+    assert.deepEqual(response, { ok: true, result: { renewed: "lease-1" } });
   });
 
   it("refuses a mutating method with not_authorized and never calls a handler", async () => {
