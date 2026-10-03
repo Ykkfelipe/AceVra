@@ -53,6 +53,7 @@ import {
   zcodeSessionModeSchema,
   zcodeSessionStatusSchema,
   zcodeSessionKindSchema,
+  zcodeCreatableSessionTaskTypeSchema,
   zcodeSessionGoalSchema,
   zcodeSessionGoalVerificationSchema,
   zcodeSessionGoalVerificationTimelineSchema,
@@ -1615,6 +1616,10 @@ export const zcodeSessionCreateParamsSchema = z
     // 动态工作流灰度：与 offPeakToolEnabled 同一
     // 模式——host 裁决后下发，缺省不下发 = 不注册工作流工具簇（fail-closed）。
     dynamicWorkflowEnabled: z.boolean().optional(),
+    // Personal Bot 对话的类型标签：只接受 zcodeCreatableSessionTaskTypes 中的值。
+    // 缺省 = interactive（既有行为不变）；外部类型（fork/subagent/workflow_child）
+    // 仍然是宿主内部派生产物，不能由调用方指定。
+    taskType: zcodeCreatableSessionTaskTypeSchema.optional(),
   })
   .strict();
 export type ZCodeSessionCreateParams = z.infer<typeof zcodeSessionCreateParamsSchema>;

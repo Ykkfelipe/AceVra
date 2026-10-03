@@ -7,14 +7,14 @@
 ## 1. Product rule for M1
 
 The user experiences **one persistent personal Bot**, not a team of agents and not a coding
-workspace. M1 establishes the *identity and boundaries* that make that possible, and a Bot section
+workspace. M1 establishes the _identity and boundaries_ that make that possible, and a Bot section
 in the app that is visibly separate from Coding Sessions.
 
 M1 ships:
 
 1. A persistent Bot identity, separate from any conversation.
 2. A Bot profile structure (name, avatar reference, style/persona descriptor).
-3. A persistent Bot conversation shell: the Bot owns *which* session is its conversation; the
+3. A persistent Bot conversation shell: the Bot owns _which_ session is its conversation; the
    session runtime owns the messages.
 4. Personal-memory interfaces with explicit write/read boundaries and **bounded retrieval**
    instead of injecting the whole store.
@@ -27,14 +27,14 @@ goals/ideas surfaces, Bot self-customization, or Cross-Mode wiring.
 
 ## 2. Ownership (one owner per piece of state)
 
-| State | Owner | Notes |
-| --- | --- | --- |
-| Bot identity + profile | `bot` module (single JSON document, single writer) | Never derived from a chat transcript. |
-| Bot conversation pointer (`sessionId`) | `bot` module | The pointer only. The Bot module never writes messages. |
-| Conversation messages / turns | CLI `AgentRuntime` → `SqliteSessionStore` | Unchanged ownership. The Bot module must not persist messages. |
-| Personal memory records | `bot` module | Separate document from identity; separate from Project (coding) Memory. |
-| Capability availability facts | Re-projected from existing capability sources | The Bot module declares the surface; it does not become a second registry. |
-| Bot workspace path / identity | `@zcode/shared` constant + `packages/services/src/paths.ts` helper | One canonical value so the host and the runtime agree. |
+| State                                  | Owner                                                              | Notes                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Bot identity + profile                 | `bot` module (single JSON document, single writer)                 | Never derived from a chat transcript.                                      |
+| Bot conversation pointer (`sessionId`) | `bot` module                                                       | The pointer only. The Bot module never writes messages.                    |
+| Conversation messages / turns          | CLI `AgentRuntime` → `SqliteSessionStore`                          | Unchanged ownership. The Bot module must not persist messages.             |
+| Personal memory records                | `bot` module                                                       | Separate document from identity; separate from Project (coding) Memory.    |
+| Capability availability facts          | Re-projected from existing capability sources                      | The Bot module declares the surface; it does not become a second registry. |
+| Bot workspace path / identity          | `@zcode/shared` constant + `packages/services/src/paths.ts` helper | One canonical value so the host and the runtime agree.                     |
 
 **Explicitly not the owner:** `packages/services/src/memory` (Project Memory for coding
 workspaces) and `packages/services/src/session` (desktop task-index shadow + automations). Personal
@@ -87,9 +87,9 @@ Rules:
 
 ```ts
 interface BotConversationShell {
-  workspacePath: string;        // dedicated Bot workspace, not a coding repo
-  workspaceIdentity: string;    // stable Bot identity key
-  sessionId: string | null;     // pointer to the Bot's conversation session
+  workspacePath: string; // dedicated Bot workspace, never a coding repo
+  workspaceKey: string; // workspaceIdentity?.trim() || workspacePath
+  sessionId: string | null; // pointer to the Bot's conversation session
   createdAt: number;
   updatedAt: number;
 }
@@ -97,8 +97,10 @@ interface BotConversationShell {
 
 Semantics:
 
-- The Bot workspace is dedicated: `{dataBaseDir}/.zcode/workspace/personal-bot`, identity
-  `personal-bot`. It is never a user repository.
+- The Bot workspace is dedicated: `{dataBaseDir}/.zcode/workspace/personal-bot`. It is never a
+  user repository. The M1 workspace is local and has no separate identity, so `workspaceKey`
+  equals `workspacePath`; a future remote Bot workspace would carry its remote identity here
+  without changing caller semantics.
 - `sessionId` is a **pointer**, set by `setConversationSession`. The module does not create
   sessions; it records which existing session the Bot surface resumed last.
 - Setting the same id twice is idempotent; setting `null` clears the pointer without touching
@@ -112,8 +114,15 @@ Semantics:
 
 ```ts
 type PersonalMemoryCategory =
-  | "person" | "project" | "goal" | "preference" | "routine"
-  | "place" | "decision" | "event" | "situation";
+  | "person"
+  | "project"
+  | "goal"
+  | "preference"
+  | "routine"
+  | "place"
+  | "decision"
+  | "event"
+  | "situation";
 
 interface PersonalMemoryRecord {
   id: string;
@@ -205,13 +214,13 @@ Rules:
 
 ## 10. Failure semantics summary
 
-| Failure | Behaviour |
-| --- | --- |
-| Bot documents missing | Create with defaults on first write; reads return defaults. |
-| Bot document unparseable | Surface a read error; keep the file; do not overwrite. |
-| Memory store empty | Retrieval returns empty selection; no context is injected. |
-| Conversation pointer stale | Surface clears the pointer and starts a new Bot conversation. |
-| Older CLI without `personal_bot` | Session is created as `interactive`; Bot UI still works. |
+| Failure                          | Behaviour                                                     |
+| -------------------------------- | ------------------------------------------------------------- |
+| Bot documents missing            | Create with defaults on first write; reads return defaults.   |
+| Bot document unparseable         | Surface a read error; keep the file; do not overwrite.        |
+| Memory store empty               | Retrieval returns empty selection; no context is injected.    |
+| Conversation pointer stale       | Surface clears the pointer and starts a new Bot conversation. |
+| Older CLI without `personal_bot` | Session is created as `interactive`; Bot UI still works.      |
 
 ## 11. Acceptance scenarios (M1)
 

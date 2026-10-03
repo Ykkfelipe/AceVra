@@ -8,6 +8,7 @@ import type {
   TraceContext,
 } from "../deps.js";
 import type { AgentTelemetryCausation } from "@zcode/contracts";
+import { isConversationalSessionTaskType } from "@zcode/contracts";
 import type { AgentRuntimeInternal } from "../internal.js";
 import {
   persistFallbackGoalSummaryTitle,
@@ -145,7 +146,7 @@ function shouldAttemptSessionTitleGeneration(
   if (!runtime.config.titleGeneration) return false;
   if (!runtime.sessionStore) return false;
   if (runtime.config.parentSessionId) return false;
-  if (runtime.config.taskType && runtime.config.taskType !== "interactive") return false;
+  if (!isConversationalSessionTaskType(runtime.config.taskType)) return false;
   if (runtime.turnNumber !== 0) return false;
   const normalizedInput = normalizeTitleInput(input);
   if (normalizedInput.length === 0) return false;
@@ -182,7 +183,11 @@ async function generateAndPersistSessionTitle(
   } = {},
 ): Promise<void> {
   const initialSession = await this.sessionStore?.getSession(this.sessionId);
-  if (!initialSession || initialSession.parentID || initialSession.taskType !== "interactive") {
+  if (
+    !initialSession ||
+    initialSession.parentID ||
+    !isConversationalSessionTaskType(initialSession.taskType)
+  ) {
     return;
   }
 
@@ -349,7 +354,9 @@ async function getSessionForGeneratedTitle(
   traceContext: TraceContext,
 ): Promise<SessionInfo | null> {
   const session = await this.sessionStore?.getSession(this.sessionId);
-  if (!session || session.parentID || session.taskType !== "interactive") return null;
+  if (!session || session.parentID || !isConversationalSessionTaskType(session.taskType)) {
+    return null;
+  }
   if (
     await shouldSkipGeneratedTitleForFirstQueryEdit.call(this, session, messageID, traceContext)
   ) {

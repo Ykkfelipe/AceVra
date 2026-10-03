@@ -39,8 +39,18 @@ export const SESSION_TASK_TYPES = [
   "workflow_child",
   "subagent_child",
   "nested_workflow_child",
+  // Personal Bot 的一次持续对话：归属专用 Bot workspace，不进 Coding Sessions 列表
+  // （TASK_LIST_SESSION_TYPES 不含它），也不参与 Project Memory。
+  "personal_bot",
 ] as const;
 export type SessionTaskType = (typeof SESSION_TASK_TYPES)[number];
+
+/** 主对话类任务：与 interactive 同样需要会话标题、目标摘要等「正常对话」行为。 */
+export function isConversationalSessionTaskType(
+  taskType: SessionTaskType | undefined,
+): boolean {
+  return taskType === undefined || taskType === "interactive" || taskType === "personal_bot";
+}
 
 export const SESSION_TITLE_SOURCES = ["default", "first_input", "generated", "custom"] as const;
 export type SessionTitleSource = (typeof SESSION_TITLE_SOURCES)[number];
