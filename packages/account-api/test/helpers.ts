@@ -8,7 +8,12 @@ import type { TaskServiceOptions } from "../src/tasks.js";
 import { createAdmissionLedger } from "../src/accounts.js";
 import { createClerkIdentityVerifier } from "../src/clerk.js";
 import { migrate } from "../src/migrate.js";
-import type { ClerkUserDirectory, ClerkUserProfile, SqlExecutor } from "../src/ports.js";
+import type {
+  ClerkUserDirectory,
+  ClerkUserProfile,
+  HumanSessionDirectory,
+  SqlExecutor,
+} from "../src/ports.js";
 
 /** A real PostgreSQL engine (WASM), so the production SQL is what the tests run. */
 export async function createTestDb(): Promise<SqlExecutor> {
@@ -31,13 +36,13 @@ const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString("base
 
 /** Signs a Clerk-shaped session JWT with the test key. */
 export function signSessionToken(
-  claims: { sub: string; azp?: string; expOffsetSec?: number },
+  claims: { sub: string; azp?: string; expOffsetSec?: number; sid?: string | null },
   key = privateKey,
 ): string {
   const now = Math.floor(Date.now() / 1000);
   const input = `${b64({ alg: "RS256", typ: "JWT", kid: "test" })}.${b64({
     sub: claims.sub,
-    sid: "sess_test",
+    ...(claims.sid === null ? {} : { sid: claims.sid ?? "sess_test" }),
     azp: claims.azp,
     iss: "https://clerk.test",
     iat: now,
@@ -52,6 +57,8 @@ export const foreignKey = generateKeyPairSync("rsa", { modulusLength: 2048 }).pr
 
 export async function createTestApp(options?: {
   users?: Record<string, ClerkUserProfile>;
+  /** Human sessions owned by Clerk user id, as the boundary reports them. */
+  sessions?: HumanSessionDirectory;
   authorizedParties?: string[];
   rateLimit?: { limit: number; windowMs: number };
   log?: (line: string) => void;
@@ -90,6 +97,7 @@ export async function createTestApp(options?: {
     db,
     verifier,
     directory,
+    sessions: options?.sessions,
     clock: () => clock.now,
     channel: options?.channel,
     tasks: options?.tasks,
@@ -104,12 +112,12 @@ export async function createTestApp(options?: {
     });
   /** Authenticated request as a Clerk user (admission decided by the ledger). */
   const as =
-    (sub: string) =>
+    (sub: string, sid?: string | null) =>
     async (path: string, init: RequestInit & { json?: unknown } = {}) =>
       app.request(path, {
         ...init,
         headers: {
-          authorization: `Bearer ${signSessionToken({ sub })}`,
+          authorization: `Bearer ${signSessionToken({ sub, ...(sid === undefined ? {} : { sid }) })}`,
           ...(init.json !== undefined ? { "content-type": "application/json" } : {}),
           ...(init.headers as Record<string, string> | undefined),
         },

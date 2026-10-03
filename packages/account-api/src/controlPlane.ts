@@ -3,13 +3,20 @@ import { createAccountService } from "./accounts.js";
 import { createDeviceChannel, type DeviceChannelOptions } from "./deviceChannel.js";
 import { createDeviceService } from "./devices.js";
 import { createPairingService } from "./pairing.js";
-import type { ClerkUserDirectory, HumanIdentityVerifier, SqlExecutor } from "./ports.js";
+import type {
+  ClerkUserDirectory,
+  HumanIdentityVerifier,
+  HumanSessionDirectory,
+  SqlExecutor,
+} from "./ports.js";
 import { createTaskService, type TaskServiceOptions } from "./tasks.js";
 
 export interface ControlPlaneDeps {
   db: SqlExecutor;
   verifier: HumanIdentityVerifier;
   directory: ClerkUserDirectory;
+  /** Human login sessions; omit to expose no session listing. */
+  sessions?: HumanSessionDirectory;
   clock?: () => number;
   channel?: DeviceChannelOptions;
   tasks?: TaskServiceOptions;
@@ -46,6 +53,7 @@ export function createControlPlane(deps: ControlPlaneDeps) {
       nodeGraceMs: deps.nodeGraceMs,
     }),
     pairings: createPairingService(deps.db, clock),
+    sessions: deps.sessions,
     tasks,
     onDeviceRevoked: (id) => channel.closeDevice(id, "revoked"),
     onTaskQueued: (id) => void channel.kick(id),

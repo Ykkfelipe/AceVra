@@ -156,3 +156,201 @@ test("a directory outage is a not_found, never a crash", async () => {
     reason: "not_found",
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Route level: ownership, current-session identity, and the boundary
+ * between "human login session" and "AceVra device".
+ * ------------------------------------------------------------------ */
+
+import { createTestApp } from "./helpers.js";
+import type { HumanSessionDirectory, HumanSessionRecord } from "../src/ports.js";
+
+const record = (id: string, over: Partial<HumanSessionRecord> = {}): HumanSessionRecord => ({
+  id,
+  status: "active",
+  createdAt: 1_699_000_000_000,
+  lastActiveAt: 1_700_000_000_000,
+  deviceType: null,
+  browserName: null,
+  country: null,
+  ...over,
+});
+
+/** A directory that knows several users' sessions, as Clerk would. */
+function multiOwnerDirectory(owned: Record<string, HumanSessionRecord[]>) {
+  const revoked: Array<{ user: string; session: string }> = [];
+  const directory: HumanSessionDirectory = {
+    listActiveSessions: async (clerkUserId) => owned[clerkUserId] ?? [],
+    revokeSession: async (clerkUserId, sessionId) => {
+      const found = (owned[clerkUserId] ?? []).find((s) => s.id === sessionId);
+      if (!found) return { ok: false, reason: "not_found" };
+      revoked.push({ user: clerkUserId, session: sessionId });
+      return { ok: true };
+    },
+  };
+  return { directory, revoked, owned };
+}
+
+const ME = { displayName: "Ada", avatarUrl: null, verifiedEmails: ["me@test"] };
+const OTHER = { displayName: "Bea", avatarUrl: null, verifiedEmails: ["other@test"] };
+const STRANGER = { displayName: "Cy", avatarUrl: null, verifiedEmails: ["stranger@test"] };
+
+/** An app where `me` and `other` are admitted and `stranger` is not. */
+async function appWith(directory: HumanSessionDirectory) {
+  const app = await createTestApp({
+    sessions: directory,
+    users: { user_me: ME, user_other: OTHER, user_stranger: STRANGER },
+  });
+  await app.ledger.approve({ email: "me@test" });
+  await app.ledger.approve({ email: "other@test" });
+  return app;
+}
+
+test("GET /v1/sessions lists only the caller's own sessions", async () => {
+  const { directory } = multiOwnerDirectory({
+    user_me: [
+      record("sess_1"),
+      record("sess_2", { deviceType: "Desktop", browserName: "Electron" }),
+    ],
+  });
+  const app = await appWith(directory);
+  const res = await app.as("user_me")("/v1/sessions");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { sessions: Array<Record<string, unknown>> };
+  assert.deepEqual(
+    body.sessions.map((s) => s.id),
+    ["sess_1", "sess_2"],
+  );
+});
+
+test("another account's sessions are never listed", async () => {
+  const { directory } = multiOwnerDirectory({
+    user_me: [record("sess_mine")],
+    user_other: [record("sess_theirs")],
+  });
+  const app = await appWith(directory);
+  const res = await app.as("user_other")("/v1/sessions");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { sessions: Array<{ id: string }> };
+  assert.deepEqual(
+    body.sessions.map((s) => s.id),
+    ["sess_theirs"],
+    "only its own, never the other account's",
+  );
+});
+
+test("the session this request authenticated with is marked current", async () => {
+  const { directory } = multiOwnerDirectory({
+    user_me: [record("sess_1"), record("sess_2")],
+  });
+  const app = await appWith(directory);
+  const res = await app.as("user_me", "sess_2")("/v1/sessions");
+  const body = (await res.json()) as { sessions: Array<{ id: string; current: boolean }> };
+  assert.deepEqual(
+    body.sessions.map((s) => [s.id, s.current]),
+    [
+      ["sess_1", false],
+      ["sess_2", true],
+    ],
+  );
+});
+
+test("a token with no sid marks nothing current rather than guessing", async () => {
+  const { directory } = multiOwnerDirectory({ user_me: [record("sess_1")] });
+  const app = await appWith(directory);
+  const res = await app.as("user_me", null)("/v1/sessions");
+  const body = (await res.json()) as { sessions: Array<{ current: boolean }> };
+  assert.equal(body.sessions.length, 1);
+  assert.equal(body.sessions[0]!.current, false);
+});
+
+test("revoking a session you own succeeds and removes it from the next list", async () => {
+  const { directory, revoked, owned } = multiOwnerDirectory({
+    user_me: [record("sess_1"), record("sess_2")],
+  });
+  const app = await appWith(directory);
+
+  const res = await app.as("user_me", "sess_1")("/v1/sessions/sess_2/revoke", { method: "POST" });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true });
+  assert.deepEqual(revoked, [{ user: "user_me", session: "sess_2" }]);
+
+  owned.user_me = [record("sess_1")];
+  const after = await app.as("user_me")("/v1/sessions");
+  const body = (await after.json()) as { sessions: Array<{ id: string }> };
+  assert.deepEqual(
+    body.sessions.map((s) => s.id),
+    ["sess_1"],
+  );
+});
+
+test("revoking another account's session is a non-disclosing 404", async () => {
+  const { directory, revoked } = multiOwnerDirectory({
+    user_me: [record("sess_mine")],
+    user_other: [record("sess_theirs")],
+  });
+  const app = await appWith(directory);
+
+  const foreign = await app.as("user_me", "sess_mine")("/v1/sessions/sess_theirs/revoke", {
+    method: "POST",
+  });
+  assert.equal(foreign.status, 404);
+  assert.deepEqual(await foreign.json(), { error: "not_found" });
+  assert.deepEqual(revoked, [], "no revoke was attempted on another account's session");
+
+  // The owner can still revoke it, proving the 404 was about ownership, not absence.
+  const owner = await app.as("user_other", "sess_theirs")("/v1/sessions/sess_theirs/revoke", {
+    method: "POST",
+  });
+  assert.equal(owner.status, 200);
+  assert.deepEqual(revoked, [{ user: "user_other", session: "sess_theirs" }]);
+});
+
+test("an unknown session id is indistinguishable from a foreign one", async () => {
+  const { directory, revoked } = multiOwnerDirectory({ user_me: [record("sess_1")] });
+  const app = await appWith(directory);
+  const res = await app.as("user_me")("/v1/sessions/sess_nope/revoke", { method: "POST" });
+  assert.equal(res.status, 404);
+  assert.deepEqual(await res.json(), { error: "not_found" });
+  assert.deepEqual(revoked, []);
+});
+
+test("both session routes require an authenticated, admitted account", async () => {
+  const { directory } = multiOwnerDirectory({ user_me: [record("sess_1")] });
+  const app = await appWith(directory);
+  assert.equal((await app.me()).status, 401);
+  assert.equal((await app.app.request("/v1/sessions")).status, 401);
+  assert.equal(
+    (await app.app.request("/v1/sessions/sess_1/revoke", { method: "POST" })).status,
+    401,
+  );
+  // Authenticated but never admitted: 403, and still no session list.
+  const denied = await app.as("user_stranger")("/v1/sessions");
+  assert.equal(denied.status, 403);
+});
+
+test("revoke is rate-limited tighter than reads", async () => {
+  const { directory } = multiOwnerDirectory({ user_me: [record("sess_1")] });
+  const app = await appWith(directory);
+  const statuses: number[] = [];
+  for (let i = 0; i < 12; i += 1) {
+    statuses.push(
+      (await app.as("user_me")(`/v1/sessions/sess_${i}/revoke`, { method: "POST" })).status,
+    );
+  }
+  assert.equal(statuses.includes(429), true, "repeated revokes are throttled");
+  // Reads are unaffected by the revoke limiter.
+  assert.equal((await app.as("user_me")("/v1/sessions")).status, 200);
+});
+
+test("a session id is not a device id and a device id is not a session id", async () => {
+  // Signing in does not create a device, and a machine cannot be revoked through the
+  // session routes. The two registries share no identifiers and no routes.
+  const { directory } = multiOwnerDirectory({ user_me: [record("sess_1")] });
+  const app = await appWith(directory);
+  assert.equal(
+    (await app.as("user_me")("/v1/sessions/dev_1/revoke", { method: "POST" })).status,
+    404,
+  );
+  assert.equal((await app.as("user_me")("/v1/devices/sess_1")).status, 404);
+});
