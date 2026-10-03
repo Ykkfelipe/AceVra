@@ -901,6 +901,9 @@ export function createConversationV4Gateway(
         });
       }
     },
+    publishCrossModeOrigin: (sessionId, origin) => {
+      context.v4Gateway?.updateCrossModeOrigin(sessionId, origin);
+    },
     discardSharedContext: async (sessionId, contextId) => {
       const store = context.deps.sessionStore;
       if (!store?.transitionSharedContextImport) return false;
@@ -1901,6 +1904,7 @@ export function createConversationV4Gateway(
           running: subagents.running,
         },
         ...(source.sharedContextImport ? { sharedContextImport: source.sharedContextImport } : {}),
+        ...(source.crossModeOrigin ? { crossModeOrigin: source.crossModeOrigin } : {}),
         sourceEventSeq,
       };
     },

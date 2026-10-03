@@ -1002,6 +1002,14 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
     },
     [handleSelectTaskInChat],
   );
+  // Cross-Mode「Work on this」accepted 后切到新的 Coding 会话：复用运行历史同一条导航
+  // （补开/激活目标 workspace → 选中会话 → 切回 chat 主视图）。Bot 选择不受影响。
+  const handleOpenCrossModeCodingSession = useCallback(
+    (target: { workspacePath: string; workspaceIdentity?: string }, sessionId: string) => {
+      handleSelectTaskInChat(target.workspacePath, sessionId, target.workspaceIdentity);
+    },
+    [handleSelectTaskInChat],
+  );
   // 工作流运行历史「查看实例」：先回到发起它的会话（侧栏页只在 chat 视图里可见），再开实例详情页。
   const handleOpenSavedWorkflowRun = useCallback(
     (params: SavedWorkflowsOpenRunParams) => {
@@ -1600,7 +1608,8 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
 
   return (
     // Bot 工作区控制器常驻挂载、仅在 Bot 视图可见时读取；侧栏与主区共用同一份选择/历史（spec §16.2）。
-    <BotWorkspaceProvider active={Boolean(botActive)}>
+    // onOpenBot 同时让 Coding 会话的「Continue with Ace」回链可用（spec cross-mode-bot-to-coding §2）。
+    <BotWorkspaceProvider active={Boolean(botActive)} onOpenBot={handleOpenBot}>
       <DesktopWindowFrame
         title={`ZCode / ${getPathLeaf(workspaceAbsPath)}`}
         showHeader
@@ -1932,6 +1941,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                                 isMacFullscreen={isMacFullscreen}
                                 isWindowsDesktop={isWindowsDesktop}
                                 reserveLeadingWindowControls={!isSidebarVisible}
+                                onOpenCodingSession={handleOpenCrossModeCodingSession}
                               />
                             </ScopedErrorBoundary>
                           </main>

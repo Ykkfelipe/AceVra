@@ -8,7 +8,12 @@ import {
   type TurnFileChangeSummary,
   type TurnId,
 } from "@zcode/contracts";
-import type { ConversationSnapshot } from "@zcode/shared/zcode-protocol-v4";
+import {
+  CROSS_MODE_ORIGIN_SESSION_ENTRY_TYPE,
+  parseCrossModeOriginEntry,
+  projectCrossModeOriginState,
+  type ConversationSnapshot,
+} from "@zcode/shared/zcode-protocol-v4";
 import {
   goalVerificationEntriesFromSessionEntries,
   synthesizeEventsFromMessages,
@@ -21,6 +26,8 @@ interface ConversationMaterializationSource {
   messages: MessageWithParts[];
   /** shared_context 正文仍是 provider-only；这里只下发脱敏的 handover metadata。 */
   sharedContextImport?: ConversationSnapshot["sharedContextImport"];
+  /** Cross-Mode 来源（entry 原样存确认快照；这里只下发只读投影）。 */
+  crossModeOrigin?: ConversationSnapshot["crossModeOrigin"];
   /** 只有成功读取 session_target 后才存在；显式 null 也是持久 authority。 */
   target?: SessionGoal | null;
 }
@@ -44,6 +51,22 @@ interface PersistedConversationMaterializationStore {
     sessionID: import("@zcode/contracts").SessionId;
     type?: string;
   }): Promise<SessionEntryInfo[]>;
+}
+
+/**
+ * `v4/cross_mode_origin` → 只读投影。一个会话至多一次交接；坏数据（版本未知/快照篡改）
+ * 按「没有来源」处理，不能拖垮整个冷快照。
+ */
+function crossModeOriginFromEntries(
+  entries: readonly SessionEntryInfo[],
+): ConversationSnapshot["crossModeOrigin"] {
+  for (const entry of entries) {
+    if (entry.type !== CROSS_MODE_ORIGIN_SESSION_ENTRY_TYPE) continue;
+    const parsed = parseCrossModeOriginEntry(entry.data);
+    const origin = parsed ? projectCrossModeOriginState(parsed) : null;
+    if (origin) return origin;
+  }
+  return undefined;
 }
 
 /**
@@ -111,11 +134,13 @@ export async function loadPersistedConversationMaterialization(input: {
           }
         : { title: session.title.trim() }
       : undefined;
+  const crossModeOrigin = crossModeOriginFromEntries(entries);
   return {
     goalVerificationEntries: goalVerificationEntriesFromSessionEntries(entries),
     memoryEvents: [...input.memoryEvents],
     messages,
     ...(sharedContextImport ? { sharedContextImport } : {}),
+    ...(crossModeOrigin ? { crossModeOrigin } : {}),
     target,
   };
 }

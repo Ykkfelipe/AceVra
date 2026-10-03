@@ -137,6 +137,7 @@ import { SessionSubscriptionErrorPanel } from "@/v4/SessionSubscriptionErrorPane
 import { ConversationTimeline } from "@/v4/ConversationTimeline.js";
 import { SessionTaskArtifactSection } from "@/v4/TaskArtifactCard.js";
 import { ConversationShareImportNotice } from "@/v4/ConversationShareImportNotice.js";
+import { CrossModeOriginNotice } from "@/v4/CrossModeOriginNotice.js";
 import { ConversationShareConfirmationDock } from "@/v4/ConversationShareConfirmationDock.js";
 import { ConversationShareSuccessDock } from "@/v4/ConversationShareSuccessDock.js";
 import {
@@ -5040,6 +5041,9 @@ export function SessionPane({
                     onOpenFileLink={onOpenFileLink}
                     onOpenCodeViewer={onOpenCodeViewer}
                   />
+                ) : snapshot?.crossModeOrigin ? (
+                  // Cross-Mode 来源（只读元数据）；与分享导入互斥：交接会话从不是导入副本。
+                  <CrossModeOriginNotice origin={snapshot.crossModeOrigin} />
                 ) : null
               }
               emptyState={

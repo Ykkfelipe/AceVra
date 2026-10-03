@@ -28,6 +28,7 @@ import {
   zcodeProtocolMcpServerSchema,
 } from "../zcode-protocol/index.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
+import { crossModeHandoffCreateSchema, crossModeOriginStateSchema } from "./cross-mode-origin.js";
 import { submissionExecutionTargetSchema } from "../execution-target-protocol.js";
 import { zcodeCreatableSessionTaskTypeSchema } from "../zcode-protocol-legacy-types.js";
 export type { SharedContextRef } from "./shared-context-ref.js";
@@ -73,6 +74,10 @@ export const commandPayloadSchemas = {
     // Personal Bot 对话的类型标签（只接受 zcodeCreatableSessionTaskTypes）。
     // 缺省 = interactive；旧 CLI 丢弃该键，会话退化为普通 interactive（降级而非损坏）。
     taskType: zcodeCreatableSessionTaskTypeSchema.optional(),
+    // Cross-Mode 交接（docs/specs/cross-mode-bot-to-coding.md §4）：已确认的冻结快照。
+    // 与 firstInput / taskType 互斥（首条输入由 CLI 从 packet 渲染；目的会话恒为普通会话）。
+    // 旧 CLI 丢弃该键：ACK 不带 crossModeOrigin，桌面据此判定交接未被执行。
+    crossModeHandoff: crossModeHandoffCreateSchema.optional(),
   }),
   // 父会话由 envelope.sessionId 指定；服务端从父 record 派生完整运行配置。
   // firstInput 存在时，child 创建完成后立即启动首条普通输入；缺省则保持空副屏。
@@ -402,6 +407,8 @@ export const commandResultSchema = z.discriminatedUnion("type", [
         messageId: z.string().optional(),
       })
       .optional(),
+    // 仅 createSession 携带 crossModeHandoff 且准入成功时存在（目的会话上的持久来源投影）。
+    crossModeOrigin: crossModeOriginStateSchema.optional(),
   }),
   z.object({
     type: z.literal("resolveInteraction"),

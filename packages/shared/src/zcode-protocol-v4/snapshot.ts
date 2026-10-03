@@ -3,6 +3,7 @@
 // A 区更新语义 = 字段级整体替换（state.updated），绝不深合并——深合并是错乱之母。
 import { z } from "zod";
 import { sharedContextImportStateSchema } from "./shared-context-import.js";
+import { crossModeOriginStateSchema } from "./cross-mode-origin.js";
 export { sharedContextImportStateSchema } from "./shared-context-import.js";
 import { conversationInputDispatchSchema, conversationInputIntentSchema } from "./input-intent.js";
 import {
@@ -483,6 +484,8 @@ export const conversationSnapshotSchema = z.object({
   meta: sessionMetaStateSchema.default({ title: "", titleSource: "default" }),
   // Additive：旧 CLI/旧快照不带该字段时仍按普通会话处理。
   sharedContextImport: sharedContextImportStateSchema.optional(),
+  // Additive：Cross-Mode 交接创建的会话的持久来源（只读元数据，不产生 row / revision）。
+  crossModeOrigin: crossModeOriginStateSchema.optional(),
   config: sessionConfigStateSchema,
   // 持久化稳定事实供 live 客户端识别一次性提示；旧快照缺字段时不触发。
   modelTransition: sessionModelTransitionSchema.nullable().default(null),

@@ -24,7 +24,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { BotConversationShell } from "@zcode/services";
+import { toBotConversationRef, type BotConversationShell } from "@zcode/services";
+import type { HandoffObjectRef } from "@zcode/shared/cross-mode";
+import type { CrossModeOriginState } from "@zcode/shared/zcode-protocol-v4";
+import {
+  botConversationIdOfOrigin,
+  CrossModeOriginNavigationContext,
+  type CrossModeOriginNavigation,
+} from "@/crossMode/CrossModeOriginNavigation.js";
 import { useBotHome, useBotService } from "@/hooks/useBotHome.js";
 import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { logger } from "@/logger.js";
@@ -51,6 +58,11 @@ export interface BotWorkspaceValue {
   shellStatus: BotWorkspaceShellStatus;
   workspacePath: string | null;
   selectedSessionId: string | null;
+  /**
+   * 选中对话在 Cross-Mode 对象图里的引用（Bot 模块 `toBotConversationRef` 投影）；
+   * 草稿或 id 不合契约时为 null——调用方不得自行拼装引用。
+   */
+  conversationRef: HandoffObjectRef | null;
   rows: readonly BotConversationRow[];
   historyStatus: BotHistoryStatus;
   selectConversation: (sessionId: string) => void;
@@ -72,10 +84,15 @@ function errorMessage(error: unknown): string {
 interface BotWorkspaceProviderProps {
   /** Bot 主视图是否可见；不可见时不发起读取，但保留已加载的选择与历史以便切回。 */
   active: boolean;
+  /**
+   * 切到 Bot 主视图。提供时，Coding 会话可经 CrossModeOriginNavigation 回到来源对话
+   * （回链 = 显式选择 + 切视图，与侧栏点选同一条指针写入路径）。
+   */
+  onOpenBot?: () => void;
   children: ReactNode;
 }
 
-export function BotWorkspaceProvider({ active, children }: BotWorkspaceProviderProps) {
+export function BotWorkspaceProvider({ active, onOpenBot, children }: BotWorkspaceProviderProps) {
   const botService = useBotService();
   const home = useBotHome(active);
   const [shell, setShell] = useState<BotConversationShell | null>(null);
@@ -181,6 +198,9 @@ export function BotWorkspaceProvider({ active, children }: BotWorkspaceProviderP
 
   const selectConversation = useCallback(
     (sessionId: string) => {
+      // 修复：Bot 视图从未打开过时（例如从 Coding 的「Continue with Ace」进入），首次指针读取
+      // 尚未完成；若不标记已初始化，迟到的读取会用旧指针覆盖这次显式选择。显式选择优先。
+      selectionInitializedRef.current = true;
       if (selectedRef.current === sessionId) return;
       applySelection(sessionId);
       void persistPointer(sessionId);
@@ -244,6 +264,11 @@ export function BotWorkspaceProvider({ active, children }: BotWorkspaceProviderP
     [runHistoryRefresh],
   );
 
+  const conversationRef = useMemo(
+    () => (shell ? toBotConversationRef({ ...shell, sessionId: selectedSessionId }) : null),
+    [selectedSessionId, shell],
+  );
+
   const value = useMemo<BotWorkspaceValue>(
     () => ({
       available: botService !== undefined,
@@ -251,6 +276,7 @@ export function BotWorkspaceProvider({ active, children }: BotWorkspaceProviderP
       shellStatus,
       workspacePath,
       selectedSessionId,
+      conversationRef,
       rows,
       historyStatus,
       selectConversation,
@@ -263,6 +289,7 @@ export function BotWorkspaceProvider({ active, children }: BotWorkspaceProviderP
     }),
     [
       botService,
+      conversationRef,
       historyStatus,
       home,
       refreshHistory,
@@ -279,7 +306,27 @@ export function BotWorkspaceProvider({ active, children }: BotWorkspaceProviderP
     ],
   );
 
-  return <BotWorkspaceContext.Provider value={value}>{children}</BotWorkspaceContext.Provider>;
+  const available = botService !== undefined;
+  const originNavigation = useMemo<CrossModeOriginNavigation | null>(() => {
+    if (!onOpenBot || !available) return null;
+    return {
+      canOpenOrigin: (origin: CrossModeOriginState) => botConversationIdOfOrigin(origin) !== null,
+      openOrigin: (origin: CrossModeOriginState) => {
+        const conversationId = botConversationIdOfOrigin(origin);
+        if (!conversationId) return;
+        selectConversation(conversationId);
+        onOpenBot();
+      },
+    };
+  }, [available, onOpenBot, selectConversation]);
+
+  return (
+    <BotWorkspaceContext.Provider value={value}>
+      <CrossModeOriginNavigationContext.Provider value={originNavigation}>
+        {children}
+      </CrossModeOriginNavigationContext.Provider>
+    </BotWorkspaceContext.Provider>
+  );
 }
 
 export function useBotWorkspace(): BotWorkspaceValue {

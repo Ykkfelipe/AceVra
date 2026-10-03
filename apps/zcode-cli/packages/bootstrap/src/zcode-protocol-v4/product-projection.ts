@@ -639,6 +639,16 @@ export class ProductProjection {
     };
   }
 
+  /**
+   * Cross-Mode 来源的只读种子（与 sharedContextImport 同一纪律）：静态元数据，
+   * 不产生 row、不递增 revision/seq；同一 handoff 重复补种幂等。
+   */
+  seedCrossModeOrigin(source: ConversationSnapshot["crossModeOrigin"] | null | undefined): void {
+    if (!source) return;
+    if (this.snapshot.crossModeOrigin?.handoffId === source.handoffId) return;
+    this.snapshot = { ...this.snapshot, crossModeOrigin: source };
+  }
+
   seedUsage(seed: SessionUsageSeed): void {
     const current = this.snapshot.usage;
     const currentContextWindow = current.contextWindow;

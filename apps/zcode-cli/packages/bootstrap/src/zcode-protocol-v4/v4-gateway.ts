@@ -174,6 +174,8 @@ interface PersistedEventsLoadResult {
   subagentsSeed?: SessionSubagentsSeed;
   /** shared_context 不生成可见 row；只把脱敏 handover metadata 下发。 */
   sharedContextImport?: ConversationSnapshot["sharedContextImport"];
+  /** Cross-Mode 来源（`v4/cross_mode_origin` 的只读投影）。 */
+  crossModeOrigin?: ConversationSnapshot["crossModeOrigin"];
   /** memory eventStore 取快照时已包含的 raw sequence 水位。 */
   sourceEventSeq?: number;
   /** 与本次历史事件使用同一容量的种子；null 表示已查询但没有历史水位。 */
@@ -628,6 +630,19 @@ export class ConversationV4Gateway {
     const publisher = this.publishers.get(sessionId);
     if (!publisher) return;
     publisher.seedSharedContextImport(source);
+    for (const [routeKey, state] of this.flushStates) {
+      if (state.sessionId === sessionId) this.scheduleFlush(routeKey, state, publisher);
+    }
+  }
+
+  /** Cross-Mode 来源已持久化后的在线补种；publisher 尚不存在时由冷订阅从 entry 恢复。 */
+  updateCrossModeOrigin(
+    sessionId: string,
+    source: NonNullable<ConversationSnapshot["crossModeOrigin"]>,
+  ): void {
+    const publisher = this.publishers.get(sessionId);
+    if (!publisher) return;
+    publisher.seedCrossModeOrigin(source);
     for (const [routeKey, state] of this.flushStates) {
       if (state.sessionId === sessionId) this.scheduleFlush(routeKey, state, publisher);
     }
@@ -2998,6 +3013,7 @@ export class ConversationV4Gateway {
       if (loaded.sharedContextImport) {
         latestPublisher.seedSharedContextImport(loaded.sharedContextImport);
       }
+      latestPublisher.seedCrossModeOrigin(loaded.crossModeOrigin);
       await this.seedPublisherUsage(
         sessionId,
         latestPublisher,
@@ -3033,6 +3049,7 @@ export class ConversationV4Gateway {
     if (loaded.sharedContextImport) {
       publisher.seedSharedContextImport(loaded.sharedContextImport);
     }
+    publisher.seedCrossModeOrigin(loaded.crossModeOrigin);
     if (loaded.subagentsSeed) publisher.seedSubagents(loaded.subagentsSeed);
     // 同次恢复的种子先应用，再补 live buffer；较新的使用量和选模事件始终获胜。
     if (loaded.usageSeed) publisher.seedUsage(loaded.usageSeed);

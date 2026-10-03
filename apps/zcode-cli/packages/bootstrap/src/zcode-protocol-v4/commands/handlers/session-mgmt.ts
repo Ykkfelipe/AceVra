@@ -5,6 +5,7 @@ import type {
   CommandEnvelope,
   CommandPayloadMap,
   CommandResult,
+  CrossModeOriginState,
 } from "@zcode/shared/zcode-protocol-v4";
 import { mapAttachmentRefsToTurnAttachments } from "../attachment-refs.js";
 import { inputIntentMetadata } from "../input-intent.js";
@@ -19,6 +20,10 @@ import {
   resolveSubmittedExecutionState,
 } from "./session-flow.js";
 import { applySubmittedExecutionTarget } from "./execution-target-selection.js";
+import {
+  preflightCrossModeCodingHandoff,
+  renderCrossModeHandoffFirstInput,
+} from "../../../app/cross-mode-coding-handoff.js";
 
 /**
  * createSession：回落面最后一项的原生化。
@@ -40,6 +45,20 @@ async function createSession(
   const payload = envelope.payload as CommandPayloadMap["createSession"];
   if (!host.createSessionRecord) {
     throw new Error("v4 createSession requires host.createSessionRecord capability");
+  }
+  // Cross-Mode 交接：所有校验都在建 record 之前完成——失败不留下任何会话（spec §5 规则 1）。
+  const handoff = payload.crossModeHandoff;
+  if (handoff) {
+    if (payload.firstInput || payload.taskType) {
+      throw new V4InputAdmissionRejectedError(
+        "proto.invalidPayload",
+        "crossModeHandoff cannot be combined with firstInput or taskType",
+      );
+    }
+    const preflight = preflightCrossModeCodingHandoff(handoff.confirmation);
+    if (!preflight.ok) {
+      throw new V4InputAdmissionRejectedError("proto.invalidPayload", preflight.message);
+    }
   }
   // 完全空的 firstInput 必须在创建 record 前拒绝，避免失败请求遗留无效 deferred session。
   if (
@@ -70,6 +89,14 @@ async function createSession(
       });
     }
   }
+  // Cross-Mode 交接：准入 + 物化 + origin，必须先于首条 turn（turn 失败时来源仍在）。
+  let crossModeOrigin: CrossModeOriginState | undefined;
+  let requestedFirstInput = payload.firstInput;
+  if (handoff) {
+    const accepted = await acceptHandoffIntoCreatedSession(host, sessionId, payload, handoff);
+    crossModeOrigin = accepted.origin;
+    requestedFirstInput = { text: accepted.firstInputText };
+  }
   let firstInput:
     | {
         delivery: "startNow" | "queue" | "guide";
@@ -77,26 +104,26 @@ async function createSession(
         messageId?: string;
       }
     | undefined;
-  if (payload.firstInput) {
+  if (requestedFirstInput) {
     // 附件命令面：firstInput.attachments（AttachmentRef → TurnAttachment）随首条发送。
     const record = requireRecord(host, sessionId);
-    applySubmittedExecutionTarget(record, payload.firstInput.executionTarget);
+    applySubmittedExecutionTarget(record, requestedFirstInput.executionTarget);
     const admission = commandAdmissionOf(envelope);
     const durableAdmission =
       (await host.admitInputCommand?.(envelope, sessionId, admission)) ?? null;
     try {
       const attachments = await mapAttachmentRefsToTurnAttachments(
         record.app,
-        payload.firstInput.attachments,
+        requestedFirstInput.attachments,
       );
       const intent = inputIntentMetadata(envelope, {
-        text: payload.firstInput.text,
+        text: requestedFirstInput.text,
         requestedDelivery: "startNow",
-        attachmentRefs: payload.firstInput.attachments,
-        ...resolveSubmittedExecutionState(record, payload.firstInput),
+        attachmentRefs: requestedFirstInput.attachments,
+        ...resolveSubmittedExecutionState(record, requestedFirstInput),
       });
       const started = await startPromptTurn(host, record, {
-        content: payload.firstInput.text,
+        content: requestedFirstInput.text,
         inputId: envelope.commandId,
         intent,
         ...(attachments ? { attachments } : {}),
@@ -125,10 +152,95 @@ async function createSession(
           });
         }
       }
-      throw error;
+      // 交接会话已物化并带有来源：首轮失败不能把整个交接报成失败（会话与来源已存在，
+      // 报错只会让桌面以为什么都没发生）。ACK 仍 accepted（带 origin、不带 input），失败留日志。
+      if (crossModeOrigin) {
+        host.logger?.warn?.("v4 createSession cross-mode first turn failed; origin kept", {
+          error: error instanceof Error ? error.message : String(error),
+          handoffId: crossModeOrigin.handoffId,
+          sessionId,
+        });
+      } else {
+        throw error;
+      }
     }
   }
-  return { type: "createSession", sessionId, ...(firstInput ? { input: firstInput } : {}) };
+  return {
+    type: "createSession",
+    sessionId,
+    ...(firstInput ? { input: firstInput } : {}),
+    ...(crossModeOrigin ? { crossModeOrigin } : {}),
+  };
+}
+
+/**
+ * 在刚建好的 record 上执行 Cross-Mode 入站交接。拒绝时关闭这个空会话再抛错：
+ * ACK rejected 的同时不留下孤儿会话。成功后把只读来源推给在线投影（冷订阅从 entry 恢复）。
+ */
+async function acceptHandoffIntoCreatedSession(
+  host: V4CommandCoreHost,
+  sessionId: string,
+  payload: CommandPayloadMap["createSession"],
+  handoff: NonNullable<CommandPayloadMap["createSession"]["crossModeHandoff"]>,
+): Promise<{ origin: CrossModeOriginState; firstInputText: string }> {
+  const record = requireRecord(host, sessionId);
+  const closeCreatedSession = async () => {
+    try {
+      await host.closeSession?.(record.app.sessionId);
+    } catch (closeError) {
+      host.logger?.warn?.("v4 createSession cross-mode cleanup failed", {
+        error: closeError instanceof Error ? closeError.message : String(closeError),
+        sessionId,
+      });
+    }
+  };
+  if (!record.app.acceptCrossModeHandoff) {
+    await closeCreatedSession();
+    throw new V4InputAdmissionRejectedError(
+      "fault.command.capabilityUnsupported",
+      "this runtime cannot accept cross-mode handoffs",
+    );
+  }
+  // 修复：首轮需要可用模型。若在物化/写来源之后才发现，会留下一个带来源却没有交接正文的会话
+  // （实机隔离 HOME 复现：「Session model must be provider-qualified」）；所以在准入前先校验，
+  // record 仍是 deferred，关闭即无痕。
+  try {
+    await host.ensureModelReady?.(record);
+    // 与首轮 admission 同一个解析：会话没有可用的 provider-qualified 选择时在这里就失败。
+    resolveSubmittedExecutionState(record, {});
+  } catch (error) {
+    await closeCreatedSession();
+    throw error;
+  }
+  const workspacePath = record.workspace.workspacePath;
+  const outcome = await record.app.acceptCrossModeHandoff({
+    confirmation: handoff.confirmation,
+    destination: {
+      workspacePath,
+      // workspaceId 是 identity 优先的身份键；与路径不同即为远程 identity。
+      ...(payload.workspaceId !== workspacePath ? { workspaceIdentity: payload.workspaceId } : {}),
+    },
+  });
+  if (!outcome.ok) {
+    await closeCreatedSession();
+    throw new V4InputAdmissionRejectedError(
+      outcome.reason === "invalid_input"
+        ? "proto.invalidPayload"
+        : "fault.command.crossModeHandoffRejected",
+      outcome.message,
+    );
+  }
+  record.persistence = "immediate";
+  host.publishCrossModeOrigin?.(sessionId, outcome.origin);
+  host.logger?.info?.("v4 createSession accepted cross-mode handoff", {
+    handoffId: outcome.origin.handoffId,
+    sessionId,
+    sourceMode: outcome.origin.sourceMode,
+  });
+  return {
+    origin: outcome.origin,
+    firstInputText: renderCrossModeHandoffFirstInput(outcome.packet),
+  };
 }
 
 /**
