@@ -64,6 +64,13 @@ export { BOT_CAPABILITY_DOMAINS } from "./domain/capabilities.js";
 
 export { BotStoreCorruptError, isBotStoreCorruptError } from "./app/ports.js";
 
+/**
+ * Cross-Mode 采用点：Bot 对话引用（`{ kind: "conversation", id }`），类型来自冻结的
+ * `@zcode/shared/cross-mode` 契约。Bot 不创建 handoff 记录，也不实现执行端口。
+ */
+export { toBotConversationRef } from "./domain/handoff.js";
+export type { HandoffObjectRef } from "@zcode/shared/cross-mode";
+
 /** 身份 + 档案的读取结果；两者同属 identity 文档，与对话状态无关。 */
 export interface BotIdentityView {
   identity: BotIdentity;
