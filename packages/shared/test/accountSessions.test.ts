@@ -162,3 +162,10 @@ test("activity fields are optional in the body and become null, never a guess", 
   assert.equal(parsed?.sessions[0]?.browserName, null);
   assert.equal(parsed?.sessions[0]?.country, null);
 });
+
+test("an unreadable list is distinguishable from an empty one", () => {
+  // `sessions: []` means "you have no other logins". An unavailable flag means "we
+  // could not check". Collapsing them would show a confident, wrong security summary.
+  assert.equal(parseAccountSessions({ sessions: [] })?.unavailable, undefined);
+  assert.deepEqual(parseAccountSessions({ sessions: [] })?.sessions, []);
+});

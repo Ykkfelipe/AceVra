@@ -192,6 +192,13 @@ export interface IAccountPlatform extends IRemoteProcessService {
   resetDeviceIdentity(): Promise<AccountDevicesView>;
   renameDevice(id: string, displayName: string): Promise<AccountDevicesView>;
   revokeDevice(id: string): Promise<AccountDevicesView>;
+  /**
+   * Human login sessions for the signed-in account. A session is a login, not a
+   * device; the current one is marked by the backend and has no revoke control.
+   */
+  listSessions(): Promise<AccountSessionsView>;
+  /** Ends one other session. The current session is ended by `signOut()` instead. */
+  revokeSession(id: string): Promise<AccountSessionRevokeResult>;
   /** Engineering-only raw process runner UI; never true in packaged builds. */
   engineeringTools(): Promise<boolean>;
   /** Agent-started tasks to attach to their conversation card (M2F). Never a task fact. */
@@ -237,6 +244,8 @@ export const AccountChannels = {
   DeviceRename: "acevra-account:device-rename",
   DeviceRevoke: "acevra-account:device-revoke",
   DeviceResetIdentity: "acevra-account:device-reset-identity",
+  SessionsList: "acevra-account:sessions-list",
+  SessionRevoke: "acevra-account:session-revoke",
   EngineeringTools: "acevra-account:engineering-tools",
   /** main → main renderer */
   ViewChanged: "acevra-account:view-changed",
@@ -275,6 +284,12 @@ export interface AccountSession {
 
 export interface AccountSessionsView {
   sessions: AccountSession[];
+  /**
+   * True when the list could not be read at all. An empty list and an unreadable one
+   * are different facts: "you have no other sessions" versus "we could not check", and
+   * only the second is worth a retry.
+   */
+  unavailable?: boolean;
 }
 
 export type AccountSessionRevokeResult =

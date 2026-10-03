@@ -68,6 +68,8 @@ export function createDesktopPlatform(options: {
       renameDevice: (id, name) => window.zcode.account.renameDevice(id, name),
       revokeDevice: (id) => window.zcode.account.revokeDevice(id),
       resetDeviceIdentity: () => window.zcode.account.resetDeviceIdentity(),
+      listSessions: () => window.zcode.account.listSessions(),
+      revokeSession: (id) => window.zcode.account.revokeSession(id),
       engineeringTools: () => window.zcode.account.engineeringTools(),
       onViewChanged: (callback) => window.zcode.account.onViewChanged(callback),
       onAgentTaskStarted: (callback) => window.zcode.account.onAgentTaskStarted(callback),
