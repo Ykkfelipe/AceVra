@@ -333,7 +333,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
     : undefined;
   const tabs = useTabStore((state) => state.tabs);
   const activateTab = useTabStore((state) => state.activateTab);
-  const closeTab = useTabStore((state) => state.closeTab);
   const expandedWorkspacePaths = useTabStore((state) => state.expandedWorkspacePaths);
   const toggleWorkspaceExpanded = useTabStore((state) => state.toggleWorkspaceExpanded);
   const reorderWorkspaceTabs = useTabStore((state) => state.reorderWorkspaceTabs);
@@ -1395,7 +1394,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                               tabId: tab.id,
                                             })}
                                             activateTab={activateTab}
-                                            closeTab={closeTab}
                                             toggleWorkspaceExpanded={toggleWorkspaceExpanded}
                                             onSelectTask={onSelectTask}
                                             onStartDraftInWorkspace={onStartDraftInWorkspace}

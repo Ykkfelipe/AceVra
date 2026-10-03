@@ -527,6 +527,13 @@ export const TID_V4_WORKSPACE_HOOK_PENDING_BANNER = "v4-workspace-hook-pending-b
 export const TID_V4_WORKSPACE_HOOK_PENDING_REVIEW = "v4-workspace-hook-pending-review";
 /** v4 工作区 Hook 待审核提示条「忽略」按钮 */
 export const TID_V4_WORKSPACE_HOOK_PENDING_DISMISS = "v4-workspace-hook-pending-dismiss";
+/** 本地项目目录不可用时，替代 composer 显示在底部 dock 的提示容器 */
+export const TID_UNAVAILABLE_WORKSPACE_NOTICE = "unavailable-workspace-notice";
+/** 目录不可用提示中的「打开文件夹」按钮 */
+export const TID_UNAVAILABLE_WORKSPACE_NOTICE_OPEN_FOLDER =
+  "unavailable-workspace-notice-open-folder";
+/** 目录不可用提示中的「移除项目」按钮 */
+export const TID_UNAVAILABLE_WORKSPACE_NOTICE_REMOVE = "unavailable-workspace-notice-remove";
 /** v4 composer 容器 */
 export const TID_V4_COMPOSER = "v4-composer";
 /** v4 composer 文本输入 */

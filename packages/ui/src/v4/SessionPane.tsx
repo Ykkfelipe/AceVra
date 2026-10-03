@@ -305,6 +305,11 @@ export interface SessionPaneProps {
   rootSessionId?: string;
   /** subagent 右侧详情等观察视图：不显示 composer/input，也不发送行内编辑类命令。 */
   readOnly?: boolean;
+  /**
+   * readOnly 时替代 composer 显示在底部 dock 的说明（例如本地项目目录不可用）。
+   * 非 readOnly 时忽略；缺省时 readOnly 维持原样不渲染 dock。
+   */
+  readOnlyComposerNotice?: ReactNode;
   /** 观察视图的显式例外：允许文件摘要恢复 workspace，但不开放会话编辑能力。 */
   allowWorkspaceFileRewind?: boolean;
   /** 框选副屏：保留普通 composer/tools，但隐藏并禁止 edit/retry/fork/goal。 */
@@ -526,6 +531,7 @@ export function SessionPane({
   openTrigger,
   rootSessionId,
   readOnly = false,
+  readOnlyComposerNotice,
   allowWorkspaceFileRewind = false,
   selectionSideChat = false,
   activeSelectionSideChatSessionId = null,
@@ -4681,7 +4687,11 @@ export function SessionPane({
     />
   );
   const pendingGuideProjection = snapshot ? projectPendingGuideQueue(snapshot.queue) : null;
-  const conversationBottomDockContent = readOnly ? null : shareActive && sessionId ? (
+  // 根因：readOnly 过去直接让 dock 为空，目录不可用时 composer 无声消失。
+  // 宿主只在 readOnly 由 workspace 不可用导致时下发说明；其他观察视图仍为空 dock。
+  const conversationBottomDockContent = readOnly ? (
+    (readOnlyComposerNotice ?? null)
+  ) : shareActive && sessionId ? (
     shareInSelectionStage ? (
       <ConversationShareSelectionDock
         selectedCount={selectedShareRowIds.size}
