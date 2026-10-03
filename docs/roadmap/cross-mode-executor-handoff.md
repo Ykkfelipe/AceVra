@@ -142,3 +142,56 @@ future Coding → Bot executor plugs in beside this one.
 | Bootstrap | `app/cross-mode-handoff-executor.ts` (new), `app/cross-mode-handoff-service.ts` (new), `app/create-app.ts`, `app/types.ts`, `zcode-protocol-v4/commands/handlers/cross-mode-handoff.ts` (new), `handlers/index.ts` |
 | Tests | `bootstrap/test/cross-mode-handoff.test.ts` (new), `bootstrap/test/cross-mode-multitask-integration.test.ts` (rewritten to drive production) |
 | Scripts | `apps/zcode-cli/scripts/cross-mode-handoff-live-acceptance.mjs` (new) |
+
+## Review record: independent verification (2026-10-03)
+
+Reviewed on a clean worktree from `fe214c2e70576a5a2b243e0a84a94bee0695510d`
+(baseline `ccfbe09`; frozen refs `feature/cross-mode@b5b4ca1`,
+`feature/multitask-m2@024183c`; the integration worktree itself untouched).
+Verdict: **accepted — `fe214c2` is the frozen Cross-Mode → Multitask executor
+milestone head.** No blocking defects. What follows is for the next Cross-Mode
+planning round (after Personal Bot reaches its own freeze point); nothing here
+changes this milestone.
+
+Independently re-verified:
+
+- **Ownership**: the frozen admission service stays the sole writer of
+  handoff records / retries / returns (`handoff_flow_already_admitted`,
+  `handoff_flow_already_returned` guards); the Multitask adoption adapter
+  diffs 0 lines vs the baseline; Workflow/M2 still owns run confirmation
+  (Multitask inherits `alwaysAsk: true`), lifecycle, cancel/resume, journal
+  and evidence — the executor only calls `scheduleTools`/`executeTools`, the
+  same `executor.executeSchedule` path as model tool calls. No duplicate
+  session/workspace/run state introduced.
+- **Harness vs `ccfbe09`**: no assertion removed or weakened; several
+  strengthened (deny path now also asserts `rejectionReason`; `returnPolicy:
+  "none"` now also asserts the record stays `accepted`). The
+  `multitaskAvailable:false` simulation moved from "tool not registered" to a
+  host-boundary `TOOL_NOT_FOUND` result — verified equivalent to the real
+  registry-miss error shape (`tool_not_found` from `call-runner.ts`) on the
+  same executor path.
+- **Gate**: live allow + deny both PASS in an isolated HOME; deny leaves the
+  run catalog empty; insufficient permission is rejected at the adapter floor
+  with zero gate prompts (host untouched, asserted in unit tests).
+- **Lifecycle / return**: accepted runs get the correct
+  `{kind:"multitask-run"}` backlink; stopped runs are never auto-returned
+  (wiring completes only on `status === "completed"`) and stay resumable with
+  the backlink intact; the completed/partial/cancelled/failed/none mapping
+  table holds (partial never upgrades); return attaches at most once.
+- **Frozen contracts**: `packages/shared/src/cross-mode` diffs **0 lines** vs
+  `b5b4ca1`; every multitask-m2 file present at `024183c` diffs **0 lines**
+  vs `fe214c2`; the adoption adapter is untouched by the milestone.
+- **Re-runs (clean worktree, mise Node 24.14.0)**: root `tsc -b` clean;
+  oxlint 0 errors; architecture `--changed` 0 violations; bootstrap
+  cross-mode 12/12, shared cross-mode 39/39, multitask suites 23/23; turbo
+  CLI build 16/16; desktop-agent bundle staged; committed live-acceptance
+  driver PASS (allow + `--deny`) with self-isolated HOME.
+
+### Non-blocking follow-ups (accepted as-is; deliberately not fixed here)
+
+| # | Finding | Ownership |
+| --- | --- | --- |
+| F1 | Root `pnpm fmt:check` fails on 46 files — pre-existing repo-wide debt (see the 43-file note in `cross-mode-multitask-integration-handoff.md`); this milestone added one new failing doc (this file) and extended another already-failing one, so the "oxfmt clean on touched files" claim above holds for code files only | docs hygiene / repo-wide formatting pass |
+| F2 | Rejected submissions keep the binding and reuse toolCall id `handoff-<handoffId>` on retry, so a future retry would re-journal events under the same id; unreachable via protocol today (no retry command) — retry affordances should consider per-attempt ids | executor (bootstrap), together with the Cross-Mode retry affordance |
+| F3 | Admission store, bindings, confirmations and the run→handoff index are in-memory only; records do not survive restart (already listed under "What remains") | Cross-Mode (M2 scope) |
+| F4 | Auto-return wiring fires only on `completed`; failed/stopped runs never auto-return even though the canonical mapping handles `failed` — failed-run returns need a future UI/retry surface | Cross-Mode return path |
