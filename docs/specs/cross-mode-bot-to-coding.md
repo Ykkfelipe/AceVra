@@ -118,10 +118,13 @@ sequenceDiagram
 Rules:
 
 - Validation failures happen **before** the session record exists (no leaked sessions).
+- Model readiness is checked on the still-deferred record **before** admission; if no model is usable
+  the record is closed and nothing is persisted.
 - If the intake rejects after the record exists, the handler closes the session and rejects the ACK.
 - The origin is persisted **before** the first turn starts, so it exists even if the turn fails.
-- A failure to start the first turn after acceptance keeps the session and origin (the user can resend);
-  the ACK reports the input failure as today.
+- A failure to start the first turn after acceptance keeps the session and origin: the ACK is still
+  `accepted` with `crossModeOrigin` and without `input` (logged at warn), so the desktop opens the
+  session instead of reporting a handoff that did in fact happen.
 
 ## 6. Failure semantics
 

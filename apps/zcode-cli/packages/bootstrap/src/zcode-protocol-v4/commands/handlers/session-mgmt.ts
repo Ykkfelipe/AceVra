@@ -152,7 +152,17 @@ async function createSession(
           });
         }
       }
-      throw error;
+      // 交接会话已物化并带有来源：首轮失败不能把整个交接报成失败（会话与来源已存在，
+      // 报错只会让桌面以为什么都没发生）。ACK 仍 accepted（带 origin、不带 input），失败留日志。
+      if (crossModeOrigin) {
+        host.logger?.warn?.("v4 createSession cross-mode first turn failed; origin kept", {
+          error: error instanceof Error ? error.message : String(error),
+          handoffId: crossModeOrigin.handoffId,
+          sessionId,
+        });
+      } else {
+        throw error;
+      }
     }
   }
   return {
@@ -190,6 +200,14 @@ async function acceptHandoffIntoCreatedSession(
       "fault.command.capabilityUnsupported",
       "this runtime cannot accept cross-mode handoffs",
     );
+  }
+  // 修复：首轮需要可用模型。若在物化/写来源之后才发现，会留下一个带来源却没有交接正文的会话；
+  // 所以在准入前先校验（record 仍是 deferred，关闭即无痕）。
+  try {
+    await host.ensureModelReady?.(record);
+  } catch (error) {
+    await closeCreatedSession();
+    throw error;
   }
   const workspacePath = record.workspace.workspacePath;
   const outcome = await record.app.acceptCrossModeHandoff({

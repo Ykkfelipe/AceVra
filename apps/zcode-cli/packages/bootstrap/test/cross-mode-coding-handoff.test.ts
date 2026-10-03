@@ -160,7 +160,11 @@ interface FakeRecord {
   persistence: "immediate" | "deferred";
 }
 
-function fakeHost(options: { intake?: (input: unknown) => Promise<unknown> }) {
+function fakeHost(options: {
+  intake?: (input: unknown) => Promise<unknown>;
+  modelReady?: () => Promise<void>;
+  sendFails?: boolean;
+}) {
   const created: string[] = [];
   const closed: string[] = [];
   const published: CrossModeOriginState[] = [];
@@ -180,6 +184,7 @@ function fakeHost(options: { intake?: (input: unknown) => Promise<unknown> }) {
           },
           ...(options.intake ? { acceptCrossModeHandoff: options.intake } : {}),
           sendInput: async (input: { text: string }) => {
+            if (options.sendFails) throw new Error("provider unavailable");
             sentTexts.push(input.text);
             return { kind: "started", completion: Promise.resolve() };
           },
@@ -190,6 +195,7 @@ function fakeHost(options: { intake?: (input: unknown) => Promise<unknown> }) {
       });
       return { sessionId };
     },
+    ...(options.modelReady ? { ensureModelReady: options.modelReady } : {}),
     closeSession: async (sessionId: string) => {
       closed.push(sessionId);
     },
@@ -321,4 +327,47 @@ test("cold materialization restores crossModeOrigin from the persisted entry", a
   assert.deepEqual(loaded.crossModeOrigin?.sourceRefs, [
     { kind: "conversation", id: "sess_bot_1" },
   ]);
+});
+
+test("createSession rejects before admission when no model is ready; nothing is persisted", async () => {
+  let intakeCalls = 0;
+  const fake = fakeHost({
+    intake: async () => {
+      intakeCalls += 1;
+      return { ok: false, reason: "rejected", message: "unreachable" };
+    },
+    modelReady: async () => {
+      throw new Error("no model selection");
+    },
+  });
+  await assert.rejects(
+    NATIVE_HANDLERS.createSession(
+      fake.host,
+      createEnvelope({ workspaceId: "/repo/app", crossModeHandoff: { confirmation: confirm() } }),
+    ),
+    /no model selection/,
+  );
+  assert.equal(intakeCalls, 0);
+  assert.deepEqual(fake.closed, ["sess_1"]);
+});
+
+test("a first-turn failure after acceptance keeps the session and returns the origin", async () => {
+  const confirmation = confirm();
+  const fake = fakeHost({
+    sendFails: true,
+    intake: async (input) => {
+      const { deps } = intakeDeps([]);
+      return acceptCrossModeCodingHandoff(
+        (input as { confirmation: HandoffConfirmation }).confirmation,
+        { ...deps, sessionId: "sess_1" },
+      );
+    },
+  });
+  const result = (await NATIVE_HANDLERS.createSession(
+    fake.host,
+    createEnvelope({ workspaceId: "/repo/app", crossModeHandoff: { confirmation } }),
+  )) as { crossModeOrigin?: CrossModeOriginState; input?: unknown };
+  assert.equal(result.crossModeOrigin?.handoffId, confirmation.handoffId);
+  assert.equal(result.input, undefined);
+  assert.deepEqual(fake.closed, []);
 });
