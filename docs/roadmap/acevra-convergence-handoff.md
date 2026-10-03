@@ -135,10 +135,10 @@ Phase B are still outstanding.
 Two further accepted milestones converged on top of Phase A and are now the
 **canonical baseline future agents must branch from**:
 
-| Item     | Value                                                                                     |
-| -------- | ----------------------------------------------------------------------------------------- |
-| Branch   | `integration/acevra-convergence` — local == `origin` @ **`8c61cc4`** (pushed, verified)   |
-| Worktree | `/Users/felipemore/Projects/AceVra-convergence`                                           |
+| Item     | Value                                                                                                                                                                   |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Branch   | `integration/acevra-convergence` — local == `origin` @ **`8c61cc4`** (pushed, verified)                                                                                 |
+| Worktree | `/Users/felipemore/Projects/AceVra-convergence`                                                                                                                         |
 | Rule     | **Frozen.** No feature work directly on this branch; new milestones branch from `8c61cc4` in fresh worktrees unless an isolated branch has a different integration plan |
 
 ## History since Phase A (`58f1b0b`)
@@ -189,11 +189,11 @@ Both accepted milestones are verified ancestors of `8c61cc4`
 
 ## Reconciliation conflicts (resolved, both features kept)
 
-| File                        | Resolution                                                                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WorkspaceSidebar.tsx`      | 79f5db3's `useWorkspaceTabRemoval` refactor wins; Bot's rail already replaced the footer that used `openSettingsTab`.                                                  |
-| `WorkspaceShellLayout.tsx`  | Bot's view gating kept; 79f5db3's `readOnlyComposerNotice` prop added to `V4WorkspaceChatArea` (Coding only; never rendered in the Bot view).                          |
-| `locales`, `SessionPane`    | Auto-merged; en-US/zh-CN parity intact.                                                                                                                               |
+| File                       | Resolution                                                                                                                                    |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WorkspaceSidebar.tsx`     | 79f5db3's `useWorkspaceTabRemoval` refactor wins; Bot's rail already replaced the footer that used `openSettingsTab`.                         |
+| `WorkspaceShellLayout.tsx` | Bot's view gating kept; 79f5db3's `readOnlyComposerNotice` prop added to `V4WorkspaceChatArea` (Coding only; never rendered in the Bot view). |
+| `locales`, `SessionPane`   | Auto-merged; en-US/zh-CN parity intact.                                                                                                       |
 
 ## Phase A2 verification (all on `8c61cc4`)
 
@@ -216,3 +216,47 @@ user-requested screenshot, internal screenshot kept tool-only; zero new
 - Bot conversation rename/delete: deferred (out of V2 scope).
 - Cross-Mode "Work on this": deferred; the header actions slot
   (`bot-conversation-actions`) stays reserved.
+
+---
+
+# Phase B1 — Bot → Coding "Work on this" converged (2026-10-03)
+
+| Item          | Value                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| Feature       | `feature/bot-work-on-this` @ **`38c1930`** (frozen, pushed; 8 commits on `191b1bc`)          |
+| Merge         | `merge: feature/bot-work-on-this@38c1930` (`--no-ff`) on `integration/acevra-convergence`    |
+| Conflicts     | none — the feature branched from `191b1bc`; merged tree is byte-identical to `38c1930`       |
+| Spec / record | `docs/specs/cross-mode-bot-to-coding.md`, `docs/roadmap/cross-mode-bot-to-coding-handoff.md` |
+
+## Combined gates (on the merge)
+
+Root typecheck pass; CLI turbo typecheck 21/21; lint 0 errors / 89 warnings (baseline); architecture
+0 violations; `git diff --check` clean. Tests: shared 81/81 (Cross-Mode 43/43), UI 292/292 (Work on this
+
+- Bot V2 21/21), bootstrap 67/67 (session origin + personal-bot task-list/session-kind + Cross-Mode
+  handoffs 32/32), CLI build aliases 2/2, desktop 124/124, services 335/336 (the known pre-existing Codex
+  `sendTurn` failure, also on release).
+
+## Convergence live smoke (AceVra Dev from this worktree)
+
+Existing Ace conversation → Work on this → writable local project, Ace reply unticked → Start in Coding:
+new `interactive` session, first turn contains exactly objective + note + the one ticked message (the
+unticked reply recorded `included:false, inclusion:"user"` and absent; no memory/profile words);
+`v4/cross_mode_origin` names the Ace conversation, handoff and Coding session; Continue with Ace restored
+the same conversation; `conversation.json` byte-identical; task index +1 (the Coding session only), Bot
+rows unchanged (1, the historical stale row).
+
+## Recorded separately (not fixed in this merge)
+
+1. **Dev/prod session-database isolation.** The AceVra dev app's CLI writes sessions to
+   `~/.zcode/cli/db/db.sqlite`, shared with the installed ZCode app; only host settings are isolated under
+   `~/.zcode-acevra-dev`. Needs an infrastructure fix before extensive further live testing.
+2. **Handoff session model selection.** A Work on this session starts on the CLI runtime default
+   (observed: individual-plan GLM-5.3 · Max), not the Start-plan GLM-5.3-Flash · Low chosen in the target
+   project's composer, so the first turn can hit the plan's usage limit. Handoff, origin and context are
+   unaffected; decide whether the handoff should carry the target project's current model selection.
+
+## Next milestone
+
+Coding → Bot return with a concise work summary, built on the durable origin (`sourceRefs` → Ace
+conversation, `handoffId`, `resultRef` → Coding session); no second store needed.
