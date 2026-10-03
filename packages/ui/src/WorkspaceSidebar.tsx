@@ -361,7 +361,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
   const commandCenterShortcutLabel = useShortcutCommandLabel("openCommandCenter");
   const tabs = useTabStore((state) => state.tabs);
   const activateTab = useTabStore((state) => state.activateTab);
-  const closeTab = useTabStore((state) => state.closeTab);
   const openSettingsTab = useTabStore((state) => state.openSettingsTab);
   const expandedWorkspacePaths = useTabStore((state) => state.expandedWorkspacePaths);
   const toggleWorkspaceExpanded = useTabStore((state) => state.toggleWorkspaceExpanded);
@@ -1530,7 +1529,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebarComponent({
                                               tabId: tab.id,
                                             })}
                                             activateTab={activateTab}
-                                            closeTab={closeTab}
                                             toggleWorkspaceExpanded={toggleWorkspaceExpanded}
                                             onSelectTask={onSelectTask}
                                             onStartDraftInWorkspace={onStartDraftInWorkspace}

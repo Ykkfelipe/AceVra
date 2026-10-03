@@ -72,6 +72,8 @@ interface V4WorkspaceChatAreaProps {
   /** Prompt 模板埋点当前仅覆盖 Desktop；Web / 手机远控保留 UI 行为但不触发该事件。 */
   isDesktop?: boolean;
   readOnly?: boolean;
+  /** shell workspace 只读时替代 composer 的说明（本地目录不可用）；pane 自身只读时不显示。 */
+  readOnlyComposerNotice?: ReactNode;
   /** Settings 等覆盖层打开时为 false，隐藏 Pane 不得消费一次性 Composer 请求。 */
   foregroundEnabled?: boolean;
   remoteSessionId?: string;
@@ -144,6 +146,7 @@ export function V4WorkspaceChatArea({
   workspaceIdentity,
   isDesktop = false,
   readOnly = false,
+  readOnlyComposerNotice,
   foregroundEnabled = true,
   remoteSessionId,
   sessionId,
@@ -269,6 +272,7 @@ export function V4WorkspaceChatArea({
       ...(remoteSessionId ? { remoteSessionId } : {}),
       isDesktop,
       readOnly,
+      readOnlyComposerNotice,
       sessionId: primaryPaneSessionId,
       // primaryPaneSessionId 在 active task 被 split pane 接管时会刻意置空，
       // 辅助对话划词路由仍需保留 shell 真正的 active task id。
@@ -317,6 +321,7 @@ export function V4WorkspaceChatArea({
       remoteSessionId,
       isDesktop,
       readOnly,
+      readOnlyComposerNotice,
       primaryPaneSessionId,
       activeSelectionSideChatSessionId,
       provider,

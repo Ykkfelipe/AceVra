@@ -56,6 +56,7 @@ import {
   type WorkbenchSessionDragPayload,
 } from "@/v4/workbenchDragDrop.js";
 import { registerWorkbenchPointerDropTarget } from "@/v4/workbenchPointerDragDrop.js";
+import { resolvePaneReadOnlyComposerNotice } from "@/v4/paneReadOnlyComposerNotice.js";
 import {
   acquireSessionsIndex,
   releaseSessionsIndex,
@@ -258,6 +259,8 @@ export interface WorkbenchShellBinding {
   /** Prompt 模板埋点当前仅覆盖 Desktop。 */
   isDesktop?: boolean;
   readOnly?: boolean;
+  /** shell workspace 只读时替代 composer 的说明；只下发给展示 shell workspace 的 pane。 */
+  readOnlyComposerNotice?: ReactNode;
   sessionId: string | null;
   /** Shell 当前真正激活的 task；split pane 接管 active task 时不等于 primary sessionId。 */
   activeSessionId?: string | null;
@@ -511,10 +514,14 @@ export function WorkbenchLeafPane({
   const sessionId = isPrimary
     ? (primaryBinding?.sessionId ?? shell.sessionId)
     : (binding?.sessionId ?? null);
-  const readOnly = Boolean(
-    (isPrimary ? primaryBinding?.readOnly : binding?.readOnly) ||
-    (isShellWorkspace && shell.readOnly),
-  );
+  const bindingReadOnly = Boolean(isPrimary ? primaryBinding?.readOnly : binding?.readOnly);
+  const readOnly = bindingReadOnly || Boolean(isShellWorkspace && shell.readOnly);
+  const readOnlyComposerNotice = resolvePaneReadOnlyComposerNotice({
+    isShellWorkspace,
+    shellReadOnly: Boolean(shell.readOnly),
+    bindingReadOnly,
+    notice: shell.readOnlyComposerNotice,
+  });
   const shouldUseShellStatusPanel = isShellWorkspace;
   const paneSearchResultHighlightRequest =
     sessionId === shell.searchResultHighlightRequest?.taskId
@@ -548,6 +555,7 @@ export function WorkbenchLeafPane({
         <SessionPane
           paneId={paneId}
           readOnly={readOnly}
+          readOnlyComposerNotice={readOnlyComposerNotice}
           sessionId={sessionId}
           openTrigger={isPrimary ? "sidebar" : "split"}
           activeSelectionSideChatSessionId={resolvePaneActiveSelectionSideChatSessionId(

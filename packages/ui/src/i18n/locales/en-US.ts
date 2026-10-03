@@ -1296,6 +1296,10 @@ const enUS: Record<string, string> = {
   "workspace.addNewWorkspace": "Add new workspace",
   "workspace.startFromScratch": "Start from scratch",
   "workspace.openFolder": "Open folder",
+  "workspace.unavailableNotice.title": "This project's folder can't be found",
+  "workspace.unavailableNotice.description":
+    "Task history is still readable, but new messages need the folder. Restore it and restart the app to keep working here.",
+  "workspace.unavailableNotice.removeProject": "Remove project",
   "workspace.openPluginsSettings": "Plugin Marketplace",
   "workspace.backToWorkspace": "Back to workspace",
   "workspace.noActiveForNewTask": "There is no available workspace yet. Open a workspace first.",
