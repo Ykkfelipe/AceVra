@@ -40,9 +40,10 @@ test("lists only active sessions for the requested user", async () => {
   ]);
   const listed = await directory.listActiveSessions("user_me");
   assert.deepEqual(
-    listed.map((s) => s.id),
+    listed.sessions.map((s) => s.id),
     ["sess_a"],
   );
+  assert.equal(listed.partial, false);
 });
 
 test("the user id always comes from the caller of record, never from the record", async () => {
@@ -67,7 +68,8 @@ test("reports only activity Clerk actually provided, never a fabricated device",
       // latestActivity is optional in Clerk's model: absent must read as "unknown".
     }),
   ]);
-  const [plain] = await directory.listActiveSessions("user_me");
+  const { sessions: plainSessions } = await directory.listActiveSessions("user_me");
+  const [plain] = plainSessions;
   assert.deepEqual(plain, {
     id: "sess_plain",
     status: "active",
@@ -91,7 +93,8 @@ test("reports only activity Clerk actually provided, never a fabricated device",
       } as never,
     }),
   ]);
-  const [detail] = await withActivity.listActiveSessions("user_me");
+  const { sessions: detailSessions } = await withActivity.listActiveSessions("user_me");
+  const [detail] = detailSessions;
   assert.ok(detail, "session is listed");
   assert.equal(detail.deviceType, "Desktop");
   assert.equal(detail.browserName, "Electron");
@@ -109,7 +112,7 @@ test("only genuinely active sessions are listed, whatever the query returned", a
     session({ id: "sess_expired", userId: "user_me", status: "expired" }),
     session({ id: "sess_future", userId: "user_me", status: "somethingNewInClerk" }),
   ]);
-  const listed = await directory.listActiveSessions("user_me");
+  const { sessions: listed } = await directory.listActiveSessions("user_me");
   assert.deepEqual(
     listed.map((s) => s.id),
     ["sess_ok"],
@@ -143,7 +146,7 @@ test("an unknown session id is indistinguishable from one owned by someone else"
   assert.deepEqual(revoked, []);
 });
 
-test("a directory outage is a not_found, never a crash", async () => {
+test("a lookup outage is a not_found, so an unreachable Clerk never leaks existence", async () => {
   const directory = createSessionDirectory({
     list: async () => ({ data: [] }),
     get: async () => {
@@ -155,6 +158,21 @@ test("a directory outage is a not_found, never a crash", async () => {
     ok: false,
     reason: "not_found",
   });
+});
+
+test("a revoke failure is NOT reported as not_found", async () => {
+  // Deliberately different from the lookup case. By the time we revoke, ownership is
+  // already proven, so an outage means "we could not end it" — reporting not_found
+  // would tell the user their other session is gone when it may still be live. This
+  // propagates so the route answers 503, which the client shows as retryable.
+  const directory = createSessionDirectory({
+    list: async () => ({ data: [] }),
+    get: async () => ({ userId: "user_me" }),
+    revoke: async () => {
+      throw new Error("clerk unreachable");
+    },
+  });
+  await assert.rejects(() => directory.revokeSession("user_me", "sess_a"), /unreachable/);
 });
 
 /* ------------------------------------------------------------------ *
@@ -180,7 +198,10 @@ const record = (id: string, over: Partial<HumanSessionRecord> = {}): HumanSessio
 function multiOwnerDirectory(owned: Record<string, HumanSessionRecord[]>) {
   const revoked: Array<{ user: string; session: string }> = [];
   const directory: HumanSessionDirectory = {
-    listActiveSessions: async (clerkUserId) => owned[clerkUserId] ?? [],
+    listActiveSessions: async (clerkUserId) => ({
+      sessions: owned[clerkUserId] ?? [],
+      partial: false,
+    }),
     revokeSession: async (clerkUserId, sessionId) => {
       const found = (owned[clerkUserId] ?? []).find((s) => s.id === sessionId);
       if (!found) return { ok: false, reason: "not_found" };
@@ -345,12 +366,95 @@ test("revoke is rate-limited tighter than reads", async () => {
 
 test("a session id is not a device id and a device id is not a session id", async () => {
   // Signing in does not create a device, and a machine cannot be revoked through the
-  // session routes. The two registries share no identifiers and no routes.
+  // session routes. Asserted against routes that exist, so a passing 404 means "this
+  // registry does not know that id" rather than "there is no such route".
   const { directory } = multiOwnerDirectory({ user_me: [record("sess_1")] });
   const app = await appWith(directory);
+
+  // A device id offered to the session revoke route: the directory does not own it.
   assert.equal(
     (await app.as("user_me")("/v1/sessions/dev_1/revoke", { method: "POST" })).status,
     404,
   );
-  assert.equal((await app.as("user_me")("/v1/devices/sess_1")).status, 404);
+
+  // A session id offered to real device routes. Register one device, then try to
+  // rename and revoke it using the session's id: both must behave as unknown devices.
+  const registeredRes = await app.as("user_me")("/v1/devices/register", {
+    method: "POST",
+    json: {
+      installationId: "22222222-2222-4222-8222-222222222222",
+      type: "desktop",
+      platform: "darwin",
+      displayName: "Mac",
+      capabilities: ["files"],
+    },
+  });
+  const registered = (await registeredRes.json()) as { device: { id: string } };
+  assert.ok(registered.device?.id, "the device registered");
+  assert.equal(
+    (
+      await app.as("user_me")(`/v1/devices/${registered.device.id}`, {
+        method: "PATCH",
+        json: { displayName: "Renamed" },
+      })
+    ).status,
+    200,
+    "the real device is reachable by its own id",
+  );
+  assert.equal(
+    (await app.as("user_me")(`/v1/devices/sess_1/heartbeat`, { method: "POST" })).status,
+    404,
+    "a session id is not a device id",
+  );
+});
+
+test("a malformed session id never reaches the directory", async () => {
+  // The id is interpolated into an outbound Clerk URL. Constraining its shape here is
+  // what stops `/`, `.`, `?`, `#` and `%` from travelling; relying on the SDK to
+  // reject a traversal would make the boundary depend on a dependency's internals.
+  const seen: string[] = [];
+  const { directory } = multiOwnerDirectory({ user_me: [record("sess_1")] });
+  const app = await appWith({
+    listActiveSessions: directory.listActiveSessions,
+    revokeSession: async (user, id) => {
+      seen.push(id);
+      return directory.revokeSession(user, id);
+    },
+  });
+  for (const bad of [
+    "..%2F..%2Fusers",
+    "..%2Fsess_x",
+    "a%3Fb=1",
+    "a%23frag",
+    "sess 1",
+    "sess/1",
+    "x".repeat(200),
+  ]) {
+    const res = await app.as("user_me")(`/v1/sessions/${bad}/revoke`, { method: "POST" });
+    assert.equal(res.status, 404, `expected 404 for ${bad}`);
+  }
+  assert.deepEqual(seen, [], "no malformed id reached the directory");
+});
+
+test("a well-formed session id is accepted", async () => {
+  const { directory } = multiOwnerDirectory({ user_me: [record("sess_abc123")] });
+  const app = await appWith(directory);
+  const res = await app.as("user_me")("/v1/sessions/sess_abc123/revoke", { method: "POST" });
+  assert.equal(res.status, 200);
+});
+
+test("the revoke limiter is keyed per account, not per client address", async () => {
+  // Throttling before authentication, on a shared client key, would let an
+  // unauthenticated caller spend the bucket and lock revoke for everyone.
+  const { directory } = multiOwnerDirectory({
+    user_me: [record("sess_1")],
+    user_other: [record("sess_theirs")],
+  });
+  const app = await appWith(directory);
+  for (let i = 0; i < 12; i += 1) {
+    await app.as("user_me")(`/v1/sessions/sess_${i}/revoke`, { method: "POST" });
+  }
+  // user_other is throttled separately and must still be able to act.
+  const other = await app.as("user_other")("/v1/sessions/sess_theirs/revoke", { method: "POST" });
+  assert.equal(other.status, 200);
 });

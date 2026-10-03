@@ -74,9 +74,10 @@ export function createAccountApp(deps: {
     | {
         ok: true;
         account: { id: string; displayName: string | null; avatarUrl: string | null };
-        /** The session this request authenticated with, when the token carried one. */
         clerkUserId: string;
         sessionId: string | null;
+        /** The resolved account, used as a rate-limit bucket key. Never client-supplied. */
+        accountId: string;
       }
     | { ok: false; response: Response }
   > {
@@ -97,6 +98,7 @@ export function createAccountApp(deps: {
         // without a `sid` claim yields null rather than a guess.
         clerkUserId: identity.clerkUserId,
         sessionId: identity.sessionId ?? null,
+        accountId: result.account.id,
       };
     } catch {
       return { ok: false, response: c.json({ error: "unavailable" }, 503) };

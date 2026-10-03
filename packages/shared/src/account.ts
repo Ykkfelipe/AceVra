@@ -290,6 +290,11 @@ export interface AccountSessionsView {
    * only the second is worth a retry.
    */
   unavailable?: boolean;
+  /**
+   * True when the backend holds more sessions than it returned. This list is a
+   * security review surface, so a capped page must say so rather than look complete.
+   */
+  partial?: boolean;
 }
 
 export type AccountSessionRevokeResult =
@@ -304,6 +309,10 @@ export function parseAccountSessions(body: unknown): AccountSessionsView | null 
   if (typeof body !== "object" || body === null) return null;
   const sessions = (body as { sessions?: unknown }).sessions;
   if (!Array.isArray(sessions)) return null;
+  const partial = (body as { partial?: unknown }).partial;
+  // Only a real boolean counts; anything else means the backend's "there are more"
+  // claim is not trustworthy and is treated as absent rather than assumed false.
+  const isPartial = typeof partial === "boolean" ? partial : undefined;
   const parsed: AccountSession[] = [];
   for (const entry of sessions) {
     if (typeof entry !== "object" || entry === null) return null;
@@ -312,18 +321,31 @@ export function parseAccountSessions(body: unknown): AccountSessionsView | null 
     if (typeof value.status !== "string") return null;
     if (typeof value.createdAt !== "number" || typeof value.lastActiveAt !== "number") return null;
     if (typeof value.current !== "boolean") return null;
-    const nullable = (key: "deviceType" | "browserName" | "country") =>
-      typeof value[key] === "string" ? value[key] : null;
+    const nullable = (key: "deviceType" | "browserName" | "country") => {
+      const field = value[key];
+      // Absent is fine — Clerk only records activity once a client reports some.
+      // Present-but-wrong is a contract break, and this body is either wholly trusted
+      // or wholly rejected.
+      if (field === undefined || field === null) return null;
+      if (typeof field !== "string") return undefined;
+      return field;
+    };
+    const deviceType = nullable("deviceType");
+    if (deviceType === undefined) return null;
+    const browserName = nullable("browserName");
+    if (browserName === undefined) return null;
+    const country = nullable("country");
+    if (country === undefined) return null;
     parsed.push({
       id: value.id,
       status: value.status,
       createdAt: value.createdAt,
       lastActiveAt: value.lastActiveAt,
-      deviceType: nullable("deviceType"),
-      browserName: nullable("browserName"),
-      country: nullable("country"),
+      deviceType,
+      browserName,
+      country,
       current: value.current,
     });
   }
-  return { sessions: parsed };
+  return isPartial === undefined ? { sessions: parsed } : { sessions: parsed, partial: isPartial };
 }

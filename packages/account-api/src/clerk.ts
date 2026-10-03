@@ -77,7 +77,11 @@ export function createClerkSessionDirectory(secretKey: string): HumanSessionDire
  * knows these exist.
  */
 export interface ClerkSessionCalls {
-  list(params: { userId: string; status: "active"; limit: number }): Promise<{ data: Session[] }>;
+  list(params: { userId: string; status: "active"; limit: number }): Promise<{
+    data: Session[];
+    /** Clerk's total for the query, which may exceed the page we asked for. */
+    totalCount?: number;
+  }>;
   get(sessionId: string): Promise<{ userId: string }>;
   revoke(sessionId: string): Promise<unknown>;
 }
@@ -108,7 +112,11 @@ export function createSessionDirectory(sessions: ClerkSessionCalls): HumanSessio
       // Filter again on our side rather than trusting the query alone: this list is a
       // security review surface, so an ended, expired or revoked session must never be
       // presented as something the user could act on.
-      return page.data.filter((s) => s.status === "active").map(toRecord);
+      const records = page.data.filter((s) => s.status === "active").map(toRecord);
+      return {
+        sessions: records,
+        partial: (page.totalCount ?? records.length) > records.length,
+      };
     },
 
     async revokeSession(clerkUserId, sessionId) {

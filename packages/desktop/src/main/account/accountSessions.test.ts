@@ -44,7 +44,7 @@ test("an unreachable backend is unavailable, not an empty list", async () => {
   assert.equal(view.unavailable, true);
 });
 
-test("a rejected session is not reported as an empty or unavailable list", async () => {
+test("a rejected session is unavailable, never an empty list", async () => {
   const { sessions } = client(() => json(401, { error: "unauthenticated" }));
   const view = await sessions.list();
   // The transport already routed this 401 through M2's re-auth path. Reporting it as

@@ -30,14 +30,24 @@ export function AceVraSessionsSection() {
   const [revoking, setRevoking] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null);
-  // A refresh and a revoke can overlap; without ordering the slower one wins and can
-  // put a session back on screen that was just ended.
+  // Sessions we have ended. A refresh issued before Clerk processed a revoke can come
+  // back with that session still listed, so ended ids are filtered on every list
+  // rather than removed once — an ordering ticket cannot do this, because the list
+  // that needs filtering is the *newer* one.
+  const ended = useRef(new Set<string>());
+  // Orders two concurrent reads so the slower one cannot overwrite the newer.
   const seq = useRef(0);
 
   const load = useCallback(async () => {
     const ticket = ++seq.current;
     const next = (await account?.listSessions().catch(() => null)) ?? null;
-    if (ticket === seq.current) setView(next);
+    if (ticket !== seq.current || !next) return;
+    const hidden = ended.current;
+    setView(
+      hidden.size === 0
+        ? next
+        : { ...next, sessions: next.sessions.filter((s) => !hidden.has(s.id)) },
+    );
   }, [account]);
 
   useEffect(() => {
@@ -59,22 +69,32 @@ export function AceVraSessionsSection() {
 
   const revoke = async (id: string) => {
     setBusy(id);
-    const ticket = ++seq.current;
     try {
       const result = await account?.revokeSession(id);
       const outcome = describeAccountSessionRevoke(result ?? { status: "unavailable" }, text);
       setNote(outcome);
-      if (outcome.ok && ticket === seq.current) {
-        // Drop it locally rather than waiting for a round trip, so the row the user
-        // just ended does not sit there claiming to be signed in.
+      if (outcome.ok) {
+        // Drop it immediately rather than waiting for a round trip, and remember it so
+        // an in-flight refresh cannot put it back.
+        ended.current.add(id);
         setView((previous) =>
           previous
             ? { ...previous, sessions: previous.sessions.filter((s) => s.id !== id) }
             : previous,
         );
       }
-      setRevoking(null);
+    } catch {
+      setNote({
+        ok: false,
+        message: text(
+          "sessions.revokeUnavailable",
+          "Couldn't end that session. Check your connection and try again.",
+        ),
+      });
     } finally {
+      // Always clear, so a failed call cannot strand the row in its confirm state
+      // with no way out and no explanation.
+      setRevoking(null);
       setBusy(null);
     }
   };
@@ -102,6 +122,14 @@ export function AceVraSessionsSection() {
         )}
       </p>
 
+      {view.partial && !view.unavailable && (
+        <p className="text-ui-sm text-foreground-subtle" data-testid="acevra-sessions-partial">
+          {text(
+            "sessions.partial",
+            "Showing the most recent sign-ins. Some older sessions are not listed.",
+          )}
+        </p>
+      )}
       {view.unavailable ? (
         <div className="flex items-center gap-2">
           <p
@@ -159,6 +187,7 @@ export function AceVraSessionsSection() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  disabled={busy !== null}
                   data-testid="acevra-session-revoke"
                   onClick={() => {
                     setNote(null);

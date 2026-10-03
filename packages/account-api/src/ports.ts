@@ -60,9 +60,18 @@ export interface HumanSessionRecord {
  * control plane verifies — so this is a thin boundary over it, not a second source
  * of truth. No database table mirrors this state.
  */
+export interface HumanSessionResult {
+  sessions: HumanSessionRecord[];
+  /**
+   * True when Clerk holds more sessions than were returned. The list is a security
+   * review surface, so a silently capped page would present itself as complete.
+   */
+  partial: boolean;
+}
+
 export interface HumanSessionDirectory {
   /** Active sessions belonging to this user. Never accepts a caller-supplied user. */
-  listActiveSessions(clerkUserId: string): Promise<HumanSessionRecord[]>;
+  listActiveSessions(clerkUserId: string): Promise<HumanSessionResult>;
   /**
    * Revokes a session only if it belongs to `clerkUserId`, resolving `not_found`
    * otherwise. Clerk's own revoke takes a bare session id with no user scope, so

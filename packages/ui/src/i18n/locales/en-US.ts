@@ -68,6 +68,8 @@ const enUS: Record<string, string> = {
   "acevra.account.sessions.refresh": "Refresh",
   "acevra.account.sessions.retry": "Try again",
   "acevra.account.sessions.empty": "No other sign-ins found.",
+  "acevra.account.sessions.partial":
+    "Showing the most recent sign-ins. Some older sessions are not listed.",
   "acevra.account.sessions.unavailable":
     "Couldn't load your sign-ins. AceVra Account may be unreachable.",
   "acevra.account.sessions.thisSession": "This sign-in",

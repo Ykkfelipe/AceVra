@@ -59,6 +59,7 @@ const zhCN: Record<string, string> = {
   "acevra.account.sessions.refresh": "刷新",
   "acevra.account.sessions.retry": "重试",
   "acevra.account.sessions.empty": "没有其他登录会话。",
+  "acevra.account.sessions.partial": "仅显示最近的登录，更早的会话未列出。",
   "acevra.account.sessions.unavailable": "无法加载登录会话，AceVra 账号可能暂时无法连接。",
   "acevra.account.sessions.thisSession": "当前登录",
   "acevra.account.sessions.unknownDevice": "登录会话",

@@ -62,13 +62,18 @@ export interface HumanSessionRecord {
 
 export interface HumanSessionDirectory {
   /** Sessions belonging to this Clerk user only. Never accepts a caller-supplied user. */
-  listActiveSessions(clerkUserId: string): Promise<HumanSessionRecord[]>;
+  listActiveSessions(clerkUserId: string): Promise<HumanSessionResult>;
   /**
-   * Revokes a session **only if it belongs to `clerkUserId`**.
-   * Resolves null for a session that is not theirs, so a caller cannot probe for
-   * or act on another account's sessions.
+   * Revokes a session **only if it belongs to `clerkUserId`**. Resolves
+   * `not_found` for a session that is not theirs, so a caller cannot probe for or act
+   * on another account's sessions. A Clerk failure *after* ownership is proven
+   * propagates instead, so the route can answer 503: "we could not end it" must not
+   * read as "it is already gone".
    */
-  revokeSession(clerkUserId: string, sessionId: string): Promise<"revoked" | "not_found">;
+  revokeSession(
+    clerkUserId: string,
+    sessionId: string,
+  ): Promise<{ ok: true } | { ok: false; reason: "not_found" }>;
 }
 ```
 
@@ -112,7 +117,15 @@ export interface SessionsResponse {
   than guessing.
 - Revoke returns `{ ok: true }` or a non-disclosing `404 not_found`.
 - Revoke gets a tighter rate limit than the global 60/min, following the pairing
-  precedent, because it is a destructive authenticated write.
+  precedent, because it is a destructive authenticated write. It is keyed **per
+  account and applied after authentication**: keying on a client address before auth
+  would let an unauthenticated caller spend a shared bucket and lock the control for
+  everyone on the instance.
+- The `:id` path parameter is shape-validated before use, so a hostile id cannot be
+  interpolated into an outbound Clerk URL. Relying on the Clerk SDK to reject a
+  traversal would make the boundary depend on a dependency's internals.
+- A list is capped at 100 and reports `partial` when Clerk holds more, so a truncated
+  security review never presents itself as complete.
 
 ## 5. Shared contract
 

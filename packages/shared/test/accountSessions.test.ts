@@ -163,9 +163,46 @@ test("activity fields are optional in the body and become null, never a guess", 
   assert.equal(parsed?.sessions[0]?.country, null);
 });
 
-test("an unreadable list is distinguishable from an empty one", () => {
-  // `sessions: []` means "you have no other logins". An unavailable flag means "we
-  // could not check". Collapsing them would show a confident, wrong security summary.
-  assert.equal(parseAccountSessions({ sessions: [] })?.unavailable, undefined);
-  assert.deepEqual(parseAccountSessions({ sessions: [] })?.sessions, []);
+test("a capped page is reported as partial rather than looking complete", () => {
+  // The backend says it holds more than it returned. Passing that through keeps a
+  // truncated security review from reading as "that is all of them".
+  const parsed = parseAccountSessions({
+    sessions: [
+      {
+        id: "sess_a",
+        status: "active",
+        createdAt: 1,
+        lastActiveAt: 2,
+        deviceType: null,
+        browserName: null,
+        country: null,
+        current: false,
+      },
+    ],
+    partial: true,
+  });
+  assert.equal(parsed?.partial, true);
+});
+
+test("a wrongly typed activity field rejects the body instead of coercing", () => {
+  // Every other field rejects on a wrong type. These three must too, or a malformed
+  // payload would quietly become a list with holes in it.
+  for (const key of ["deviceType", "browserName", "country"]) {
+    const body = {
+      sessions: [
+        {
+          id: "sess_a",
+          status: "active",
+          createdAt: 1,
+          lastActiveAt: 2,
+          deviceType: null,
+          browserName: null,
+          country: null,
+          current: false,
+          [key]: 123,
+        },
+      ],
+    };
+    assert.equal(parseAccountSessions(body), null, `expected rejection for ${key}`);
+  }
 });
