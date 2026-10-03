@@ -7,8 +7,8 @@
  *
  * 状态全部来自 BotWorkspaceProvider；本组件只持有「检查器是否展开」这一项每位用户的界面偏好。
  */
-import { useCallback, useState, type CSSProperties } from "react";
-import { PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import { Hammer, PanelRightClose, PanelRightOpen, RefreshCw } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.js";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
@@ -20,6 +20,13 @@ import { BotInspector, type BotInspectorTab } from "@/bot/BotInspector.js";
 import { botAvatarInitial } from "@/bot/BotConversationSidebar.js";
 import { useBotWorkspace } from "@/bot/BotWorkspaceProvider.js";
 import { useComputerSessionAutoOpen } from "@/hooks/useComputer.js";
+import {
+  useCrossModeCodingLaunch,
+  type CrossModeCodingTarget,
+} from "@/hooks/useCrossModeCodingLaunch.js";
+import { WorkOnThisDialog } from "@/bot/workOnThis/WorkOnThisDialog.js";
+import { buildAutomationWorkspaceOptions } from "@/settings/automationWorkspaceOptions.js";
+import { useTabStore } from "@/store/TabStoreProvider.js";
 
 const INSPECTOR_OPEN_STORAGE_KEY = "zcode:bot:inspector-open";
 /**
@@ -52,6 +59,11 @@ interface BotSectionProps {
   isWindowsDesktop?: boolean;
   /** 二级侧栏收起时，为左上角浮层让位。 */
   reserveLeadingWindowControls?: boolean;
+  /**
+   * Work on this 被目标 CLI 接受后切到新的 Coding 会话（壳层导航；Bot 指针不变）。
+   * 缺省 = 宿主不支持跨模式导航，动作不显示。
+   */
+  onOpenCodingSession?: (target: CrossModeCodingTarget, sessionId: string) => void;
 }
 
 export function BotSection({
@@ -60,9 +72,32 @@ export function BotSection({
   isMacFullscreen = false,
   isWindowsDesktop = false,
   reserveLeadingWindowControls = false,
+  onOpenCodingSession,
 }: BotSectionProps) {
   const { intl } = useZCodeIntl();
-  const { available, home, rows, selectedSessionId, refreshHistory } = useBotWorkspace();
+  const {
+    available,
+    home,
+    rows,
+    selectedSessionId,
+    conversationRef,
+    workspacePath,
+    refreshHistory,
+  } = useBotWorkspace();
+  const [workOnThisOpen, setWorkOnThisOpen] = useState(false);
+  const tabs = useTabStore((store) => store.tabs);
+  // 本里程碑只把工作交给本机 Coding 项目（远程项目的连接租约另议）。
+  const codingProjects = useMemo(
+    () => buildAutomationWorkspaceOptions(tabs).filter((project) => !project.remoteSessionId),
+    [tabs],
+  );
+  const navigateToCoding = useCallback(
+    (target: CrossModeCodingTarget, sessionId: string) => onOpenCodingSession?.(target, sessionId),
+    [onOpenCodingSession],
+  );
+  const { launch: launchCodingHandoff, pending: codingHandoffPending } = useCrossModeCodingLaunch({
+    onNavigate: navigateToCoding,
+  });
   const [inspectorOpen, setInspectorOpen] = useState(readInspectorOpen);
   // 检查器的界面状态归本组件：auto-open（第一次 RemoteComputer 动作）要同时
   // 「显示检查器 + 切到 Computers + 选中那台机器」，三件事必须一起可写（spec §16.5）。
@@ -146,11 +181,25 @@ export function BotSection({
             {conversationTitle}
           </h1>
         </div>
-        {/* 预留给后续显式的「Work on this」交接动作（Cross-Mode）；V2 不渲染任何内容。 */}
+        {/* Cross-Mode「Work on this」（Bot → Coding）：只有已存在的对话才可引用，草稿不显示。 */}
         <div
           data-testid="bot-conversation-actions"
           className="flex shrink-0 items-center gap-1 [app-region:no-drag]"
-        />
+        >
+          {conversationRef && onOpenCodingSession ? (
+            <ControlHintTooltip title={intl.formatMessage({ id: "bot.workOnThis.hint" })}>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="bot-work-on-this"
+                onClick={() => setWorkOnThisOpen(true)}
+              >
+                <Hammer data-icon="inline-start" aria-hidden="true" />
+                {intl.formatMessage({ id: "bot.workOnThis.action" })}
+              </Button>
+            </ControlHintTooltip>
+          ) : null}
+        </div>
         <div className="flex shrink-0 items-center gap-1 [app-region:no-drag]">
           <ControlHintTooltip title={intl.formatMessage({ id: "bot.refresh" })}>
             <Button
@@ -198,6 +247,29 @@ export function BotSection({
           />
         ) : null}
       </div>
+      {conversationRef && workspacePath ? (
+        <WorkOnThisDialog
+          open={workOnThisOpen}
+          onOpenChange={setWorkOnThisOpen}
+          botWorkspacePath={workspacePath}
+          conversationRef={conversationRef}
+          conversationTitle={selectedRow?.title ?? null}
+          projects={codingProjects}
+          pending={codingHandoffPending}
+          onConfirm={async (project, confirmation) => {
+            const result = await launchCodingHandoff(
+              {
+                workspacePath: project.workspacePath,
+                ...(project.workspaceIdentity
+                  ? { workspaceIdentity: project.workspaceIdentity }
+                  : {}),
+              },
+              confirmation,
+            );
+            return result.ok ? { ok: true } : { ok: false, message: result.message };
+          }}
+        />
+      ) : null}
     </div>
   );
 }

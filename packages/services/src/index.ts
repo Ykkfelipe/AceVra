@@ -243,6 +243,7 @@ export {
   MAX_MEMORY_TAGS,
   MAX_MEMORY_TITLE_LENGTH,
   PERSONAL_MEMORY_CATEGORIES,
+  toBotConversationRef,
 } from "./bot/contract.js";
 export type {
   BotAccent,
