@@ -1,7 +1,9 @@
 # Personal Bot M1 — worker handoff
 
 Branch: `feature/personal-bot`
-Base: `origin/release/0.1.0-alpha` (`c02e24c`), fast-forwarded from `main`
+Base: `origin/release/0.1.0-alpha` (`c02e24c`), fast-forwarded from `main`. The release branch
+advanced to `0da09de` during implementation (oxfmt on relay drills, saved CUA dynamic workflows,
+`.gitignore`); it was merged at `d55a958` with zero file overlap and no conflicts.
 Spec: `docs/specs/personal-bot.md`
 Roadmap: `docs/roadmap/personal-bot.md`, `docs/roadmap/parallel-development-policy.md`
 
