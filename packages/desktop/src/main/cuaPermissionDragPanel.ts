@@ -248,7 +248,11 @@ export function createRealCuaPermissionPanelWindow(deps: {
       showInactive() {
         win.showInactive();
         win.setAlwaysOnTop(true, "screen-saver");
-        win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+        // 与接管辉光同理：不能借 app.dock.hide() 改变 AceVra 进程类型（见 screenTakeoverOverlay.ts）。
+        win.setVisibleOnAllWorkspaces(true, {
+          visibleOnFullScreen: true,
+          skipTransformProcessType: true,
+        });
       },
       hide() {
         win.hide();
