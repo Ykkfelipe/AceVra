@@ -642,8 +642,17 @@ control.sessionEnded)` changes. Coding hosts do not pass it.
 - Composer: assistant-oriented placeholder copy through a narrow placeholder-variant prop —
   "What can I help you with?" (empty), "Reply…" (idle with history), "Keep typing — I'll read it
   next" (turn running); no new composer.
-- Inspector: the same Memory / Computers / Capabilities tabs (§15), restyled as a quiet context
-  inspector (section headers, list rows, no stacked cards). It can be hidden from the header; the choice
+- Inspector: the same Memory / Computers / Capabilities tabs (§15). The **Computers tab hosts the
+  live Computer pane** from `acevra-agent-computer.md` §3.3 — the same `ComputerPane` the coding
+  side pane uses (live screen stream, Working / Idle / Offline status, Take control / Give back /
+  Resume / Stop), reading the same SSH computer list the user configures in Settings → Computers.
+  No second machine registry: the account-device pairing stays in Settings. The pane's **Stop ends
+  the owning chat turn** (only when that job's session is the selected Bot conversation), and the
+  pane's expand/collapse widens/narrows the inspector (per-viewer convenience, not persisted).
+  **Auto-open:** when the agent's first `RemoteComputer` action of the selected conversation is
+  announced by Main (`computers.onSessionStarted`, once per conversation), the Bot view reveals the
+  inspector if hidden, switches it to the Computers tab and selects that computer — the same
+  surface contract as the coding side pane. It can be hidden from the header; the choice
   is a per-viewer convenience kept in `localStorage` (wrapped in try/catch).
 - **Cross-Mode preparation:** the header's trailing actions slot (`data-testid="bot-conversation-actions"`)
   is the reserved location for a future explicit "Work on this" action. It renders nothing in V2. No

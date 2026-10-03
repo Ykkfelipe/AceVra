@@ -1,16 +1,20 @@
 /**
  * Bot 右侧上下文检查器（docs/specs/personal-bot.md §15 / §16.5）。
  *
- * Memory / Computers / Capabilities 三个标签页，数据与 V1 相同：
- * 记忆与能力面经 IBotService（BotWorkspaceProvider.home），Computers 经账户设备注册表。
- * V2 只调整呈现：安静的分组标题 + 列表行，而不是一摞 coding 卡片。
+ * Memory / Computers / Capabilities 三个标签页：记忆与能力面经 IBotService
+ * （BotWorkspaceProvider.home），Computers 是 coding 侧面板同一个实时 ComputerPane
+ * （acevra-agent-computer.md §3.3，见 BotComputerPane）。
+ *
+ * 标签页受控：auto-open（acevra 的第一次 RemoteComputer 动作）要把检查器切到 Computers，
+ * 所以 tab 状态归 BotSection，本组件只按 props 渲染。展开时检查器加宽，方便看住远程屏幕。
  */
 import { Badge } from "@/components/ui/badge.js";
 import { Spinner } from "@/components/ui/spinner.js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
-import { BotComputersPanel } from "@/bot/BotComputersPanel.js";
+import { BotComputerPane } from "@/bot/BotComputerPane.js";
 import { useBotWorkspace } from "@/bot/BotWorkspaceProvider.js";
+import { cn } from "@/components/lib/utils.js";
 import type {
   BotCapabilityAvailability,
   BotCapabilityEntry,
@@ -19,6 +23,17 @@ import type {
 
 const MAX_VISIBLE_MEMORY = 8;
 const TAB_CONTENT_CLASS_NAME = "min-h-0 flex-1 overflow-y-auto px-4 py-3 [scrollbar-gutter:stable]";
+
+export type BotInspectorTab = "memory" | "computers" | "capabilities";
+
+interface BotInspectorProps {
+  tab: BotInspectorTab;
+  onTabChange: (tab: BotInspectorTab) => void;
+  computerId: string | null;
+  onSelectComputer: (computerId: string) => void;
+  computerExpanded: boolean;
+  onToggleComputerExpanded: () => void;
+}
 
 function availabilityMessageId(availability: BotCapabilityAvailability): string {
   if (availability === "available") return "bot.capability.available";
@@ -76,7 +91,14 @@ function CapabilityRow({ entry }: { entry: BotCapabilityEntry }) {
   );
 }
 
-export function BotInspector() {
+export function BotInspector({
+  tab,
+  onTabChange,
+  computerId,
+  onSelectComputer,
+  computerExpanded,
+  onToggleComputerExpanded,
+}: BotInspectorProps) {
   const { intl } = useZCodeIntl();
   const { home } = useBotWorkspace();
   const { memory, capabilities, loading, error } = home;
@@ -86,9 +108,16 @@ export function BotInspector() {
     <aside
       data-testid="bot-inspector"
       aria-label={intl.formatMessage({ id: "bot.inspector.label" })}
-      className="flex w-full shrink-0 flex-col border-t border-border md:w-80 md:border-t-0 md:border-l"
+      className={cn(
+        "flex w-full shrink-0 flex-col border-t border-border md:border-t-0 md:border-l",
+        computerExpanded && tab === "computers" ? "md:w-[min(40rem,60vw)]" : "md:w-80",
+      )}
     >
-      <Tabs defaultValue="memory" className="flex min-h-0 flex-1 flex-col gap-0">
+      <Tabs
+        value={tab}
+        onValueChange={(next) => onTabChange(next as BotInspectorTab)}
+        className="flex min-h-0 flex-1 flex-col gap-0"
+      >
         <div className="shrink-0 px-3 pt-3 pb-2">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="memory">{intl.formatMessage({ id: "bot.tab.memory" })}</TabsTrigger>
@@ -131,8 +160,14 @@ export function BotInspector() {
           ) : null}
         </TabsContent>
 
-        <TabsContent value="computers" className={TAB_CONTENT_CLASS_NAME}>
-          <BotComputersPanel />
+        {/* 实时 ComputerPane 自己占满标签页：无 px/py 内边距，流画面与 coding 侧面板一致。 */}
+        <TabsContent value="computers" className="min-h-0 flex-1 overflow-hidden">
+          <BotComputerPane
+            computerId={computerId}
+            expanded={computerExpanded}
+            onToggleExpand={onToggleComputerExpanded}
+            onSelectComputer={onSelectComputer}
+          />
         </TabsContent>
 
         <TabsContent value="capabilities" className={TAB_CONTENT_CLASS_NAME}>

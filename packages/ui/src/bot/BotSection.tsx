@@ -16,9 +16,10 @@ import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { DesktopWindowControls } from "@/DesktopWindowControls.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { BotConversation } from "@/bot/BotConversation.js";
-import { BotInspector } from "@/bot/BotInspector.js";
+import { BotInspector, type BotInspectorTab } from "@/bot/BotInspector.js";
 import { botAvatarInitial } from "@/bot/BotConversationSidebar.js";
 import { useBotWorkspace } from "@/bot/BotWorkspaceProvider.js";
+import { useComputerSessionAutoOpen } from "@/hooks/useComputer.js";
 
 const INSPECTOR_OPEN_STORAGE_KEY = "zcode:bot:inspector-open";
 /**
@@ -63,6 +64,11 @@ export function BotSection({
   const { intl } = useZCodeIntl();
   const { available, home, rows, selectedSessionId, refreshHistory } = useBotWorkspace();
   const [inspectorOpen, setInspectorOpen] = useState(readInspectorOpen);
+  // 检查器的界面状态归本组件：auto-open（第一次 RemoteComputer 动作）要同时
+  // 「显示检查器 + 切到 Computers + 选中那台机器」，三件事必须一起可写（spec §16.5）。
+  const [inspectorTab, setInspectorTab] = useState<BotInspectorTab>("memory");
+  const [computerId, setComputerId] = useState<string | null>(null);
+  const [computerExpanded, setComputerExpanded] = useState(false);
   const usesInlineWindowControls = Boolean(isWindowsDesktop || (isDesktop && !isMacDesktop));
 
   const toggleInspector = useCallback(() => {
@@ -70,6 +76,16 @@ export function BotSection({
     setInspectorOpen(next);
     writeInspectorOpen(next);
   }, [inspectorOpen]);
+
+  // 与 coding 侧面板同一契约：Main 每个对话只播报一次第一次 RemoteComputer 动作；
+  // 当前选中的 Bot 对话在屏上时，显示检查器、切到 Computers 并选中该机器。
+  const openComputer = useCallback((nextComputerId: string) => {
+    setComputerId(nextComputerId);
+    setInspectorTab("computers");
+    setInspectorOpen(true);
+    writeInspectorOpen(true);
+  }, []);
+  useComputerSessionAutoOpen(selectedSessionId, openComputer);
 
   const handleRefresh = useCallback(() => {
     void home.refresh();
@@ -171,7 +187,16 @@ export function BotSection({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <BotConversation isDesktop={isDesktop} />
         </div>
-        {inspectorOpen ? <BotInspector /> : null}
+        {inspectorOpen ? (
+          <BotInspector
+            tab={inspectorTab}
+            onTabChange={setInspectorTab}
+            computerId={computerId}
+            onSelectComputer={setComputerId}
+            computerExpanded={computerExpanded}
+            onToggleComputerExpanded={() => setComputerExpanded((previous) => !previous)}
+          />
+        ) : null}
       </div>
     </div>
   );

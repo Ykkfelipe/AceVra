@@ -308,3 +308,36 @@ test("new Bot Workspace V2 strings exist in both locales", () => {
     assert.ok(`bot.sidebar.group.${group}` in enUS, `missing group label ${group}`);
   }
 });
+
+test("the Bot Computers tab hosts the live Computer pane, not the account registry", () => {
+  const inspector = readSource("bot/BotInspector.tsx");
+  assert.match(inspector, /BotComputerPane/, "the Computers tab must render the live pane wrapper");
+  assert.ok(!inspector.includes("BotComputersPanel"), "the account-registry panel must be gone");
+  assert.match(inspector, /value=\{tab\}[\s\S]*?onValueChange/, "the tabs are controlled");
+
+  const pane = readSource("bot/BotComputerPane.tsx");
+  assert.match(pane, /from "@\/computers\/ComputerPane\.js"/, "same pane as the coding side panel");
+  assert.match(pane, /stopGeneration/, "Stop ends the owning chat turn");
+  assert.match(pane, /jobSessionId !== selectedSessionId/, "Stop never crosses conversations");
+});
+
+test("the first RemoteComputer action auto-opens the inspector on Computers", () => {
+  const section = readSource("bot/BotSection.tsx");
+  assert.match(section, /useComputerSessionAutoOpen\(/, "BotSection must listen for the notice");
+  assert.match(
+    section,
+    /setComputerId\([\s\S]{0,80}setInspectorTab\("computers"\)[\s\S]{0,80}setInspectorOpen\(true\)/,
+    "the notice selects the computer, opens Computers and reveals the inspector",
+  );
+});
+
+test("the account-registry strings left the locales with the old panel", () => {
+  for (const messages of [enUS, zhCN]) {
+    assert.deepEqual(
+      Object.keys(messages).filter((key) => key.startsWith("bot.computers.")),
+      [],
+      "bot.computers.* must be removed",
+    );
+    assert.ok("bot.tab.computers" in messages, "the tab label stays");
+  }
+});
