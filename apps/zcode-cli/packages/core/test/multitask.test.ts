@@ -42,6 +42,11 @@ test("bounds worker and task sets, validates references and cycles", () => {
 test("lowers readers to concurrent asks, escapes text, compiles against Workflow", () => {
   const script = buildMultitaskScript(MultitaskInputSchema.parse(graph()), []);
   assert.match(script, /Promise\.all/);
+  // M2：每个任务都是 typed ask，结局由脚本按声明 + 运行时证据推出，并逐条 report。
+  assert.match(script, /\.ask<MultitaskTaskResult>\(/);
+  assert.doesNotMatch(script, /\.ask\(/);
+  assert.match(script, /multitaskReport\(multitaskJudge\(/);
+  assert.match(script, /Ending your turn without submitting does not count as done/);
   assert.equal(analyzeWorkflowScript(script).ok, true);
   const escaped = buildMultitaskScript(
     MultitaskInputSchema.parse({ ...graph(), objective: '` ${process.exit()} \n "test"' }),

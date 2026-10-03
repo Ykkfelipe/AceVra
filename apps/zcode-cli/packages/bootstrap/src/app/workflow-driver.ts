@@ -69,6 +69,7 @@ import {
   type WorkflowReportSink,
   type WorldReadOp,
 } from "@zcode/dynamic-workflow";
+import { isMultitaskWorkerPersona, multitaskSubmission } from "./multitask-worker-evidence.js";
 import { executeArtifactPublish } from "./workflow-artifact-publish.js";
 import { qualityEpilogue } from "./workflow-ask-epilogue.js";
 import { ensureSubmitProfileFits } from "./workflow-driver-submit-profile.js";
@@ -86,6 +87,7 @@ import {
   type EscalationHost,
 } from "./workflow-driver-escalation.js";
 import {
+  closeActorRuntime,
   NUDGE_PROMPT,
   TYPED_TOOL_EPILOGUE,
   defer,
@@ -217,6 +219,13 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
       handlers: {
         // 子代理的第一笔工作区写入 ⇒ 引擎关导入缓存。
         onMutating: (instance) => this.sink.askMutating(instance),
+        // Multitask worker 的一个任务往往只有一轮长 turn：只在 turn 解析时报进度，卡上的「正在做什么」
+        // 会整段停在旧值上。所以 Multitask worker 每开跑一次工具就报一次进行中的进度（普通 Workflow 不变）。
+        onToolStarted: () => {
+          const instance = live();
+          if (instance !== undefined && state?.multitaskWorker === true)
+            this.sink.askProgress(instance, modelActivity.progressNow());
+        },
         onWaiting: (info) => {
           const instance = live();
           if (instance !== undefined) this.sink.askWaiting(instance, info);
@@ -265,6 +274,7 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
       modelActivity,
       actor,
       actorName: effectiveActorName(persona),
+      multitaskWorker: isMultitaskWorkerPersona(persona),
       transientAttempts: 0,
     };
     modelActivity.observe(runtime, sessionId);
@@ -383,7 +393,7 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
       state.modelActivity.unsubscribe();
       state.cancelRedrive?.();
       state.cancelRedrive = undefined;
-      const close = (): void => this.closeActorRuntime(state);
+      const close = (): void => closeActorRuntime(this.deps, state);
       if (state.turn === undefined) close();
       else state.turn.then(close, close);
     }
@@ -391,20 +401,6 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
     this.sessions.clear();
     this.instanceToSession.clear();
     this.qidToSession.clear();
-  }
-
-  private closeActorRuntime(state: SessionState): void {
-    // Promise.resolve().then(...)：把同步抛出也归到同一条 warn 路径（最小 stub runtime 没有这个方法）。
-    void Promise.resolve()
-      .then(() => state.runtime.closeBrowserSession())
-      .catch((error: unknown) => {
-        this.deps.logger?.warn?.("Dynamic workflow actor runtime close failed", {
-          errorMessage: error instanceof Error ? error.message : String(error),
-          event: "dynamic_workflow.actor_runtime.close_failed",
-          module: "bootstrap.app",
-          sessionId: state.sessionId,
-        });
-      });
   }
 
   /**
@@ -559,7 +555,8 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
         const deferred = defer<ContractsSubmitVerdict>();
         state.pendingSubmit = deferred;
         // 同步上报：引擎在本调用栈内校验并经 respondToSubmit 回裁决（同步解开 deferred）。
-        this.sink.askSubmitAttempted(instance, request.result);
+        // Multitask worker 的证据只能来自运行时观察（见 multitask-worker-evidence.ts）。
+        this.sink.askSubmitAttempted(instance, multitaskSubmission(state, request.result));
         return deferred.promise;
       },
     };

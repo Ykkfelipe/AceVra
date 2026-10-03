@@ -24,7 +24,11 @@ import {
   type WorkflowReportSink,
 } from "@zcode/dynamic-workflow";
 import type { ActorToolCounts } from "./workflow-driver-tool-activity.js";
-import type { Deferred, SessionState } from "./workflow-driver-types.js";
+import type {
+  AgentRuntimeWorkflowDriverDeps,
+  Deferred,
+  SessionState,
+} from "./workflow-driver-types.js";
 
 export function defer<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
@@ -261,4 +265,25 @@ export function reportTurnObservations(
 ): void {
   sink.askProgress(instance, state.modelActivity.noteTurnResolved());
   sink.askStats(instance, statsFromTurn(result, state.modelActivity.toolCounts()));
+}
+
+/**
+ * 关一个 actor runtime（driver dispose 时逐会话调用）。从 workflow-driver.ts 原样搬来，
+ * 让 driver 留在行数门之内。
+ */
+export function closeActorRuntime(
+  deps: Pick<AgentRuntimeWorkflowDriverDeps, "logger">,
+  state: SessionState,
+): void {
+  // Promise.resolve().then(...)：把同步抛出也归到同一条 warn 路径（最小 stub runtime 没有这个方法）。
+  void Promise.resolve()
+    .then(() => state.runtime.closeBrowserSession())
+    .catch((error: unknown) => {
+      deps.logger?.warn?.("Dynamic workflow actor runtime close failed", {
+        errorMessage: error instanceof Error ? error.message : String(error),
+        event: "dynamic_workflow.actor_runtime.close_failed",
+        module: "bootstrap.app",
+        sessionId: state.sessionId,
+      });
+    });
 }

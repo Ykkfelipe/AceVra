@@ -1,3 +1,4 @@
+import { ESCALATE_TOOL_NAME, SUBMIT_RESULT_TOOL_NAME } from "@zcode/contracts";
 import type { PersonaSpec } from "@zcode/dynamic-workflow";
 import type { AgentRuntimeConfig } from "@zcode/core";
 import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
@@ -14,9 +15,13 @@ export function multitaskActorPolicy(persona: PersonaSpec): Partial<AgentRuntime
     ...(worker.permissionMode ? { mode: worker.permissionMode } : {}),
     // 通配 "*" 必须当作"不限定"：运行时按精确工具名求交集，字面量 "*" 一个都匹配不上，
     // 会把 worker 的工具面整体清空（模型无工具可用，turn 只说一句就结束）。
+    // M2 live 回归：read worker 的白名单只有 Read/Glob/Grep/WebFetch/WebSearch，把 submit_result 与
+    // escalate 一起滤掉了——typed 任务下 worker 根本交不了结果，每个 reader 都以 ResultNotSubmitted 失败
+    // （model-io 实测 toolNames 里没有 submit_result）。白名单收窄的是 worker 的**能力**，Workflow 的
+    // 协议工具是运行时收结果 / 提问的通道，不属于能力面，必须恒在。
     toolAllowlist:
       worker.tools && worker.tools.length > 0 && !worker.tools.includes("*")
-        ? worker.tools
+        ? [...new Set([...worker.tools, SUBMIT_RESULT_TOOL_NAME, ESCALATE_TOOL_NAME])]
         : undefined,
     toolDisallowlist: [
       ...workflowActorToolPolicy().toolDisallowlist,

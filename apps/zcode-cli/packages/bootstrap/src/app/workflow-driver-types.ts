@@ -233,6 +233,8 @@ export interface SessionState {
   /** 本会话的 actor 身份（ProviderStop 明细点名触发停止的子代理）。 */
   readonly actor: ActorRef;
   readonly actorName: string | undefined;
+  /** 该 actor 是 Multitask worker：submit_result 载荷交引擎前由 driver 盖上运行时证据。 */
+  readonly multitaskWorker: boolean;
   /**
    * 当前 ask 里 driver 侧瞬态重驱的次数：runner 放过来的瞬态失败（流恢复耗尽等）不结算节点，按退避曲线再起一轮。
    * startAsk 归零。

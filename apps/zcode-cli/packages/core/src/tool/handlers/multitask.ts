@@ -21,7 +21,7 @@ export function createMultitaskToolEntry(profiles: readonly AgentProfile[] = [])
     metadata: {
       ...createWorkflowToolEntry.metadata,
       name: MULTITASK_TOOL_NAME,
-      description: `Use ONLY when the user explicitly requests Multitask or parallel workers. Plan the minimum useful set of 1–4 workers and explicit task dependencies; submit this structured graph without writing a Workflow script. Available Subagent profiles: ${active.map((profile) => `${profile.name}: ${profile.description}`).join("; ")}. Read workers run concurrently with conservative read tools; writers run exclusively in the shared checkout. No nested delegation. Use scoped task prompts and sharedContext for common facts. Workers may choose a model from ListModels; otherwise use the profile or parent model. Skills, scoped MCP and memory profiles are unsupported in M1. Completion returns results by task ID: synthesize a coherent final answer yourself, do not add report-writing workers. Workflow remains available for explicit repeatable scripts.`,
+      description: `Use ONLY when the user explicitly requests Multitask or parallel workers. Plan the minimum useful set of 1–4 workers and explicit task dependencies; submit this structured graph without writing a Workflow script. Available Subagent profiles: ${active.map((profile) => `${profile.name}: ${profile.description}`).join("; ")}. Read workers run concurrently with conservative read tools; writers run exclusively in the shared checkout. No nested delegation. Use scoped task prompts and sharedContext for common facts. Workers may choose a model from ListModels; otherwise use the profile or parent model. Skills, scoped MCP and memory profiles are unsupported in M1. Workers must submit an explicit result per task; completion returns, by task ID, {outcome, result, evidence}. outcome is one of done (declared done and backed by observed tool use), done_no_changes (writer made no changes), unverified (claimed done with no observed tool use), blocked, failed (no result submitted or the ask failed) or skipped (a dependency did not finish). Only done is evidence-backed: never present the others as success. Synthesize a coherent final answer yourself, do not add report-writing workers. Workflow remains available for explicit repeatable scripts.`,
     },
     inputSchema: MultitaskInputJsonSchema,
     runtimeInputSchema: MultitaskInputSchema.extend({
@@ -91,7 +91,7 @@ export function createMultitaskToolEntry(profiles: readonly AgentProfile[] = [])
       );
       return {
         ...(output as object),
-        response: `${(output as { response: string }).response}\nMultitask: synthesize the task results into one coherent answer when the run completes.`,
+        response: `${(output as { response: string }).response}\nMultitask: when the run completes, synthesize the task results into one coherent answer. Check each task outcome; only "done" is backed by observed tool use, so report unverified, blocked, failed or skipped tasks honestly.`,
       };
     },
     permission: {
