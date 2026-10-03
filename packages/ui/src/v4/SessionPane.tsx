@@ -321,6 +321,12 @@ export interface SessionPaneProps {
    */
   onSessionUnavailable?: () => void;
   /**
+   * 本 pane 新建会话时要带上的 session 类型标签（只允许可创建类型，如 personal_bot）。
+   * 必须在下发 createSession / 草稿预热时带上：类型在创建期决定，之后无法更改。
+   * 缺省不传 = interactive，既有 coding 路径行为不变。
+   */
+  createSessionTaskType?: string;
+  /**
    * Focus 层：全局快捷键（Esc stop）与 add-to-chat 事件只路由到
    * focused pane。单 pane 消费者（V4ChatPane）缺省 true。
    */
@@ -515,6 +521,7 @@ export function SessionPane({
   onSessionCreated,
   onSelectionSideChatUnavailable,
   onSessionUnavailable,
+  createSessionTaskType,
   focused = true,
   telemetryVisible = true,
   onSplitRight,
@@ -571,6 +578,13 @@ export function SessionPane({
     useServices();
   const { intl, locale } = useZCodeIntl();
   const slashCommands = useSlashCommands(workspacePath, workspaceIdentity);
+
+  // 本 pane 新建会话的 session 类型标签；缺省为空对象，coding 路径的 createSession 载荷
+  // 逐字节不变。类型只在创建期有效（首发是对该会话的 sendText，之后无法改类型）。
+  const createSessionTaskPayload = useMemo(
+    () => (createSessionTaskType ? { taskType: createSessionTaskType } : {}),
+    [createSessionTaskType],
+  );
   const baseWorkspaceServices = useBaseWorkspaceServices();
   const workspaceHomePath = useWorkspaceHomePath({
     workspacePath,
@@ -2416,6 +2430,7 @@ export function SessionPane({
     workspaceKey,
     paneId,
     invalidationVersion: draftRuntimeInvalidationVersion,
+    sessionTaskType: createSessionTaskType,
     // SessionDataLayer 来自 workspace connection registry：同 transport generation 的 pane/remount
     // 共享 identity；provider wrapper 重建产生的新 sendCommand 函数不能误判为 transport 换代。
     transportIdentity: layer,
@@ -2885,7 +2900,7 @@ export function SessionPane({
         );
         const createAck = await dispatchSubmissionCommand(
           "createSession",
-          { workspaceId: workspaceKey, ...draftConfigPayload },
+          { workspaceId: workspaceKey, ...draftConfigPayload, ...createSessionTaskPayload },
           null,
         );
         if (createAck.status !== "accepted") {
@@ -2971,6 +2986,7 @@ export function SessionPane({
               workspaceId: workspaceKey,
               firstInput: { text: effectiveText, ...submission },
               ...draftConfigPayload,
+              ...createSessionTaskPayload,
             },
             null,
             undefined,
@@ -2999,7 +3015,7 @@ export function SessionPane({
         // 不做任何附件上传，也不会让非 ready 附件绕过 composer 门禁。
         const createAck = await dispatchSubmissionCommand(
           "createSession",
-          { workspaceId: workspaceKey, ...draftConfigPayload },
+          { workspaceId: workspaceKey, ...draftConfigPayload, ...createSessionTaskPayload },
           null,
         );
         if (createAck.status !== "accepted") {

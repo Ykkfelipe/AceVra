@@ -144,6 +144,9 @@ export function BotConversation({ isDesktop = false }: BotConversationProps) {
         onSessionCreated={handleSessionCreated}
         onSessionDeleted={handleSessionDeleted}
         onSessionUnavailable={handleSessionUnavailable}
+        // Bot 对话必须在创建期就打上 personal_bot：这样它不进 Coding Sessions，
+        // 也是个人记忆注入的唯一门禁（非 personal_bot 连 host 往返都不会发生）。
+        createSessionTaskType="personal_bot"
       />
     </div>
   );

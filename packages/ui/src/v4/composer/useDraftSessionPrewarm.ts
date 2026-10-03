@@ -44,8 +44,15 @@ function startDraftSessionPrewarm(params: {
   onSettled?: () => void;
   /** 预热会话初始 config（全局「上次选择」，同步解析）；让投影首帧即全局、不闪。 */
   resolveInitialConfig?: () => Partial<SessionConfigState> | undefined;
+  /**
+   * 预热会话的 session 类型标签（只允许可创建类型，如 personal_bot）。
+   * 必须在**预热创建**时就带上：首发是 sendText 打到这个会话，之后无法再改类型。
+   * 缺省不传 = interactive，既有路径行为不变。
+   */
+  sessionTaskType?: string;
 }): DraftPrewarmController {
-  const { workspaceKey, dispatchCommand, onReady, onSettled, resolveInitialConfig } = params;
+  const { workspaceKey, dispatchCommand, onReady, onSettled, resolveInitialConfig, sessionTaskType } =
+    params;
   let disposed = false;
   let promotionState: "draft" | "pending" | "promoted" | "discarded" = "draft";
   let createdSessionId: string | null = null;
@@ -67,7 +74,10 @@ function startDraftSessionPrewarm(params: {
   };
 
   const createPayload = () => {
-    const createPayload: Record<string, unknown> = { workspaceId: workspaceKey };
+    const createPayload: Record<string, unknown> = {
+      workspaceId: workspaceKey,
+      ...(sessionTaskType ? { taskType: sessionTaskType } : {}),
+    };
     const initialConfig = resolveInitialConfig?.();
     if (initialConfig && Object.keys(initialConfig).length > 0) {
       // 预热会话首帧即用全局模型（CLI 归并 createSession.config），不闪 workspace 缺省。
@@ -207,6 +217,7 @@ class DraftSessionPrewarmCoordinator {
     dispatchCommand: DispatchCommand,
     resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined,
     private readonly onEmpty: () => void,
+    private sessionTaskType?: string,
   ) {
     this.dispatchCommand = dispatchCommand;
     this.resolveInitialConfig = resolveInitialConfig;
@@ -215,9 +226,11 @@ class DraftSessionPrewarmCoordinator {
   update(
     dispatchCommand: DispatchCommand,
     resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined,
+    sessionTaskType?: string,
   ): void {
     this.dispatchCommand = dispatchCommand;
     this.resolveInitialConfig = resolveInitialConfig;
+    this.sessionTaskType = sessionTaskType;
   }
 
   acquire(params: {
@@ -323,6 +336,7 @@ class DraftSessionPrewarmCoordinator {
       dispatchCommand: (type, payload, targetSessionId) =>
         this.dispatchCommand(type, payload, targetSessionId),
       resolveInitialConfig: () => this.resolveInitialConfig?.(),
+      sessionTaskType: this.sessionTaskType,
       onReady: (sessionId) => {
         if (this.current !== current || current.retiring) {
           return;
@@ -431,6 +445,7 @@ function getDraftSessionPrewarmCoordinator(params: {
   transportIdentity: unknown;
   dispatchCommand: DispatchCommand;
   resolveInitialConfig: (() => Partial<SessionConfigState> | undefined) | undefined;
+  sessionTaskType?: string;
 }): DraftSessionPrewarmCoordinator {
   let transportCoordinators = draftPrewarmCoordinatorsByTransport.get(params.transportIdentity);
   if (!transportCoordinators) {
@@ -453,6 +468,9 @@ function getDraftSessionPrewarmCoordinator(params: {
           draftPrewarmCoordinatorsByTransport.delete(params.transportIdentity);
         }
       },
+      // 协调器按 transport+workspace+pane 复用：同一 owner 必然属于同一个对话面，
+      // 因此类型标签随创建固化即可，不需要额外的失效逻辑。
+      params.sessionTaskType,
     );
     transportCoordinators.set(ownerKey, coordinator);
   }
@@ -472,6 +490,8 @@ export function useDraftSessionPrewarm(params: {
   dispatchCommand: DispatchCommand;
   /** 预热会话初始 config（全局「上次选择」，同步解析）；让投影首帧即全局、不闪。 */
   resolveInitialConfig?: () => Partial<SessionConfigState> | undefined;
+  /** 预热会话的 session 类型标签（见 startDraftSessionPrewarm）。缺省 = interactive。 */
+  sessionTaskType?: string;
 }): DraftSessionPrewarm {
   const {
     enabled,
@@ -481,6 +501,7 @@ export function useDraftSessionPrewarm(params: {
     invalidationVersion = 0,
     dispatchCommand,
     resolveInitialConfig,
+    sessionTaskType,
   } = params;
   // workspace/pane/transport 共同定义逻辑 owner：同 owner 重挂复用 single-flight，transport
   // 换代仍生成新 coordinator，确保旧 session 的清理不会误走新 transport。
@@ -496,11 +517,12 @@ export function useDraftSessionPrewarm(params: {
         transportIdentity,
         dispatchCommand,
         resolveInitialConfig,
+        sessionTaskType,
       }),
     [owner],
   );
   useLayoutEffect(() => {
-    coordinator.update(dispatchCommand, resolveInitialConfig);
+    coordinator.update(dispatchCommand, resolveInitialConfig, sessionTaskType);
   }, [coordinator, dispatchCommand, resolveInitialConfig]);
   const generation = useMemo(() => ({ owner }), [enabled, invalidationVersion, owner]);
   const [ready, setReady] = useState<{
