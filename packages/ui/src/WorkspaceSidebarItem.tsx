@@ -65,10 +65,7 @@ import {
 } from "@zcode/shared";
 import type { ZCodeTaskMeta } from "@zcode/shared";
 import { useBaseWorkspaceServices, useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
-import {
-  applyTaskQueryCacheMutation,
-  invalidateTaskQueryCacheByScopes,
-} from "@/store/taskQueryCacheStore.js";
+import { applyTaskQueryCacheMutation } from "@/store/taskQueryCacheStore.js";
 import { useRemotePinnedTaskStore } from "@/store/remotePinnedTaskStore.js";
 import { useRemoteTimelineTaskStore } from "@/store/remoteTimelineTaskStore.js";
 import { logger } from "@/logger.js";
@@ -82,13 +79,7 @@ import { refreshSharedSkillStoreForWorkspace } from "@/lib/skillStoreRefresh.js"
 import { refreshWorkspacePluginCapabilitiesAfterRemoteSync } from "@/lib/remotePluginSyncRefresh.js";
 import { useMcpStore } from "@/store/mcpStore.js";
 import { TaskRowActionButton } from "@/workspace-grouped-tasks/task-row-action-button.js";
-import { releaseWorkspaceRuntimeAfterProjectRemoval } from "@/lib/workspaceRuntimeRelease.js";
-import {
-  hasRunningWorkspaceChat,
-  scanWindowsReservedDeviceNameFiles,
-} from "@/lib/workspaceRemovalSafety.js";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog.js";
-import { toast } from "@/components/ui/toast.js";
+import { useWorkspaceTabRemoval } from "@/hooks/useWorkspaceTabRemoval.js";
 
 export type SortableBindings = Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">;
 
@@ -132,7 +123,6 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   tab,
   isActiveWorkspace,
   isExpanded,
-  closeTab,
   toggleWorkspaceExpanded,
   onSelectTask,
   onStartDraftInWorkspace,
@@ -156,7 +146,6 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
   isActiveWorkspace: boolean;
   isExpanded: boolean;
   activateTab: (tabId: string) => void;
-  closeTab: (tabId: string) => void;
   toggleWorkspaceExpanded: (workspacePath: string) => void;
   onSelectTask: (
     targetWorkspacePath: string,
@@ -205,13 +194,10 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     tab.workspaceIdentity,
     tab.remoteTarget,
   );
-  const confirmDialog = useConfirmDialog();
   const baseServices = useBaseWorkspaceServices();
   const zcodeTaskService = services.zcodeTaskService;
   const taskItemsRef = useRef(taskItems);
   taskItemsRef.current = taskItems;
-  const workspaceZCodeStateRef = useRef(workspaceZCodeState);
-  workspaceZCodeStateRef.current = workspaceZCodeState;
   const findCurrentTaskItem = useCallback((taskId: string) => {
     // 流式刷新会重建 taskItems 数组，任务操作回调如果直接依赖数组，
     // 即使任务语义没变也会换引用，继续击穿 TaskListItem 的 memo。
@@ -346,86 +332,12 @@ export const WorkspaceSidebarItem = memo(function WorkspaceSidebarItem({
     [onStartDraftInWorkspace, readOnlyReason, tab.workspaceIdentity, tab.workspacePath],
   );
 
-  const handleRemoveWorkspace = useCallback(async () => {
-    const workspaceKey = tab.workspaceIdentity?.trim() || tab.workspacePath;
-    logger.debug("[WorkspaceSidebarItem] 移除 workspace", {
-      isExpanded,
-      workspaceKey,
-    });
-
-    if (
-      hasRunningWorkspaceChat({
-        workspaceState: workspaceZCodeStateRef.current,
-        taskItems: taskItemsRef.current,
-      })
-    ) {
-      const confirmed = await confirmDialog({
-        title: intl.formatMessage({ id: "workspaceSidebar.removeRunningWorkspace.title" }),
-        description: intl.formatMessage({
-          id: "workspaceSidebar.removeRunningWorkspace.description",
-        }),
-        confirmLabel: intl.formatMessage({ id: "workspaceSidebar.removeRunningWorkspace.confirm" }),
-        cancelLabel: intl.formatMessage({ id: "common.cancel" }),
-        confirmVariant: "destructive",
-      });
-      if (!confirmed) {
-        logger.debug("[WorkspaceSidebarItem] 用户取消移除运行中 workspace", { workspaceKey });
-        return;
-      }
-    }
-
-    closeTab(tab.id);
-    releaseWorkspaceRuntimeAfterProjectRemoval({
-      tab: {
-        workspacePath: tab.workspacePath,
-        workspaceIdentity: tab.workspaceIdentity,
-      },
-      zcodeTaskService,
-    });
-    // 移除 workspace 只是移除入口和连接历史，不代表用户要隐藏历史任务：
-    // 这里只失效缓存，保留 sqlite 任务索引原状态，避免重连同一 SSH workspace 后任务像“丢了”。
-    invalidateTaskQueryCacheByScopes([
-      {
-        workspacePath: tab.workspacePath,
-        ...(tab.workspaceIdentity ? { workspaceIdentity: tab.workspaceIdentity } : {}),
-      },
-    ]);
-
-    if (!isRemoteWorkspace) {
-      void scanWindowsReservedDeviceNameFiles(baseServices.fileService, tab.workspacePath)
-        .then((result) => {
-          if (result.findings.length === 0) {
-            return;
-          }
-          const firstFinding = result.findings[0] ?? tab.workspacePath;
-          toast(
-            intl.formatMessage(
-              { id: "workspaceSidebar.windowsReservedNameRisk" },
-              { count: result.findings.length, path: firstFinding },
-            ),
-            { durationMs: 8_000, variant: "warning" },
-          );
-        })
-        .catch((error: unknown) => {
-          // Windows 保留设备名扫描只是移除后的兼容风险提示，失败不能影响 workspace 生命周期释放。
-          logger.debug("[WorkspaceSidebarItem] Windows 保留名风险扫描失败", {
-            workspaceKey,
-            error,
-          });
-        });
-    }
-  }, [
-    baseServices.fileService,
-    closeTab,
-    confirmDialog,
-    intl,
-    isExpanded,
-    isRemoteWorkspace,
-    tab.id,
-    tab.workspaceIdentity,
-    tab.workspacePath,
-    zcodeTaskService,
-  ]);
+  const getCurrentTaskItems = useCallback(() => taskItemsRef.current, []);
+  // 移除事务与目录不可用提示共用同一个 hook，避免两条关闭路径分叉。
+  const handleRemoveWorkspace = useWorkspaceTabRemoval(tab, {
+    source: "sidebar",
+    getTaskItems: getCurrentTaskItems,
+  });
 
   const handleReconnectRemoteWorkspace = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {

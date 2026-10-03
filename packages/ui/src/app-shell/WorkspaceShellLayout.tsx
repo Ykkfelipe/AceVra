@@ -56,6 +56,7 @@ import {
   useBrowserScreenshotSurfaceRequest,
 } from "@/browser-use/useBrowserScreenshotSurfaceRequest.js";
 import { AnimatedTerminalPanel } from "@/app-shell/AnimatedTerminalPanel.js";
+import { UnavailableWorkspaceComposerNotice } from "@/app-shell/UnavailableWorkspaceComposerNotice.js";
 import { SIDE_PANE_DEFAULT_EXPANDED_SIZE } from "@/app-shell/sidePaneLayout.js";
 import { useAnimatedResizablePanel } from "@/app-shell/useAnimatedResizablePanel.js";
 import { ensureTaskNavigationWorkspace } from "@/app-shell/taskNavigationWorkspace.js";
@@ -1267,6 +1268,25 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
       workspaceTabs,
     ],
   );
+  // 本地项目目录不可用时 pane 为只读且没有 composer；在同一 dock 位置给出原因和操作，
+  // 打开文件夹复用草稿 workspace 菜单的同一入口，移除复用侧栏的同一移除事务。
+  const readOnlyComposerNotice = useMemo(
+    () =>
+      workspaceReadOnlyReason ? (
+        <UnavailableWorkspaceComposerNotice
+          workspacePath={workspaceAbsPath}
+          workspaceIdentity={workspaceIdentity}
+          onOpenFolder={allowOpenWorkspace ? onOpenFolderFromWorkspaceMenu : undefined}
+        />
+      ) : undefined,
+    [
+      allowOpenWorkspace,
+      onOpenFolderFromWorkspaceMenu,
+      workspaceAbsPath,
+      workspaceIdentity,
+      workspaceReadOnlyReason,
+    ],
+  );
   const handleV4SessionDeleted = useCallback(() => {
     if (activeTaskId) {
       for (const tab of sidePaneState?.tabs ?? []) {
@@ -1885,6 +1905,7 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
                                   绑定语义与 testid 契约（paneId=workspace-main）不变。 */}
                             <V4WorkspaceChatArea
                               readOnly={Boolean(workspaceReadOnlyReason)}
+                              readOnlyComposerNotice={readOnlyComposerNotice}
                               foregroundEnabled={isWorkspaceVisible}
                               workspacePath={workspaceAbsPath}
                               workspaceIdentity={workspaceIdentity}

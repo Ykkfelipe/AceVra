@@ -1367,6 +1367,10 @@ const zhCN: Record<string, string> = {
   "workspace.addNewWorkspace": "添加新工作区",
   "workspace.startFromScratch": "从空目录开始",
   "workspace.openFolder": "打开文件夹",
+  "workspace.unavailableNotice.title": "找不到此项目的文件夹",
+  "workspace.unavailableNotice.description":
+    "历史任务仍可查看，但发送新消息需要该文件夹。恢复文件夹后重启应用即可继续在此项目中工作。",
+  "workspace.unavailableNotice.removeProject": "移除项目",
   "workspace.openPluginsSettings": "插件市场",
   "workspace.backToWorkspace": "返回工作区",
   "workspace.noActiveForNewTask": "当前还没有可用的工作区，请先打开一个工作区。",
