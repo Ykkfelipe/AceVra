@@ -42,6 +42,26 @@ export function readAccountApiConfig(env: NodeJS.ProcessEnv = process.env): Acco
     seedClerkUserIds: list(env.ACEVRA_ADMISSION_SEED_CLERK_USER_IDS),
     // 300s is the bound stated in the M3a spec: worst-case exposure is one TTL
     // after the last confirmation, regardless of the instance's token TTL.
-    sessionFreshnessSeconds: Number(env.ACEVRA_SESSION_FRESHNESS_SECONDS ?? 300),
+    sessionFreshnessSeconds: parseFreshnessSeconds(env.ACEVRA_SESSION_FRESHNESS_SECONDS),
   };
+}
+
+/** An hour is far beyond any useful bound, and past it the check is off, not infinite. */
+const MAX_FRESHNESS_SECONDS = 3_600;
+
+/**
+ * Parses the freshness TTL, falling back to the documented default rather than
+ * accepting anything.
+ *
+ * `Number(...)` alone is how a typo silently disables the only revocation control: a
+ * non-numeric or negative value becomes NaN, and NaN fails the `> 0` gate downstream
+ * so the check turns off with nothing in the logs. An unparseable value is treated as
+ * unset, and out-of-range values are clamped, so the worst outcome of a bad
+ * configuration is the default rather than no protection.
+ */
+function parseFreshnessSeconds(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return 300;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) return 300;
+  return Math.min(value, MAX_FRESHNESS_SECONDS);
 }

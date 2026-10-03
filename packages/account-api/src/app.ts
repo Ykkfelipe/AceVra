@@ -151,6 +151,7 @@ export function createAccountApp(deps: {
       sessions: deps.sessions,
       authenticate,
       clientKey: deps.clientKey,
+      freshness: deps.freshness,
     });
   }
 

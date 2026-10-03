@@ -463,3 +463,68 @@ test("the revoke limiter is keyed per account, not per client address", async ()
   const other = await app.as("user_other")("/v1/sessions/sess_theirs/revoke", { method: "POST" });
   assert.equal(other.status, 200);
 });
+
+test("a rejected Clerk credential is an outage, not a mass revocation", async () => {
+  // 401 against Clerk's backend API means THIS control plane's secret key was
+  // rejected, not that one session ended. Treating it as `not_active` would sign out
+  // every session in the product, cached for a full TTL.
+  const directory = createSessionDirectory({
+    list: async () => ({ data: [] }),
+    get: async () => ({ userId: "user_me" }),
+    revoke: async () => ({}),
+    status: async () => {
+      throw Object.assign(new Error("unauthorized"), { status: 401 });
+    },
+  });
+  assert.equal(await directory.sessionStatus("user_me", "sess_a"), "unavailable");
+});
+
+test("only a definitive 404 means the session is gone", async () => {
+  const gone = createSessionDirectory({
+    list: async () => ({ data: [] }),
+    get: async () => ({ userId: "user_me" }),
+    revoke: async () => ({}),
+    status: async () => {
+      throw Object.assign(new Error("not found"), { status: 404 });
+    },
+  });
+  assert.equal(await gone.sessionStatus("user_me", "sess_a"), "not_active");
+
+  for (const status of [403, 429, 500, 502, 503]) {
+    const failing = createSessionDirectory({
+      list: async () => ({ data: [] }),
+      get: async () => ({ userId: "user_me" }),
+      revoke: async () => ({}),
+      status: async () => {
+        throw Object.assign(new Error("upstream"), { status });
+      },
+    });
+    assert.equal(
+      await failing.sessionStatus("user_me", "sess_a"),
+      "unavailable",
+      `${status} must be an outage`,
+    );
+  }
+});
+
+test("a non-HTTP status field on an unrelated error is not read as a 404", async () => {
+  const directory = createSessionDirectory({
+    list: async () => ({ data: [] }),
+    get: async () => ({ userId: "user_me" }),
+    revoke: async () => ({}),
+    status: async () => {
+      throw Object.assign(new TypeError("conn reset"), { status: "ENOENT" });
+    },
+  });
+  assert.equal(await directory.sessionStatus("user_me", "sess_a"), "unavailable");
+});
+
+test("another user's session reads as not active, whatever its status says", async () => {
+  const directory = createSessionDirectory({
+    list: async () => ({ data: [] }),
+    get: async () => ({ userId: "user_me" }),
+    revoke: async () => ({}),
+    status: async () => ({ userId: "user_other", status: "active" }),
+  });
+  assert.equal(await directory.sessionStatus("user_me", "sess_theirs"), "not_active");
+});

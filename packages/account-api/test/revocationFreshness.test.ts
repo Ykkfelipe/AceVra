@@ -127,14 +127,16 @@ test("an unknown sid for an admitted user is rejected rather than trusted", asyn
   assert.equal((await app.as("user_me", "sess_never_existed")("/v1/me")).status, 401);
 });
 
-test("a Clerk outage admits an unexpired token and never caches the absence", async () => {
-  // Availability is preserved and the bound degrades to token expiry, which is the
-  // M3 guarantee. An outage must not become a mass revocation.
+test("a Clerk outage admits an unexpired token and does not defer the next check", async () => {
+  // Availability is preserved and the bound degrades to token expiry, which is the M3
+  // guarantee. An outage must not become a mass revocation, and it must not be cached
+  // so long that a real revocation is deferred behind it.
   const { directory, asked } = livenessDirectory({ user_me: ["sess_me"] }, () => "unavailable");
   const app = await appWith(directory, 300);
   assert.equal((await app.as("user_me", "sess_me")("/v1/me")).status, 200);
-  assert.equal((await app.as("user_me", "sess_me")("/v1/devices")).status, 200);
-  assert.ok(asked.length >= 2, "the outage was not cached as an answer");
+  const afterFirst = asked.length;
+  assert.equal((await app.as("user_me", "sess_me")("/v1/me")).status, 200);
+  assert.equal(asked.length, afterFirst, "the outage is cached briefly, not per request");
 });
 
 test("with the check disabled, behaviour is exactly M3's", async () => {
@@ -219,4 +221,85 @@ test("a token with no sid skips the check and performs no Clerk call", async () 
   const app = await appWith(directory, 300);
   assert.equal((await app.as("user_me", null)("/v1/me")).status, 200);
   assert.deepEqual(asked, [], "nothing to revalidate, so nothing was asked");
+});
+
+test("a session revoked through our own API stops working immediately", async () => {
+  // Clerk says active (so the freshness cache would admit it), but the route revokes it.
+  // The next request must be rejected without waiting out the freshness window — a
+  // revocation this API performs is the one thing that should never be delayed.
+  const scoped = livenessDirectory({ user_me: ["sess_me"] });
+  let revoked = false;
+  const app = await appWith(
+    {
+      ...scoped.directory,
+      revokeSession: async () => {
+        revoked = true;
+        return { ok: true };
+      },
+      sessionStatus: async () => (revoked ? "not_active" : "active"),
+    },
+    300,
+  );
+  assert.equal((await app.as("user_me", "sess_me")("/v1/me")).status, 200);
+
+  const res = await app.as("user_me", "sess_me")("/v1/sessions/sess_me/revoke", { method: "POST" });
+  assert.equal(res.status, 200);
+  assert.equal((await app.as("user_me", "sess_me")("/v1/me")).status, 401);
+});
+
+test("a configured freshness TTL reaches the cache as seconds, not milliseconds", async () => {
+  // A unit slip in the seconds→ms conversion would widen the promised bound by 1000x
+  // and nothing else in the suite would notice, so pin the conversion directly.
+  const { createSessionFreshness } = await import("../src/sessionFreshness.js");
+  let t = 0;
+  let status: "active" | "not_active" = "active";
+  const freshness = createSessionFreshness({
+    check: async () => status,
+    ttlMs: 300 * 1000,
+    clock: () => t,
+  });
+  const evaluate = () =>
+    freshness.evaluate({ clerkUserId: "u", sessionId: "s", tokenExpiresAt: t + 10_000_000 });
+
+  assert.equal((await evaluate()).admit, true);
+  status = "not_active";
+  t += 299_999;
+  assert.equal((await evaluate()).admit, true, "still inside 300s");
+  t += 1;
+  assert.equal((await evaluate()).admit, false, "rejected at exactly 300s");
+});
+
+test("a malformed freshness setting falls back to the default instead of disabling", async () => {
+  const { readAccountApiConfig } = await import("../src/config.js");
+  const base = { ACEVRA_CLERK_SECRET_KEY: "sk_test", ACEVRA_DATABASE_URL: "postgres://x" };
+  assert.equal(readAccountApiConfig(base).sessionFreshnessSeconds, 300);
+  assert.equal(
+    readAccountApiConfig({ ...base, ACEVRA_SESSION_FRESHNESS_SECONDS: "abc" })
+      .sessionFreshnessSeconds,
+    300,
+    "a typo must not silently turn the check off",
+  );
+  assert.equal(
+    readAccountApiConfig({ ...base, ACEVRA_SESSION_FRESHNESS_SECONDS: "-1" })
+      .sessionFreshnessSeconds,
+    300,
+  );
+  assert.equal(
+    readAccountApiConfig({ ...base, ACEVRA_SESSION_FRESHNESS_SECONDS: "1e999" })
+      .sessionFreshnessSeconds,
+    300,
+    "an unbounded value falls back to the default rather than a weaker bound",
+  );
+  assert.equal(
+    readAccountApiConfig({ ...base, ACEVRA_SESSION_FRESHNESS_SECONDS: "999999" })
+      .sessionFreshnessSeconds,
+    3_600,
+    "an oversized value is clamped to the ceiling",
+  );
+  assert.equal(
+    readAccountApiConfig({ ...base, ACEVRA_SESSION_FRESHNESS_SECONDS: "0" })
+      .sessionFreshnessSeconds,
+    0,
+    "0 is a deliberate opt-out",
+  );
 });

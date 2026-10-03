@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { createRateLimiter } from "./rateLimit.js";
 import type { HumanSessionDirectory } from "./ports.js";
+import type { SessionFreshness } from "./sessionFreshness.js";
 
 /**
  * Human login sessions: which logins belong to this account, and ending one.
@@ -28,6 +29,11 @@ export interface RegisterSessionRoutesOptions {
   sessions: HumanSessionDirectory;
   authenticate(c: Context): Promise<SessionAuth | { ok: false; response: Response }>;
   clientKey?: (request: Request) => string;
+  /**
+   * Revocation freshness, so a revoke this API performs takes effect immediately
+   * rather than waiting out a freshness window.
+   */
+  freshness?: SessionFreshness;
   /** Requests per window per client key for revoke. Defaults: 10 / minute. */
   revokeRateLimit?: { limit: number; windowMs: number };
 }
@@ -84,6 +90,11 @@ export function registerSessionRoutes(options: RegisterSessionRoutesOptions): vo
     // Non-disclosing: a session belonging to someone else is indistinguishable from
     // one that does not exist, matching the device registry's convention.
     if (!result.ok) return c.json({ error: "not_found" }, 404);
+    // Record it as authoritative immediately. Clerk has already revoked it, so waiting
+    // for the next revalidation would leave this session usable for the rest of the
+    // freshness window — a revocation that the API itself performs should be the one
+    // thing that is never delayed.
+    options.freshness?.markRevoked(sessionId);
     return c.json({ ok: true });
   });
 }

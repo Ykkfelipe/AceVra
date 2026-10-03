@@ -16,6 +16,7 @@ function harness(options?: {
   statuses?: SessionStatusCheck[] | (() => Promise<SessionStatusCheck>);
   ttlMs?: number;
   maxEntries?: number;
+  timeoutMs?: number;
 }) {
   const time = clock();
   const asked: Array<{ user: string; session: string }> = [];
@@ -33,6 +34,7 @@ function harness(options?: {
     ttlMs: options?.ttlMs ?? 300_000,
     clock: time.now,
     maxEntries: options?.maxEntries,
+    timeoutMs: options?.timeoutMs ?? 50,
   });
   return { freshness, asked, time };
 }
@@ -83,14 +85,43 @@ test("a mid-TTL revocation is caught on the next revalidation — the bound", as
   assert.equal(h.asked.length, 2, "exactly one revalidation at the boundary");
 });
 
-test("the negative answer is cached, so an outage cannot re-admit a dead session", async () => {
+test("a known revocation survives past the TTL, even during an outage", async () => {
+  // This is the regression guard for the window M3a exists to close. A negative that
+  // merely shared the positive TTL would let the next Clerk outage re-admit a session
+  // already known to be dead — for the rest of the token's life.
   let status: SessionStatusCheck = "not_active";
   const h = harness({ statuses: async () => status });
   assert.equal((await evaluate(h)).admit, false);
+
   status = "unavailable";
-  h.time.advance(1_000);
-  assert.equal((await evaluate(h)).admit, false, "cached negative survives an outage");
-  assert.equal(h.asked.length, 1);
+  for (const step of [1_000, 300_000, 86_400_000]) {
+    h.time.advance(step);
+    assert.equal((await evaluate(h)).admit, false, `still rejected ${step}ms later`);
+  }
+  assert.equal(h.freshness.revokedCount(), 1);
+});
+
+test("a known revocation survives cache eviction pressure", async () => {
+  // LRU must never widen the window by dropping a revocation to save memory. The first
+  // check reports the session dead; the rest of the traffic is healthy, so only the
+  // eviction cap can lose it.
+  let firstCall = true;
+  const h = harness({
+    maxEntries: 2,
+    statuses: async () => {
+      if (firstCall) {
+        firstCall = false;
+        return "not_active";
+      }
+      return "active";
+    },
+  });
+  assert.equal((await evaluate(h, { sessionId: "sess_dead" })).admit, false);
+  for (let i = 0; i < 20; i += 1) {
+    assert.equal((await evaluate(h, { sessionId: `sess_${i}` })).admit, true);
+  }
+  // Clerk now says "active" for everything. The revocation must still win.
+  assert.equal((await evaluate(h, { sessionId: "sess_dead" })).admit, false);
 });
 
 test("one user's revocation state cannot affect another sid", async () => {
@@ -101,13 +132,17 @@ test("one user's revocation state cannot affect another sid", async () => {
   assert.equal(h.asked.length, 2, "each sid was checked on its own");
 });
 
-test("a revoked session cannot be revived by another user presenting the same sid", async () => {
-  // The cache is keyed by sid. A different user must not inherit the other user's
-  // negative, and must not be able to launder a revoked sid back to "active".
-  const h = harness({ statuses: ["not_active"] });
-  assert.equal((await evaluate(h, { clerkUserId: "user_a", sessionId: "sess_x" })).admit, false);
-  // Same sid, other user: revalidates rather than trusting the cached answer blindly.
-  h.time.advance(300_000);
+test("a cached positive is not inherited by a different user presenting that sid", async () => {
+  // The cache is keyed by sid alone. This test pins that a positive learned for one
+  // user is not silently reused for another — the sid comes from a signed token
+  // alongside its sub, so the pair cannot disagree in practice, and this keeps the
+  // assumption explicit rather than implicit.
+  let status: SessionStatusCheck = "active";
+  const h = harness({ statuses: async () => status });
+  assert.equal((await evaluate(h, { clerkUserId: "user_a", sessionId: "sess_x" })).admit, true);
+
+  status = "not_active";
+  h.time.advance(300_000); // past the TTL, forcing a revalidation
   assert.equal((await evaluate(h, { clerkUserId: "user_b", sessionId: "sess_x" })).admit, false);
 });
 
@@ -128,14 +163,21 @@ test("concurrent first requests share one in-flight Clerk call", async () => {
   assert.equal(h.asked.length, 1, "a burst is not a burst of Clerk calls");
 });
 
-test("when Clerk is unreachable an unexpired token is admitted and not cached", async () => {
+test("an outage is admitted on an unexpired token and is only cached briefly", async () => {
+  // Cached briefly so a burst of requests during an outage is one failed Clerk call,
+  // not one per request. Not cached for the full TTL: that would let an outage defer
+  // a real revocation check.
   const h = harness({ statuses: ["unavailable"] });
   const verdict = await evaluate(h, { tokenExpiresAt: 1_000_000 + 60_000 });
   assert.equal(verdict.admit, true);
-  assert.equal(verdict.reason, "outage_unexpired");
-  // The absence of an answer must not be remembered as an answer.
+
   h.time.advance(1_000);
-  assert.equal(h.freshness.size(), 0, "an outage caches nothing");
+  assert.equal((await evaluate(h)).reason, "outage_cached", "served without calling Clerk");
+  assert.equal(h.asked.length, 1);
+
+  h.time.advance(20_000);
+  await evaluate(h);
+  assert.equal(h.asked.length, 2, "retried once the outage cache lapsed");
 });
 
 test("when Clerk is unreachable and the token has expired, the request is rejected", async () => {
@@ -184,4 +226,24 @@ test("a zero TTL revalidates every time", async () => {
   await evaluate(h);
   await evaluate(h);
   assert.equal(h.asked.length, 2, "the check can be disabled without changing its shape");
+});
+
+test("markRevoked takes effect immediately, without waiting out a TTL", async () => {
+  // This is what a revoke performed through our own API relies on.
+  const h = harness({ statuses: ["active"] });
+  assert.equal((await evaluate(h)).admit, true);
+  h.freshness.markRevoked("sess_1");
+  assert.equal((await evaluate(h)).admit, false);
+  assert.equal(h.asked.length, 1, "no second Clerk call was needed");
+});
+
+test("a hung Clerk call is abandoned rather than wedging the session", async () => {
+  const h = harness({
+    statuses: () => new Promise<SessionStatusCheck>(() => undefined),
+  });
+  const started = Date.now();
+  const verdict = await evaluate(h);
+  assert.equal(verdict.admit, true, "falls back rather than hanging");
+  assert.equal(verdict.reason, "outage_unexpired");
+  assert.ok(Date.now() - started < 10_000, "gave up promptly");
 });

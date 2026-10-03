@@ -61,8 +61,8 @@ export function createClerkUserDirectory(secretKey: string): ClerkUserDirectory 
  *
  * Clerk owns this state — it issued the tokens the control plane verifies — so there
  * is deliberately no database table here. Persisting it would duplicate an authority
- * that can drift, and a webhook-driven revocation table (M3a) is the only case that
- * would justify persistence.
+ * that can drift. M3a rejected a webhook-driven revocation denylist for the same
+ * reason: it needs a table, and on its own it is not bounded.
  */
 export function createClerkSessionDirectory(secretKey: string): HumanSessionDirectory {
   const client = createClerkClient({ secretKey });
@@ -162,12 +162,17 @@ export function createSessionDirectory(sessions: ClerkSessionCalls): HumanSessio
 /**
  * Distinguishes "this session is gone" from "Clerk could not be reached".
  *
- * Only a definitive not-found or unauthorized answer counts as a revocation. A 429, a
- * 5xx, or a network failure is an outage: treating those as revocations would let a
- * Clerk hiccup sign every user out at once.
+ * Only a definitive 404 counts as a revocation, and only when `status` really is an
+ * HTTP status on a number.
+ *
+ * 401 is deliberately NOT treated as a revocation. Against Clerk's backend API it
+ * means *this control plane's own credential* was rejected, not that one session
+ * ended — so classifying it as `not_active` would turn a rotated or expired secret key
+ * into a mass sign-out of every session, cached for a full TTL and re-arming on
+ * every revalidation. 403, 429, 5xx and network failures are outages for the same
+ * reason: none of them is evidence about a particular session.
  */
 function classifyLivenessFailure(error: unknown): SessionLiveness {
   const status = (error as { status?: unknown })?.status;
-  if (status === 404 || status === 401) return "not_active";
-  return "unavailable";
+  return status === 404 ? "not_active" : "unavailable";
 }
