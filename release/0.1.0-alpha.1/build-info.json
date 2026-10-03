@@ -2,8 +2,8 @@
   "schemaVersion": 4,
   "product": "AceVra",
   "version": "0.1.0-alpha.1",
-  "buildCommitId": "8d96aa26",
-  "buildTime": "2026-09-24T19:49:02.867Z",
+  "buildCommitId": "9f01995d",
+  "buildTime": "2026-10-03T04:17:52.349Z",
   "releaseProfile": "local-engineering-alpha",
   "distribution": "local engineering alpha",
   "branch": "release/0.1.0-alpha",
@@ -37,14 +37,11 @@
     "peerProbeId": "dev.acevra.cua-peer-identity.development",
     "architecture": "arm64"
   },
-  "artifacts": [
-    "AceVra-0.1.0-alpha.1-arm64.dmg",
-    "AceVra-0.1.0-alpha.1-arm64.zip"
-  ],
-  "handoff": "release/0.1.0-alpha.1/handoff-final-8d96aa2",
+  "artifacts": ["AceVra-0.1.0-alpha.1-arm64.dmg", "AceVra-0.1.0-alpha.1-arm64.zip"],
+  "handoff": "release/0.1.0-alpha.1/handoff",
   "installedPath": "/Applications/AceVra.app",
-  "installedRevision": "8d96aa26",
-  "installedBackup": "/Applications/.AceVra.app.backup-8784b2b6-a911-429f-9811-759bc8230558",
-  "installedAcceptance": "8d96aa2 composer unlock + codex turn recovery installed; human check pending",
-  "broaderAcceptance": "paused; no TCC changes or broader CUA/browser/provider/artifact/remote/restart acceptance"
+  "installedRevision": "9f01995d",
+  "installedBackup": "/Applications/.AceVra.app.backup-b436db07-6cf8-4b89-9c2c-1dd980f29e4f",
+  "installedAcceptance": "9f01995d packaged CUA smoke: takeover, glow+cursor, fixture click/key, requested+observation screenshot split, Esc user takeover; human check passed",
+  "broaderAcceptance": "Computer Use frozen as verified; full acceptance matrix beyond smoke deferred with the deck's non-blocking limitations"
 }

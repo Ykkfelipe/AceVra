@@ -1662,7 +1662,7 @@ and subsequent turns" — mid-session switching IS supported; earlier "thread-le
 wrong); Codex reports the adopted `model` and `reasoningEffort` in the thread/start response and
 `Thread` object.
 
-Repairs: wire/runtime/snapshot/meta now carry Codex's *reported* model/effort; turn-level
+Repairs: wire/runtime/snapshot/meta now carry Codex's _reported_ model/effort; turn-level
 `codexTurnOverride` on v4 sendText applies per-turn model/effort (schema-strict, allow-list
 fail-loud); composer shows a live model+effort dropdown in draft AND existing Codex sessions
 (fixes the “locked composer” and “selection doesn't stick” symptoms); existing Codex sessions no
