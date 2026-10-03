@@ -93,6 +93,7 @@ import {
   type MultitaskHandoffStartRequest,
 } from "./cross-mode-handoff-service.js";
 import { MultitaskHandoffSessionBusyError } from "./cross-mode-handoff-executor.js";
+import { acceptCrossModeCodingHandoff } from "./cross-mode-coding-handoff.js";
 import { workflowActorToolPolicy } from "./workflow-actor-tools.js";
 import {
   createNodeReplBrowserBroker,
@@ -1340,6 +1341,31 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
           };
         }
       },
+      // Cross-Mode 入站交接（Bot → Coding）：本会话就是目的侧工作。物化必须走统一用户执行边界
+      // （与 /goal 同理：首次持久化前固定 shell/selection，冷恢复才不会退回 legacy fallback），
+      // origin entry 对 session 行有外键，所以先物化再写 entry。
+      acceptCrossModeHandoff: (input) =>
+        acceptCrossModeCodingHandoff(input.confirmation, {
+          sessionId,
+          destination: input.destination,
+          persistSession: async (objective) => {
+            await prepareUserExecutionBoundary({ traceContext });
+            await getRuntime().ensureSessionPersistedForExternalActivity(objective, {
+              traceContext,
+            });
+          },
+          saveOriginEntry: async (entry) => {
+            if (!sessionStore.saveSessionEntry) {
+              throw new Error("session store cannot persist the cross-mode origin");
+            }
+            await sessionStore.saveSessionEntry({
+              ...entry,
+              sessionID: sessionId,
+              // 来源是会话的静态元数据，不是用户活动：不刷新 time_updated。
+              touchSession: false,
+            });
+          },
+        }),
       // GUI「配置」。它
       // 沿用前驱的脚本，所以端口必须既能 amend 又能读回脚本；缺一就不注册，GUI 拿到能力不支持。
       // 与 startSavedWorkflow 同一条用户执行边界：冷恢复的会话先恢复 Session 边界再落设置轮。

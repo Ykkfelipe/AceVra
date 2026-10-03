@@ -21,6 +21,7 @@ import type {
   StableForkTarget,
   StableForkTargetResolution,
   ConversationRowTarget,
+  CrossModeOriginState,
 } from "@zcode/shared/zcode-protocol-v4";
 import type { ZCodeApp } from "../../app/types.js";
 import type { V4InteractionRegistry } from "../interaction-registry.js";
@@ -104,6 +105,8 @@ export interface V4CommandCoreHost {
   ): Promise<ConversationInputIntent | null>;
   cancelInputCommand?(sessionId: string, queueItemId: string, reason: string): Promise<void>;
   discardSharedContext?(sessionId: string, contextId: string): Promise<boolean>;
+  /** Cross-Mode 来源已持久化：推给在线投影（静态只读元数据；无投影时冷订阅从 entry 恢复）。 */
+  publishCrossModeOrigin?(sessionId: string, origin: CrossModeOriginState): void;
   /**
    * 当前输入路由模式（数据源 = v4 投影 inputRouting.mode）。
    * sendText/sendGoalCommand 的 held choice 裁决（heldQueueInputRequiresChoice）依赖它判定是否必须携带 heldQueueDisposition。

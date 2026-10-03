@@ -33,6 +33,11 @@ import type { ModelProviderSourceTitle } from "../model-config.js";
 import type { ZCodeInstalledPluginData } from "../plugins.js";
 import type { MultitaskHandoffStartRequest } from "./cross-mode-handoff-service.js";
 import type {
+  CrossModeCodingDestination,
+  CrossModeCodingIntakeOutcome,
+} from "./cross-mode-coding-handoff.js";
+import type { HandoffConfirmation } from "@zcode/shared/cross-mode";
+import type {
   AutomationPort,
   OffPeakPort,
   ExecutionTargetPort,
@@ -469,6 +474,15 @@ export interface ZCodeApp {
   startMultitaskHandoff?(
     input: Omit<MultitaskHandoffStartRequest, "traceContext">,
   ): Promise<ZCodeAppMultitaskHandoffStartResult>;
+  /**
+   * Cross-Mode 入站交接（目的 = 本会话，Coding）：冻结快照经 M2 准入重新校验后，物化本会话并写入
+   * `v4/cross_mode_origin`（docs/specs/cross-mode-bot-to-coding.md）。不启动 turn——首条输入由命令层
+   * 按既有 createSession.firstInput 路径提交。结构化结果，不 throw 业务拒绝。
+   */
+  acceptCrossModeHandoff?(input: {
+    confirmation: HandoffConfirmation;
+    destination: CrossModeCodingDestination;
+  }): Promise<CrossModeCodingIntakeOutcome>;
   /**
    * GUI「配置」改一个 run 的子代理模型与并发上界：以同一份脚本修订出新 run，不经模型轮、不开确认窗。可选能力：端口
    * 缺席、或端口不带 `amend` / `getScript` 时不注册（网关回能力不支持错误）。失败以结构化 `reason`
