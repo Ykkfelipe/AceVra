@@ -20,6 +20,44 @@ import {
 // errorCode/suggestedAction/media(screenshot) 等结构化内容带到 renderer）。consume-main 之前
 // 缺这个 union + toolOutputSchema.display 字段——协议层 zod 校验会把 agent 下发的 display 整个
 // strip 掉，导致 UI 永远拿不到 display?.kind==="cua"，CUA 工具调用退化成 fallback 渲染。
+/**
+ * RemoteComputer（acevra-agent-computer.md §3.5）的截图 display：两通道与 node_repl_images
+ * 同构——image（用户要看，进聊天主流）与 observationImage（agent 自查，仅工具详情缩略图）。
+ * 单图上限 256KB 沿用 CUA inline media 口径；与 contracts 侧
+ * remoteComputerToolResultDisplayPayloadSchema 必须同集，少一个字段整块 display 被剥。
+ * 定义在文件前部：toolResultDisplaySchema（output 侧）与 toolCallDisplaySchema（row 侧）
+ * 两个 strict union 都要复用它。
+ */
+export const toolCallRemoteComputerDisplaySchema = z
+  .object({
+    kind: z.literal("remote_computer"),
+    targetId: z.string().min(1).max(128),
+    action: z.string().min(1).max(32),
+    image: z
+      .object({
+        base64: z
+          .string()
+          .min(1)
+          .max(256 * 1024),
+        mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/iu),
+      })
+      .strict()
+      .optional(),
+    observationImage: z
+      .object({
+        base64: z
+          .string()
+          .min(1)
+          .max(256 * 1024),
+        mimeType: z.string().regex(/^image\/[a-z0-9.+-]+$/iu),
+      })
+      .strict()
+      .optional(),
+    truncated: z.boolean().optional(),
+  })
+  .strict();
+export type ToolCallRemoteComputerDisplay = z.infer<typeof toolCallRemoteComputerDisplaySchema>;
+
 const toolResultDisplaySchema = z.discriminatedUnion("kind", [
   bashOutputDisplaySchema,
   z.object({
@@ -147,6 +185,8 @@ const toolResultDisplaySchema = z.discriminatedUnion("kind", [
   toolCallSavedWorkflowListDisplaySchema,
   toolCallListModelsDisplaySchema,
   toolCallResumeWorkflowRunDisplaySchema,
+  // RemoteComputer 截图（§3.5）：同上，缺成员 = output display 整块被剥。
+  toolCallRemoteComputerDisplaySchema,
 ]);
 export type ToolResultDisplay = z.infer<typeof toolResultDisplaySchema>;
 
@@ -281,5 +321,6 @@ export const toolCallDisplaySchema = z.discriminatedUnion("kind", [
   toolCallSavedWorkflowListDisplaySchema,
   toolCallListModelsDisplaySchema,
   toolCallResumeWorkflowRunDisplaySchema,
+  toolCallRemoteComputerDisplaySchema,
 ]);
 export type ToolCallDisplay = z.infer<typeof toolCallDisplaySchema>;

@@ -5364,6 +5364,8 @@ function toProtocolToolCallDisplay(
     case "list_models":
     // ResumeWorkflowRun 的恢复卡。
     case "resume_workflow_run":
+    // RemoteComputer 截图（§3.5）：用户要看的进聊天主流，自查的在工具详情。
+    case "remote_computer":
       return display;
     default:
       return undefined;

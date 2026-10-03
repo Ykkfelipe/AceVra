@@ -3,12 +3,14 @@ import {
   toolCallGetWorkflowRunDisplaySchema,
   toolCallListModelsDisplaySchema,
   toolCallListWorkflowRunsDisplaySchema,
+  toolCallRemoteComputerDisplaySchema,
   toolCallResumeWorkflowRunDisplaySchema,
   toolCallSavedWorkflowListDisplaySchema,
   type ToolCallEvalWorkflowSnippetDisplay,
   type ToolCallGetWorkflowRunDisplay,
   type ToolCallListModelsDisplay,
   type ToolCallListWorkflowRunsDisplay,
+  type ToolCallRemoteComputerDisplay,
   type ToolCallResumeWorkflowRunDisplay,
   type ToolCallSavedWorkflowListDisplay,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -75,7 +77,8 @@ export type ToolResultDisplay =
   | ToolCallEvalWorkflowSnippetDisplay
   | ToolCallSavedWorkflowListDisplay
   | ToolCallListModelsDisplay
-  | ToolCallResumeWorkflowRunDisplay;
+  | ToolCallResumeWorkflowRunDisplay
+  | ToolCallRemoteComputerDisplay;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -99,6 +102,8 @@ const WORKFLOW_DISPLAY_PARSERS_BY_KIND: Record<
   list_models: (value) => parseWorkflowDisplay(toolCallListModelsDisplaySchema, value),
   resume_workflow_run: (value) =>
     parseWorkflowDisplay(toolCallResumeWorkflowRunDisplaySchema, value),
+  // RemoteComputer 截图（§3.5）：同款 schema 驱动解析，字段表与协议侧永远同步。
+  remote_computer: (value) => parseWorkflowDisplay(toolCallRemoteComputerDisplaySchema, value),
 };
 
 function parseWorkflowDisplay<T extends ToolResultDisplay>(

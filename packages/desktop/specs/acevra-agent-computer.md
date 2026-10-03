@@ -113,9 +113,9 @@ control`, `You're using the Dell — agent paused` (+ **Resume**), `Paused`.
      DOM listener no longer sees prevented events, so nothing is sent twice.
   2. The give-back chord `Ctrl+Option+Esc` never contains Cmd, stays renderer-handled, and is
      never forwarded — the local escape hatch in both layers.
-  Known platform limits (documented, not hackable): macOS system shortcuts (Cmd+Tab, Cmd+Space,
-  Mission Control) are not interceptable; `before-input-event` cannot see events consumed by the
-  system. `Ctrl+Alt+Del` is not supported.
+     Known platform limits (documented, not hackable): macOS system shortcuts (Cmd+Tab, Cmd+Space,
+     Mission Control) are not interceptable; `before-input-event` cannot see events consumed by the
+     system. `Ctrl+Alt+Del` is not supported.
 - **Punctuation key names**: chorded punctuation (e.g. `Ctrl+Shift+;`) maps `event.code` to its
   character (`;`, `/`, `[`, …). The renderer allowlist and the relay `sanitizeInputEvent` accept the
   same explicit safe punctuation set (single printable ASCII symbols only — pyautogui accepts
@@ -152,6 +152,26 @@ unsaved buffers). Rules for the `RemoteComputer` tool prompt and the agent:
 - Type only into a fresh, known-empty document the agent created this turn (Ctrl+N / new tab;
   verify an empty buffer before typing).
 - Never send Ctrl+A / Delete / Alt+F4 without a fresh (§4.5.1 converged) post-action screenshot.
+
+### 3.5 Screenshot display in chat (user-visible vs agent-internal)
+
+`RemoteComputer` screenshots follow the same two-channel model as local Computer Use
+(`node_repl_images`: `images` vs `observationImages`):
+
+- The tool input gains `showToUser?: boolean`. The tool prompt tells the model: set it when the
+  user asked to see the screen (or the screenshot is the deliverable); omit it for verification
+  shots taken to plan or check the agent's own actions. The output echoes `showToUser` so the
+  display pipeline can branch without re-reading the input.
+- The persisted tool display kind `remote_computer` carries at most one image per channel:
+  `image` (user-visible → rendered inline in the conversation flow, same slot as delivered local
+  Computer Use screenshots) or `observationImage` (agent-internal → thumbnail inside the tool
+  card details, never the chat flow). Non-screenshot actions produce no display.
+- Images over the display cap (256 KB base64, the CUA inline-media cap) are dropped from the
+  display and marked `truncated`; the model-visible result is unchanged. The chat-flow projection
+  only renders host-delivered display payloads — never the model's "I took a screenshot" text
+  (same fix basis as `ConversationComputerImages`).
+- This is workspace-independent: coding tasks and Bot conversations share the components, so the
+  fix covers both.
 
 ## 4. Worker HTTP contract v2 (the Dell side)
 
@@ -253,7 +273,7 @@ renderer never assumes the Dell.
 - **Latest-frame semantics (no backlog)**: every stage keeps only the newest frame. The producer
   stores one frame; each viewer's sender sends only the newest frame newer than what it last
   sent; skipped intermediate seqs count as `dropped`. If a send would block behind transport,
-  the *next* tick supersedes it — freshness beats completeness everywhere.
+  the _next_ tick supersedes it — freshness beats completeness everywhere.
 - **Ownership changes never touch the stream**: take-control / give-back only change the job
   state (and the Mac's profile switch); the `/ws/view` socket and capture thread keep running.
 - **Profiles** (Mac side): watch 5 fps / ≤ 960 px / q60; control 15 fps / ≤ 1366 px / q65
@@ -273,7 +293,7 @@ renderer never assumes the Dell.
 Two separate concepts, one capture source:
 
 - **Human live stream** (`WS /ws/view`) is never gated: continuous frames at the viewer's fps.
-- **Agent observation** (`GET /screen`) must be *converged*: the worker records the finish time of
+- **Agent observation** (`GET /screen`) must be _converged_: the worker records the finish time of
   every admitted input (agent or human); `/screen` returns only a frame that is
   1. captured at least `SCREEN_MIN_SETTLE` (0.25 s) after the last admitted input finished, and
   2. pixel-identical to the immediately preceding grab (bounded stability check, deadline
@@ -471,7 +491,6 @@ pure functions (letterbox mapping, modifier/key mapping, throttling, no subscrip
 
 Composer Run-on control removed; user turns declare `automatic`; Settings → Computers; plain work
 card wording; agent tool descriptions reworded; "Tool callRunning" separator fixed.
-
 
 ## Stop ends the owning chat turn (2026-10-01)
 

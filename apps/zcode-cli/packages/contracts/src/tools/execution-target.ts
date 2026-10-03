@@ -146,6 +146,12 @@ export const RemoteComputerInputSchema = z
       .max(4)
       .optional()
       .describe("Windows key names (pyautogui): enter, tab, esc, backspace, delete, up, down, left, right, home, end, pageup, pagedown, f1-f12, ctrl, alt, shift, win, or a single letter/digit."),
+    showToUser: z
+      .boolean()
+      .optional()
+      .describe(
+        "Set true only when the user asked to see the screen (or the screenshot is the deliverable). Omit it for screenshots you take to plan or verify your own actions — those stay inside the tool details.",
+      ),
   })
   .strict();
 export type RemoteComputerInput = z.infer<typeof RemoteComputerInputSchema>;
@@ -166,6 +172,7 @@ export const RemoteComputerOutputSchema = z
       })
       .strict()
       .optional(),
+    showToUser: z.boolean().optional(),
   })
   .strict();
 export type RemoteComputerOutput = z.infer<typeof RemoteComputerOutputSchema>;
