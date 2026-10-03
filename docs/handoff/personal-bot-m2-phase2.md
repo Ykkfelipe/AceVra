@@ -112,3 +112,52 @@ it.
   integration is underway. When that branch hands off, the Personal Bot additions that intersect it
   are the shared protocol barrel (`packages/shared/src/index.ts`), the protocol method table, and the
   `zcodeAgentService` request dispatch — all additive, but worth a merge dry-run at the time.
+
+## Live acceptance — observed results (2026-10-03, head `bd8de7b`)
+
+Runtime: `mise run dev` desktop dev profile (`~/.zcode-acevra-dev`, Vite 5174, CDP 9229), driven via
+Playwright-core `connectOverCDP`. Bot fixtures reset before the run (fresh first-launch). All seven
+scenarios passed:
+
+1. **First launch** — the `personal-bot` workspace is recreated mkdir-only at startup (empty dir),
+   no CLI runtime is spawned for it before the first message (0 matching processes, 0 host-log
+   mentions), and the bot store regenerates lazily on first Bot open.
+2. **First message creates a `personal_bot` session** — real turn through `V4ChatPane` (streamed
+   reply), pointer written (`conversation.json`), turn ran with cwd = the bot workspace (model-io),
+   and the session has **no row in the tasks index** (Coding Sessions exclusion). The session kind
+   is positively proven by scenario 4: turn-time injection is gated on `taskType === "personal_bot"`
+   before any host RPC, and injection fired.
+3. **Restart/resume** — after a full app kill + relaunch, the Bot view resumed the same session id
+   with both turns, both answers, memory rows ("2 remembered") and a ready composer.
+4. **End-to-end memory injection** — two seeded records (one pinned) produced a `system` attachment
+   in the provider request (verified in the turn's model-io JSONL: the bounded
+   "Personal memory (remembered from earlier conversations…)" block with exactly the two rendered
+   records) and the answer quoted both facts. No block on the pre-seeding turn. The Memory tab needs
+   a manual refresh to see out-of-band store edits (mount-time read); refresh works and fresh
+   mounts read current data.
+5. **Bot ↔ other-view navigation** — leaving Bot via a top-level main-view switch unmounts the Bot
+   section with zero conversation-text leakage into other surfaces; returning restores both turns.
+   (The chat/coding view is re-entered by restore or workspace selection, not by the sidebar
+   Projects/Tasks items while Bot is active.)
+6. **Stale pointer recovery** — corrupted pointer (`sess_does_not_exist…`) + reload: no crash, no
+   error boundary, and the durable pointer self-heals to `null` passively (no user action). A
+   message after recovery creates a fresh session and re-points. Cosmetic note: if the pane layer
+   still holds a _valid_ previous session, its transcript can flash briefly before the pointer
+   validation clears it; the state converges correctly (old content never persists into the new
+   session).
+7. **Ordinary coding tool path** — a coding session in the restored project workspace ran a shell
+   tool (`ls -1 | wc -l` → "7") normally; its model-io contains **no** personal-memory block or
+   RPC trace; the session indexes normally; the two live bot sessions never entered the index.
+
+Redesigned UI (spec §15) verified during the same run: conversation flow, Memory/Computers/
+Capabilities tabs, memory rows with category badges, Computers empty state with the SSH-server hint
+and a working refresh, capability domains with availability badges, header identity, composer.
+
+Automated verification at the same head: services `personalBot(+Handoff)` 18/18, CLI core
+`personal-memory-context` 7/7, CLI bootstrap `personalBotSessionKind` 4/4, UI
+`botSectionPresentation` 4/4, root `pnpm typecheck` clean, oxlint 0 errors (89 pre-existing
+repo-wide warnings, none in bot files), `architecture:check --changed` 0 violations.
+
+Conclusion: `V4ChatPane` is confirmed as the production Bot conversation host. No Personal Bot
+defects were found during live acceptance; the branch is ready to freeze for cross-feature
+integration.
